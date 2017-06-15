@@ -6,8 +6,8 @@ params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=20e-3
 
-mps = MPS()
-#mps = MPS("192.168.1.20")
+#mps = MPS()
+mps = MPS("192.168.1.20")
 
 # This version does not store the data
 #u = measurement(mps, params)

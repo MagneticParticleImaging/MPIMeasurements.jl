@@ -12,7 +12,8 @@ end
 
 using Reexport
 using IniFile
-using MPIFiles
+@reexport using MPIFiles
+using PyPlot
 @reexport using Redpitaya
 
 

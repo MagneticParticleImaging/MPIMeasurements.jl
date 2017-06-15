@@ -72,16 +72,16 @@ function readData(mps::Spectrometer, startFrame, numPeriods)
 end
 
 # low level OLD: uses SCPI interface
-function measurement(mps::MPS,params=Dict{Symbol,Any}())
+function measurement(mps::MPS,params=Dict{String,Any}())
   updateParams(mps, params)
 
-  nAverages = mps.params[:rxNumAverages]
-  amplitude = mps.params[:dfStrength]
+  nAverages = mps.params["rxNumAverages"]
+  amplitude = mps.params["dfStrength"]
 
-  dec = mps.params[:decimation]
-  freq = div(mps.params[:dfBaseFrequency],mps.params[:dfDivider])
+  dec = mps.params["decimation"]
+  freq = div(mps.params["dfBaseFrequency"],mps.params["dfDivider"])
 
-  numPeriods = mps.params[:acqNumFrames]
+  numPeriods = mps.params["measNumFrames"]
   freqR = roundFreq(mps.rp,dec,freq)
   numSampPerPeriod = numSamplesPerPeriod(mps.rp,dec,freqR)
   numSamp = numSampPerPeriod*numPeriods
@@ -93,7 +93,7 @@ function measurement(mps::MPS,params=Dict{Symbol,Any}())
   # start sending
   send(mps.rp,"GEN:RST")
   sendAnalogSignal(mps.rp,1,"SINE",freqR,
-                   mps.params[:calibFieldToVolt]*amplitude)
+                   mps.params["calibFieldToVolt"]*amplitude)
   sleep(0.3)
   buffer = zeros(Float32,numSamp)
   for n=1:nAverages
@@ -118,90 +118,78 @@ function measurement(mps::MPS,params=Dict{Symbol,Any}())
   return reshape(buffer,numSampPerPeriod,numPeriods)
 end
 
-# high level: This should store as MDF
-function measurement(mps::MPS, filename::String, params_=Dict{Symbol,Any}())
+# high level: This stores as MDF
+function measurement(mps::MPS, filename::String, params_=Dict{String,Any}())
   updateParams(mps, params_)
 
-  params = Dict{String,Any}()
+  params = copy(mps.params)
 
-  dec = mps.params[:decimation]
-  freq = div(mps.params[:dfBaseFrequency],mps.params[:dfDivider])
+  dec = mps.params["decimation"]
+  freq = div(mps.params["dfBaseFrequency"],mps.params["dfDivider"])
   freqR = roundFreq(mps.rp,dec,freq)
   numSampPerPeriod = numSamplesPerPeriod(mps.rp,dec,freqR)
 
-  # study parameters
-  params["studyName"] = mps.params[:studyName]
-  params["studyExperiment"] = mps.params[:studyExperiment]
-  params["studyDescription"] = mps.params[:studyDescription]
-  params["studySubject"] = mps.params[:studySubject]
+
   params["studyIsSimulation"] = false
   params["studyIsCalibration"] = false
 
-  # tracer parameters
-  params["tracerName"] = mps.params[:tracerName]
-  params["tracerBatch"] = mps.params[:tracerBatch]
-  params["tracerVendor"] = mps.params[:tracerVendor]
-  params["tracerVolume"] = mps.params[:tracerVolume]
-  params["tracerConcentration"] = mps.params[:tracerConcentration]
-  params["tracerSolute"] = mps.params[:tracerSolute]
-
-  # scanner parameters
-  params["scannerFacility"] = mps.params[:scannerFacility]
-  params["scannerOperator"] = mps.params[:scannerOperator]
-  params["scannerManufacturer"] = mps.params[:scannerManufacturer]
-  params["scannerModel"] = mps.params[:scannerModel]
-  params["scannerTopology"] = mps.params[:scannerTopology]
-
   # acquisition parameters
-  params["acqNumFrames"] = mps.params[:acqNumFrames]
-  params["acqNumBGFrames"] = mps.params[:acqNumBGFrames]
   params["acqFramePeriod"] = 1/freqR
   params["acqNumPatches"] = 1
   params["acqStartTime"] = Dates.unix2datetime(time())
-  params["acqGradient"] = 0.0
-  params["acqOffsetField"] = 0.0
+  params["acqGradient"] = addTrailingSingleton([0.0;0.0;0.0],2)
+  params["acqOffsetField"] = addTrailingSingleton([0.0;0.0;0.0],2)
 
   # drivefield parameters
-  params["dfStrength"] = reshape([mps.params[:dfStrength]],1,1,1)
-  params["dfPhase"] = reshape([mps.params[:dfPhase]],1,1,1)
-  params["dfBaseFrequency"] = mps.params[:dfBaseFrequency]
-  params["dfDivider"] = reshape([mps.params[:dfDivider]],1,1)
+  params["dfStrength"] = reshape([mps.params["dfStrength"]],1,1,1)
+  params["dfPhase"] = reshape([mps.params["dfPhase"]],1,1,1)
+  params["dfBaseFrequency"] = mps.params["dfBaseFrequency"]
+  params["dfDivider"] = reshape([mps.params["dfDivider"]],1,1)
   params["dfPeriod"] = params["acqFramePeriod"]
   params["dfWaveform"] = "sine"
 
   # receiver parameters
-  params["rxNumAverages"] = mps.params[:rxNumAverages]
-  params["rxBandwidth"] = mps.params[:dfBaseFrequency] / dec / 2
+  params["rxNumChannels"] = 1
+  params["rxBandwidth"] = mps.params["dfBaseFrequency"] / dec / 2
   params["rxNumSamplingPoints"] = [numSampPerPeriod]
   #params["rxFrequencies"] = rxFrequencies(f)
   #params["rxTransferFunction"] = rxTransferFunction(f)
 
   # measurement
   params["measUnit"] = "V"
-  params["measRawDataConversion"] = 1.0
-  params["measDataTimeOrder"] =
-     collect((1:mps.params[:acqNumFrames]) .+ mps.params[:acqNumBGFrames])
+  params["measDataConversionFactor"] = [1.0, 0]
+  params["measNumFrames"] = mps.params["measNumFrames"] * 2
+  params["measIsAveraged"] = false
+  params["measIsTransposed"] = false
+  params["measIsFrameSelection"] = false
+  params["measIsBGCorrected"] = false
+  params["measIsTFCorrected"] = false
+  params["measIsFramePermutation"] = false
+  params["measIsFrequencySelection"] = false
+  params["measIsFourierTransformed"] = false
+  params["measIsSpectralLeakageCorrected"] = false
+  params["measIsBGFrame"] = cat(1, ones(Bool,mps.params["measNumFrames"]),
+                                   zeros(Bool,mps.params["measNumFrames"]))
 
-  params["measBGDataTimeOrder"] = collect(1:mps.params[:acqNumBGFrames])
 
   println("Remove the sample to perform BG measurement and press enter")
   readline(STDIN)
-  u = measurement(mps)
-  params["measBGData"] = reshape(u,size(u)...,1,1)
+  uBG = measurement(mps)
 
   println("Put in the sample to perform measurement and press enter")
   readline(STDIN)
-  u = measurement(mps)
-  params["measData"] = reshape(u,size(u)...,1,1)
+  uFG = measurement(mps)
+  params["measData"] = cat(4,reshape(uBG,size(uBG,1),1,1,size(uBG,2)),
+                             reshape(uFG,size(uFG,1),1,1,size(uFG,2)))
 
   MPIFiles.saveasMDF( filename, params )
-
+  return filename
 end
 
-function measurement(mps::MPS, mdf::MDFDatasetStore, params=Dict{Symbol,Any})
+function measurement(mps::MPS, mdf::MDFDatasetStore, params=Dict{String,Any})
   updateParams(mps, params)
 
-  name = params[:studyName]
+  name = params["studyName"]
   path = joinpath( studydir(mdf), name)
   subject = ""
   date = ""
@@ -211,8 +199,8 @@ function measurement(mps::MPS, mdf::MDFDatasetStore, params=Dict{Symbol,Any})
   addStudy(mdf, newStudy)
   expNum = getNewExperimentNum(mdf, newStudy)
 
-  mps.params[:studyName] = params[:studyName]
-  mps.params[:studyExperiment] = expNum
+  mps.params["studyName"] = params["studyName"]
+  mps.params["studyExperiment"] = expNum
 
 
   filename = joinpath(studydir(mdf),newStudy.name,string(expNum)*".mdf")

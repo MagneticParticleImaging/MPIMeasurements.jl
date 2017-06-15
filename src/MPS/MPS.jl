@@ -52,7 +52,7 @@ function prepareForVisu{T}(u::Matrix{T}, numPeriods)
 end
 
 export showMPSData
-function showMPSData(u)  
+function showMPSData(u)
   u_ = prepareForVisu(u,10)
   figure(1)
   clf()
@@ -71,7 +71,7 @@ function showMPSData(mps,u)
   plot(u_)
   subplot(2,1,2)
   uhat = abs(rfft(u_))
-  freq = (0:(length(uhat)-1)) * mps.params[:dfBaseFrequency] / mps.params[:dfDivider][1,1,1]  /10
+  freq = (0:(length(uhat)-1)) * mps.params["dfBaseFrequency"] / mps.params["dfDivider"][1,1,1]  /10
 
   semilogy(freq,uhat,"o-b",lw=2)
   sleep(0.1)
@@ -83,9 +83,9 @@ end
 export loadMPSData
 function loadMPSData(filename)
   f = MPIFiles.MPIFile(filename)
-  u = MPIFiles.measData(f)[:,:,1,1] 
-  uBG = MPIFiles.measBGData(f)[:,:,1,1]
-  uBGMean = mean(uBG[:,:,1,1],2)
+  u = MPIFiles.measData(f)[:,1,1,measFGFrameIdx(f)]
+  uBG = MPIFiles.measData(f)[:,1,1,measBGFrameIdx(f)]
+  uBGMean = mean(uBG[:,:],2)
 
   return u .- uBGMean
 end
