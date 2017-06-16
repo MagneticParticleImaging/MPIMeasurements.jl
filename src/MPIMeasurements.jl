@@ -18,5 +18,6 @@ using PyPlot
 
 
 include("MPS/MPS.jl")
+include("Robots/Robots.jl")
 
 end # module

@@ -41,7 +41,7 @@ function Spectrometer(ip::String, numSamplesPerPeriod=78)
 end
 
 
-include("Measurements.jl")
+#include("Measurements.jl")
 include("UI.jl")
 
 function prepareForVisu{T}(u::Matrix{T}, numPeriods)
