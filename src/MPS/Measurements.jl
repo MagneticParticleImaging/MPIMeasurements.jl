@@ -75,13 +75,13 @@ end
 function measurement(mps::MPS,params=Dict{String,Any}())
   updateParams(mps, params)
 
-  nAverages = mps.params["rxNumAverages"]
+  nAverages = mps.params["acqNumAverages"]
   amplitude = mps.params["dfStrength"]
 
   dec = mps.params["decimation"]
   freq = div(mps.params["dfBaseFrequency"],mps.params["dfDivider"])
 
-  numPeriods = mps.params["measNumFrames"]
+  numPeriods = mps.params["acqNumFrames"]
   freqR = roundFreq(mps.rp,dec,freq)
   numSampPerPeriod = numSamplesPerPeriod(mps.rp,dec,freqR)
   numSamp = numSampPerPeriod*numPeriods
@@ -158,7 +158,7 @@ function measurement(mps::MPS, filename::String, params_=Dict{String,Any}())
   # measurement
   params["measUnit"] = "V"
   params["measDataConversionFactor"] = [1.0, 0]
-  params["measNumFrames"] = mps.params["measNumFrames"] * 2
+  params["acqNumFrames"] = mps.params["acqNumFrames"] * 2
   params["measIsAveraged"] = false
   params["measIsTransposed"] = false
   params["measIsFrameSelection"] = false
@@ -168,8 +168,8 @@ function measurement(mps::MPS, filename::String, params_=Dict{String,Any}())
   params["measIsFrequencySelection"] = false
   params["measIsFourierTransformed"] = false
   params["measIsSpectralLeakageCorrected"] = false
-  params["measIsBGFrame"] = cat(1, ones(Bool,mps.params["measNumFrames"]),
-                                   zeros(Bool,mps.params["measNumFrames"]))
+  params["measIsBGFrame"] = cat(1, ones(Bool,mps.params["acqNumFrames"]),
+                                   zeros(Bool,mps.params["acqNumFrames"]))
 
 
   println("Remove the sample to perform BG measurement and press enter")

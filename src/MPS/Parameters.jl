@@ -2,8 +2,8 @@ export loadParams, saveParams, updateParams
 
 function defaultMPSParams()
   params = Dict{String,Any}()
-  params["measNumFrames"] = 10
-  params["rxNumAverages"] = 10
+  params["acqNumFrames"] = 10
+  params["acqNumAverages"] = 10
   params["decimation"] = 8
   params["calibFieldToVolt"] = 19.5
   params["calibRefToField"] = 1
