@@ -65,7 +65,7 @@ function simRefZYX()
 end
 
 function setZeroPoint()
-  c="@n7" # for absolute move
+  c="@0n7" # for absolute move
   return addCR(c)
 end
 
@@ -73,7 +73,7 @@ function _moveAbs(stepsX,velX,stepsY,velY,stepsZ,velZ)
   c="@0M"
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
-  cmd=string(c," ",stepsX,velX,stepsY,velY,stepsZ,velZ,0,30)
+  cmd=string(c," ",stepsX,",",velX,",",stepsY,",",velY,",",stepsZ,",",velZ,",",0,",",30)
   return addCR(cmd)
 end
 
