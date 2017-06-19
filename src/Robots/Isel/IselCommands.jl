@@ -1,14 +1,19 @@
 using Unitful
 
+export initRefZYX, moveRel, moveAbs,setZeroPoint, setBrake, setFree
+
 const minVel = 30
 const maxVel = 40000
 const minAcceleration = 1
 const maxAcceleration = 4000
 const minstartStopFreq = 20
 const maxstartStopFreq = 4000
+const stepsPerTurn = 400
+const gearSlope = 5 # 1 turn equals 5mm feed
+const stepsPermm =stepsPerTurn / gearSlope
 
-function addCR(command::String)
-    return string(command,"\r")
+function addCR(cmd::String)
+    return string(cmd,"\r")
 end
 
 
@@ -29,12 +34,20 @@ function initRefZYX()
   return cmds
 end
 
-function moveRel(stepsX,velX,stepsY,velY,stepsZ,velZ)
+function _moveRel(stepsX,velX,stepsY,velY,stepsZ,velZ)
   c="@0A"
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
-  cmd=string(c," ",stepsX,velX,stepsY,velY,stepsZ,velZ,0,30)
+  cmd=string(c," ",stepsX,",",velX,",",stepsY,",",velY,",",stepsZ,",",velZ,",",0,",",30)
   return addCR(cmd)
+end
+
+function moveRel(distX::typeof(1.0u"mm"), velX, distY::typeof(1.0u"mm"), velY, distZ::typeof(1.0u"mm"), velZ)
+  return _moveRel(mm2Steps(distX),velX,mm2Steps(distY),velY,mm2Steps(distZ),velZ)
+end
+
+function mm2Steps(dist::typeof(1.0u"mm"))
+    return round(Int64,ustrip(dist)*stepsPermm)
 end
 
 function getPos()
@@ -56,12 +69,16 @@ function setZeroPoint()
   return addCR(c)
 end
 
-function moveAbs(stepsX,velX,stepsY,velY,stepsZ,velZ)
+function _moveAbs(stepsX,velX,stepsY,velY,stepsZ,velZ)
   c="@0M"
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
   cmd=string(c," ",stepsX,velX,stepsY,velY,stepsZ,velZ,0,30)
   return addCR(cmd)
+end
+
+function moveAbs(posX::typeof(1.0u"mm"), velX, posY::typeof(1.0u"mm"), velY, posZ::typeof(1.0u"mm"), velZ)
+  return _moveAbs(mm2Steps(posX),velX,mm2Steps(posY),velY,mm2Steps(posZ),velZ)
 end
 
 function setAcceleration(acceleration)
