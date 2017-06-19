@@ -29,19 +29,21 @@ end
 
 MPS() = MPS("10.167.6.87")
 
+export Spectrometer
+
 function Spectrometer(ip::String, numSamplesPerPeriod=78)
 
   params = defaultMPSParams()
 
-  mps = MPS(ip, params, nothing, numSamplesPerPeriod)
+  mps = Spectrometer(ip, params, nothing, numSamplesPerPeriod)
 
-  loadParams(mps)
+  #loadParams(mps)
 
   return mps
 end
 
 
-#include("Measurements.jl")
+include("Measurements.jl")
 include("UI.jl")
 
 function prepareForVisu{T}(u::Matrix{T}, numPeriods)

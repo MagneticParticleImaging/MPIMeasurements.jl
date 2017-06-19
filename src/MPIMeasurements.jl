@@ -19,5 +19,6 @@ using PyPlot
 
 include("MPS/MPS.jl")
 include("Robots/Robots.jl")
+include("DAQ/DAQ.jl")
 
 end # module

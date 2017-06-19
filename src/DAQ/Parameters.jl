@@ -1,7 +1,9 @@
 export loadParams, saveParams, updateParams
 
-function defaultMPSParams()
+# The purpose of this function is to define the type of the entries
+function defaultDAQParams()
   params = Dict{String,Any}()
+  params["ip"] = "192.168.1.20"
   params["acqNumFrames"] = 10
   params["acqNumAverages"] = 10
   params["decimation"] = 8
@@ -30,10 +32,10 @@ function defaultMPSParams()
   return params
 end
 
-function saveParams(mps::MPS)
-  filename = Pkg.dir("MPILib","src","MPS","MPS.ini")
+function saveParams(daq::AbstractDAQ)
+  filename = configFile(daq)
   ini = Inifile()
-  for (key,value) in mps.params
+  for (key,value) in daq.params
     set(ini, key, string(value) )
   end
   open(filename,"w") do fd
@@ -41,25 +43,54 @@ function saveParams(mps::MPS)
   end
 end
 
+function readParam{T}(ini::Inifile,key::String,default::T)
+  param = get(ini,key)
+  if param == :notfound
+    return default
+  else
+    return parse(T,param)
+  end
+end
 
-function loadParams(mps::MPS)
-  filename = Pkg.dir("MPILib","src","MPS","MPS.ini")
+function readParam(ini::Inifile,key::String,default::Bool)
+  param = get(ini,key)
+  if param == :notfound
+    return default
+  else
+    return to_bool(param)
+  end
+end
 
+function readParam(ini::Inifile,key::String,default::String)
+  param = get(ini,key)
+  if param == :notfound
+    return default
+  else
+    return param
+  end
+end
+
+function loadParams(daq::AbstractDAQ)
+  filename = configFile(daq)
+  loadParams(daq, filename)
+end
+
+function loadParams(daq::AbstractDAQ, filename)
   ini = Inifile()
 
   if isfile(filename)
     read(ini, filename)
   end
 
-  for key in keys(mps.params)
-    mps.params[key] = readParam(ini, key, mps.params[key])
+  for key in keys(daq.params)
+    daq.params[key] = readParam(ini, key, daq.params[key])
   end
 end
 
-function updateParams(mps::MPS,params::Dict)
+function updateParams(daq::AbstractDAQ,params::Dict)
 
   for key in keys(params)
-    mps.params[key] = params[key]
+    daq.params[key] = params[key]
   end
 
 end
