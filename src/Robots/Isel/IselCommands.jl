@@ -8,7 +8,7 @@ const minAcceleration = 1
 const maxAcceleration = 4000
 const minstartStopFreq = 20
 const maxstartStopFreq = 4000
-const stepsPerTurn = 400
+const stepsPerTurn = 5000
 const gearSlope = 5 # 1 turn equals 5mm feed
 const stepsPermm =stepsPerTurn / gearSlope
 

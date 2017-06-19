@@ -1,9 +1,12 @@
 using MPILib
+using Unitful
 using LibSerialPort
+using SerialPorts
+
 
 serialports = list_ports()
-#s = SerialPort("/dev/ttyS0", 19200)
-s = open_serial_port("/dev/ttyS0", 19200)
+s = SerialPort("/dev/ttyS0", 19200)
+#s = open("/dev/ttyS0", 19200)
 #baurate 19200, 8 Datenbit, 1 Stoppbit, keine Parität
 
 # r1=write(s, "@07\r")
