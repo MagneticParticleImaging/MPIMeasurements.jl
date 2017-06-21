@@ -16,16 +16,19 @@ include("RedPitayaScpi.jl")
 
 function init(daq::AbstractDAQ)
   daq.params["dfFreq"] = div(daq.params["dfBaseFrequency"],daq.params["dfDivider"])
-  daq.params["numSampPerPeriod"] = numSamplesPerPeriod(daq.rp,dec,daq.params["dfFreq"])
+  daq.params["dfPeriod"] = 1/daq.params["dfFreq"] # TODO: make this generic
+  daq.params["numSampPerPeriod"] = round(Int, daq.params["dfBaseFrequency"] /
+                                              daq.params["decimation"] *daq.params["dfPeriod"])
 
   #freqR = roundFreq(mps.rp,dec,freq)
 end
 
 function measurement(daq::AbstractDAQ; params=Dict{String,Any}() )
 
-  updateParams(mps, params)
-  numAverages = mps.params["acqNumAverages"]
-  numPeriods = mps.params["acqNumFrames"]
+  updateParams(daq, params)
+  numAverages = daq.params["acqNumAverages"]
+  numFrames = daq.params["acqNumFrames"]
+  numSampPerPeriod = daq.params["numSampPerPeriod"]
 
   startTx(daq)
 
@@ -34,16 +37,16 @@ function measurement(daq::AbstractDAQ; params=Dict{String,Any}() )
   end
   currFr = currentFrame(daq)
 
-  buffer = zeros(Float32,numSamp)
-  for n=1:nAverages
-    uMeas = readData(daq, currFr, numPeriods*numAverages)
-    buffer[:] .+= uMeas
+  buffer = zeros(Float32,numSampPerPeriod, numFrames)
+  for n=1:numFrames
+    uMeas = readData(daq, currFr, numAverages)
+    uMeas = mean(uMeas,2)
+    buffer[:,n] = uMeas
   end
-  buffer[:] ./= nAverages
 
   stopTx(daq)
 
-  return uMeas
+  return buffer
 end
 
 

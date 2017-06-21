@@ -12,15 +12,18 @@ function DAQRedPitayaScpi()
   daq = DAQRedPitayaScpi(params,rp)
   loadParams(daq)
   init(daq)
-  return
+  return daq
 end
 
 function configFile(daq::DAQRedPitayaScpi)
   return Pkg.dir("MPIMeasurements","src","DAQ","Configurations","RedPitayaScpi.ini")
 end
 
+controlPhaseDone(daq::DAQRedPitayaScpi) = true
+currentFrame(daq::DAQRedPitayaScpi) = 1
+
 function startTx(daq::DAQRedPitayaScpi)
-  dfAmplitude = mps.params["dfStrength"]
+  dfAmplitude = daq.params["dfStrength"]
   dec = daq.params["decimation"]
   freq = daq.params["dfFreq"]
 
@@ -31,18 +34,18 @@ function startTx(daq::DAQRedPitayaScpi)
 end
 
 function stopTx(daq::DAQRedPitayaScpi)
-  disableAnalogOutput(daq.rp,1)
+  Redpitaya.disableAnalogOutput(daq.rp,1)
 end
 
 function setTxParams(daq::DAQRedPitayaScpi, amplitude, phase)
     send(daq.rp,"SOUR1:VOLT $(amplitude)") # Set amplitude of output signal
 end
 
-function readData(daq::DAQRedPitayaScpi, startFrame, numPeriods)
+function readData(daq::DAQRedPitayaScpi, startFrame, numFrames)
 
-  dec = mps.params["decimation"]
-
-  numSampPerPeriod = numSamplesPerPeriod(daq.rp,dec,daq.params["dfFreq"])
+  dec = daq.params["decimation"]
+  numSampPerPeriod = daq.params["numSampPerPeriod"]
+  numSamp = numSampPerPeriod*numFrames
 
   sleep(0.1)
 
@@ -52,7 +55,7 @@ function readData(daq::DAQRedPitayaScpi, startFrame, numPeriods)
                 typ="OLD", trigger=trigger, triggerLevel=-0.0,
                 binary=true, triggerDelay=numSampPerPeriod)
 
-  uMeas[:] = circshift(uMeas,-phaseShift(uRef, numPeriods))
+  uMeas[:] = circshift(uMeas,-phaseShift(uRef, numFrames))
 
-  return reshape(buffer,numSampPerPeriod,numPeriods)
+  return reshape(uMeas,numSampPerPeriod,numFrames)
 end
