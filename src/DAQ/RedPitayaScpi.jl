@@ -19,7 +19,6 @@ function configFile(daq::DAQRedPitayaScpi)
   return Pkg.dir("MPIMeasurements","src","DAQ","Configurations","RedPitayaScpi.ini")
 end
 
-controlPhaseDone(daq::DAQRedPitayaScpi) = true
 currentFrame(daq::DAQRedPitayaScpi) = 1
 
 function startTx(daq::DAQRedPitayaScpi)
@@ -42,7 +41,7 @@ function setTxParams(daq::DAQRedPitayaScpi, amplitude, phase)
   send(daq.rp,"SOUR1:VOLT $(amplitude[1])") # Set amplitude of output signal
 end
 
-refToField(daq::DAQRedPitayaScpi) = daq["calibRefToField"][1]
+refToField(daq::DAQRedPitayaScpi) = daq["calibRefToField"]
 
 function readData(daq::DAQRedPitayaScpi, numFrames, startFrame=1)
 

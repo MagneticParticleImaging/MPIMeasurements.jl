@@ -3,10 +3,11 @@ using Graphics: @mustimplement
 import Base: setindex!, getindex
 
 export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
-      readDataControlled
+      readDataControlled, numRxChannels, numTxChannels
 
 abstract AbstractDAQ
 
+include("Control.jl")
 
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
@@ -14,6 +15,9 @@ abstract AbstractDAQ
 @mustimplement currentFrame(daq::AbstractDAQ)
 @mustimplement readData(daq::AbstractDAQ, channel, startFrame, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ)
+
+numRxChannels(daq::AbstractDAQ) = daq["rxNumChannels"]
+numTxChannels(daq::AbstractDAQ) = length(daq["dfDivider"])
 
 include("Parameters.jl")
 include("RedPitaya.jl")
@@ -30,7 +34,19 @@ function init(daq::AbstractDAQ)
 
   daq["numSampPerPeriod"] = round(Int, daq["dfBaseFrequency"] /
                                               daq["decimation"] * daq["dfPeriod"])
-
+  D = numTxChannels(daq)
+  N = daq["numSampPerPeriod"]
+  sinLUT = zeros(N,D)
+  cosLUT = zeros(N,D)
+  for d=1:D
+    Y = round(Int64, daq["dfPeriod"]*daq["dfFreq"][d] )
+    for n=1:N
+      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N
+      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N
+    end
+  end
+  daq["sinLUT"] = sinLUT
+  daq["cosLUT"] = cosLUT
 end
 
 function readDataControlled(daq::AbstractDAQ, numFrames)
@@ -38,7 +54,7 @@ function readDataControlled(daq::AbstractDAQ, numFrames)
   readData(daq, numFrames, currentFrame(daq))
 end
 
-function measurement(daq::AbstractDAQ; params=Dict{String,Any}() )
+function measurement(daq::AbstractDAQ, params=Dict{String,Any}() )
 
   updateParams(daq, params)
 
@@ -59,47 +75,6 @@ function measurement(daq::AbstractDAQ; params=Dict{String,Any}() )
   return uMeas
 end
 
-function controlLoop(daq::AbstractDAQ)
-  N = daq["numSampPerPeriod"]
-  numChannels = daq["rxNumChannels"]
-  sinBuff = [sin(2 * pi * k / N)/N for k=0:(N-1)]
-  cosBuff = [cos(2 * pi * k / N)/N for k=0:(N-1)]
-
-  if !haskey(daq.params,"currTxAmp")
-    daq["currTxAmp"] = 0.1*ones(numChannels)
-    daq["currTxPhase"] = zeros(numChannels)
-  end
-  setTxParams(daq, daq["currTxAmp"], daq["currTxPhase"])
-  sleep(0.5)
-
-  controlPhaseDone = false
-  while !controlPhaseDone
-    @time uMeas, uRef = readData(daq, 1, currentFrame(daq))
-    a = sum(uRef[:,1,1].*cosBuff)
-    b = sum(uRef[:,1,1].*sinBuff)
-
-    amplitude = sqrt(a*a+b*b)*refToField(daq)
-    phase = atan2(a,b) / pi * 180;
-
-    println("feedback amplitude=$amplitude phase=$phase")
-
-    if abs(daq["dfStrength"][1] - amplitude)/daq["dfStrength"][1] < 0.01 &&
-       abs(phase) < 0.1
-      controlPhaseDone  = true
-    end
-
-    daq["currTxPhase"] .-= phase
-    daq["currTxAmp"] *=  daq["dfStrength"][1] / amplitude
-
-    setTxParams(daq, daq["currTxAmp"], daq["currTxPhase"])
-
-    sleep(0.5)
-  end
-
-end
-
-
-
 
 # DO NOT USE
 export measurementCont
@@ -111,13 +86,15 @@ function measurementCont(daq::AbstractDAQ)
   try
       while true
         uMeas, uRef = readData(daq,10, currentFrame(daq))
-        showDAQData(daq,vec(uMeas))
+        #showDAQData(daq,vec(uMeas))
+        showAllDAQData(uMeas,1)
+        showAllDAQData(uRef,2)
         sleep(0.01)
       end
   catch x
       if isa(x, InterruptException)
           println("Stop Tx")
-          stopTx(mps)
+          stopTx(daq)
       else
         rethrow(x)
       end
@@ -151,5 +128,24 @@ function showDAQData(daq,u)
   freq = (0:(length(uhat)-1)) * daq["dfBaseFrequency"] / daq["dfDivider"][1,1,1]  /10
 
   semilogy(freq,uhat,"o-b",lw=2)
+  sleep(0.1)
+end
+
+
+
+
+
+export showAllDAQData
+function showAllDAQData(u, fignum=1)
+  D = size(u,2)
+  figure(fignum)
+  clf()
+  for d=1:D
+    u_ = vec(u[:,d,:])
+    subplot(2,D,(d-1)*2+ 1)
+    plot(u_)
+    subplot(2,D,(d-1)*2+ 2)
+    semilogy(abs(rfft(u_)),"o-b",lw=2)
+  end
   sleep(0.1)
 end

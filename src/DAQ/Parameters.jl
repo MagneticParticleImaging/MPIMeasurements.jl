@@ -29,6 +29,7 @@ function defaultDAQParams()
   params["dfBaseFrequency"] = 125e6
   params["dfDivider"] = [4836]
   params["rxNumChannels"] = 1
+  params["controlPause"] = 0.5
 
   return params
 end
