@@ -36,7 +36,6 @@ float *txBuff = NULL;
 int64_t data_read;
 int64_t data_read_total;
 int64_t buff_size;
-float intToVolt = 0.5/200222.109375; // needs config value
 float amplitudeTx = 0.1;             // needs config value
 float phaseTx = 0.0;                 // needs config value
 int numSamplesPerPeriod;
@@ -122,8 +121,8 @@ void* acquisition_thread(void* ch)
 
        }
 
-       //printf("++++ data_written: %lld total_frame %lld\n", 
-       //         data_read, data_read_total/numSamplesPerPeriod);
+       printf("++++ data_written: %lld total_frame %lld\n", 
+                data_read, data_read_total/numSamplesPerPeriod);
 
        wp_old = wp;
        currentFrameTotal = data_read_total / numSamplesPerPeriod - 1;
@@ -360,7 +359,6 @@ int main(int argc, char **argv){
   }
 
   // These are parameter that we need to know from host
-  intToVolt = 0.5/200222.109375;
   amplitudeTx = 0.1;
 
   while(true)
