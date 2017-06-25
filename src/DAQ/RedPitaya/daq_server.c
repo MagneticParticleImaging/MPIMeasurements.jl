@@ -33,29 +33,34 @@ static uint32_t getSizeFromStartEndPos(uint32_t start_pos, uint32_t end_pos) {
 int16_t *buff;
 int16_t *buffControl;
 float *txBuff = NULL;
+float *ffValues = NULL;
 int64_t data_read;
 int64_t data_read_total;
 int64_t buff_size;
-float amplitudeTx = 0.1;             // needs config value
-float phaseTx = 0.0;                 // needs config value
-int numSamplesPerPeriod;
-int numPeriodsPerFrame;
-int numPeriods;
-int tx_buff_size;
+float amplitudeTx = 0.0;
+float phaseTx = 0.0;
+int64_t numFramesInMemoryBuffer;
+int numSamplesInTxBuff;
+int numSamplesPerFrame;
 int64_t decimation = 64;
 
-bool txEnabled;
-bool isMaster;
 bool rxEnabled;
+bool ffOn;
+uint32_t wp_first;
 
 int64_t currentFrameTotal;
 
-void fill_tx_buff()
-{
-  for (int i = 0; i < tx_buff_size; ++i){
-    txBuff[i] = sin(2.0*M_PI / tx_buff_size * i + phaseTx/180.0*M_PI);
-  }
-}
+struct paramsType {
+  int numSamplesPerPeriod;
+  int numSamplesPerTxPeriod;
+  int numPeriodsPerFrame;
+  int numFFChannels;
+  bool txEnabled;
+  bool ffEnabled;
+  bool isMaster; // not used yet
+};
+
+struct paramsType params;
 
 void wait_for_acq_trigger()
 {
@@ -67,7 +72,7 @@ void wait_for_acq_trigger()
 
   rp_acq_trig_state_t state = RP_TRIG_STATE_TRIGGERED;
 
-  while(true) {
+  while(false) {
     rp_AcqGetTriggerState(&state);
     if(state == RP_TRIG_STATE_TRIGGERED){
       //sleep(1);
@@ -77,17 +82,21 @@ void wait_for_acq_trigger()
   }
 }
 
+
 void* acquisition_thread(void* ch)
 {        
   wait_for_acq_trigger();
 
+
   uint32_t wp,wp_old;
   rp_AcqGetWritePointer(&wp_old);
+  wp_first = wp_old;
   //rp_AcqGetWritePointerAtTrig(&wp_old);
   data_read = 0;
   int counter = 0;
   currentFrameTotal = 0;
 
+  ffOn = true;
   while(rxEnabled) {
      rp_AcqGetWritePointer(&wp);
           
@@ -121,21 +130,65 @@ void* acquisition_thread(void* ch)
 
        }
 
-       printf("++++ data_written: %lld total_frame %lld\n", 
-                data_read, data_read_total/numSamplesPerPeriod);
+       //printf("++++ data_written: %lld total_frame %lld\n", 
+       //         data_read, data_read_total/params.numSamplesPerPeriod);
 
        wp_old = wp;
-       currentFrameTotal = data_read_total / numSamplesPerPeriod - 1;
+       currentFrameTotal = data_read_total / params.numSamplesPerPeriod - 1;
      } 
 
      counter++;
    }
    printf("ACQ Thread is finished!\n");
        printf("____  data_written: %lld total_frame %lld\n",
-                       data_read, data_read_total/numSamplesPerPeriod);
+                       data_read, data_read_total/params.numSamplesPerPeriod);
   return NULL;
 }
 
+uint64_t dataReadFF;
+
+void* focus_field_thread(void* ch)
+{        
+  dataReadFF=0;
+  uint32_t wp,wp_old;
+  int64_t currFr;
+  int64_t oldFr=-1;
+  
+  printf("tick\n");
+  while(!ffOn) {}
+  wp_old = wp_first;
+  printf("toc\nk");
+
+  while(rxEnabled && ffOn) {
+    rp_AcqGetWritePointer(&wp);
+    uint32_t size = getSizeFromStartEndPos(wp_old, wp)-1;
+    if (size > 0) {
+      dataReadFF += size;
+      currFr = dataReadFF/params.numSamplesPerPeriod; 
+      if(currFr > oldFr +1) {
+        printf("WARNING: We lost a frame! oldFr %lld newFr %lld size=%d\n", oldFr, currFr, size);
+      }
+      if(currFr > oldFr) {
+        //printf("++++ currFrame: %lld\n",  currFr);
+        int currFFStep = currFr % params.numPeriodsPerFrame;
+        for (int i=0; i< params.numFFChannels; i++) {
+          
+          int status = rp_AOpinSetValue(i, ffValues[currFFStep*params.numFFChannels+i]);
+          //printf("Set ff channel %d in cycle %d to value %f.\n", i,
+          //              currFFStep,ffValues[currFFStep*params.numFFChannels+i]);
+          if (status != RP_OK) {
+              printf("Could not set AO[%i] voltage.\n", i);
+          }
+        }
+        oldFr = currFr;
+      }
+      wp_old=wp;
+    }
+    //usleep(4);
+  } 
+
+  return NULL;
+}
 
 
 
@@ -176,56 +229,51 @@ void wait_for_connections()
                  &clilen);
   if (newsockfd < 0) 
         error("ERROR on accept");
-  bzero(buffer,256);
 
-
-  n = read(newsockfd,buffer,4);
-  if (n < 0) error("ERROR reading from socket");
-  
-  numSamplesPerPeriod = ((uint32_t*)buffer)[0];
-  printf("Num Samples Per Period: %d\n", numSamplesPerPeriod);
-
-  n = read(newsockfd,buffer,4);
+  n = read(newsockfd,&params,sizeof(struct paramsType));
   if (n < 0) error("ERROR reading from socket");
  
-  numPeriods = ((uint32_t*)buffer)[0];
-  printf("Num Periods: %d\n", numPeriods);
- 
-  n = read(newsockfd,buffer,4);
-  if (n < 0) error("ERROR reading from socket");
-  
-  txEnabled = (((int32_t*)buffer)[0] == 1);
-  printf("txEnabled: %d\n", txEnabled);
-  
-  n = read(newsockfd,buffer,4);
-  if (n < 0) error("ERROR reading from socket");
-  
-  isMaster = (((int32_t*)buffer)[0] == 1);
-  printf("isMaster: %d\n", isMaster);
+  numSamplesPerFrame = params.numSamplesPerPeriod * params.numPeriodsPerFrame; 
+  numFramesInMemoryBuffer = 64*1024*1024 / numSamplesPerFrame / 2;
+                             
+  printf("Num Samples Per Period: %d\n", params.numSamplesPerPeriod);
+  printf("Num Samples Per Tx Period: %d\n", params.numSamplesPerTxPeriod);
+  printf("Num Periods Per Frame: %d\n", params.numPeriodsPerFrame);
+  printf("Num Samples Per Frame: %d\n", numSamplesPerFrame);
+  printf("Num Frames In Memory Buffer: %lld\n", numFramesInMemoryBuffer);
+  printf("Num FF Channels: %d\n", params.numFFChannels);
+  printf("txEnabled: %d\n", params.txEnabled);
+  printf("ffEnabled: %d\n", params.ffEnabled);
+  printf("isMaster: %d\n", params.isMaster);
+
+  if(params.ffEnabled) {
+    ffValues = (float *)malloc(params.numFFChannels* params.numPeriodsPerFrame * sizeof(float));
+    n = read(newsockfd,ffValues,params.numFFChannels* params.numPeriodsPerFrame * sizeof(float));
+    for(int i=0;i<params.numFFChannels* params.numPeriodsPerFrame; i++) printf(" %f ",ffValues[i]);
+    printf("\n");
+    if (n < 0) error("ERROR reading from socket");
+  }
 }
 
 void send_data_to_host(int64_t frame, int64_t numframes, int64_t channel)
 {
-  int64_t frameInBuff = frame % numPeriods;
+  int64_t frameInBuff = frame % numFramesInMemoryBuffer;
 
   int16_t* buff_ = channel == 1 ? buff : buffControl; 
 
-  if(numframes+frameInBuff < numPeriods)
+  if(numframes+frameInBuff < numFramesInMemoryBuffer)
   {
-    n = write(newsockfd, buff_+frameInBuff*numSamplesPerPeriod, 
-                  numSamplesPerPeriod * numframes * sizeof(int16_t));
+    n = write(newsockfd, buff_+frameInBuff*numSamplesPerFrame, 
+                  numSamplesPerFrame * numframes * sizeof(int16_t));
     if (n < 0) error("ERROR writing to socket"); 
-    //n = write(newsockfd, buffControl+frameInBuff*numSamplesPerPeriod, 
-    //              numSamplesPerPeriod * sizeof(int16_t));
-    //if (n < 0) error("ERROR writing to socket"); 
   } else {
-      int64_t frames1 = numPeriods - frameInBuff;
+      int64_t frames1 = numFramesInMemoryBuffer - frameInBuff;
       int64_t frames2 = numframes - frames1;
-      n = write(newsockfd, buff_+frameInBuff*numSamplesPerPeriod,
-                  numSamplesPerPeriod * frames1 *sizeof(int16_t));
+      n = write(newsockfd, buff_+frameInBuff*numSamplesPerFrame,
+                  numSamplesPerFrame * frames1 *sizeof(int16_t));
       if (n < 0) error("ERROR writing to socket");
       n = write(newsockfd, buff_,
-                  numSamplesPerPeriod * frames2 * sizeof(int16_t));
+                  numSamplesPerFrame * frames2 * sizeof(int16_t));
       if (n < 0) error("ERROR writing to socket");
   }
 }
@@ -270,6 +318,7 @@ void* communication_thread(void* ch)
        close(newsockfd);
        close(sockfd);
        rxEnabled = false;
+       ffOn = false;
        return NULL;
     }
   }
@@ -277,24 +326,22 @@ void* communication_thread(void* ch)
   return NULL;
 }
 
+void fillTxBuff()
+{
+  for (int i = 0; i < numSamplesInTxBuff; ++i){
+    txBuff[i] = sin(2.0*M_PI / numSamplesInTxBuff * i + phaseTx/180.0*M_PI);
+  }
+}
+
 void startTx()
 {
   rp_GenReset();
   
-
-  /*double targetFreq = 125.0e6 / 64.0 / numSamplesPerPeriod;
-  float usedFreq;
-  rp_GenFreq(RP_CH_1, 125.0e6 / 64.0 / numSamplesPerPeriod );
-  rp_GenGetFreq(RP_CH_1, &usedFreq);
-  printf("Target Freq: %f   Used Freq: %f  \n",targetFreq,usedFreq);
-  */
-  //rp_GenWaveform(RP_CH_1, RP_WAVEFORM_SINE);
-
-  tx_buff_size = decimation*numSamplesPerPeriod;  //16384/2;
-  txBuff = (float *)malloc(tx_buff_size * sizeof(float));
-  fill_tx_buff();
+  numSamplesInTxBuff = decimation*params.numSamplesPerTxPeriod;  //16384/2;
+  txBuff = (float *)malloc(numSamplesInTxBuff * sizeof(float));
+  fillTxBuff();
   rp_GenWaveform(RP_CH_1, RP_WAVEFORM_ARBITRARY);
-  rp_GenArbWaveform(RP_CH_1, txBuff, tx_buff_size);
+  rp_GenArbWaveform(RP_CH_1, txBuff, numSamplesInTxBuff);
   rp_GenFreq(RP_CH_1, 125.0e6 / ((double)decimation) / 256 );
 
   rp_GenAmp(RP_CH_1, amplitudeTx);
@@ -307,8 +354,8 @@ void updateTx() {
   printf("phaseTx New: %f \n", phaseTx);
   rp_GenAmp(RP_CH_1, amplitudeTx);
   //rp_GenWaveform(RP_CH_1, RP_WAVEFORM_ARBITRARY);
-  fill_tx_buff();
-  rp_GenArbWaveform(RP_CH_1, txBuff, tx_buff_size);
+  fillTxBuff();
+  rp_GenArbWaveform(RP_CH_1, txBuff, numSamplesInTxBuff);
 }
 
 void stopTx()
@@ -338,7 +385,8 @@ void stopRx()
 void initBuffers()
 {
   // intitialize buffers
-  buff_size = numSamplesPerPeriod*numPeriods;
+
+  buff_size = params.numSamplesPerPeriod*numFramesInMemoryBuffer;
   buff = (int16_t*)malloc(buff_size * sizeof(int16_t) );
   memset(buff,0, buff_size * sizeof(int16_t));
   buffControl = (int16_t*)malloc(buff_size * sizeof(int16_t) );
@@ -375,7 +423,7 @@ int main(int argc, char **argv){
     phaseTx = 0.0;
 
     initBuffers();
-    if(txEnabled) {
+    if(params.txEnabled) {
       startTx();
     }
     startRx();
@@ -383,6 +431,11 @@ int main(int argc, char **argv){
     pthread_t pAcq;
     pthread_create(&pAcq, NULL, acquisition_thread, NULL);
     
+    pthread_t pFF;
+    if(params.ffEnabled) {
+      pthread_create(&pFF, NULL, focus_field_thread, NULL);
+    }
+
     pthread_t pCom;
     pthread_create(&pCom, NULL, communication_thread, NULL);
     
@@ -391,7 +444,14 @@ int main(int argc, char **argv){
     pthread_join(pCom, NULL);
     printf("Com Thread finished \n");
 
-    stopTx();
+    if(params.ffEnabled) {
+      pthread_join(pFF, NULL);
+      printf("FF Thread finished \n");
+    }
+ 
+    if(params.txEnabled) {
+      stopTx();
+    }
     stopRx();
 
     releaseBuffers();
