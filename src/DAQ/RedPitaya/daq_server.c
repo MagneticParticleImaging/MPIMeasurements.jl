@@ -49,6 +49,7 @@ bool ffOn;
 uint32_t wp_first;
 
 int64_t currentFrameTotal;
+int64_t oldFrameTotal;
 
 struct paramsType {
   int numSamplesPerPeriod;
@@ -87,7 +88,6 @@ void* acquisition_thread(void* ch)
 {        
   wait_for_acq_trigger();
 
-
   uint32_t wp,wp_old;
   rp_AcqGetWritePointer(&wp_old);
   wp_first = wp_old;
@@ -95,11 +95,11 @@ void* acquisition_thread(void* ch)
   data_read = 0;
   int counter = 0;
   currentFrameTotal = 0;
+  oldFrameTotal = -1;
 
   ffOn = true;
   while(rxEnabled) {
      rp_AcqGetWritePointer(&wp);
-          
      uint32_t size = getSizeFromStartEndPos(wp_old, wp)-1;
      //printf("____ %d %d %d \n", size, wp_old, wp);
      if (size > 0) {
@@ -131,10 +131,31 @@ void* acquisition_thread(void* ch)
        }
 
        //printf("++++ data_written: %lld total_frame %lld\n", 
-       //         data_read, data_read_total/params.numSamplesPerPeriod);
+         //       data_read, data_read_total/params.numSamplesPerPeriod);
+
+       currentFrameTotal = data_read_total / params.numSamplesPerPeriod;
+       if (ffOn) {
+         if(currentFrameTotal > oldFrameTotal + 1) {
+           printf("WARNING: We lost a frame! oldFr %lld newFr %lld size=%d\n", 
+                   oldFrameTotal, currentFrameTotal, size);
+         }
+         if(currentFrameTotal > oldFrameTotal) {
+           //printf("++++ currFrame: %lld\n",  currFr);
+           int currFFStep = currentFrameTotal % params.numPeriodsPerFrame;
+           for (int i=0; i< params.numFFChannels; i++) {
+
+             int status = rp_AOpinSetValue(i, ffValues[currFFStep*params.numFFChannels+i]);
+             //printf("Set ff channel %d in cycle %d to value %f.\n", i,
+             //              currFFStep,ffValues[currFFStep*params.numFFChannels+i]);
+             if (status != RP_OK) {
+                 printf("Could not set AO[%i] voltage.\n", i);
+             }
+           }
+         }
+       }
 
        wp_old = wp;
-       currentFrameTotal = data_read_total / params.numSamplesPerPeriod - 1;
+       oldFrameTotal = currentFrameTotal;
      } 
 
      counter++;
@@ -145,52 +166,6 @@ void* acquisition_thread(void* ch)
   return NULL;
 }
 
-uint64_t dataReadFF;
-
-void* focus_field_thread(void* ch)
-{        
-  dataReadFF=0;
-  uint32_t wp,wp_old;
-  int64_t currFr;
-  int64_t oldFr=-1;
-  
-  printf("tick\n");
-  while(!ffOn) {}
-  wp_old = wp_first;
-  printf("toc\nk");
-
-  while(rxEnabled && ffOn) {
-    rp_AcqGetWritePointer(&wp);
-    uint32_t size = getSizeFromStartEndPos(wp_old, wp)-1;
-    if (size > 0) {
-      dataReadFF += size;
-      currFr = dataReadFF/params.numSamplesPerPeriod; 
-      if(currFr > oldFr +1) {
-        printf("WARNING: We lost a frame! oldFr %lld newFr %lld size=%d\n", oldFr, currFr, size);
-      }
-      if(currFr > oldFr) {
-        //printf("++++ currFrame: %lld\n",  currFr);
-        int currFFStep = currFr % params.numPeriodsPerFrame;
-        for (int i=0; i< params.numFFChannels; i++) {
-          
-          int status = rp_AOpinSetValue(i, ffValues[currFFStep*params.numFFChannels+i]);
-          //printf("Set ff channel %d in cycle %d to value %f.\n", i,
-          //              currFFStep,ffValues[currFFStep*params.numFFChannels+i]);
-          if (status != RP_OK) {
-              printf("Could not set AO[%i] voltage.\n", i);
-          }
-        }
-        oldFr = currFr;
-      }
-      wp_old=wp;
-    }
-    //usleep(4);
-  } 
-
-  return NULL;
-}
-
-
 
 // globals used for network communication
 int sockfd, newsockfd, portno;
@@ -199,7 +174,6 @@ char buffer[256];
 struct sockaddr_in serv_addr, cli_addr;
 int n;
  
-
 void init_socket()
 {
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -292,7 +266,7 @@ void* communication_thread(void* ch)
 
     switch(command) {
       case 1: // get current frame number
-        ((int64_t*)buffer)[0] = currentFrameTotal;
+        ((int64_t*)buffer)[0] = currentFrameTotal-1; // -1 because we want full frames
         n = write(newsockfd, buffer, sizeof(int64_t));
         if (n < 0) error("ERROR writing to socket");
       break;
@@ -431,11 +405,6 @@ int main(int argc, char **argv){
     pthread_t pAcq;
     pthread_create(&pAcq, NULL, acquisition_thread, NULL);
     
-    pthread_t pFF;
-    if(params.ffEnabled) {
-      pthread_create(&pFF, NULL, focus_field_thread, NULL);
-    }
-
     pthread_t pCom;
     pthread_create(&pCom, NULL, communication_thread, NULL);
     
@@ -444,11 +413,6 @@ int main(int argc, char **argv){
     pthread_join(pCom, NULL);
     printf("Com Thread finished \n");
 
-    if(params.ffEnabled) {
-      pthread_join(pFF, NULL);
-      printf("FF Thread finished \n");
-    }
- 
     if(params.txEnabled) {
       stopTx();
     }
