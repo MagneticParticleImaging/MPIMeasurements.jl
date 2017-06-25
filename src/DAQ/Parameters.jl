@@ -3,6 +3,7 @@ export loadParams, saveParams, updateParams
 # The purpose of this function is to define the type of the entries
 function defaultDAQParams()
   params = Dict{String,Any}()
+  params["daq"] = "RedPitaya"
   params["ip"] = ["192.168.1.20"]
   params["acqNumFrames"] = 10
   params["acqNumAverages"] = 10
@@ -27,9 +28,13 @@ function defaultDAQParams()
   params["dfStrength"] = [10e-3]
   params["dfPhase"] = [0.0]
   params["dfBaseFrequency"] = 125e6
-  params["dfDivider"] = [4836]
+  params["dfDivider"] = [4800]
   params["rxNumChannels"] = 1
   params["controlPause"] = 0.5
+  params["acqNumPatches"] = 1
+  params["acqNumFFChannels"] = 1
+  params["acqFFValues"] = [1.0]
+  params["acqNumPeriods"] = 1
 
   return params
 end
@@ -90,21 +95,18 @@ function readParam(ini::Inifile,key::String,default::Vector{String})
   end
 end
 
-function loadParams(daq::AbstractDAQ)
-  filename = configFile(daq)
-  loadParams(daq, filename)
-end
-
-function loadParams(daq::AbstractDAQ, filename)
+function loadParams(filename)
+  params = defaultDAQParams()
   ini = Inifile()
 
   if isfile(filename)
     read(ini, filename)
   end
 
-  for key in keys(daq.params)
-    daq.params[key] = readParam(ini, key, daq.params[key])
+  for key in keys(params)
+    params[key] = readParam(ini, key, params[key])
   end
+  return params
 end
 
 function updateParams(daq::AbstractDAQ,params::Dict)

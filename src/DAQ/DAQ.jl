@@ -3,7 +3,7 @@ using Graphics: @mustimplement
 import Base: setindex!, getindex
 
 export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
-      readDataControlled, numRxChannels, numTxChannels
+      readDataControlled, numRxChannels, numTxChannels, DAQ
 
 abstract AbstractDAQ
 
@@ -23,6 +23,26 @@ include("Parameters.jl")
 include("RedPitaya.jl")
 include("RedPitayaScpi.jl")
 
+function loadParams(daq::AbstractDAQ)
+  filename = configFile(daq)
+  loadParams(daq, filename)
+end
+
+function DAQ(file::String)
+  params = loadParams(_configFile(file))
+  if params["daq"] == "RedPitaya"
+    return DAQRedPitaya(params)
+  elseif params["daq"] == "RedPitayaScpi"
+    return DAQRedPitayaScpi(params)
+  else
+    error("$(params["daq"]) not yet implemented!")
+  end
+end
+
+function _configFile(file::String)
+  return Pkg.dir("MPIMeasurements","src","DAQ","Configurations",file)
+end
+
 getindex(daq::AbstractDAQ, param::String) = daq.params[param]
 function setindex!(daq::AbstractDAQ, value, param::String)
   daq.params[param] = value
@@ -30,10 +50,15 @@ end
 
 function init(daq::AbstractDAQ)
   daq["dfFreq"] = daq["dfBaseFrequency"] ./ daq["dfDivider"]
-  daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"]
+  daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"] *
+                    daq["acqNumPeriods"]
 
-  daq["numSampPerPeriod"] = round(Int, daq["dfBaseFrequency"] /
-                                              daq["decimation"] * daq["dfPeriod"])
+  if !isinteger(daq["dfDivider"] / daq["decimation"])
+    warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
+  end
+  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"]  *
+                                                                daq["acqNumPeriods"]
+                                              )
   D = numTxChannels(daq)
   N = daq["numSampPerPeriod"]
   sinLUT = zeros(N,D)
@@ -85,7 +110,7 @@ function measurementCont(daq::AbstractDAQ)
 
   try
       while true
-        uMeas, uRef = readData(daq,10, currentFrame(daq))
+        uMeas, uRef = readData(daq,1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         showAllDAQData(uMeas,1)
         showAllDAQData(uRef,2)

@@ -7,30 +7,40 @@ export DAQRedPitaya
 #   LD_LIBRARY_PATH=/root/MPIMeasurements/src/DAQ/RedPitaya/ /root/MPIMeasurements/src/DAQ/RedPitaya/daq_server
 #
 
+import Base.write
 
 type DAQRedPitaya <: AbstractDAQ
   params::Dict
   sockets::Vector{Any}
 end
 
-function DAQRedPitaya()
-  params = defaultDAQParams()
+function DAQRedPitaya(params)
   daq = DAQRedPitaya(params,Vector{Any}(length(params["ip"])))
-  loadParams(daq)
   println(params["ip"])
-  daq.sockets = Vector{Any}(length(params["ip"])) #ugly
   init(daq)
 
   return daq
 end
 
-function configFile(daq::DAQRedPitaya)
-  return Pkg.dir("MPIMeasurements","src","DAQ","Configurations","RedPitaya2D.ini")
-end
+DAQRedPitaya() = DAQRedPitaya(loadParams(_configFile("RedPitaya.ini")))
 
 function currentFrame(daq::DAQRedPitaya)
   write(daq.sockets[1],UInt32(1))
   return read(daq.sockets[1],Int64)
+end
+
+immutable ParamsType
+  numSamplesPerPeriod::Int32
+  numSamplesPerTxPeriod::Int32
+  numPeriodsPerFrame::Int32
+  numFFChannels::Int32
+  txEnabled::Bool
+  ffEnabled::Bool
+  isMaster::Bool
+end
+
+function Base.write(io::IO, p::ParamsType)
+  write(io, reinterpret(Int8,[p]))
 end
 
 function startTx(daq::DAQRedPitaya)
@@ -38,13 +48,22 @@ function startTx(daq::DAQRedPitaya)
   dec = daq.params["decimation"]
   freq = daq.params["dfFreq"]
 
-  #daq.params["calibFieldToVolt"]*dfAmplitude
+  numSamplesPerTxPeriod = round(Int32, daq["numSampPerPeriod"] ./
+                                       (daq["dfPeriod"] .* daq["dfFreq"]))
+
   for d=1:length(daq["ip"])
     daq.sockets[d] = connect(daq["ip"][d],7777)
-    write(daq.sockets[d],UInt32(daq.params["numSampPerPeriod"]))
-    write(daq.sockets[d],UInt32(1000000))
-    write(daq.sockets[d],UInt32(1))
-    write(daq.sockets[d],UInt32(1))
+    p = ParamsType(daq["numSampPerPeriod"],
+                   numSamplesPerTxPeriod[d],
+                   daq["acqNumFFChannels"],
+                   daq["acqNumPatches"],
+                   true,
+                   daq["acqNumPatches"] > 1,
+                   true)
+    write(daq.sockets[d],p)
+    if daq["acqNumPatches"] > 1
+      write(daq.sockets[d],map(Float32,daq["acqFFValues"]))
+    end
   end
 end
 

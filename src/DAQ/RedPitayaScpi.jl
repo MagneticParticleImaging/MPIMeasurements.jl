@@ -5,19 +5,15 @@ type DAQRedPitayaScpi <: AbstractDAQ
   rp::RedPitaya
 end
 
-function DAQRedPitayaScpi()
-  params = defaultDAQParams()
+function DAQRedPitayaScpi(params)
   println(params["ip"])
   rp = RedPitaya(params["ip"][1])
   daq = DAQRedPitayaScpi(params,rp)
-  loadParams(daq)
   init(daq)
   return daq
 end
 
-function configFile(daq::DAQRedPitayaScpi)
-  return Pkg.dir("MPIMeasurements","src","DAQ","Configurations","RedPitayaScpi.ini")
-end
+DAQRedPitayaScpi() = DAQRedPitayaScpi(loadParams(_configFile("RedPitayaScpi.ini")))
 
 currentFrame(daq::DAQRedPitayaScpi) = 1
 
