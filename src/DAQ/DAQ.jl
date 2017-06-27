@@ -166,7 +166,7 @@ function showAllDAQData(u, fignum=1)
   figure(fignum)
   clf()
   for d=1:D
-    u_ = vec(u[:,d,:])
+    u_ = vec(u[:,d,:,:])
     subplot(2,D,(d-1)*2+ 1)
     plot(u_)
     subplot(2,D,(d-1)*2+ 2)

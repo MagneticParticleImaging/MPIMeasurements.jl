@@ -13,7 +13,8 @@ function controlLoop(daq::AbstractDAQ)
 
   controlPhaseDone = false
   while !controlPhaseDone
-    @time uMeas, uRef = readData(daq, 1, currentFrame(daq))
+    frame = currentFrame(daq)
+    @time uMeas, uRef = readData(daq, 1, frame)
 
     controlPhaseDone = doControlStep(daq, uRef)
 

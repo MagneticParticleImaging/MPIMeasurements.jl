@@ -26,7 +26,8 @@ DAQRedPitaya() = DAQRedPitaya(loadParams(_configFile("RedPitaya.ini")))
 
 function currentFrame(daq::DAQRedPitaya)
   write(daq.sockets[1],UInt32(1))
-  return read(daq.sockets[1],Int64)
+  v = read(daq.sockets[1],Int64)
+  return v
 end
 
 immutable ParamsType
@@ -36,6 +37,7 @@ immutable ParamsType
   numFFChannels::Int32
   txEnabled::Bool
   ffEnabled::Bool
+  ffLinear::Bool
   isMaster::Bool
 end
 
@@ -55,10 +57,11 @@ function startTx(daq::DAQRedPitaya)
     daq.sockets[d] = connect(daq["ip"][d],7777)
     p = ParamsType(daq["numSampPerPeriod"],
                    numSamplesPerTxPeriod[d],
-                   daq["acqNumFFChannels"],
                    daq["acqNumPatches"],
+                   daq["acqNumFFChannels"],
                    true,
                    daq["acqNumPatches"] > 1,
+                   true,
                    true)
     write(daq.sockets[d],p)
     if daq["acqNumPatches"] > 1
@@ -94,38 +97,43 @@ function readData(daq::DAQRedPitaya, numFrames, startFrame)
   numSamp = numSampPerPeriod*numFrames
   numAverages = daq["acqNumAverages"]
   numAllFrames = numAverages*numFrames
+  numPatches = daq["acqNumPatches"]
 
-  uMeas = zeros(Int16,numSampPerPeriod,numRxChannels(daq),numFrames)
-  uRef = zeros(Int16,numSampPerPeriod,numTxChannels(daq),numFrames)
+  numSampPerFrame = numSampPerPeriod * numPatches
+
+  uMeas = zeros(Int16,numSampPerPeriod,numRxChannels(daq),numPatches,numFrames)
+  uRef = zeros(Int16,numSampPerPeriod,numTxChannels(daq),numPatches,numFrames)
   wpRead = startFrame
   l=1
-  chunkSize = 10000
+  chunkSize = 1000
   while l<=numFrames
     wpWrite = currentFrame(daq) # TODO handle wpWrite overflow
     while wpRead >= wpWrite
       wpWrite = currentFrame(daq)
     end
     chunk = min(wpWrite-wpRead,chunkSize)
+    println(chunk)
     if l+chunk > numFrames
       chunk = numFrames - l+1
     end
 
-    println("Read from $wpRead until $(wpRead+chunk-1), WpWrite $(wpWrite)")
+    println("Read from $wpRead until $(wpRead+chunk-1), WpWrite $(wpWrite), chunk=$(chunk)")
 
     for d=1:numRxChannels(daq)
       write(daq.sockets[d],UInt32(2))
       write(daq.sockets[d],UInt64(wpRead))
       write(daq.sockets[d],UInt64(chunk))
       write(daq.sockets[d],UInt64(1))
-      uMeas[:,d,l:(l+chunk-1)] = read(daq.sockets[d],Int16,chunk * numSampPerPeriod)
+      uMeas[:,d,:,l:(l+chunk-1)] = read(daq.sockets[d],Int16,chunk * numSampPerFrame)
     end
     for d=1:numTxChannels(daq)
       write(daq.sockets[d],UInt32(2))
       write(daq.sockets[d],UInt64(wpRead))
       write(daq.sockets[d],UInt64(chunk))
       write(daq.sockets[d],UInt64(2))
-      uRef[:,d,l:(l+chunk-1)] = read(daq.sockets[d],Int16,chunk * numSampPerPeriod)
+      uRef[:,d,:,l:(l+chunk-1)] = read(daq.sockets[d],Int16,chunk * numSampPerFrame)
     end
+
     l += chunk
     wpRead += chunk
   end
