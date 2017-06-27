@@ -34,6 +34,7 @@ int16_t *buff;
 int16_t *buffControl;
 float *txBuff = NULL;
 float *ffValues = NULL;
+float *ffRead = NULL;
 int64_t data_read;
 int64_t data_read_total;
 int64_t buff_size;
@@ -45,7 +46,6 @@ int numSamplesPerFrame;
 int64_t decimation = 64;
 
 bool rxEnabled;
-bool ffOn;
 uint32_t wp_first;
 
 int64_t currentFrameTotal;
@@ -96,8 +96,9 @@ void* acquisition_thread(void* ch)
   int counter = 0;
   currentFrameTotal = 0;
   oldFrameTotal = -1;
+  int64_t currentPeriodTotal;
+  int64_t oldPeriodTotal=-1;
 
-  ffOn = true;
   while(rxEnabled) {
      rp_AcqGetWritePointer(&wp);
      uint32_t size = getSizeFromStartEndPos(wp_old, wp)-1;
@@ -131,17 +132,18 @@ void* acquisition_thread(void* ch)
        }
 
        //printf("++++ data_written: %lld total_frame %lld\n", 
-         //       data_read, data_read_total/params.numSamplesPerPeriod);
+       //         data_read, data_read_total/ numSamplesPerFrame);
 
-       currentFrameTotal = data_read_total / params.numSamplesPerPeriod;
-       if (ffOn) {
-         if(currentFrameTotal > oldFrameTotal + 1) {
-           printf("WARNING: We lost a frame! oldFr %lld newFr %lld size=%d\n", 
-                   oldFrameTotal, currentFrameTotal, size);
+       currentFrameTotal = data_read_total / numSamplesPerFrame;
+       currentPeriodTotal = data_read_total / params.numSamplesPerPeriod;
+       if (params.ffEnabled) {
+         if(currentPeriodTotal > oldPeriodTotal + 1) {
+           printf("WARNING: We lost an ff step! oldFr %lld newFr %lld size=%d\n", 
+                   oldPeriodTotal, currentPeriodTotal, size);
          }
-         if(currentFrameTotal > oldFrameTotal) {
+         if(currentPeriodTotal > oldPeriodTotal) {
            //printf("++++ currFrame: %lld\n",  currFr);
-           int currFFStep = currentFrameTotal % params.numPeriodsPerFrame;
+           int currFFStep = currentPeriodTotal % params.numPeriodsPerFrame;
            for (int i=0; i< params.numFFChannels; i++) {
 
              int status = rp_AOpinSetValue(i, ffValues[currFFStep*params.numFFChannels+i]);
@@ -150,19 +152,24 @@ void* acquisition_thread(void* ch)
              if (status != RP_OK) {
                  printf("Could not set AO[%i] voltage.\n", i);
              }
+             //status = rp_AIpinGetValue(i, ffRead + currFFStep*4+i);
+             //if (status != RP_OK) {
+             //    printf("Could not get AO[%i] voltage.\n", i);
+             //}
            }
          }
        }
 
        wp_old = wp;
        oldFrameTotal = currentFrameTotal;
+       oldPeriodTotal = currentPeriodTotal;
      } 
 
      counter++;
    }
    printf("ACQ Thread is finished!\n");
        printf("____  data_written: %lld total_frame %lld\n",
-                       data_read, data_read_total/params.numSamplesPerPeriod);
+                       data_read, data_read_total/numSamplesPerFrame);
   return NULL;
 }
 
@@ -233,8 +240,11 @@ void send_data_to_host(int64_t frame, int64_t numframes, int64_t channel)
 {
   int64_t frameInBuff = frame % numFramesInMemoryBuffer;
 
-  int16_t* buff_ = channel == 1 ? buff : buffControl; 
+  int16_t* buff_ = (channel == 1) ? buff : buffControl; 
 
+  //printf("channel = %lld \n",channel);
+
+  //printf("We send %lld data\n", numSamplesPerFrame * numframes);
   if(numframes+frameInBuff < numFramesInMemoryBuffer)
   {
     n = write(newsockfd, buff_+frameInBuff*numSamplesPerFrame, 
@@ -258,6 +268,7 @@ void* communication_thread(void* ch)
 {
   while(true)
   {
+    printf("SERVER: Wait for new command \n");
     n = read(newsockfd,buffer,4);
     if (n < 0) error("ERROR reading from socket");
 
@@ -267,6 +278,7 @@ void* communication_thread(void* ch)
     switch(command) {
       case 1: // get current frame number
         ((int64_t*)buffer)[0] = currentFrameTotal-1; // -1 because we want full frames
+        printf(" current frame = %lld \n", ((int64_t*)buffer)[0]);
         n = write(newsockfd, buffer, sizeof(int64_t));
         if (n < 0) error("ERROR writing to socket");
       break;
@@ -276,7 +288,7 @@ void* communication_thread(void* ch)
 
         int64_t frame = ((int64_t*)buffer)[0];
         int64_t numframes = ((int64_t*)buffer)[1];
-        int64_t channel = ((int64_t*)buffer)[3];
+        int64_t channel = ((int64_t*)buffer)[2];
         printf("Frame to read: %lld\n", frame);
         send_data_to_host(frame,numframes,channel);
       break;
@@ -292,7 +304,6 @@ void* communication_thread(void* ch)
        close(newsockfd);
        close(sockfd);
        rxEnabled = false;
-       ffOn = false;
        return NULL;
     }
   }
@@ -360,17 +371,20 @@ void initBuffers()
 {
   // intitialize buffers
 
-  buff_size = params.numSamplesPerPeriod*numFramesInMemoryBuffer;
+  buff_size = numSamplesPerFrame*numFramesInMemoryBuffer;
   buff = (int16_t*)malloc(buff_size * sizeof(int16_t) );
   memset(buff,0, buff_size * sizeof(int16_t));
   buffControl = (int16_t*)malloc(buff_size * sizeof(int16_t) );
   memset(buffControl,0, buff_size * sizeof(int16_t));
+  ffRead = (float*)malloc(numFramesInMemoryBuffer * 4 * sizeof(float) );
+  memset(ffRead,0, numFramesInMemoryBuffer * 4 * sizeof(float));
 }
 
 void releaseBuffers()
 {
   free(buff);
   free(buffControl);
+  free(ffRead);
 }
 
 int main(int argc, char **argv){
