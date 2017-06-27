@@ -10,6 +10,12 @@ if !isdir(Pkg.dir("MPIFiles"))
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
 
+if !isdir(Pkg.dir("LibSerialPorts"))
+  println("Installing LibSerialPort....")
+  Pkg.clone("https://github.com/hofmannmartin/LibSerialPort.jl.git")
+  Pkg.checkout("LibSerialPort","julia-0.5-compat")
+end
+
 using Reexport
 using IniFile
 @reexport using MPIFiles
@@ -20,5 +26,6 @@ using PyPlot
 include("MPS/MPS.jl")
 include("Robots/Robots.jl")
 include("DAQ/DAQ.jl")
+include("SerialDevices/SerialDevices.jl")
 
 end # module
