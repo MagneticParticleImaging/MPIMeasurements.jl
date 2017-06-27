@@ -1,5 +1,4 @@
-/* Red Pitaya C API example Acquiring a signal from a buffer  
- * This application acquires a signal on a specific channel */
+
 
 #include <stdio.h>
 #include <math.h>
@@ -58,6 +57,7 @@ struct paramsType {
   int numFFChannels;
   bool txEnabled;
   bool ffEnabled;
+  bool ffLinear;
   bool isMaster; // not used yet
 };
 
@@ -137,16 +137,26 @@ void* acquisition_thread(void* ch)
        currentFrameTotal = data_read_total / numSamplesPerFrame;
        currentPeriodTotal = data_read_total / params.numSamplesPerPeriod;
        if (params.ffEnabled) {
+         //printf("factor = %f \n",factor);
          if(currentPeriodTotal > oldPeriodTotal + 1) {
            printf("WARNING: We lost an ff step! oldFr %lld newFr %lld size=%d\n", 
                    oldPeriodTotal, currentPeriodTotal, size);
          }
-         if(currentPeriodTotal > oldPeriodTotal) {
+         if(currentPeriodTotal > oldPeriodTotal || params.ffLinear) {
+           float factor = ((float)data_read_total - currentPeriodTotal*params.numSamplesPerPeriod)/
+                         params.numSamplesPerPeriod;
            //printf("++++ currFrame: %lld\n",  currFr);
            int currFFStep = currentPeriodTotal % params.numPeriodsPerFrame;
            for (int i=0; i< params.numFFChannels; i++) {
-
-             int status = rp_AOpinSetValue(i, ffValues[currFFStep*params.numFFChannels+i]);
+             float val;
+             if(params.ffLinear) {
+               val = (1-factor)*ffValues[currFFStep*params.numFFChannels+i] +
+                     factor*ffValues[((currFFStep+1) % params.numPeriodsPerFrame)*params.numFFChannels+i];
+             } else {
+               val = ffValues[currFFStep*params.numFFChannels+i];
+             }
+             int status = rp_AOpinSetValue(i, val);
+             
              //printf("Set ff channel %d in cycle %d to value %f.\n", i,
              //              currFFStep,ffValues[currFFStep*params.numFFChannels+i]);
              if (status != RP_OK) {
