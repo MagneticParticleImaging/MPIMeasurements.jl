@@ -1,7 +1,5 @@
 import Base: send
 
-using LibSerialPort
-
 # abstract supertype for all possible serial devices
 abstract Device
 

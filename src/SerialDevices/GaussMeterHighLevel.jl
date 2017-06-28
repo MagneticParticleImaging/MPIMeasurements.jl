@@ -1,5 +1,6 @@
-export getXValue,getYValue,getZValue,getVectorMagnitude,setXRange,setYRange
-export setZRange,setAllRange,sleepModeOn,sleepModeOff,lockOn,lockOff
+export getXValue,getYValue,getZValue,getVectorMagnitude
+export setXRange,setYRange,setZRange,setAllRange
+export sleepModeOn,sleepModeOff,lockOn,lockOff
 export setUnitToGauss,setUnitToTesla,setStandardSettings
 
 """
