@@ -35,6 +35,7 @@ function defaultDAQParams()
   params["acqNumFFChannels"] = 1
   params["acqFFValues"] = [1.0]
   params["acqNumPeriods"] = 1
+  params["acqFFLinear"] = false
 
   return params
 end
@@ -67,6 +68,9 @@ function readParam{T}(ini::Inifile,key::String,default::Vector{T})
     return [parse(T,strip(path)) for path in split(param,",")]
   end
 end
+
+to_bool(s::AbstractString) = (lowercase(s) == "true") ? true : false
+to_bool(b::Bool) = b
 
 function readParam(ini::Inifile,key::String,default::Bool)
   param = get(ini,key)
