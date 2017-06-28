@@ -61,7 +61,7 @@ function startTx(daq::DAQRedPitaya)
                    daq["acqNumFFChannels"],
                    true,
                    daq["acqNumPatches"] > 1,
-                   true,
+                   daq["acqFFLinear"],
                    true)
     write(daq.sockets[d],p)
     if daq["acqNumPatches"] > 1
