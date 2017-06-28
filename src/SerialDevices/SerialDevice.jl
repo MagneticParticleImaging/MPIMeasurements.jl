@@ -7,7 +7,8 @@ type SerialDevice{T<:Device}
 	sp::SerialPort
 	pause_ms::Int
 	timeout_ms::Int
-	delim::String
+	delim_read::String
+	delim_write::String
 end
 
 """
@@ -26,12 +27,20 @@ function set_timeout_ms(sd::SerialDevice,timeout_ms::Int)
 	return nothing
 end
 
+"""
+Set character which terminates querry.
+"""
+function set_delim_write(sd::SerialDevice,delim::String)
+	sd.delim_write = delim
+	return nothing
+end
+
 
 """
 Set character which terminates querry answer.
 """
-function set_delim(sd::SerialDevice,delim::String)
-	sd.delim = delim
+function set_delim_read(sd::SerialDevice,delim::String)
+	sd.delim_read = delim
 	return nothing
 end
 
@@ -39,7 +48,7 @@ end
 Send command string to serial device.
 """
 function send(sd::SerialDevice,cmd::String)
-	write(sd.sp,cmd)
+	write(sd.sp,string(cmd,sd.delim_write))
 	sleep(sd.pause_ms/1000)
 	return nothing
 end
@@ -56,7 +65,17 @@ Send querry to serial device and receive device answer. Returns a String
 """
 function querry(sd::SerialDevice,cmd::String)
 	flush(sd.sp)
-	send(sd,cmd)
-	out = readuntil(sd.sp, sd.delim, sd.timeout_ms)
-	return out
+	send(sd,string(cmd,sd.delim_write))
+	out = readuntil(sd.sp, sd.delim_read, sd.timeout_ms)
+	flush(sd.sp)
+	return rstrip(out,Vector{Char}(sd.delim_read))
+end
+
+"""
+Close the serial port of the serial device `sd`. The optional `delete` keyword
+argument triggers a call to `sp_free_port` in the C library if set to `true`.
+"""
+function Base.close(sd::SerialDevice; delete::Bool=false)
+	sd.sp = close(sd.sp,delete=delete)
+	return sd
 end
