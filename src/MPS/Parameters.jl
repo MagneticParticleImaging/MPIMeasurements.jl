@@ -31,7 +31,7 @@ function defaultMPSParams()
 end
 
 function saveParams(mps::MPS)
-  filename = Pkg.dir("MPILib","src","MPS","MPS.ini")
+  filename = Pkg.dir("MPIMeasurements","src","MPS","MPS.ini")
   ini = Inifile()
   for (key,value) in mps.params
     set(ini, key, string(value) )
@@ -43,7 +43,7 @@ end
 
 
 function loadParams(mps::MPS)
-  filename = Pkg.dir("MPILib","src","MPS","MPS.ini")
+  filename = Pkg.dir("MPIMeasurements","src","MPS","MPS.ini")
 
   ini = Inifile()
 

@@ -94,6 +94,8 @@ function measurement(mps::MPS,params=Dict{String,Any}())
   send(mps.rp,"GEN:RST")
   sendAnalogSignal(mps.rp,1,"SINE",freqR,
                    mps.params["calibFieldToVolt"]*amplitude)
+
+  println("Send $(mps.params["calibFieldToVolt"]*amplitude) V to RP")
   sleep(0.3)
   buffer = zeros(Float32,numSamp)
   for n=1:nAverages
