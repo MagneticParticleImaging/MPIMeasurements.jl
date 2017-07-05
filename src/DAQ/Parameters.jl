@@ -36,6 +36,8 @@ function defaultDAQParams()
   params["acqFFValues"] = [1.0]
   params["acqNumPeriods"] = 1
   params["acqFFLinear"] = false
+  params["controlLoopPhaseAccuracy"] = 0.5
+  params["controlLoopAmplitudeAccuracy"] = 0.01
 
   return params
 end

@@ -85,8 +85,7 @@ function setTxParams(daq::DAQRedPitaya, amplitude, phase)
   end
 end
 
-
-const intToVolt = 0.5/200222.109375*64 #FIXME
+const intToVolt = 0.5/200222.109375*64  /14.15 #/ 14.15 #FIXME
 
 refToField(daq::DAQRedPitaya) = intToVolt*daq["calibRefToField"]
 

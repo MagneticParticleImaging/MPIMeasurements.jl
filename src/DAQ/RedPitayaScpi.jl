@@ -33,8 +33,12 @@ function stopTx(daq::DAQRedPitayaScpi)
 end
 
 function setTxParams(daq::DAQRedPitayaScpi, amplitude, phase)
-  println("SOUR1:VOLT $(amplitude[1])")
-  send(daq.rp,"SOUR1:VOLT $(amplitude[1])") # Set amplitude of output signal
+  if amplitude[1] < 0.5
+    println("SOUR1:VOLT $(amplitude[1])")
+    send(daq.rp,"SOUR1:VOLT $(amplitude[1])") # Set amplitude of output signal
+  else
+    error("errorororo")
+  end
 end
 
 refToField(daq::DAQRedPitayaScpi) = daq["calibRefToField"]
@@ -53,8 +57,12 @@ function readData(daq::DAQRedPitayaScpi, numFrames, startFrame=1)
                 typ="OLD", trigger=trigger, triggerLevel=-0.0,
                 binary=true, triggerDelay=numSampPerPeriod)
 
-  uMeas[:] = circshift(uMeas,-phaseShift(uRef, numFrames))
-  uRef[:] = circshift(uRef,-phaseShift(uRef, numFrames))
+  phase = phaseShift(uRef, numFrames)
+
+  uMeas[:] = circshift(uMeas, -phase)
+  uRef[:] = circshift(uRef,-phase)
+
+
 
   return reshape(uMeas,numSampPerPeriod,1,numFrames), reshape(uRef,numSampPerPeriod,1,numFrames)
 end
