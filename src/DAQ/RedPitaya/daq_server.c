@@ -103,6 +103,9 @@ void* acquisition_thread(void* ch)
      rp_AcqGetWritePointer(&wp);
      uint32_t size = getSizeFromStartEndPos(wp_old, wp)-1;
      //printf("____ %d %d %d \n", size, wp_old, wp);
+     if(size > 4000) {
+       printf("I think we lost a step %d %d %d \n", size, wp_old, wp);
+     }
      if (size > 0) {
        if(data_read + size <= buff_size) { 
          // Read measurement data
@@ -278,7 +281,7 @@ void* communication_thread(void* ch)
 {
   while(true)
   {
-    printf("SERVER: Wait for new command \n");
+    //printf("SERVER: Wait for new command \n");
     n = read(newsockfd,buffer,4);
     if (n < 0) error("ERROR reading from socket");
 
@@ -288,7 +291,7 @@ void* communication_thread(void* ch)
     switch(command) {
       case 1: // get current frame number
         ((int64_t*)buffer)[0] = currentFrameTotal-1; // -1 because we want full frames
-        printf(" current frame = %lld \n", ((int64_t*)buffer)[0]);
+        //printf(" current frame = %lld \n", ((int64_t*)buffer)[0]);
         n = write(newsockfd, buffer, sizeof(int64_t));
         if (n < 0) error("ERROR writing to socket");
       break;
@@ -347,6 +350,9 @@ void startTx()
 void updateTx() {
   printf("amplitudeTx New: %f \n", amplitudeTx);
   printf("phaseTx New: %f \n", phaseTx);
+  if( amplitudeTx > 0.5) {
+    amplitudeTx = 0.5;
+  }
   rp_GenAmp(RP_CH_1, amplitudeTx);
   //rp_GenWaveform(RP_CH_1, RP_WAVEFORM_ARBITRARY);
   fillTxBuff();
