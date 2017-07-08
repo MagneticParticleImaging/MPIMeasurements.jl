@@ -4,20 +4,20 @@ params = Dict{String,Any}()
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=20e-3
+params["dfStrength"]=[20e-3]
 
-#mps = MPS()
-mps = MPS("192.168.1.20")
+daq = DAQ("MPS.ini") #With custom server => continuous samples
+#daq = DAQ("MPSScpi.ini") #With Scpi interface => higher sampling rate
 
 # This version does not store the data
-#u = measurement(mps, params)
+#u = measurement(daq, params, controlPhase=false)
 
 # This version does store the data in a custom location
-#filename = measurement(mps,"/home/knopp/test.mdf", params)
+#filename = measurement(daq,"/home/knopp/test.mdf", params, background=true, controlPhase=false)
 
 # This version does store the data in the MDFStore
-filename = measurement(mps, MDFStore, params)
+filename = measurement(daq, MDFStore, params, background=false, controlPhase=true)
 
-u = loadMPSData(filename)
+u = loadBGCorrData(filename)
 
-showMPSData(mps,u)
+showDAQData(daq,u)

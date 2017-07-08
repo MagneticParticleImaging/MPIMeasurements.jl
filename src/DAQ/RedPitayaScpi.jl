@@ -18,14 +18,14 @@ DAQRedPitayaScpi() = DAQRedPitayaScpi(loadParams(_configFile("RedPitayaScpi.ini"
 currentFrame(daq::DAQRedPitayaScpi) = 1
 
 function startTx(daq::DAQRedPitayaScpi)
-  dfAmplitude = daq.params["dfStrength"][1]
-  dec = daq.params["decimation"]
-  freq = daq.params["dfFreq"][1]
+  dfAmplitude = daq["dfStrength"][1]
+  dec = daq["decimation"]
+  freq = daq["dfFreq"][1]
 
   # start sending
   send(daq.rp,"GEN:RST")
   sendAnalogSignal(daq.rp,1,"SINE",freq,
-                   daq.params["calibFieldToVolt"]*dfAmplitude)
+                   daq["calibFieldToVolt"]*dfAmplitude)
 end
 
 function stopTx(daq::DAQRedPitayaScpi)
@@ -62,7 +62,5 @@ function readData(daq::DAQRedPitayaScpi, numFrames, startFrame=1)
   uMeas[:] = circshift(uMeas, -phase)
   uRef[:] = circshift(uRef,-phase)
 
-
-
-  return reshape(uMeas,numSampPerPeriod,1,numFrames), reshape(uRef,numSampPerPeriod,1,numFrames)
+  return reshape(uMeas,numSampPerPeriod,1,1,numFrames), reshape(uRef,numSampPerPeriod,1,1,numFrames)
 end

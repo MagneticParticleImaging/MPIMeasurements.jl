@@ -27,8 +27,6 @@ using IniFile
 using PyPlot
 @reexport using Redpitaya
 
-
-include("MPS/MPS.jl")
 include("Robots/Robots.jl")
 include("DAQ/DAQ.jl")
 

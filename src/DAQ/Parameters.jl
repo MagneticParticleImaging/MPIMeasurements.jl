@@ -38,6 +38,19 @@ function defaultDAQParams()
   params["acqFFLinear"] = false
   params["controlLoopPhaseAccuracy"] = 0.5
   params["controlLoopAmplitudeAccuracy"] = 0.01
+  params["dfWaveform"] = "sine"
+  params["measUnit"] = "V"
+  params["measDataConversionFactor"] = [1.0, 0]
+  params["measIsTransposed"] = false
+  params["measIsBGCorrected"] = false
+  params["measIsTFCorrected"] = false
+  params["measIsFramePermutation"] = false
+  params["measIsFrequencySelection"] = false
+  params["measIsFourierTransformed"] = false
+  params["measIsSpectralLeakageCorrected"] = false
+  params["studyIsSimulation"] = false
+  params["studyIsCalibration"] = false
+  params["rpGainSetting"] = [0, 0]
 
   return params
 end
