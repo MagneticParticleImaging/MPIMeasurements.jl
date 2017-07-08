@@ -59,6 +59,8 @@ struct paramsType {
   bool ffEnabled;
   bool ffLinear;
   bool isMaster; // not used yet
+  bool isHighGainChA;
+  bool isHighGainChB;
 };
 
 struct paramsType params;
@@ -109,9 +111,9 @@ void* acquisition_thread(void* ch)
      if (size > 0) {
        if(data_read + size <= buff_size) { 
          // Read measurement data
-         rp_AcqGetDataRaw(RP_CH_2,wp_old, &size, buff+data_read );
+         rp_AcqGetDataRaw(RP_CH_1,wp_old, &size, buff+data_read );
          // Read control data
-         rp_AcqGetDataRaw(RP_CH_1,wp_old, &size, buffControl+data_read );
+         rp_AcqGetDataRaw(RP_CH_2,wp_old, &size, buffControl+data_read );
          data_read += size;
          data_read_total += size;
        } else {
@@ -312,6 +314,30 @@ void* communication_thread(void* ch)
         phaseTx = ((double*)buffer)[1];
         printf("New Tx: %f %f\n", amplitudeTx, phaseTx);
         updateTx();
+      break;
+      case 4: ;// get calibration params
+        rp_calib_params_t calib = rp_GetCalibrationSettings();
+
+        uint32_t calibScaleA = params.isHighGainChA ? calib.fe_ch1_fs_g_hi : calib.fe_ch1_fs_g_lo;
+        uint32_t calibScaleB = params.isHighGainChB ? calib.fe_ch2_fs_g_hi : calib.fe_ch2_fs_g_lo;
+
+        int32_t dc_offsA = params.isHighGainChA ? calib.fe_ch1_hi_offs : calib.fe_ch1_lo_offs;
+        int32_t dc_offsB = params.isHighGainChB ? calib.fe_ch2_hi_offs : calib.fe_ch2_lo_offs;
+
+        float offA = rp_CmnCnvCntToV(14, 0, params.isHighGainChA ? 20.0 : 1.0, calibScaleA, dc_offsA, 0.0);
+        float offB = rp_CmnCnvCntToV(14, 0, params.isHighGainChB ? 20.0 : 1.0, calibScaleB, dc_offsB, 0.0);
+        float tmpA = rp_CmnCnvCntToV(14, 1, params.isHighGainChA ? 20.0 : 1.0, calibScaleA, dc_offsA, 0.0);
+        float tmpB = rp_CmnCnvCntToV(14, 1, params.isHighGainChB ? 20.0 : 1.0, calibScaleB, dc_offsB, 0.0);
+        float scalingA = tmpA-offA;
+        float scalingB = tmpB-offB;
+
+        ((float*)buffer)[0] = scalingA;
+        ((float*)buffer)[1] = offA;
+        ((float*)buffer)[2] = scalingB;
+        ((float*)buffer)[3] = offB;
+        n = write(newsockfd, buffer, sizeof(float)*4);
+        if (n < 0) error("ERROR writing to socket");
+ 
       break;
       default:
        close(newsockfd);
