@@ -77,6 +77,7 @@ function startTx(daq::DAQRedPitaya)
                    daq["rpGainSetting"][1],
                    daq["rpGainSetting"][2])
     write(daq.sockets[d],p)
+    println("ParamsType has $(sizeof(p)) bytes")
     if daq["acqNumPatches"] > 1
       write(daq.sockets[d],map(Float32,daq["acqFFValues"]))
     end
