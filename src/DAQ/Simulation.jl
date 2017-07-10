@@ -1,23 +1,18 @@
-export DAQRedPitayaScpi
+export DAQSimulation
 
-type DAQRedPitayaScpi <: AbstractDAQ
+type DAQSimulation <: AbstractDAQ
   params::Dict
-  rp::RedPitaya
 end
 
-function DAQRedPitayaScpi(params)
-  println(params["ip"])
-  rp = RedPitaya(params["ip"][1])
-  daq = DAQRedPitayaScpi(params,rp)
+function DAQSimulation(params)
+  daq = DAQSimulation(params)
   init(daq)
   return daq
 end
 
-DAQRedPitayaScpi() = DAQRedPitayaScpi(loadParams(_configFile("RedPitayaScpi.ini")))
+currentFrame(daq::DAQSimulation) = 1
 
-currentFrame(daq::DAQRedPitayaScpi) = 1
-
-function startTx(daq::DAQRedPitayaScpi)
+function startTx(daq::DAQSimulation)
   dfAmplitude = daq["dfStrength"][1]
   dec = daq["decimation"]
   freq = daq["dfFreq"][1]
@@ -28,11 +23,11 @@ function startTx(daq::DAQRedPitayaScpi)
                    daq["calibFieldToVolt"]*dfAmplitude)
 end
 
-function stopTx(daq::DAQRedPitayaScpi)
+function stopTx(daq::DAQSimulation)
   Redpitaya.disableAnalogOutput(daq.rp,1)
 end
 
-function setTxParams(daq::DAQRedPitayaScpi, amplitude, phase)
+function setTxParams(daq::DAQSimulation, amplitude, phase)
   if amplitude[1] < 0.5
     println("SOUR1:VOLT $(amplitude[1])")
     send(daq.rp,"SOUR1:VOLT $(amplitude[1])") # Set amplitude of output signal
@@ -41,9 +36,11 @@ function setTxParams(daq::DAQRedPitayaScpi, amplitude, phase)
   end
 end
 
-refToField(daq::DAQRedPitayaScpi) = daq["calibRefToField"]
+refToField(daq::DAQSimulation) = daq["calibRefToField"]
 
-function readData(daq::DAQRedPitayaScpi, numFrames, startFrame=1)
+function readData(daq::DAQSimulation, numFrames, startFrame=1)
+
+
 
   dec = daq["decimation"]
   numSampPerPeriod = daq["numSampPerPeriod"]

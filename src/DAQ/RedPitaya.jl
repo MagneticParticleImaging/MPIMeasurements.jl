@@ -12,10 +12,11 @@ import Base.write
 type DAQRedPitaya <: AbstractDAQ
   params::Dict
   sockets::Vector{Any}
+  calib
 end
 
 function DAQRedPitaya(params)
-  daq = DAQRedPitaya(params,Vector{Any}(length(params["ip"])))
+  daq = DAQRedPitaya(params,Vector{Any}(length(params["ip"])),zeros(4))
   println(params["ip"])
   init(daq)
 
@@ -30,6 +31,13 @@ function currentFrame(daq::DAQRedPitaya)
   return v
 end
 
+export calibParams
+function calibParams(daq::DAQRedPitaya, d)
+  write(daq.sockets[d],UInt32(4))
+  calib = read(daq.sockets[d],Float32,4)
+  return calib
+end
+
 immutable ParamsType
   numSamplesPerPeriod::Int32
   numSamplesPerTxPeriod::Int32
@@ -39,6 +47,8 @@ immutable ParamsType
   ffEnabled::Bool
   ffLinear::Bool
   isMaster::Bool
+  isHighGainChA::Bool
+  isHighGainChB::Bool
 end
 
 function Base.write(io::IO, p::ParamsType)
@@ -53,6 +63,7 @@ function startTx(daq::DAQRedPitaya)
   numSamplesPerTxPeriod = round(Int32, daq["numSampPerPeriod"] ./
                                        (daq["dfPeriod"] .* daq["dfFreq"]))
 
+  calib = zeros(Float32, 4, length(daq["ip"]))
   for d=1:length(daq["ip"])
     daq.sockets[d] = connect(daq["ip"][d],7777)
     p = ParamsType(daq["numSampPerPeriod"],
@@ -62,12 +73,17 @@ function startTx(daq::DAQRedPitaya)
                    true,
                    daq["acqNumPatches"] > 1,
                    daq["acqFFLinear"],
-                   true)
+                   true,
+                   daq["rpGainSetting"][1],
+                   daq["rpGainSetting"][2])
     write(daq.sockets[d],p)
+    println("ParamsType has $(sizeof(p)) bytes")
     if daq["acqNumPatches"] > 1
       write(daq.sockets[d],map(Float32,daq["acqFFValues"]))
     end
+    calib[:,d] = calibParams(daq,d)
   end
+  daq.calib = calib
 end
 
 function stopTx(daq::DAQRedPitaya)
@@ -85,9 +101,7 @@ function setTxParams(daq::DAQRedPitaya, amplitude, phase)
   end
 end
 
-const intToVolt = 0.5/200222.109375*64  /14.15 #/ 14.15 #FIXME
-
-refToField(daq::DAQRedPitaya) = intToVolt*daq["calibRefToField"]
+refToField(daq::DAQRedPitaya) = daq.calib[3,1]*daq["calibRefToField"]
 
 function readData(daq::DAQRedPitaya, numFrames, startFrame)
 

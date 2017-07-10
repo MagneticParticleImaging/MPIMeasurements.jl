@@ -24,15 +24,21 @@ function controlLoop(daq::AbstractDAQ)
 end
 
 
-function doControlStep(daq::AbstractDAQ, uRef)
-## TODO make me multidimensional
-  a = sum(uRef[:,1,1].*daq["cosLUT"][:,1])
-  b = sum(uRef[:,1,1].*daq["sinLUT"][:,1])
+function calcFieldFromRef(daq::AbstractDAQ, uRef)
+  a = 2*sum(float(uRef[:,1,1]).*daq["cosLUT"][:,1])
+  b = 2*sum(float(uRef[:,1,1]).*daq["sinLUT"][:,1])
 
   println(" $(sqrt(a*a+b*b)) ")
   amplitude = sqrt(a*a+b*b)*refToField(daq)[1]
-  phase = atan2(a,b) / pi * 180;
+  phase = atan2(a,b) / pi * 180
+  return amplitude, phase
+end
 
+function doControlStep(daq::AbstractDAQ, uRef)
+## TODO make me multidimensional
+
+  amplitude, phase = calcFieldFromRef(daq,uRef)
+  
   println("reference amplitude=$amplitude phase=$phase")
 
   if abs(daq["dfStrength"][1] - amplitude)/daq["dfStrength"][1] <

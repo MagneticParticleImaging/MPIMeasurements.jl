@@ -21,14 +21,18 @@ if is_linux()
   include("SerialDevices/SerialDevices.jl")
 end
 
+if !haskey(ENV,"MPILIB_UI")
+  ENV["MPILIB_UI"] = "PyPlot"
+end
+
 using Reexport
 using IniFile
 @reexport using MPIFiles
-using PyPlot
+if ENV["MPILIB_UI"] == "PyPlot"
+  using PyPlot
+end
 @reexport using Redpitaya
 
-
-include("MPS/MPS.jl")
 include("Robots/Robots.jl")
 include("DAQ/DAQ.jl")
 
