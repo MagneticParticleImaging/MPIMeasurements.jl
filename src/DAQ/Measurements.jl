@@ -29,7 +29,7 @@ end
 
 # high level: This stores as MDF
 function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any}();
-                     background=false, kargs...)
+                     background=false, bgdata=nothing, kargs...)
   updateParams(daq, params_)
 
   params = copy(daq.params)
@@ -48,7 +48,7 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   params["rxNumSamplingPoints"] = daq["numSampPerPeriod"]
 
   # measurement
-  if background
+  if background # acquire dedicated BG data
     params["acqNumFrames"] = daq["acqNumFrames"] * 2
     params["measIsBGFrame"] = cat(1, ones(Bool,daq["acqNumFrames"]),
                                      zeros(Bool,daq["acqNumFrames"]))
@@ -61,9 +61,14 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
     uFG = measurement(daq; kargs...)
     params["measData"] = cat(4,uBG,uFG)
   else
-    params["measIsBGFrame"] = cat(1, zeros(Bool,daq["acqNumFrames"]))
     uFG = measurement(daq; kargs...)
-    params["measData"] = uFG
+    if bgdata == nothing
+      params["measIsBGFrame"] = zeros(Bool,daq["acqNumFrames"])
+      params["measData"] = uFG
+    else
+      params["measData"] = cat(4,mean(bgdata,4),uFG)
+      params["measIsBGFrame"] = cat(1, true, zeros(Bool,daq["acqNumFrames"]))
+    end
   end
 
   MPIFiles.saveasMDF( filename, params )
@@ -86,7 +91,7 @@ function measurement(daq::AbstractDAQ, mdf::MDFDatasetStore, params=Dict{String,
   expNum = getNewExperimentNum(mdf, newStudy)
 
   daq["studyName"] = params["studyName"]
-  daq["studyExperiment"] = expNum
+  daq["experimentNumber"] = expNum
 
   filename = joinpath(studydir(mdf),newStudy.name,string(expNum)*".mdf")
   measurement(daq, filename; kargs...)

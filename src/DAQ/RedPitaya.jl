@@ -26,14 +26,14 @@ end
 DAQRedPitaya() = DAQRedPitaya(loadParams(_configFile("RedPitaya.ini")))
 
 function currentFrame(daq::DAQRedPitaya)
-  write(daq.sockets[1],UInt32(1))
+  write_(daq.sockets[1],UInt32(1))
   v = read(daq.sockets[1],Int64)
   return v
 end
 
 export calibParams
 function calibParams(daq::DAQRedPitaya, d)
-  write(daq.sockets[d],UInt32(4))
+  write_(daq.sockets[d],UInt32(4))
   calib = read(daq.sockets[d],Float32,4)
   return calib
 end
@@ -49,10 +49,17 @@ immutable ParamsType
   isMaster::Bool
   isHighGainChA::Bool
   isHighGainChB::Bool
+  pad1::Bool
+  pad2::Bool
 end
 
 function Base.write(io::IO, p::ParamsType)
-  write(io, reinterpret(Int8,[p]))
+  n=write(io, reinterpret(Int8,[p]))
+end
+
+function write_(io::IO, p)
+  n=write(io, p)
+  println("I have written $n bytes p=$p")
 end
 
 function startTx(daq::DAQRedPitaya)
@@ -75,11 +82,12 @@ function startTx(daq::DAQRedPitaya)
                    daq["acqFFLinear"],
                    true,
                    daq["rpGainSetting"][1],
-                   daq["rpGainSetting"][2])
-    write(daq.sockets[d],p)
+                   daq["rpGainSetting"][2],
+                   false, false)
+    write_(daq.sockets[d],p)
     println("ParamsType has $(sizeof(p)) bytes")
     if daq["acqNumPatches"] > 1
-      write(daq.sockets[d],map(Float32,daq["acqFFValues"]))
+      write_(daq.sockets[d],map(Float32,daq["acqFFValues"]))
     end
     calib[:,d] = calibParams(daq,d)
   end
@@ -88,16 +96,16 @@ end
 
 function stopTx(daq::DAQRedPitaya)
   for d=1:length(daq["ip"])
-    write(daq.sockets[d],UInt32(9))
+    write_(daq.sockets[d],UInt32(9))
     close(daq.sockets[d])
   end
 end
 
 function setTxParams(daq::DAQRedPitaya, amplitude, phase)
   for d=1:numTxChannels(daq)
-    write(daq.sockets[d],UInt32(3))
-    write(daq.sockets[d],Float64(amplitude[d]))
-    write(daq.sockets[d],Float64(phase[d]))
+    write_(daq.sockets[d],UInt32(3))
+    write_(daq.sockets[d],Float64(amplitude[d]))
+    write_(daq.sockets[d],Float64(phase[d]))
   end
 end
 
