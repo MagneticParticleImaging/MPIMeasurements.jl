@@ -61,6 +61,8 @@ struct paramsType {
   bool isMaster; // not used yet
   bool isHighGainChA;
   bool isHighGainChB;
+  bool pad1;
+  bool pad2;
 };
 
 struct paramsType params;
@@ -226,6 +228,8 @@ void wait_for_connections()
   if (newsockfd < 0) 
         error("ERROR on accept");
 
+  printf("Params type has %d bytes \n", sizeof(struct paramsType));
+
   n = read(newsockfd,&params,sizeof(struct paramsType));
   if (n < 0) error("ERROR reading from socket");
  
@@ -241,6 +245,8 @@ void wait_for_connections()
   printf("txEnabled: %d\n", params.txEnabled);
   printf("ffEnabled: %d\n", params.ffEnabled);
   printf("isMaster: %d\n", params.isMaster);
+  printf("isHighGainChA: %d\n", params.isHighGainChA);
+  printf("isHighGainChB: %d\n", params.isHighGainChB);
 
   if(params.ffEnabled) {
     ffValues = (float *)malloc(params.numFFChannels* params.numPeriodsPerFrame * sizeof(float));
@@ -288,7 +294,7 @@ void* communication_thread(void* ch)
     if (n < 0) error("ERROR reading from socket");
 
     int command = ((int32_t*)buffer)[0];
-    //printf("Command: %d\n", command);
+    printf("Command: %d\n", command);
 
     switch(command) {
       case 1: // get current frame number
@@ -308,7 +314,7 @@ void* communication_thread(void* ch)
         send_data_to_host(frame,numframes,channel);
       break;
       case 3: // get new tx params
-        n = read(newsockfd,buffer,16);
+        n = read(newsockfd,buffer,2*sizeof(double));
         if (n < 0) error("ERROR reading from socket");
         amplitudeTx = ((double*)buffer)[0];
         phaseTx = ((double*)buffer)[1];
@@ -339,11 +345,12 @@ void* communication_thread(void* ch)
         if (n < 0) error("ERROR writing to socket");
  
       break;
-      default:
+      case 9: 
        close(newsockfd);
        close(sockfd);
        rxEnabled = false;
        return NULL;
+      default: ;
     }
   }
 
