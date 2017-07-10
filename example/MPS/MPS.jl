@@ -4,7 +4,7 @@ params = Dict{String,Any}()
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=[20e-3]
+params["dfStrength"]=[10e-3]
 
 daq = DAQ("MPS.ini") #With custom server => continuous samples
 #daq = DAQ("MPSScpi.ini") #With Scpi interface => higher sampling rate
