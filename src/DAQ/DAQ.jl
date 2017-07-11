@@ -62,7 +62,7 @@ function init(daq::AbstractDAQ)
                                                                 daq["acqNumPeriods"]
                                               )
   daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
-  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPatches"] *daq["acqNumPeriods"]
+  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPatches"] 
 
   D = numTxChannels(daq)
   N = daq["numSampPerPeriod"]
