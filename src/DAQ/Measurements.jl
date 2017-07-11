@@ -68,6 +68,7 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
     else
       params["measData"] = cat(4,mean(bgdata,4),uFG)
       params["measIsBGFrame"] = cat(1, true, zeros(Bool,daq["acqNumFrames"]))
+      params["acqNumFrames"] = daq["acqNumFrames"] +1
     end
   end
 
