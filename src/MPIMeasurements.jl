@@ -35,5 +35,6 @@ end
 
 include("Robots/Robots.jl")
 include("DAQ/DAQ.jl")
+include("TransferFunction/TransferFunction.jl")
 
 end # module
