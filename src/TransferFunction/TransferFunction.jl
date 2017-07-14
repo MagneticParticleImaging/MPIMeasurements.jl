@@ -9,18 +9,22 @@ type TransferFunction
   data
   interp
 
-  function TransferFunction(freq_, data)
+  function TransferFunction(freq_, datain)
     freq = freq_[1]:(freq_[2]-freq_[1]):freq_[end]
-    interp = scale(interpolate(data,BSpline(Quadratic(Reflect())), OnCell()),freq)
-    return new(freq, data, interp)
+    data=deepcopy(datain)
+    data=data.*collect(freq)
+    interp=interpolate(data,BSpline(Quadratic(Reflect())), OnCell())
+    return new(freq, data, interp) 
   end
 
   function TransferFunction(freq_, ampdata, phasedata)
     freq = freq_[1]:(freq_[2]-freq_[1]):freq_[end]
     data = ampdata.*exp(im.*phasedata)
-    interp = scale(interpolate(data,BSpline(Quadratic(Reflect())), OnCell()),freq)
+    data=data.*collect(freq)
+    interp= interpolate(data,BSpline(Quadratic(Reflect())), OnCell())
     return new(freq, data, interp)
   end
+
 
 end
 
@@ -88,6 +92,40 @@ function load_tf_fromUlrich(filename::String)
   close(file)
 
   return TransferFunction(freq, aρdata, aϕdata)
+end
+
+function load_tf_fromVNA(filename::String)
+  R = 50.0 #Ω
+  N=5# Turns
+  A=1.3e-3^2*pi;
+  file = open(filename)
+  lines = readlines(file)
+  apdata = Float64[]
+  aϕdata = Float64[]
+  freq = Float64[]
+  for i=4:length(lines)
+      tmp = split(strip(lines[i])," ")
+      tmp=tmp[tmp.!=""]
+      f = parse(Float64,strip(tmp[1]))
+      if lines[3]=="# kHz S MA R 50" 
+          ap = parse(Float64,strip(tmp[2]))
+          aphi = parse(Float64,strip(tmp[3]))
+      elseif lines[3]=="# kHz S DB R 50" 
+          ap = 10^(parse(Float64,strip(tmp[2]))/20)
+          aphi = parse(Float64,strip(tmp[3]))
+      elseif lines[3]=="# kHz S RI R 50"
+          tf_complex=parse(Float64,strip(tmp[2]))+im*parse(Float64,strip(tmp[3]))
+          ap=abs(tf_complex);
+          aphi=angle(tf_complex)
+      else
+      corror("Wrong data Format! Please export in kHz domain S21 parameter with either Magnitude/Phase, DB/Phase or Real/Imaginary!")
+      end       
+      push!(apdata, ap)
+      push!(aϕdata, aphi)
+      push!(freq, f)
+  end
+  close(file)
+  return TransferFunction(freq, apdata, aϕdata)
 end
 
 function _convertTFFuncs()
