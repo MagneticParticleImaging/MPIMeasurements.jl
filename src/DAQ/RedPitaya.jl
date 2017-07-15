@@ -38,6 +38,10 @@ function calibParams(daq::DAQRedPitaya, d)
   return calib
 end
 
+function dataConversionFactor(daq::DAQRedPitaya) #default
+  return daq.calib[1:2,:]
+end
+
 immutable ParamsType
   numSamplesPerPeriod::Int32
   numSamplesPerTxPeriod::Int32

@@ -29,7 +29,7 @@ end
 
 # high level: This stores as MDF
 function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any}();
-                     background=false, bgdata=nothing, kargs...)
+                     bgdata=nothing, kargs...)
   updateParams(daq, params_)
 
   params = copy(daq.params)
@@ -45,31 +45,20 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   params["dfDivider"] = reshape(daq["dfDivider"],1,length(daq["dfDivider"]))
 
   # receiver parameters
-  params["rxNumSamplingPoints"] = daq["numSampPerPeriod"]
+  params["rxNumSamplingPoints"] = daq["numSampPerPeriod"] #FIXME rename internally
+
+  # calibration params
+  params["measDataConversionFactor"] = dataConversionFactor(daq)
 
   # measurement
-  if background # acquire dedicated BG data
-    params["acqNumFrames"] = daq["acqNumFrames"] * 2
-    params["measIsBGFrame"] = cat(1, ones(Bool,daq["acqNumFrames"]),
-                                     zeros(Bool,daq["acqNumFrames"]))
-    println("Remove the sample to perform BG measurement and press enter")
-    readline(STDIN)
-    uBG = measurement(daq; kargs...)
-
-    println("Put in the sample to perform measurement and press enter")
-    readline(STDIN)
-    uFG = measurement(daq; kargs...)
-    params["measData"] = cat(4,uBG,uFG)
+  uFG = measurement(daq; kargs...)
+  if bgdata == nothing
+    params["measIsBGFrame"] = zeros(Bool,daq["acqNumFrames"])
+    params["measData"] = uFG
   else
-    uFG = measurement(daq; kargs...)
-    if bgdata == nothing
-      params["measIsBGFrame"] = zeros(Bool,daq["acqNumFrames"])
-      params["measData"] = uFG
-    else
-      params["measData"] = cat(4,mean(bgdata,4),uFG)
-      params["measIsBGFrame"] = cat(1, true, zeros(Bool,daq["acqNumFrames"]))
-      params["acqNumFrames"] = daq["acqNumFrames"] +1
-    end
+    params["measData"] = cat(4,mean(bgdata,4),uFG)
+    params["measIsBGFrame"] = cat(1, true, zeros(Bool,daq["acqNumFrames"]))
+    params["acqNumFrames"] = daq["acqNumFrames"] +1
   end
 
   MPIFiles.saveasMDF( filename, params )

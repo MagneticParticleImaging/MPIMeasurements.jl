@@ -3,7 +3,7 @@ using Graphics: @mustimplement
 import Base: setindex!, getindex
 
 export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
-      readDataControlled, numRxChannels, numTxChannels, DAQ
+      readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor
 
 abstract AbstractDAQ
 
@@ -62,7 +62,7 @@ function init(daq::AbstractDAQ)
                                                                 daq["acqNumPeriods"]
                                               )
   daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
-  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPatches"] 
+  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPatches"]
 
   D = numTxChannels(daq)
   N = daq["numSampPerPeriod"]
@@ -77,6 +77,13 @@ function init(daq::AbstractDAQ)
   end
   daq["sinLUT"] = sinLUT
   daq["cosLUT"] = cosLUT
+end
+
+function dataConversionFactor(daq::AbstractDAQ) #default
+  factor = zeros(2,numRxChannels(daq))
+  factor[1,:] = 1.0
+  factor[2,:] = 0.0
+  return factor
 end
 
 function readDataControlled(daq::AbstractDAQ, numFrames)
