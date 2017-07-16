@@ -1,6 +1,6 @@
 export gettemperature,gettemperatures,logtemperature,logtemperatures
 
-abstract FOTemp <: Device
+@compat abstract type FOTemp <: Device end
 
 """
 `fotemp(portAdress::AbstractString)`
@@ -9,7 +9,7 @@ Initialize Fotemp fiber optical temperature sensor. For an overview
 over the high level API call `methodswith(SerialDevice{FOTemp})`.
 
 Low level functions such as `getModelName(ft)` will return a function hash and
-a whitespace, e.g. "#40 " leading the actual answer, which would be the model 
+a whitespace, e.g. "#40 " leading the actual answer, which would be the model
 name of the device in this case.
 """
 function fotemp(portAdress::AbstractString)
@@ -100,7 +100,7 @@ Sets the active channels. The parameter `channel` encodes the switched on and
 off channels. The bits of the ASCII encoded hexadecimal bytes are the channels,
 with bit 0 representing channel 1 to bit 7 for channel 8.
 
-For example `channel="1E"` will switch on channels 2, 3, 4, and 5 and switch 
+For example `channel="1E"` will switch on channels 2, 3, 4, and 5 and switch
 off the remaining channels 1,6,7, and 8.
 """
 function setActiveChannel(ft::SerialDevice{GaussMeter}, channel::String)

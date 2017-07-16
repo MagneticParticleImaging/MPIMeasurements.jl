@@ -1,6 +1,6 @@
 export gaussMeter
 
-abstract GaussMeter <: Device
+@compat abstract type GaussMeter <: Device end
 
 """
 `gaussMeter(portAdress::AbstractString)`

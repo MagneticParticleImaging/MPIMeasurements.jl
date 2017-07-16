@@ -1,3 +1,4 @@
+__precompile__()
 module MPIMeasurements
 
 if !isdir(Pkg.dir("Redpitaya"))
@@ -25,6 +26,7 @@ if !haskey(ENV,"MPILIB_UI")
   ENV["MPILIB_UI"] = "PyPlot"
 end
 
+using Compat
 using Reexport
 using IniFile
 @reexport using MPIFiles
