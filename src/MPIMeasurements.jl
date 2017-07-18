@@ -1,6 +1,7 @@
 __precompile__()
 module MPIMeasurements
 
+using Compat
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
   Pkg.clone("https://github.com/tknopp/Redpitaya.jl.git")
@@ -26,7 +27,6 @@ if !haskey(ENV,"MPILIB_UI")
   ENV["MPILIB_UI"] = "PyPlot"
 end
 
-using Compat
 using Reexport
 using IniFile
 @reexport using MPIFiles
