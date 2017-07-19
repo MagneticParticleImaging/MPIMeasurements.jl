@@ -5,7 +5,8 @@ function defaultDAQParams()
   params = Dict{String,Any}()
   params["daq"] = "RedPitaya"
   params["ip"] = ["192.168.1.20"]
-  params["acqNumFrames"] = 10
+  params["acqNumFGFrames"] = 10
+  params["acqNumBGFrames"] = 10
   params["acqNumAverages"] = 10
   params["decimation"] = 8
   params["calibFieldToVolt"] = 19.5
