@@ -51,6 +51,7 @@ function defaultDAQParams()
   params["studyIsSimulation"] = false
   params["studyIsCalibration"] = false
   params["rpGainSetting"] = [0, 0]
+  params["datasetStore"] = "/opt/data/MPS1"
 
   return params
 end
