@@ -20,7 +20,7 @@ function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
   #    uMeas = mean(uMeas,2)
   #  buffer[:,n] = uMeas
   #end
-  uMeas, uRef = readData(daq, daq["acqNumFrames"], currFr)
+  uMeas, uRef = readData(daq, daq["acqNumFGFrames"], currFr)
 
   stopTx(daq)
 
@@ -53,12 +53,14 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   # measurement
   uFG = measurement(daq; kargs...)
   if bgdata == nothing
-    params["measIsBGFrame"] = zeros(Bool,daq["acqNumFrames"])
+    params["measIsBGFrame"] = zeros(Bool,daq["acqNumFGFrames"])
     params["measData"] = uFG
+    params["acqNumFrames"] = daq["acqNumFGFrames"]
   else
-    params["measData"] = cat(4,mean(bgdata,4),uFG)
-    params["measIsBGFrame"] = cat(1, true, zeros(Bool,daq["acqNumFrames"]))
-    params["acqNumFrames"] = daq["acqNumFrames"] +1
+    numBGFrames = size(bgdata,4)
+    params["measData"] = cat(4,bgdata,uFG)
+    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,daq["acqNumFGFrames"]))
+    params["acqNumFrames"] = daq["acqNumFGFrames"] + numBGFrames
   end
 
   MPIFiles.saveasMDF( filename, params )
