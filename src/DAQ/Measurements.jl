@@ -50,6 +50,17 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   # calibration params
   params["measDataConversionFactor"] = dataConversionFactor(daq)
 
+  # transferFunction
+  if params["transferFunction"] != [""]
+    numFreq = div(params["rxNumSamplingPoints"],2)+1
+    freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
+    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    for d=1:numRxChannels(daq)
+      tf[:,d] = tf_receive_chain(params["transferFunction"][d])[freq]
+    end
+    params["rxTransferFunction"] = tf
+  end
+
   # measurement
   uFG = measurement(daq; kargs...)
   if bgdata == nothing

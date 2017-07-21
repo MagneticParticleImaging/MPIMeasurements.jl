@@ -14,7 +14,7 @@ type TransferFunction
     data=deepcopy(datain)
     data=data.*collect(freq)
     interp=interpolate(data,BSpline(Quadratic(Reflect())), OnCell())
-    return new(freq, data, interp) 
+    return new(freq, data, interp)
   end
 
   function TransferFunction(freq_, ampdata, phasedata)
@@ -44,7 +44,7 @@ end
 
 function save_tf(tf::TransferFunction, filename::String)
   writecsv(filename,hcat( vcat("frequency",tf.freq),
-                          vcat("amplitude", abs(tf.data)),
+                          vcat("amplitude", abs(tf.data)./collect(tf.freq)),
                           vcat("phase", angle(tf.data)) ))
 end
 
@@ -107,59 +107,65 @@ function load_tf_fromVNA(filename::String)
       tmp = split(strip(lines[i])," ")
       tmp=tmp[tmp.!=""]
       f = parse(Float64,strip(tmp[1]))
-      if lines[3]=="# kHz S MA R 50" 
+      if contains(lines[3],"# kHz S MA R 50")
           ap = parse(Float64,strip(tmp[2]))
           aphi = parse(Float64,strip(tmp[3]))
-      elseif lines[3]=="# kHz S DB R 50" 
+      elseif contains(lines[3],"# kHz S DB R 50")
           ap = 10^(parse(Float64,strip(tmp[2]))/20)
           aphi = parse(Float64,strip(tmp[3]))
-      elseif lines[3]=="# kHz S RI R 50"
+      elseif contains(lines[3],"# kHz S RI R 50")
           tf_complex=parse(Float64,strip(tmp[2]))+im*parse(Float64,strip(tmp[3]))
           ap=abs(tf_complex);
           aphi=angle(tf_complex)
       else
-      corror("Wrong data Format! Please export in kHz domain S21 parameter with either Magnitude/Phase, DB/Phase or Real/Imaginary!")
-      end       
+        println(lines[3])
+        println(typeof(lines[3]))
+        error("Wrong data Format! Please export in kHz domain S21 parameter with either Magnitude/Phase, DB/Phase or Real/Imaginary!")
+      end
       push!(apdata, ap)
       push!(aϕdata, aphi)
-      push!(freq, f)
+      push!(freq, f*1000)
   end
   close(file)
   return TransferFunction(freq, apdata, aϕdata)
 end
 
 function _convertTFFuncs()
-  a = load_tf_fromUlrich("measurements/HH_RXCHAIN_X_20151006.S2P")
-  save_tf(a,"tfdata/PreinstalledXUH.csv")
+  prefix = Pkg.dir("MPIMeasurements","src","TransferFunction")
+  a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_X_20151006.S2P")
+  save_tf(a,prefix*"/tfdata/PreinstalledXUH.csv")
 
-  a = load_tf_fromUlrich("measurements/HH_RXCHAIN_Y_20151006.S2P")
-  save_tf(a,"tfdata/PreinstalledYUH.csv")
+  a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Y_20151006.S2P")
+  save_tf(a,prefix*"/tfdata/PreinstalledYUH.csv")
 
-  a = load_tf_fromUlrich("measurements/HH_RXCHAIN_Z_20151006.S2P")
-  save_tf(a,"tfdata/PreinstalledZUH.csv")
+  a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Z_20151006.S2P")
+  save_tf(a,prefix*"/tfdata/PreinstalledZUH.csv")
 
 
-  t = load_tf_fromMatthias("measurements/MAGTRAFO50OHM.CSV", "measurements/PHASETRAFO50OHM.CSV")
-  save_tf(t,"tfdata/Trafo.csv")
+  t = load_tf_fromMatthias(prefix*"/measurements/MAGTRAFO50OHM.CSV", prefix*"/measurements/PHASETRAFO50OHM.CSV")
+  save_tf(t,prefix*"/tfdata/Trafo.csv")
 
-  t1M = load_tf_fromMatthias("measurements/MAGTRAFO1MEGOHM.CSV", "measurements/PHASETRAFO1MEGOHM.CSV")
-  save_tf(t1M,"tfdata/Trafo1M.csv")
+  t1M = load_tf_fromMatthias(prefix*"/measurements/MAGTRAFO1MEGOHM.CSV", prefix*"/measurements/PHASETRAFO1MEGOHM.CSV")
+  save_tf(t1M,prefix*"/tfdata/Trafo1M.csv")
 
-  a = load_tf_fromMatthias("measurements/XMAG.CSV", "measurements/XPH.CSV")
+  a = load_tf_fromMatthias(prefix*"/measurements/XMAG.CSV", prefix*"/measurements/XPH.CSV")
   b =  correct_Transformator(a,t1M)
-  save_tf(b,"tfdata/PreinstalledXMG.csv")
+  save_tf(b,prefix*"/tfdata/PreinstalledXMG.csv")
 
-  a = load_tf_fromMatthias("measurements/YMAG.CSV", "measurements/YPH.CSV")
+  a = load_tf_fromMatthias(prefix*"/measurements/YMAG.CSV", prefix*"/measurements/YPH.CSV")
   b =  correct_Transformator(a,t1M)
-  save_tf(b,"tfdata/PreinstalledYMG.csv")
+  save_tf(b,prefix*"/tfdata/PreinstalledYMG.csv")
 
-  a = load_tf_fromMatthias("measurements/ZMAG.CSV", "measurements/ZPH.CSV")
+  a = load_tf_fromMatthias(prefix*"/measurements/ZMAG.CSV", prefix*"/measurements/ZPH.CSV")
   b =  correct_Transformator(a,t1M)
-  save_tf(b,"tfdata/PreinstalledZMG.csv")
+  save_tf(b,prefix*"/tfdata/PreinstalledZMG.csv")
 
-  a = load_tf_fromMatthias("measurements/GMAG.CSV", "measurements/GGPPH.CSV")
+  a = load_tf_fromMatthias(prefix*"/measurements/GMAG.CSV", prefix*"/measurements/GGPPH.CSV")
   b =  correct_Transformator(a,t1M)
-  save_tf(b,"tfdata/Gradio1.csv")
+  save_tf(b,prefix*"/tfdata/Gradio1.csv")
+
+  a = load_tf_fromVNA(prefix*"/measurements/MPS1.s1p")
+  save_tf(a,prefix*"/tfdata/MPS1.csv")
 
 end
 

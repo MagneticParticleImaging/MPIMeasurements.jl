@@ -53,6 +53,7 @@ function defaultDAQParams()
   params["studyIsCalibration"] = false
   params["rpGainSetting"] = [0, 0]
   params["datasetStore"] = "/opt/data/MPS1"
+  params["transferFunction"] = [""]
 
   return params
 end
@@ -112,7 +113,7 @@ function readParam(ini::Inifile,key::String,default::Vector{String})
   if param == :notfound
     return default
   else
-    return [strip(path) for path in split(param,",")]
+    return [String(strip(path)) for path in split(param,",")]
   end
 end
 
