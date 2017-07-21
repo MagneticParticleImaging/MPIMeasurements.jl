@@ -47,9 +47,6 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   # receiver parameters
   params["rxNumSamplingPoints"] = daq["numSampPerPeriod"] #FIXME rename internally
 
-  # calibration params
-  params["measDataConversionFactor"] = dataConversionFactor(daq)
-
   # transferFunction
   if params["transferFunction"] != [""]
     numFreq = div(params["rxNumSamplingPoints"],2)+1
@@ -63,6 +60,10 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
 
   # measurement
   uFG = measurement(daq; kargs...)
+
+  # calibration params  (needs to be called after calibration params!)
+  params["measDataConversionFactor"] = dataConversionFactor(daq)
+
   if bgdata == nothing
     params["measIsBGFrame"] = zeros(Bool,daq["acqNumFGFrames"])
     params["measData"] = uFG
