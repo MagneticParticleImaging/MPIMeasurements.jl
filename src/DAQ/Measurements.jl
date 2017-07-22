@@ -48,14 +48,16 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   params["rxNumSamplingPoints"] = daq["numSampPerPeriod"] #FIXME rename internally
 
   # transferFunction
-  if params["transferFunction"] != [""]
+  if params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
     tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
-      tf[:,d] = tf_receive_chain(params["transferFunction"][d])[freq]
+      tf[:,d] = tf_[freq,d]
     end
     params["rxTransferFunction"] = tf
+    params["rxInductionFactor"] = tf_.inductionFactor
   end
 
   # measurement

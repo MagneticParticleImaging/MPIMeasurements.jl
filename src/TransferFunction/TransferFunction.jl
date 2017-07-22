@@ -1,51 +1,64 @@
 import Base.getindex
 
-using Interpolations
+using Interpolations, HDF5
 
 export list_tf, tf_receive_chain, plot_tf
 
 type TransferFunction
   freq::Vector{Float64}
-  data
-  interp
+  data::Matrix{Complex128}
+  interp::Vector{Any}
+  inductionFactor::Vector{Float64}
 
-  function TransferFunction(freq_, datain)
+  function TransferFunction{T<:Complex}(freq_, datain::Array{T}, inductionFactor=ones(size(datain,2)))
     freq = freq_[1]:(freq_[2]-freq_[1]):freq_[end]
-    data=deepcopy(datain)
-    data=data.*collect(freq)
-    interp=interpolate(data,BSpline(Quadratic(Reflect())), OnCell())
-    return new(freq, data, interp)
+    data=reshape(deepcopy(datain),size(datain,1), size(datain,2))
+    interp = Any[]
+    for d=1:size(datain,2)
+      I = interpolate((freq_,), data[:,d], Gridded(Linear()))
+      push!(interp,I)
+    end
+    return new(freq_, data, interp, inductionFactor)
   end
-
-  function TransferFunction(freq_, ampdata, phasedata)
-    freq = freq_[1]:(freq_[2]-freq_[1]):freq_[end]
-    data = ampdata.*exp(im.*phasedata)
-    data=data.*collect(freq)
-    interp= interpolate(data,BSpline(Quadratic(Reflect())), OnCell())
-    return new(freq, data, interp)
-  end
-
 
 end
 
-function getindex(tmf::TransferFunction, x::Real)
-  a = tmf.interp[x]
+function TransferFunction(freq_, ampdata, phasedata, args...)
+  data = ampdata.*exp(im.*phasedata)
+  return TransferFunction(freq_, data, args...)
+end
+
+function getindex(tmf::TransferFunction, x::Real, chan::Integer=1)
+  a = tmf.interp[chan][x]
   return a
 end
 
-function getindex(tmf::TransferFunction, X::Union{Vector,Range})
+
+function getindex(tmf::TransferFunction, X::Union{Vector,Range},chan::Integer=1)
   return [tmf[x] for x in X]
 end
 
 function load_tf(filename::String)
-  data = readcsv(filename)
-  return TransferFunction(data[2:end,1],data[2:end,2],data[2:end,3])
+  tf = h5read(filename,"/transferFunction")
+  tf = reinterpret(Complex{eltype(tf)}, tf, (size(tf,2),size(tf,3)))
+  freq = h5read(filename,"/frequencies")
+  inductionFactor = h5read(filename,"/inductionFactor")
+  return TransferFunction(freq,tf,inductionFactor)
+end
+
+function combine(tf1,tf2)
+  freq = tf1.freq
+  data = cat(2,tf1.data,tf2.data)
+  inductionFactor = cat(1,tf1.inductionFactor, tf2.inductionFactor)
+  return TransferFunction(freq, data, inductionFactor)
 end
 
 function save_tf(tf::TransferFunction, filename::String)
-  writecsv(filename,hcat( vcat("frequency",tf.freq),
-                          vcat("amplitude", abs(tf.data)./collect(tf.freq)),
-                          vcat("phase", angle(tf.data)) ))
+  tfR = reinterpret(Float64, tf.data, (2, size(tf.data)...))
+  h5write(filename, "/transferFunction", tfR)
+  h5write(filename, "/frequencies", tf.freq)
+  h5write(filename, "/inductionFactor", tf.inductionFactor)
+  return nothing
 end
 
 function load_tf_fromMatthias(filenameAmp::String, filenamePh::String)
@@ -55,8 +68,8 @@ function load_tf_fromMatthias(filenameAmp::String, filenamePh::String)
   amp = 10.^(data[4:end,2]./20)
   phase = [ deg2rad(p) for p in ph[4:end,2] ]
   tf = TransferFunction(freq,amp,phase)
-  #tf.data[:] ./= (freq.*2*pi*im)
-  #tf.data[1] = 1
+  tf.data[:] .*= (freq.*2*pi*im)
+  tf.data[1] = 1
   return TransferFunction(freq, tf.data)
 end
 
@@ -64,8 +77,8 @@ end
 # differential signal into a regular signal
 function correct_Transformator(tf::TransferFunction,trafo::TransferFunction)
   tf.data[:]./=trafo.data[:]
-  tf.data[:] ./= (tf.freq.*2*pi*im)
-  tf.data[1] = 1
+  #tf.data[:] ./= (tf.freq.*2*pi*im)
+  #tf.data[1] = 1
   return TransferFunction(tf.freq, tf.data)
 end
 
@@ -83,7 +96,7 @@ function load_tf_fromUlrich(filename::String)
     tmp = split(lines[i],"\t")
     Pout = 10.0^((Pin+parse(Float64,tmp[4]))/10.0)
     f = parse(Float64,tmp[1])
-    aρ = 1.0 / (Uin/sqrt(Rin*Pout)) / f
+    aρ = 1.0 / (Uin/sqrt(Rin*Pout))
     aϕ = pi*2*parse(Float64,tmp[5])/ 180 #360
     push!(aρdata, aρ)
     push!(aϕdata, aϕ)
@@ -127,52 +140,45 @@ function load_tf_fromVNA(filename::String)
       push!(freq, f*1000)
   end
   close(file)
+  #apdata .*= (freq.*2*pi)
+  apdata[1] = 1
   return TransferFunction(freq, apdata, aϕdata)
 end
 
 function _convertTFFuncs()
   prefix = Pkg.dir("MPIMeasurements","src","TransferFunction")
+
   a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_X_20151006.S2P")
-  save_tf(a,prefix*"/tfdata/PreinstalledXUH.csv")
-
-  a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Y_20151006.S2P")
-  save_tf(a,prefix*"/tfdata/PreinstalledYUH.csv")
-
-  a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Z_20151006.S2P")
-  save_tf(a,prefix*"/tfdata/PreinstalledZUH.csv")
-
+  b = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Y_20151006.S2P")
+  c = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Z_20151006.S2P")
+  d = combine(combine(a,b),c)
+  save_tf(d,prefix*"/tfdata/PreinstalledUH.h5")
 
   t = load_tf_fromMatthias(prefix*"/measurements/MAGTRAFO50OHM.CSV", prefix*"/measurements/PHASETRAFO50OHM.CSV")
-  save_tf(t,prefix*"/tfdata/Trafo.csv")
-
   t1M = load_tf_fromMatthias(prefix*"/measurements/MAGTRAFO1MEGOHM.CSV", prefix*"/measurements/PHASETRAFO1MEGOHM.CSV")
-  save_tf(t1M,prefix*"/tfdata/Trafo1M.csv")
 
   a = load_tf_fromMatthias(prefix*"/measurements/XMAG.CSV", prefix*"/measurements/XPH.CSV")
-  b =  correct_Transformator(a,t1M)
-  save_tf(b,prefix*"/tfdata/PreinstalledXMG.csv")
+  a =  correct_Transformator(a,t1M)
+  b = load_tf_fromMatthias(prefix*"/measurements/YMAG.CSV", prefix*"/measurements/YPH.CSV")
+  b =  correct_Transformator(b,t1M)
+  c = load_tf_fromMatthias(prefix*"/measurements/ZMAG.CSV", prefix*"/measurements/ZPH.CSV")
+  c =  correct_Transformator(c,t1M)
+  e = combine(combine(a,b),c)
+  save_tf(e,prefix*"/tfdata/PreinstalledMG.h5")
 
-  a = load_tf_fromMatthias(prefix*"/measurements/YMAG.CSV", prefix*"/measurements/YPH.CSV")
-  b =  correct_Transformator(a,t1M)
-  save_tf(b,prefix*"/tfdata/PreinstalledYMG.csv")
-
-  a = load_tf_fromMatthias(prefix*"/measurements/ZMAG.CSV", prefix*"/measurements/ZPH.CSV")
-  b =  correct_Transformator(a,t1M)
-  save_tf(b,prefix*"/tfdata/PreinstalledZMG.csv")
-
-  a = load_tf_fromMatthias(prefix*"/measurements/GMAG.CSV", prefix*"/measurements/GGPPH.CSV")
-  b =  correct_Transformator(a,t1M)
-  save_tf(b,prefix*"/tfdata/Gradio1.csv")
+  d = load_tf_fromMatthias(prefix*"/measurements/GMAG.CSV", prefix*"/measurements/GGPPH.CSV")
+  d =  correct_Transformator(d,t1M)
+  f = combine(combine(a,d),c)
+  save_tf(e,prefix*"/tfdata/Gradio1.h5")
 
   a = load_tf_fromVNA(prefix*"/measurements/MPS1.s1p")
-  save_tf(a,prefix*"/tfdata/MPS1.csv")
-
+  save_tf(a,prefix*"/tfdata/MPS1.h5")
 end
 
 
 function tf_receive_chain(id::String)
 
-  path = Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata",id*".csv")
+  path = Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata",id*".h5")
 
   tf = load_tf(path)
   return tf
@@ -180,19 +186,14 @@ end
 
 
 
-function tf_receive_chain(b::BrukerFile,xx="PreinstalledXUH",
-                                         yy="PreinstalledYUH",
-                                         zz="PreinstalledZUH")
+function tf_receive_chain(b::BrukerFile,id="PreinstalledUH")
 
-  ax = tf_receive_chain(xx)
-  ay = tf_receive_chain(yy)
-  az = tf_receive_chain(zz)
-
+  tf = tf_receive_chain(id)
   freq = frequencies(b)
   rxchain = Complex128[]
-  append!(rxchain, ax[freq])
-  append!(rxchain, ay[freq])
-  append!(rxchain, az[freq])
+  append!(rxchain, tf[freq,1])
+  append!(rxchain, tf[freq,2])
+  append!(rxchain, tf[freq,3])
   rxchain = reshape(rxchain, length(freq),3)
   return rxchain
 end

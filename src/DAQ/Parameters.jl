@@ -53,7 +53,7 @@ function defaultDAQParams()
   params["studyIsCalibration"] = false
   params["rpGainSetting"] = [0, 0]
   params["datasetStore"] = "/opt/data/MPS1"
-  params["transferFunction"] = [""]
+  params["transferFunction"] = ""
 
   return params
 end

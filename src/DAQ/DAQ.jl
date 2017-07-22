@@ -5,7 +5,7 @@ import Base: setindex!, getindex
 export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor
 
-@compat abstract type AbstractDAQ end
+abstract AbstractDAQ
 
 include("Control.jl")
 include("Plotting.jl")
