@@ -20,13 +20,13 @@ end
 mfMeasObj = MagneticFieldMeas(Array{Vector{typeof(1.0u"mm")},1}(),Array{Vector{typeof(1.0u"mT")},1}())
 
 # define preMoveAction
-function preMA(measObj, pos::Array{typeof(1.0u"mm"),1})
+function preMA(measObj::MagneticFieldMeas, pos::Array{typeof(1.0u"mm"),1})
   println("pre action: ", pos)
 
 end
 
 # define postMoveAction
-function postMA(measObj, pos::Array{typeof(1.0u"mm"),1})
+function postMA(measObj::MagneticFieldMeas, pos::Array{typeof(1.0u"mm"),1})
   println("post action: ", pos)
   push!(measObj.positions, pos)
   #magValues=[getXValue(measObj.serialDevice), getYValue(measObj.serialDevice), getZValue(measObj.serialDevice)]*u"mT"
