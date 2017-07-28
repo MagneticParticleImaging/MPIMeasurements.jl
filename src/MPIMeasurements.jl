@@ -2,6 +2,11 @@ __precompile__()
 module MPIMeasurements
 
 using Compat
+using Reexport
+using IniFile
+@reexport using MPIFiles
+include("Robots/Robots.jl")
+
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
   Pkg.clone("https://github.com/tknopp/Redpitaya.jl.git")
@@ -27,15 +32,13 @@ if !haskey(ENV,"MPILIB_UI")
   ENV["MPILIB_UI"] = "PyPlot"
 end
 
-using Reexport
-using IniFile
-@reexport using MPIFiles
+
 if ENV["MPILIB_UI"] == "PyPlot"
   using PyPlot
 end
 @reexport using Redpitaya
 
-include("Robots/Robots.jl")
+
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 
