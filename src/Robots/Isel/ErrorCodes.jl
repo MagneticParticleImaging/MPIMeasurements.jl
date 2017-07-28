@@ -17,9 +17,9 @@ const iselErrorCodes = Dict(
 "G"=>"ungültiges Datenfeld",
 "H"=>"Haubenbefehl",
 "R"=>"Referenzfehler",
-"A"=>"von dieser Steuerung nicht benutz",
-"B"=>"von dieser Steuerung nicht benutz",
-"C"=>"von dieser Steuerung nicht benutz",
-"E"=>"von dieser Steuerung nicht benutz",
-"="=>"von dieser Steuerung nicht benutz"
+"A"=>"von dieser Steuerung nicht benutzt",
+"B"=>"von dieser Steuerung nicht benutzt",
+"C"=>"von dieser Steuerung nicht benutzt",
+"E"=>"von dieser Steuerung nicht benutzt",
+"="=>"von dieser Steuerung nicht benutzt"
 )
