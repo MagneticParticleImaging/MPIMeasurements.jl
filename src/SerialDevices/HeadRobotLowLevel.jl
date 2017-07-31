@@ -20,6 +20,7 @@ const stepsPermm =stepsPerTurn / gearSlope
 const defaultVelocity = [1000,1000,1000]
 const parkPos = [0.0,0.0,0.0]u"mm"
 const centerPos = [0.0,0.0,0.0]u"mm"
+const defCenterPos = [0,0,0]
 
 """
 `headRobot(portAdress::AbstractString)` e.g. `headRobot("/dev/ttyS0")`
@@ -180,6 +181,14 @@ end
 function setFree(sd::SerialDevice{HeadRobot}, axis)
   ret = querry(sd,  string("@0F",axis))
   checkError(ret)
+end
+
+""" `prepareRobot(sd::SerialDevice{HeadRobot})` """
+function prepareRobot(sd::SerialDevice{HeadRobot})
+  # check sensor for reference
+  initRefZYX(sd)
+  moveAbs(sd, defCenterPos[1],defaultVelocity[1],defCenterPos[2],defaultVelocity[2],defCenterPos[3],defaultVelocity[3])
+  setZeroPoint(sd)
 end
 
 function checkError(ret::AbstractString)

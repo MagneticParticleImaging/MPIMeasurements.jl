@@ -34,7 +34,7 @@ function postMA(measObj::MagneticFieldMeas, pos::Array{typeof(1.0u"mm"),1})
   push!(measObj.magneticField, magValues)
 end
 
-res = acquireMeas(bS, rG, mfMeasObj, preMA, postMA)
+res = acquireMeas!(bS, rG, mfMeasObj, preMA, postMA)
 
 positionsArray=hcat(res.positions...)
 magArray=hcat(res.magneticField...)
