@@ -40,8 +40,8 @@ function defaultDAQParams()
   params["controlLoopPhaseAccuracy"] = 0.5
   params["controlLoopAmplitudeAccuracy"] = 0.01
   params["dfWaveform"] = "sine"
-  params["measUnit"] = "V"
-  params["measDataConversionFactor"] = [1.0, 0]
+  params["rxUnit"] = "V"
+  params["rxDataConversionFactor"] = [1.0, 0]
   params["measIsTransposed"] = false
   params["measIsBGCorrected"] = false
   params["measIsTFCorrected"] = false

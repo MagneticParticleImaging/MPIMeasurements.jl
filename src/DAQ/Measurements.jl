@@ -64,7 +64,7 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   uFG = measurement(daq; kargs...)
 
   # calibration params  (needs to be called after calibration params!)
-  params["measDataConversionFactor"] = dataConversionFactor(daq)
+  params["rxDataConversionFactor"] = dataConversionFactor(daq)
 
   if bgdata == nothing
     params["measIsBGFrame"] = zeros(Bool,daq["acqNumFGFrames"])
