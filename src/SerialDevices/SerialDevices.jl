@@ -6,7 +6,7 @@ include("ServerDevice.jl")
 include("GaussMeterLowLevel.jl")
 include("GaussMeterHighLevel.jl")
 # API for Robots
-include("HeadRobotLowLevel.jl")
+include("IselRobotLowLevel.jl")
 include("BrukerRobotLowLevel.jl")
 include("RobotMidLevel.jl")
 include("RobotHighLevel.jl")

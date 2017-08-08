@@ -1,7 +1,7 @@
 using MPIMeasurements
 using Unitful
 
-hr = headRobot("/dev/ttyS0")
+hr = iselRobot("/dev/ttyS0")
 initRefZYX(hr)
 moveRel(hr,10.0u"mm", 30, 20.0u"mm", 10000, 30.0u"mm", 40000)
 # Basic Test

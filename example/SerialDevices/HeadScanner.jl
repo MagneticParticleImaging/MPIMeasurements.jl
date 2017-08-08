@@ -1,9 +1,9 @@
 using MPIMeasurements
 using Unitful
 
-# Create Head Scanner object
-hR = headRobot("/dev/ttyS0")
-hS = HeadScanner{HeadRobot}(:HeadScanner, hR, dSampleRegularScanner, ()->())
+# Create Isel Scanner object
+hR = iselRobot("/dev/ttyS0")
+hS = HeadScanner{IselRobot}(:HeadScanner, hR, dSampleRegularScanner, ()->())
 initRefZYX(hR)
 ################# Use case 1 Basic Move #######################################
 

@@ -41,8 +41,8 @@ acquireMeas!(scanner::Scanner, grid::ChebyshevGrid{typeof(1.0u"mm")}, measObj::T
 end
 
 function acquireHeadSys(grid::AbstractGrid)
-  hR = headRobot("/dev/ttyS0")
-  hS = HeadScanner{HeadRobot}(:HeadScanner, hR, dSampleRegularScanner, ()->())
+  hR = iselRobot("/dev/ttyS0")
+  hS = HeadScanner{IselRobot}(:HeadScanner, hR, dSampleRegularScanner, ()->())
 
   headSysMeas = HeadSysMeas(Array{Vector{typeof(1.0u"mm")},1}(),Array{Vector{typeof(1.0u"mV")},1}())
   acquireMeas!(hS, grid, headSysMeas,  preMoveHeadSys, postMoveHeadSys)

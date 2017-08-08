@@ -5,5 +5,5 @@ using Unitful
 bR = brukerRobot("RobotServer")
 bS = BrukerScanner{BrukerRobot}(:BrukerScanner, bR, dSampleRegularScanner, ()->())
 
-# hR = headRobot("/dev/ttyS0")
-# hS = HeadScanner{HeadRobot}(:HeadScanner, hR, dSampRegualrScanner, ()->())
+# hR = iselRobot("/dev/ttyS0")
+# hS = HeadScanner{IselRobot}(:HeadScanner, hR, dSampRegualrScanner, ()->())
