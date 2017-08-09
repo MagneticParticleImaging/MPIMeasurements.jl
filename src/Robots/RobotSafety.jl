@@ -8,7 +8,7 @@ export convert2Unit, checkCoords
 # export defaults
 export deltaSample, mouseAdapter, regularScanner, reducedScanner, clearance,
 dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner,
-mouseAdapterREDUCEDScanner, validScannerGeometries
+mouseAdapterREDUCEDScanner, hallSensorRegularScanner,hallSensorREDUCEDScanner, validScannerGeometries
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
@@ -138,6 +138,7 @@ end
 
 # create given test geometries
 mouseAdapter = Circle(38.0u"mm", "Mouse adapter");
+hallSensor = Circle(38.0u"mm", "Hall Sensor"); # Todo measure diameter
 deltaSample = Circle(10.0u"mm", "Delta sample");
 
 # create given scanner diameter
@@ -152,8 +153,10 @@ dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, regular
 mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, regularScanner, clearance);
 dSampleREDUCEDScanner = RobotSetup("dSampleREDUCEDScanner", deltaSample, reducedScanner, clearance);
 mouseAdapterREDUCEDScanner = RobotSetup("mouseAdapterREDUCEDScanner", mouseAdapter, reducedScanner, clearance);
+hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor,regularScanner, clearance)
+hallSensorREDUCEDScanner = RobotSetup("hallSensorREDUCEDScanner", hallSensor,reducedScanner, clearance)
 
-validScannerGeometries = [dSampleRegularScanner; mouseAdapterRegularScanner; dSampleREDUCEDScanner; mouseAdapterREDUCEDScanner]
+validScannerGeometries = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner, mouseAdapterREDUCEDScanner, hallSensorRegularScanner, hallSensorREDUCEDScanner]
 
 @doc "convert2unit(data,unit) converts the data array (tuples) without units to
       an array with length units."->

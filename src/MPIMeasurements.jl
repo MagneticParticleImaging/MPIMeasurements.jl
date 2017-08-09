@@ -37,7 +37,7 @@ if ENV["MPILIB_UI"] == "PyPlot"
   using PyPlot
 end
 @reexport using Redpitaya
-
+@reexport using Unitful
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")

@@ -9,7 +9,7 @@ rG = RegularGrid{typeof(1.0u"mm")}([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm"
 
 # create BaseScanner
 bR = brukerRobot("RobotServer")
-bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, dSampleRegularScanner, ()->())
+bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, hallSensorRegularScanner, ()->())
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj

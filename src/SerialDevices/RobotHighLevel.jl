@@ -15,7 +15,7 @@ function _acquireMeas!(scanner::BaseScanner, grid::AbstractGrid, measObj::T,
 
   for pos in grid
     preMoveAction(measObj, pos)
-    moveAbs(scanner, pos)
+    moveAbs(scanner, pos) # comment for testing 
     sleep(postMoveWaitTime)
     postMoveAction(measObj, pos)
   end
