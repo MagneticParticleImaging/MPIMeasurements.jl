@@ -7,9 +7,9 @@ using Compat
 # define Grid
 rG = RegularGrid{typeof(1.0u"mm")}([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm")
 
-# create Scanner
+# create BaseScanner
 bR = brukerRobot("RobotServer")
-bS = BrukerScanner{BrukerRobot}(:BrukerScanner, bR, dSampleRegularScanner, ()->())
+bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, dSampleRegularScanner, ()->())
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj

@@ -3,7 +3,7 @@ using Base.Test
 using Unitful
 
 bR = brukerRobot("RobotServer")
-bS = BrukerScanner{BrukerRobot}(:BrukerScanner, bR, dSampleRegularScanner, ()->())
+bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, dSampleRegularScanner, ()->())
 
 # hR = iselRobot("/dev/ttyS0")
-# hS = HeadScanner{IselRobot}(:HeadScanner, hR, dSampRegualrScanner, ()->())
+# hS = Scanner{IselRobot}(scannerSymbols[3], hR, dSampRegualrScanner, ()->())

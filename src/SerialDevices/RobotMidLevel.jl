@@ -1,60 +1,60 @@
 using Graphics: @mustimplement
 
-export BrukerScanner, HeadScanner, Scanner
+export Scanner, Scanner, BaseScanner
 export name,device,robotSetup,onlineRecoLoop
 export scannerSymbols
 
 const scannerSymbols = [:BrukerScanner, :BrukerEmulator, :HeadScanner, :HeadEmulator]
 
-@compat abstract type Scanner end
+@compat abstract type BaseScanner end
 
-@mustimplement name(scanner::Scanner)
-@mustimplement device(scanner::Scanner)
-@mustimplement robotSetup(scanner::Scanner)
-@mustimplement onlineRecoLoop(scanner::Scanner)
+@mustimplement name(scanner::BaseScanner)
+@mustimplement device(scanner::BaseScanner)
+@mustimplement robotSetup(scanner::BaseScanner)
+@mustimplement onlineRecoLoop(scanner::BaseScanner)
 
-@compat struct BrukerScanner{T<:Device} <: Scanner
+@compat struct Scanner{T<:Device} <: BaseScanner
   name::Symbol
-  device::ServerDevice{T}
+  device::Union{ServerDevice{T},SerialDevice{T}}
   robotSetup::RobotSetup
   onlineRecoLoop::Function
-  BrukerScanner{T}(name::Symbol,device::ServerDevice{T},robotSetup::RobotSetup) where T<:Device = new{T}(name,device,robotSetup,()->())
-  BrukerScanner{T}(name::Symbol,device::ServerDevice{T},robotSetup::RobotSetup, onlineRecoLoop::Function) where T<:Device = new{T}(name,device,robotSetup,onlineRecoLoop)
+  Scanner{T}(name::Symbol,device::ServerDevice{T},robotSetup::RobotSetup) where T<:Device = new{T}(name,device,robotSetup,()->())
+  Scanner{T}(name::Symbol,device::ServerDevice{T},robotSetup::RobotSetup, onlineRecoLoop::Function) where T<:Device = new{T}(name,device,robotSetup,onlineRecoLoop)
 end
 
-name(scanner::BrukerScanner) = scanner.name
-device(scanner::BrukerScanner) = scanner.device
-robotSetup(scanner::BrukerScanner) = scanner.robotSetup
-onlineRecoLoop(scanner::BrukerScanner) = scanner.onlineRecoLoop
+name(scanner::Scanner) = scanner.name
+device(scanner::Scanner) = scanner.device
+robotSetup(scanner::Scanner) = scanner.robotSetup
+onlineRecoLoop(scanner::Scanner) = scanner.onlineRecoLoop
 
-@compat struct HeadScanner{T<:Device} <: Scanner
-  name::Symbol
-  device::SerialDevice{T}
-  robotSetup::RobotSetup
-  onlineRecoLoop::Function
-  HeadScanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup) where T<:Device = new{T}(name,device,robotSetup,()->())
-  HeadScanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup,onlineRecoLoop::Function) where T<:Device = new{T}(name,device,robotSetup,onlineRecoLoop)
-end
+# @compat struct Scanner{T<:Device} <: BaseScanner
+#   name::Symbol
+#   device::SerialDevice{T}
+#   robotSetup::RobotSetup
+#   onlineRecoLoop::Function
+#   Scanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup) where T<:Device = new{T}(name,device,robotSetup,()->())
+#   Scanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup,onlineRecoLoop::Function) where T<:Device = new{T}(name,device,robotSetup,onlineRecoLoop)
+# end
+#
+# name(scanner::Scanner) = scanner.name
+# device(scanner::Scanner) = scanner.device
+# robotSetup(scanner::Scanner) = scanner.robotSetup
+# onlineRecoLoop(scanner::Scanner) = scanner.onlineRecoLoop
 
-name(scanner::HeadScanner) = scanner.name
-device(scanner::HeadScanner) = scanner.device
-robotSetup(scanner::HeadScanner) = scanner.robotSetup
-onlineRecoLoop(scanner::HeadScanner) = scanner.onlineRecoLoop
-
-""" `moveCenter(scanner::Scanner)` """
-function moveCenter(scanner::Scanner)
+""" `moveCenter(scanner::BaseScanner)` """
+function moveCenter(scanner::BaseScanner)
   d = device(scanner)
   moveCenter(d)
 end
 
-""" `movePark(scanner::Scanner)` """
-function movePark(scanner::Scanner)
+""" `movePark(scanner::BaseScanner)` """
+function movePark(scanner::BaseScanner)
   d = device(scanner)
   movePark(d)
 end
 
-""" `moveAbs(scanner::Scanner, xyzPos::Vector{typeof(1.0u"mm")})` Robot MidLevel """
-function moveAbs(scanner::Scanner, xyzPos::Vector{typeof(1.0u"mm")})
+""" `moveAbs(scanner::BaseScanner, xyzPos::Vector{typeof(1.0u"mm")})` Robot MidLevel """
+function moveAbs(scanner::BaseScanner, xyzPos::Vector{typeof(1.0u"mm")})
   if length(xyzPos)!=3
     error("position vector xyzDist needs to have length = 3, but has length: ",length(xyzDist))
   end
@@ -65,6 +65,6 @@ function moveAbs(scanner::Scanner, xyzPos::Vector{typeof(1.0u"mm")})
 end
 
 """ Not Implemented """
-function moveRel(scanner::Scanner, xyzDist::Vector)
+function moveRel(scanner::BaseScanner, xyzDist::Vector)
   error("Not implemented")
 end

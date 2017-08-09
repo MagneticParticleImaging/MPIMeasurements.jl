@@ -1,9 +1,9 @@
 using MPIMeasurements
 using Unitful
 
-# Create Bruker Scanner object
+# Create Bruker BaseScanner object
 bR = brukerRobot("RobotServer")
-bS = BrukerScanner{BrukerRobot}(:BrukerScanner, bR, dSampleRegularScanner, ()->())
+bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, dSampleRegularScanner, ()->())
 
 ################# Use case 1 Basic Move #######################################
 
