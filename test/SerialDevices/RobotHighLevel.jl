@@ -5,7 +5,7 @@ using Compat
 
 
 # define Grid
-rG = RegularGrid{typeof(1.0u"mm")}([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm")
+rG = CartesianGridPositions([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm")
 
 # create BaseScanner
 bR = brukerRobot("RobotServer")

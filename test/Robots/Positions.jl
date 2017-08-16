@@ -10,9 +10,9 @@
   fov = [3.0,3.0,3.0]u"mm"
   ctr = [0,0,0]u"mm"
   caG = CartesianGridPositions(shp,fov,ctr)
-  @test MPIFiles.shape(caG) == shp
-  @test MPIFiles.fieldOfView(caG) == fov
-  @test MPIFiles.center(caG) == ctr
+  @test MPIMeasurements.shape(caG) == shp
+  @test MPIMeasurements.fieldOfView(caG) == fov
+  @test MPIMeasurements.fieldOfViewCenter(caG) == ctr
   #TODO following tests fail. dont know why
   #@test_throws BoundsError rG[0]
   #@test_throws BoundsError rG[28]
@@ -23,9 +23,9 @@
   @test caG[27] == [1,1,1]u"mm"
 
   chG = ChebyshevGridPositions(shp,fov,ctr)
-  @test MPIFiles.shape(chG) == shp
-  @test MPIFiles.fieldOfView(chG) == fov
-  @test MPIFiles.center(chG) == ctr
+  @test MPIMeasurements.shape(chG) == shp
+  @test MPIMeasurements.fieldOfView(chG) == fov
+  @test MPIMeasurements.fieldOfViewCenter(chG) == ctr
   #TODO following tests fail. dont know why
   #@test_throws BoundsError cG[0]
   #@test_throws BoundsError cG[28]
@@ -36,9 +36,9 @@
   @test chG[27] ≈ cos(π/6)*3/2*caG[27]
 
   mG = MeanderingGridPositions(caG)
-  @test MPIFiles.shape(mG) == shp
-  @test MPIFiles.fieldOfView(mG) == fov
-  @test MPIFiles.center(mG) == ctr
+  @test MPIMeasurements.shape(mG) == shp
+  @test MPIMeasurements.fieldOfView(mG) == fov
+  @test MPIMeasurements.fieldOfViewCenter(mG) == ctr
   @test mG[1] == caG[1]
   @test mG[2] == caG[2]
   @test mG[3] == caG[3]

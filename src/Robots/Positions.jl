@@ -26,7 +26,7 @@ function getindex(grid::CartesianGridPositions, i::Integer)
     throw(BoundsError)
   else
     idx = collect(ind2sub(tuple(shape(grid)...), i))
-    return ((-shape(grid).+(2.*idx.-1))./shape(grid)).*fieldOfView(grid)./2 + center(grid)
+    return ((-shape(grid).+(2.*idx.-1))./shape(grid)).*fieldOfView(grid)./2 + fieldOfViewCenter(grid)
   end
 end
 
@@ -42,7 +42,7 @@ function getindex(grid::ChebyshevGridPositions, i::Integer)
     throw(BoundsError)
   else
     idx = collect(ind2sub(tuple(shape(grid)...), i))
-    return -cos.((idx.-0.5).*pi./shape(grid)).*fieldOfView(grid)./2 .+ center(grid)
+    return -cos.((idx.-0.5).*pi./shape(grid)).*fieldOfView(grid)./2 .+ fieldOfViewCenter(grid)
   end
 end
 
@@ -83,7 +83,7 @@ function getindex(rpos::UniformRandomPositions, i::Integer)
     # make sure Positions are randomly generated from given seed
     mersenneTwister = MersenneTwister(seed(rpos))
     rP = rand(mersenneTwister, 3, i)[:,i]
-    return (rP.-0.5).*fieldOfView(rpos)+center(rpos)
+    return (rP.-0.5).*fieldOfView(rpos)+fieldOfViewCenter(rpos)
   end
 end
 
@@ -108,9 +108,9 @@ fieldOfView(grid::UniformRandomPositions) = grid.fov
 fieldOfView(mgrid::MeanderingGridPositions) = fieldOfView(mgrid.grid)
 shape(grid::GridPositions) = grid.shape
 shape(mgrid::MeanderingGridPositions) = shape(mgrid.grid)
-center(grid::GridPositions) = grid.center
-center(grid::UniformRandomPositions) = grid.center
-center(mgrid::MeanderingGridPositions) = center(mgrid.grid)
+fieldOfViewCenter(grid::GridPositions) = grid.center
+fieldOfViewCenter(grid::UniformRandomPositions) = grid.center
+fieldOfViewCenter(mgrid::MeanderingGridPositions) = fieldOfViewCenter(mgrid.grid)
 
 
 type ShpericalTDesign{S} <: Positions where {S<:Unitful.Length}

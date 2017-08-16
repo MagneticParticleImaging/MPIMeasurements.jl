@@ -4,7 +4,7 @@ export MeasObj
 # abstract supertype for all measObj etc.
 @compat abstract type MeasObj end
 
-function _acquireMeas!(scanner::BaseScanner, grid::AbstractGrid, measObj::T,
+function _acquireMeas!(scanner::BaseScanner, grid::Positions, measObj::T,
   preMoveAction::Function, postMoveAction::Function, postMoveWaitTime=0.01) where {T<:MeasObj}
 
   rSetup = robotSetup(scanner)
@@ -15,7 +15,7 @@ function _acquireMeas!(scanner::BaseScanner, grid::AbstractGrid, measObj::T,
 
   for pos in grid
     preMoveAction(measObj, pos)
-    moveAbs(scanner, pos) # comment for testing 
+    moveAbs(scanner, pos) # comment for testing
     sleep(postMoveWaitTime)
     postMoveAction(measObj, pos)
   end
@@ -25,13 +25,13 @@ end
 """ `acquireMeas(scanner::BaseScanner, grid::RegularGrid{typeof(1.0u"mm")}, measObj::T, preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj}`
 Derive your own MeasObj from MeasObj for your purposes, and define your own pre/postMoveAction Function!
 """
-acquireMeas!(scanner::BaseScanner, grid::RegularGrid{typeof(1.0u"mm")}, measObj::T,
+acquireMeas!(scanner::BaseScanner, grid::CartesianGridPositions, measObj::T,
   preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::MeanderingGrid{typeof(1.0u"mm")}, measObj::T,
+acquireMeas!(scanner::BaseScanner, grid::MeanderingGridPositions, measObj::T,
   preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::ArbitraryGrid{typeof(1.0u"mm")}, measObj::T,
+acquireMeas!(scanner::BaseScanner, grid::ArbitraryPositions, measObj::T,
   preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::ChebyshevGrid{typeof(1.0u"mm")}, measObj::T,
+acquireMeas!(scanner::BaseScanner, grid::ChebyshevGridPositions, measObj::T,
   preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
 
 @compat struct HeadSysMeas <: MeasObj
@@ -40,7 +40,7 @@ acquireMeas!(scanner::BaseScanner, grid::ChebyshevGrid{typeof(1.0u"mm")}, measOb
   signals::Array{Vector{typeof(1.0u"mV")},1}
 end
 
-function acquireHeadSys(grid::AbstractGrid)
+function acquireHeadSys(grid::Positions)
   hR = iselRobot("/dev/ttyS0")
   hS = Scanner{IselRobot}(:Scanner, hR, dSampleRegularScanner, ()->())
 
