@@ -25,14 +25,16 @@ end
 """ `acquireMeas(scanner::BaseScanner, grid::RegularGrid{typeof(1.0u"mm")}, measObj::T, preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj}`
 Derive your own MeasObj from MeasObj for your purposes, and define your own pre/postMoveAction Function!
 """
-acquireMeas!(scanner::BaseScanner, grid::CartesianGridPositions, measObj::T,
+acquireMeas!(scanner::BaseScanner, grid::Positions, measObj::T,
   preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::MeanderingGridPositions, measObj::T,
-  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::ArbitraryPositions, measObj::T,
-  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
-acquireMeas!(scanner::BaseScanner, grid::ChebyshevGridPositions, measObj::T,
-  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
+#acquireMeas!(scanner::BaseScanner, grid::CartesianGridPositions, measObj::T,
+#  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
+#acquireMeas!(scanner::BaseScanner, grid::MeanderingGridPositions, measObj::T,
+#  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
+#acquireMeas!(scanner::BaseScanner, grid::ArbitraryPositions, measObj::T,
+#  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
+#acquireMeas!(scanner::BaseScanner, grid::ChebyshevGridPositions, measObj::T,
+#  preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj} = _acquireMeas!(scanner,grid,measObj,preMoveAction,postMoveAction)
 
 @compat struct HeadSysMeas <: MeasObj
   # ioCard Todo
