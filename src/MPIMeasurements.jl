@@ -17,8 +17,8 @@ if !isdir(Pkg.dir("MPIFiles"))
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
 
-# LibSerialPort currently only supports linux
-if is_linux()
+# LibSerialPort currently only supports linux and julia versions above 0.6
+if is_linux() && VERSION=>v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
     println("Installing LibSerialPort....")
     Pkg.clone("https://github.com/hofmannmartin/LibSerialPort.jl.git")
