@@ -84,7 +84,7 @@ function sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)
 end
 
 function _sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)
-  (fromStream, inStream, p)=readandwrite(`$(sd)`);
+  (fromStream, inStream, p)=readandwrite(`$(sd.connectionName)`);
   #(fromStream, inStream, p)=readandwrite(`cat`);
   startmovetime=now(Dates.UTC);
   writetask=write(inStream,brukercmd.command)

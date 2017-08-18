@@ -138,7 +138,7 @@ end
 
 # create given test geometries
 mouseAdapter = Circle(38.0u"mm", "Mouse adapter");
-hallSensor = Circle(38.0u"mm", "Hall Sensor"); # Todo measure diameter
+hallSensor = Circle(38.0u"mm", "Hall Sensor"); # TODO measure diameter
 deltaSample = Circle(10.0u"mm", "Delta sample");
 
 # create given scanner diameter

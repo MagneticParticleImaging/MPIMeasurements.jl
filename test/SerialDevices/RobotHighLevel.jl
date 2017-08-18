@@ -5,7 +5,7 @@ using Compat
 
 
 # define Grid
-rG = RegularGrid{typeof(1.0u"mm")}([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm")
+G = CartesianGridPositions([2,2,2],[3.0,3.0,3.0]u"mm",[0.0,0.0,0.0]u"mm")
 
 # create BaseScanner
 bR = brukerRobot("RobotServer")
@@ -13,7 +13,7 @@ bS = Scanner{BrukerRobot}(scannerSymbols[1], bR, hallSensorRegularScanner, ()->(
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
-  #serialDevice::SerialDevice{GaussMeter}
+  serialDevice::SerialDevice{GaussMeter}
   positions::Array{Vector{typeof(1.0u"mm")},1}
   magneticField::Array{Vector{typeof(1.0u"mT")},1}
 end
@@ -29,7 +29,7 @@ end
 function postMA(measObj::MagneticFieldMeas, pos::Array{typeof(1.0u"mm"),1})
   println("post action: ", pos)
   push!(measObj.positions, pos)
-  #magValues=[getXValue(measObj.serialDevice), getYValue(measObj.serialDevice), getZValue(measObj.serialDevice)]*u"mT"
+  magValues=[getXValue(measObj.serialDevice), getYValue(measObj.serialDevice), getZValue(measObj.serialDevice)]*u"mT"
   magValues =[1.0u"mT",2.0u"mT",1.0u"mT"]
   push!(measObj.magneticField, magValues)
 end
