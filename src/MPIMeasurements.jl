@@ -18,7 +18,7 @@ if !isdir(Pkg.dir("MPIFiles"))
 end
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
-if is_linux() && VERSION=>v"0.6"
+if is_linux() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
     println("Installing LibSerialPort....")
     Pkg.clone("https://github.com/hofmannmartin/LibSerialPort.jl.git")
