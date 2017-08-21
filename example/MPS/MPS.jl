@@ -6,7 +6,8 @@ params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=[10e-3]
 
-daq = DAQ("MPS.ini")
+scanner = MPIScanner("MPS.toml")
+daq = getDAQ(scanner)
 
 # This version does not store the data
 #u = measurement(daq, params, controlPhase=false)

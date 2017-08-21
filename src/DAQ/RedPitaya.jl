@@ -71,7 +71,7 @@ function startTx(daq::DAQRedPitaya)
   dec = daq.params["decimation"]
   freq = daq.params["dfFreq"]
 
-  numSamplesPerTxPeriod = round(Int32, daq["numSampPerPeriod"] ./
+  numSamplesPerTxPeriod = round.(Int32, daq["numSampPerPeriod"] ./
                                        (daq["dfPeriod"] .* daq["dfFreq"]))
 
   calib = zeros(Float32, 4, length(daq["ip"]))

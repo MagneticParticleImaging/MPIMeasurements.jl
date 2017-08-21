@@ -17,6 +17,11 @@ if !isdir(Pkg.dir("MPIFiles"))
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
 
+if !isdir(Pkg.dir("TOML"))
+  println("Installing TOML...")
+  Pkg.clone("https://github.com/wildart/TOML.jl.git")
+end
+
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_linux() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
@@ -38,8 +43,11 @@ if ENV["MPILIB_UI"] == "PyPlot"
 end
 @reexport using Redpitaya
 @reexport using Unitful
+using TOML
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
+include("Scanner/Scanner.jl")
+
 
 end # module

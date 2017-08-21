@@ -20,18 +20,11 @@ include("Plotting.jl")
 numRxChannels(daq::AbstractDAQ) = daq["rxNumChannels"]
 numTxChannels(daq::AbstractDAQ) = length(daq["dfDivider"])
 
-include("Parameters.jl")
 include("RedPitaya.jl")
 include("RedPitayaScpi.jl")
 include("Measurements.jl")
 
-function loadParams(daq::AbstractDAQ)
-  filename = configFile(daq)
-  loadParams(daq, filename)
-end
-
-function DAQ(file::String)
-  params = loadParams(_configFile(file))
+function DAQ(params::Dict)
   if params["daq"] == "RedPitaya"
     return DAQRedPitaya(params)
   elseif params["daq"] == "RedPitayaScpi"
@@ -39,10 +32,6 @@ function DAQ(file::String)
   else
     error("$(params["daq"]) not yet implemented!")
   end
-end
-
-function _configFile(file::String)
-  return Pkg.dir("MPIMeasurements","src","DAQ","Configurations",file)
 end
 
 getindex(daq::AbstractDAQ, param::String) = daq.params[param]
@@ -55,7 +44,7 @@ function init(daq::AbstractDAQ)
   daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"] *
                     daq["acqNumPeriods"]
 
-  if !isinteger(daq["dfDivider"] / daq["decimation"])
+  if !all(isinteger, daq["dfDivider"] / daq["decimation"])
     warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
   end
   daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"]  *

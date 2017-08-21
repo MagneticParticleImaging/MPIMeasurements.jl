@@ -3,7 +3,7 @@ export measurement, measurementCont
 function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
                      controlPhase=false )
 
-  updateParams(daq, params)
+  merge!(daq.params, params)
 
   startTx(daq)
   if controlPhase
@@ -30,7 +30,7 @@ end
 # high level: This stores as MDF
 function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any}();
                      bgdata=nothing, kargs...)
-  updateParams(daq, params_)
+  merge!(daq.params, params_)
 
   params = copy(daq.params)
 
@@ -84,7 +84,7 @@ end
 
 function measurement(daq::AbstractDAQ, mdf::MDFDatasetStore, params=Dict{String,Any};
                      kargs...)
-  updateParams(daq, params)
+  merge!(daq.params, params)
 
   name = params["studyName"]
   path = joinpath( studydir(mdf), name)
