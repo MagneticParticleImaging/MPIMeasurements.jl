@@ -2,6 +2,7 @@ using MPIMeasurements
 using Base.Test
 using Unitful
 using Compat
+using HDF5
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
@@ -28,13 +29,13 @@ end
 #    end
 #end
 
-function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String, grad::Float64)
+function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String, grad)
     h5open(filename, "w") do file
-      write(file, "/grad", grad)
-      write(file, "/unitCoords", string(unit(first(measObj.pos))))
-      write(file, "/unitFields", string(unit(first(measObj.magneticField))))
-      write(file, "/coords", ustrip(measObj.pos))
-      write(file, "/fields", ustrip(measObj.magneticField))
+      write(file, "/grad", ustrip(grad))
+      write(file, "/unitCoords", "m")
+      write(file, "/unitFields", "T")
+      write(file, "/coords", hcat(ustrip.(measObj.positions)...))
+      write(file, "/fields", hcat(ustrip.(measObj.magneticField)...))
     end
 end
 

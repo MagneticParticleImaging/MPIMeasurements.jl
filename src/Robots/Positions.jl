@@ -129,7 +129,7 @@ function loadTDesign(t::Int64, N::Int64, radius::S=10u"mm", filename::String=joi
   address = "/$t-Design/$N"
 
   if exists(h5file, address)
-    positions = read(h5file, address)
+    positions = read(h5file, address)'
     return ShpericalTDesign(UInt(t),radius,positions)
   else
     if exists(h5file, "/$t-Design/")

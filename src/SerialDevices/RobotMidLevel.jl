@@ -56,7 +56,7 @@ end
 """ `moveAbs(scanner::BaseScanner, xyzPos::Vector{typeof(1.0u"mm")})` Robot MidLevel """
 function moveAbs(scanner::BaseScanner, xyzPos::Vector{typeof(1.0u"mm")})
   if length(xyzPos)!=3
-    error("position vector xyzDist needs to have length = 3, but has length: ",length(xyzDist))
+    error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
   end
   rSetup = robotSetup(scanner)
   coordsTable = checkCoords(rSetup, xyzPos)
