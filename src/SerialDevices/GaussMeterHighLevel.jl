@@ -2,6 +2,7 @@ export getXValue,getYValue,getZValue,getVectorMagnitude
 export setXRange,setYRange,setZRange,setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
 export setUnitToGauss,setUnitToTesla,setStandardSettings
+export getRange
 
 """
 Returns the value of the X channel
