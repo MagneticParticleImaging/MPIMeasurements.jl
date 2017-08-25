@@ -4,20 +4,20 @@ params = Dict{String,Any}()
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=[10e-3]
+params["dfStrength"]=[20e-3]
 
 scanner = MPIScanner("MPS.toml")
 daq = getDAQ(scanner)
 
 # This version does not store the data
-#u = measurement(daq, params, controlPhase=false)
+#u = measurement(daq, params, controlPhase=true)
 
 # This version does store the data in a custom location
-#filename = measurement(daq,"/home/knopp/test.mdf", params, controlPhase=false)
+filename = measurement(daq,"/home/labuser/test.mdf", params, controlPhase=true)
 
 # This version does store the data in the MDFStore
-filename = measurement(daq, MDFStore, params,  controlPhase=true)
+#filename = measurement(daq, MDFStore, params,  controlPhase=true)
 
-u = loadBGCorrData(filename)
+#u = loadBGCorrData(filename)
 
 showDAQData(daq,u)
