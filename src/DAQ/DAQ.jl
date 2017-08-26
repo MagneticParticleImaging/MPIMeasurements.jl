@@ -41,17 +41,17 @@ end
 
 function init(daq::AbstractDAQ)
   daq["dfFreq"] = daq["dfBaseFrequency"] ./ daq["dfDivider"]
-  daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"] *
-                    daq["acqNumPeriods"]
+  daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"] #*
+                    #daq["acqNumPeriods"]
 
   if !all(isinteger, daq["dfDivider"] / daq["decimation"])
     warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
   end
-  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"]  *
-                                                                daq["acqNumPeriods"]
+  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"]  #*
+                                                                #daq["acqNumPeriods"]
                                               )
   daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
-  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPatches"]
+  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPeriods"]
 
   D = numTxChannels(daq)
   N = daq["numSampPerPeriod"]

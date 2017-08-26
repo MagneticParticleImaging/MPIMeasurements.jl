@@ -79,10 +79,10 @@ function startTx(daq::DAQRedPitaya)
     daq.sockets[d] = connect(daq["ip"][d],7777)
     p = ParamsType(daq["numSampPerPeriod"],
                    numSamplesPerTxPeriod[d],
-                   daq["acqNumPatches"],
+                   daq["acqNumPeriods"],
                    daq["acqNumFFChannels"],
                    true,
-                   daq["acqNumPatches"] > 1,
+                   daq["acqNumPeriods"] > 1,
                    daq["acqFFLinear"],
                    true,
                    daq["rpGainSetting"][1],
@@ -90,7 +90,7 @@ function startTx(daq::DAQRedPitaya)
                    false, false)
     write_(daq.sockets[d],p)
     println("ParamsType has $(sizeof(p)) bytes")
-    if daq["acqNumPatches"] > 1
+    if daq["acqNumPeriods"] > 1
       write_(daq.sockets[d],map(Float32,daq["acqFFValues"]))
     end
     calib[:,d] = calibParams(daq,d)
@@ -122,12 +122,12 @@ function readData(daq::DAQRedPitaya, numFrames, startFrame)
   numSamp = numSampPerPeriod*numFrames
   numAverages = daq["acqNumAverages"]
   numAllFrames = numAverages*numFrames
-  numPatches = daq["acqNumPatches"]
+  numPeriods = daq["acqNumPeriods"]
 
-  numSampPerFrame = numSampPerPeriod * numPatches
+  numSampPerFrame = numSampPerPeriod * numPeriods
 
-  uMeas = zeros(Int16,numSampPerPeriod,numRxChannels(daq),numPatches,numFrames)
-  uRef = zeros(Int16,numSampPerPeriod,numTxChannels(daq),numPatches,numFrames)
+  uMeas = zeros(Int16,numSampPerPeriod,numRxChannels(daq),numPeriods,numFrames)
+  uRef = zeros(Int16,numSampPerPeriod,numTxChannels(daq),numPeriods,numFrames)
   wpRead = startFrame
   l=1
   chunkSize = 1000
