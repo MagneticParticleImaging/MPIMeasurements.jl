@@ -29,7 +29,7 @@ getindex(m::MeasLab, w::AbstractString) = G_.object(m.builder, w)
 
 function MeasLab(filenameConfig=nothing)
 
-  uifile = joinpath(Pkg.dir("MPILib"),"src","UI","builder","measlab.xml")
+  uifile = joinpath(Pkg.dir("MPIMeasurements"),"example","measlab.xml")
 
   if filenameConfig != nothing
     scanner = MPIScanner(filenameConfig)
@@ -90,6 +90,7 @@ function initCallbacks(m)
   signal_connect(showData, m["adjMinFre"], "value_changed", Void, (), false, m)
   signal_connect(showData, m["adjMaxFre"], "value_changed", Void, (), false, m)
   signal_connect(showData, m["cbShowBG"], "toggled", Void, (), false, m)
+  signal_connect(showData, m["cbAverage"], "toggled", Void, (), false, m)
   signal_connect(showData, m["cbSubtractBG"], "toggled", Void, (), false, m)
   signal_connect(loadExperiment, m["cbCorrTF"], "toggled", Void, (), false, m)
 
@@ -234,8 +235,12 @@ function showData(widgetptr::Ptr, m::MeasLab)
     maxTP = getproperty(m["adjMaxTP"], :value, Int64)
     minFr = getproperty(m["adjMinFre"], :value, Int64)
     maxFr = getproperty(m["adjMaxFre"], :value, Int64)
-
-    data = vec(m.data[:,chan,patch,frame])
+    
+    if getproperty(m["cbAverage"], :active, Bool)
+      data = vec(mean(m.data,4)[:,chan,patch,1]) 
+    else
+      data = vec(m.data[:,chan,patch,frame])
+    end
     if m.dataBG != nothing && getproperty(m["cbSubtractBG"], :active, Bool)
       data[:] .-=  vec(mean(m.dataBG[:,chan,patch,:],2))
     end
