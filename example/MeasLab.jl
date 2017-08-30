@@ -1,5 +1,7 @@
 using MPIMeasurements
 using Gtk.ShortNames
+ENV["WINSTON_OUTPUT"] = :gtk
+import Winston
 
 import Base: getindex
 import MPIMeasurements: measurement
@@ -264,8 +266,8 @@ function measurement(widgetptr::Ptr, m::MeasLab)
   Gtk.@sigatom  println("Calling measurement")
 
   params = getParams(m)
-  filename = "ll" #MPIMeasurements.measurement(m.daq, m.mdfstore, params,
-            #            controlPhase=true, bgdata=m.dataBGStore)
+  filename = MPIMeasurements.measurement(m.daq, m.mdfstore, params,
+                        controlPhase=true, bgdata=m.dataBGStore)
   updateStudies(C_NULL, m)
   updateExperiments(C_NULL, m)
 
