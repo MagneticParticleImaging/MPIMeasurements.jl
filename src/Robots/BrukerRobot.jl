@@ -6,6 +6,17 @@ export getPos
 
 @compat abstract type BrukerRobot <: Device end
 
+
+# FIXME: TK: das mit dem ServerDevice mach für mich nicht so viel Sinn
+
+export ServerDevice
+
+""" Server Device"""
+@compat struct ServerDevice{T<:Device}
+  connectionName::String
+end
+
+
 # Usefull links
 # http://unix.stackexchange.com/questions/87831/how-to-send-keystrokes-f5-from-terminal-to-a-process
 #

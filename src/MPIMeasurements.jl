@@ -5,7 +5,6 @@ using Compat
 using Reexport
 using IniFile
 @reexport using MPIFiles
-include("Robots/Robots.jl")
 
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
@@ -31,6 +30,7 @@ if is_linux() && VERSION >= v"0.6"
   end
   using LibSerialPort
   include("SerialDevices/SerialDevices.jl")
+  include("Robots/Robots.jl")
 end
 
 if !haskey(ENV,"MPILIB_UI")

@@ -1,3 +1,6 @@
 include("Positions.jl")
-include("Isel/ErrorCodes.jl")
 include("RobotSafety.jl")
+include("IselRobot.jl")
+include("BrukerRobot.jl")
+include("RobotMidLevel.jl")
+include("RobotHighLevel.jl")
