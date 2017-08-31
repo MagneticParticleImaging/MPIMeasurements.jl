@@ -4,6 +4,8 @@ using Unitful
 using Compat
 using HDF5
 
+export saveMagneticFieldAsHDF5, MagneticFieldMeas, getXYZValues, getPosition
+
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
   gaussMeter::MPIMeasurements.SerialDevice{MPIMeasurements.GaussMeter}

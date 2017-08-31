@@ -1,11 +1,17 @@
-include("GaussMeterFunctions.jl")
-
+using MPIMeasurements
+using Base.Test
+using Unitful
+using Compat
+using HDF5
 
 # define Grid
-rG = loadTDesign(8,36,30u"mm")
+shp = [3,3,3]
+fov = [3.0,3.0,3.0]u"mm"
+ctr = [0,0,0]u"mm"
+caG = CartesianGridPositions(shp,fov,ctr)
 
 # create Scanner
-bR = brukerRobot("RobotServer")
+bR = iselRobot("/dev/ttyUSB1")
 bS = Scanner{BrukerRobot}(:BrukerScanner, bR, hallSensorRegularScanner, ()->())
 
 mfMeasObj = MagneticFieldMeas(gaussMeter("/dev/ttyUSB2"),u"T",Vector{Vector{typeof(1.0u"m")}}(),Vector{Vector{typeof(1.0u"T")}}())
@@ -30,29 +36,9 @@ function postMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
   println(measObj.magneticField[end])
 end
 
-res = acquireMeas!(bS, rG, mfMeasObj, preMA, postMA)
+res = performTour!(bS, rG, mfMeasObj, preMA, postMA)
 
 #move back to park position after measurement has finished
 movePark(bS)
 
 saveMagneticFieldAsHDF5(mfMeasObj, "/home/nmrsu/measurmenttmp/2_5Tm.hd5", 2.5u"Tm^-1")
-
-
-#=
-# measure at random positions within cube
-# define Grid
-seed = UInt32(42)
-fov = [40,40,40.0]u"mm"
-ctr = [0,0,0]u"mm"
-N = UInt(20)
-rG = UniformRandomPositions(N,seed,fov,ctr)
-
-mfMeasObj = MagneticFieldMeas(gaussMeter("/dev/ttyUSB2"),u"T",Vector{Vector{typeof(1.0u"m")}}(),Vector{Vector{typeof(1.0u"T")}}())
-
-res = acquireMeas!(bS, rG, mfMeasObj, preMA, postMA)
-
-#move back to park position after measurement has finished
-movePark(bS)
-
-saveMagneticFieldAsHDF5(mfMeasObj, "/home/nmrsu/measurmenttmp/2_5Tm_rand.hd5", 2.5u"Tm^-1")
-=#
