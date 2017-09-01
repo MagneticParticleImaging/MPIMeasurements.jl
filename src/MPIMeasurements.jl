@@ -5,6 +5,12 @@ using Compat
 using Reexport
 using IniFile
 @reexport using MPIFiles
+@reexport using Redpitaya
+@reexport using Unitful
+
+import Redpitaya.receive
+import Redpitaya.query
+
 
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
@@ -41,13 +47,13 @@ end
 if ENV["MPILIB_UI"] == "PyPlot"
   using PyPlot
 end
-@reexport using Redpitaya
-@reexport using Unitful
+
 using TOML
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 include("Scanner/Scanner.jl")
+include("GaussMeter/GaussMeter.jl")
 include("Measurements/Measurements.jl")
 
 

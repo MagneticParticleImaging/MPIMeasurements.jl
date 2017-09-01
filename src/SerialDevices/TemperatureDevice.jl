@@ -1,6 +1,8 @@
-export gettemperature,gettemperatures,logtemperature,logtemperatures
+export FOTemp, gettemperature, gettemperatures, logtemperature, logtemperatures
 
-@compat abstract type FOTemp <: Device end
+struct FOTemp <: Device
+  sd::SerialDevice
+end
 
 """
 `fotemp(portAdress::AbstractString)`
@@ -12,7 +14,7 @@ Low level functions such as `getModelName(ft)` will return a function hash and
 a whitespace, e.g. "#40 " leading the actual answer, which would be the model
 name of the device in this case.
 """
-function fotemp(portAdress::AbstractString)
+function FOTemp(portAdress::AbstractString)
 	pause_ms::Int=200
 	timeout_ms::Int=500
 	delim_read::String="\r\n"
@@ -39,7 +41,7 @@ function fotemp(portAdress::AbstractString)
 	flush(sp)
 	if (answer=="#40 46 54 20 43 4F 4D 50 32\r\n")
 		println("Connected to fibre optical termometer.")
-		return SerialDevice{FoTemp}(sp,pause_ms,timeout_ms,delim_read,delim_write)
+		return FoTemp( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
 	elseif (answer=="*FF\r\n")
 		println("Failed to establish connection. Try again.")
 		return nothing
@@ -52,36 +54,36 @@ end
 """
 Returns the averaged temperature of a channel.
 """
-function getAveragedTemperature(ft::SerialDevice{FOTemp},channel::Char)
-	return querry(sd, "?01 $channel")
+function getAveragedTemperature(ft::FOTemp,channel::Char)
+	return query(ft.sd, "?01 $channel")
 end
 
 """
 Returns the averaged temperature of all channel.
 """
-function getAveragedTemperature(ft::SerialDevice{FOTemp})
-	return querry(sd, "?02")
+function getAveragedTemperature(ft::FOTemp)
+	return query(ft.sd, "?02")
 end
 
 """
 Returns the current temperature of a channel.
 """
-function getTemperature(ft::SerialDevice{FOTemp},channel::Char)
-	return querry(sd, "?03 $channel")
+function getTemperature(ft::FOTemp,channel::Char)
+	return query(ft.sd, "?03 $channel")
 end
 
 """
 Returns the current temperature of all channel.
 """
-function getTemperature(ft::SerialDevice{FOTemp})
-	return querry(sd, "?04")
+function getTemperature(ft::FOTemp)
+	return query(ft.sd, "?04")
 end
 
 """
 Returns the number of channels the device has.
 """
-function numChannels(ft::SerialDevice{FOTemp})
-	return querry(sd, "?0F")
+function numChannels(ft::FOTemp)
+	return query(ft.sd, "?0F")
 end
 
 """
@@ -91,8 +93,8 @@ following the function hash. I.e. `"#10 1E"` represents that channels 2, 3, 4,
 and 5 are on and the remaining channels 1,6,7, and 8 are switched off.
 
 """
-function getActiveChannels(ft::SerialDevice{GaussMeter})
-	return querry(ft, "?10")
+function getActiveChannels(ft::FOTemp)
+	return query(ft.sd, "?10")
 end
 
 """
@@ -103,51 +105,51 @@ with bit 0 representing channel 1 to bit 7 for channel 8.
 For example `channel="1E"` will switch on channels 2, 3, 4, and 5 and switch
 off the remaining channels 1,6,7, and 8.
 """
-function setActiveChannel(ft::SerialDevice{GaussMeter}, channel::String)
-	send(ft, ":10 $channel")
+function setActiveChannel(ft::FOTemp, channel::String)
+	send(ft.sd, ":10 $channel")
 	return nothing
 end
 
 """
 Returns the index of the active channel.
 """
-function getMeasuringChannels(ft::SerialDevice{GaussMeter})
-	return querry(ft, "?12")
+function getMeasuringChannels(ft::FOTemp)
+	return query(ft.sd, "?12")
 end
 
 """
 Returns the model name of the device.
 """
-function getModelName(ft::SerialDevice{GaussMeter})
-	return querry(ft, "?40")
+function getModelName(ft::FOTemp)
+	return query(ft.sd, "?40")
 end
 
 """
 Returns the model name of the device.
 """
-function getSerialNumber(ft::SerialDevice{GaussMeter})
-	return querry(ft, "?41")
+function getSerialNumber(ft::FOTemp)
+	return query(ft.sd, "?41")
 end
 
 """
 Returns the firmware version.
 """
-function getFirmwareVersion(ft::SerialDevice{GaussMeter})
-	return querry(ft, "?42")
+function getFirmwareVersion(ft::FOTemp)
+	return query(ft.sd, "?42")
 end
 
 """
 Returns the averaging count of a given `channel`.
 """
-function getTemperatureAveraging(ft::SerialDevice{GaussMeter},channel::Char)
-	return querry(ft, "?53 $channel")
+function getTemperatureAveraging(ft::FOTemp,channel::Char)
+	return query(ft.sd, "?53 $channel")
 end
 
 """
 Sets the moving averaging count of a given `channel` to 0<`numAverages`<21.
 """
-function setTemperatureAveraging(ft::SerialDevice{GaussMeter},channel::Char,numAverages::Integer)
+function setTemperatureAveraging(ft::FOTemp,channel::Char,numAverages::Integer)
 	(numAverages<0 || numAverages>20) && throw(BoundsError)
-	send(ft, ":53 $channel $numAverages")
+	send(ft.sd, ":53 $channel $numAverages")
 	return nothing
 end

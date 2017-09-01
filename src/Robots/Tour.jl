@@ -7,18 +7,17 @@ export MeasObj
 """ `performTour(scanner::BaseScanner, grid::Positions, measObj::T, preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj}`
 Derive your own MeasObj from MeasObj for your purposes, and define your own pre/postMoveAction Function!
 """
-function performTour!(scanner::BaseScanner, grid::Positions, measObj::T,
+function performTour!(robot::AbstractRobot, setup::RobotSetup, grid::Positions, measObj::T,
   preMoveAction::Function, postMoveAction::Function, postMoveWaitTime=0.01) where {T<:MeasObj}
 
-  rSetup = robotSetup(scanner)
   # check all coords for safety
   for pos in grid
-     isValid = checkCoords(rSetup, pos)
+     isValid = checkCoords(setup, pos)
   end
 
   for pos in grid
     preMoveAction(measObj, pos)
-    moveAbs(scanner, pos) # comment for testing
+    moveAbs(robot, setup, pos) # comment for testing
     sleep(postMoveWaitTime)
     postMoveAction(measObj, pos)
   end

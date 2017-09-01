@@ -1,18 +1,11 @@
 using Unitful
 
-export BrukerRobot, brukerRobot
+export BrukerRobot
 export movePark, moveCenter, mobeAbs, moveRel
 export getPos
 
-@compat abstract type BrukerRobot <: Device end
 
-
-# FIXME: TK: das mit dem ServerDevice mach für mich nicht so viel Sinn
-
-export ServerDevice
-
-""" Server Device"""
-@compat struct ServerDevice{T<:Device}
+struct BrukerRobot <: AbstractRobot
   connectionName::String
 end
 
@@ -37,36 +30,36 @@ const err="err?\n"
   command::String
 end
 
-""" Returns `ServerDevice{BrukerRobot}` """
+""" Returns `BrukerRobot` """
 function brukerRobot(connectionName::String)
-  return ServerDevice{BrukerRobot}(connectionName)
+  return BrukerRobot(connectionName)
 end
 
 """ Move Bruker Robot to center"""
-function moveCenter(sd::ServerDevice{BrukerRobot})
+function moveCenter(sd::BrukerRobot)
   _sendCommand(sd,BrukerCommand(center));
 end
 
 """ Move Bruker Robot to park"""
-function movePark(sd::ServerDevice{BrukerRobot})
+function movePark(sd::BrukerRobot)
   _sendCommand(sd,BrukerCommand(park));
 end
 
 """ Get Position of Bruker Robot"""
-function getPos(sd::ServerDevice{BrukerRobot})
+function getPos(sd::BrukerRobot)
   sendCommand(sd,BrukerCommand(pos));
 end
 
-""" `moveAbs(sd::ServerDevice{BrukerRobot}, posX::typeof(1.0u"mm"),
+""" `moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
   posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))` """
-function moveAbs(sd::ServerDevice{BrukerRobot}, posX::typeof(1.0u"mm"),
+function moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
   posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
   cmd = createMoveCommand(posX,posY,posZ)
   res = _sendCommand(sd, cmd)
 end
 
 """ Not Implemented """
-function moveRel(sd::ServerDevice{BrukerRobot}, distX::typeof(1.0u"mm"), distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
+function moveRel(sd::BrukerRobot, distX::typeof(1.0u"mm"), distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
   error("moveRel for ", sd, " not implemented")
 end
 
@@ -74,8 +67,8 @@ function createMoveCommand(x::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0
   cmd = BrukerCommand("goto $(ustrip(x)),$(ustrip(y)),$(ustrip(z))\n")
 end
 
-""" Send Command `sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)`"""
-function sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)
+""" Send Command `sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)`"""
+function sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
   (result, startmovetime, endmovetime)= _sendCommand(sd, brukercmd);
   if result=="0\n"
       return true;
@@ -94,7 +87,7 @@ function sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)
   end
 end
 
-function _sendCommand(sd::ServerDevice{BrukerRobot}, brukercmd::BrukerCommand)
+function _sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
   (fromStream, inStream, p)=readandwrite(`$(sd.connectionName)`);
   #(fromStream, inStream, p)=readandwrite(`cat`);
   startmovetime=now(Dates.UTC);

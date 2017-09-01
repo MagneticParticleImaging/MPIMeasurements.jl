@@ -4,19 +4,19 @@ using Unitful
 using Compat
 using HDF5
 
-# define Grid
-rG = loadTDesign(8,36,30u"mm")
+# define Positions
+positions = loadTDesign(8,36,30u"mm")
 
 # create Scanner
-bR = brukerRobot("RobotServer")
-bS = Scanner{BrukerRobot}(:BrukerScanner, bR, hallSensorRegularScanner, ()->())
+robot = brukerRobot("RobotServer")
+scannerSetup = hallSensorRegularScanner
 
-mfMeasObj = MagneticFieldMeas(gaussMeter("/dev/ttyUSB2"),u"T",Vector{Vector{typeof(1.0u"m")}}(),Vector{Vector{typeof(1.0u"T")}}())
+mfMeasObj = MagneticFieldMeas(GaussMeter("/dev/ttyUSB2"),u"T",
+               Vector{Vector{typeof(1.0u"m")}}(),Vector{Vector{typeof(1.0u"T")}}())
 
 
 # Initialize GaussMeter with standard settings
 setStandardSettings(mfMeasObj.gaussMeter)
-#setRange(mfMeasObj)
 
 # define preMoveAction
 function preMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
@@ -33,10 +33,10 @@ function postMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
   println(measObj.magneticField[end])
 end
 
-res = performTour!(bS, rG, mfMeasObj, preMA, postMA)
+res = performTour!(robot, scannerSetup, positions, mfMeasObj, preMA, postMA)
 
 #move back to park position after measurement has finished
-movePark(bS)
+movePark(robot)
 
 saveMagneticFieldAsHDF5(mfMeasObj, "/home/nmrsu/measurmenttmp/2_5Tm.hd5", 2.5u"Tm^-1")
 

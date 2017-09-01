@@ -8,7 +8,7 @@ export saveMagneticFieldAsHDF5, MagneticFieldMeas, getXYZValues, getPosition
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
-  gaussMeter::MPIMeasurements.SerialDevice{MPIMeasurements.GaussMeter}
+  gaussMeter::GaussMeter
   unit::Unitful.FreeUnits
   positions::Vector{Vector{typeof(1.0u"m")}}
   magneticField::Vector{Vector{typeof(1.0u"T")}}

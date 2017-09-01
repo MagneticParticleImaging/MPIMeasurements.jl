@@ -27,20 +27,6 @@ device(scanner::Scanner) = scanner.device
 robotSetup(scanner::Scanner) = scanner.robotSetup
 onlineRecoLoop(scanner::Scanner) = scanner.onlineRecoLoop
 
-# @compat struct Scanner{T<:Device} <: BaseScanner
-#   name::Symbol
-#   device::SerialDevice{T}
-#   robotSetup::RobotSetup
-#   onlineRecoLoop::Function
-#   Scanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup) where T<:Device = new{T}(name,device,robotSetup,()->())
-#   Scanner{T}(name::Symbol,device::SerialDevice{T},robotSetup::RobotSetup,onlineRecoLoop::Function) where T<:Device = new{T}(name,device,robotSetup,onlineRecoLoop)
-# end
-#
-# name(scanner::Scanner) = scanner.name
-# device(scanner::Scanner) = scanner.device
-# robotSetup(scanner::Scanner) = scanner.robotSetup
-# onlineRecoLoop(scanner::Scanner) = scanner.onlineRecoLoop
-
 """ `moveCenter(scanner::BaseScanner)` """
 function moveCenter(scanner::BaseScanner)
   d = device(scanner)

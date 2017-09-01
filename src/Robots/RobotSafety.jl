@@ -1,5 +1,4 @@
 using Unitful
-#import Plots
 # export types
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
 DriveFieldAmplitude, GradientScan, RobotSetup
@@ -18,15 +17,15 @@ const regularBrukerScannerdiameter = 118.0u"mm";
 const maxDriveFieldAmplitude = 14.0u"mT";
 const maxWantedVolumeX = 300.0u"mm";
 
-immutable Clearance
+struct Clearance
   distance::typeof(1.0u"mm")
   Clearance(distance) = distance < minClearance ? error("Clearance below minimum") :
   new(distance)
 end
 
-@compat abstract type Geometry end
+abstract type Geometry end
 
-immutable Circle <: Geometry
+struct Circle <: Geometry
   diameter::typeof(1.0u"mm")
   name::String
 
@@ -39,7 +38,7 @@ immutable Circle <: Geometry
   end
 end
 
-immutable Rectangle <: Geometry
+struct Rectangle <: Geometry
   width::typeof(1.0u"mm")
   height::typeof(1.0u"mm")
   name::String
@@ -53,7 +52,7 @@ immutable Rectangle <: Geometry
   end
 end
 
-immutable Hexagon <: Geometry
+struct Hexagon <: Geometry
   width::typeof(1.0u"mm")
   height::typeof(1.0u"mm")
   name::String
@@ -66,7 +65,7 @@ immutable Hexagon <: Geometry
   end
 end
 
-immutable Triangle <: Geometry
+struct Triangle <: Geometry
   width::typeof(1.0u"mm")
   height::typeof(1.0u"mm")
   name::String
@@ -80,7 +79,7 @@ immutable Triangle <: Geometry
   end
 end
 
-immutable ScannerGeo
+struct ScannerGeo
   diameter::typeof(1.0u"mm")
   name::String
   xMinRobot::typeof(1.0u"mm")
@@ -94,7 +93,7 @@ immutable ScannerGeo
   end
 end
 
-immutable WantedVolume
+struct WantedVolume
      x_dim::typeof(1.0u"mm")
      y_dim::typeof(1.0u"mm")
      z_dim::typeof(1.0u"mm")
@@ -108,25 +107,25 @@ immutable WantedVolume
      end
 end
 
-immutable DriveFieldAmplitude
-     amp_x::typeof(1.0u"mT")
-     amp_y::typeof(1.0u"mT")
-     amp_z::typeof(1.0u"mT")
+struct DriveFieldAmplitude
+  amp_x::typeof(1.0u"mT")
+  amp_y::typeof(1.0u"mT")
+  amp_z::typeof(1.0u"mT")
 
-     function DriveFieldAmplitude(amp_x::typeof(1.0u"mT"), amp_y::typeof(1.0u"mT"), amp_z::typeof(1.0u"mT"))
-       if amp_x > maxDriveFieldAmplitude || amp_y > maxDriveFieldAmplitude || amp_z > maxDriveFieldAmplitude
-         error("Ask Bruker for a higher drive field amplitude...")
-       else
-         new(amp_x, amp_y, amp_z)
-       end
-     end
+  function DriveFieldAmplitude(amp_x::typeof(1.0u"mT"), amp_y::typeof(1.0u"mT"), amp_z::typeof(1.0u"mT"))
+   if amp_x > maxDriveFieldAmplitude || amp_y > maxDriveFieldAmplitude || amp_z > maxDriveFieldAmplitude
+     error("Ask Bruker for a higher drive field amplitude...")
+   else
+     new(amp_x, amp_y, amp_z)
+   end
+  end
 end
 
-immutable GradientScan
-     strength::typeof(1.0u"T/m")
+struct GradientScan
+  strength::typeof(1.0u"T/m")
 
-     GradientScan(strength) = strength > 2.5u"T/m" || strength < 0.1u"T/m" ?
-      error("Buy a new scanner which has more than 2.5T/m...:)") : new(strength)
+  GradientScan(strength) = strength > 2.5u"T/m" || strength < 0.1u"T/m" ?
+  error("Buy a new scanner which has more than 2.5T/m...:)") : new(strength)
 end
 
 type RobotSetup
