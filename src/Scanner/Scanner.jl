@@ -21,7 +21,7 @@ function getRobot(scanner::MPIScanner)
   if !haskey(scanner.params, "Robot")
     error("MPI Scanner has no Robot installed!")
   end
-  return # ????? (scanner.params["DAQ"])
+  return Robot(scanner.params["Robot"])
 end
 
 function getGaussmeter(scanner::MPIScanner)

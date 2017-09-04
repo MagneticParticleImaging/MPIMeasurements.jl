@@ -1,6 +1,6 @@
 using Graphics: @mustimplement
 
-export moveAbs
+export moveAbs, AbstractRobot, Robot
 
 include("Positions.jl")
 include("RobotSafety.jl")
@@ -27,5 +27,17 @@ include("IselRobot.jl")
 include("BrukerRobot.jl")
 include("DummyRobot.jl")
 #include("RobotMidLevel.jl")
+
+function Robot(params::Dict)
+  if params["type"] == "Dummy"
+    return DummyRobot()
+  elseif params["type"] == "Isel"
+    return IselRobot(params["connection"])
+  elseif params["type"] == "Bruker"
+    return BrukerRobot(params["connection"])
+  else
+    error("Cannot create Robot!")
+  end
+end
 
 include("Tour.jl")

@@ -10,7 +10,9 @@ fov = [3.0,3.0,3.0]u"mm"
 ctr = [0,0,0]u"mm"
 positions = CartesianGridPositions(shp,fov,ctr)
 
-robot = DummyRobot()
+scanner = MPIScanner("HeadScanner.toml")
+
+robot = getRobot(scanner) #DummyRobot()
 scannerSetup = hallSensorRegularScanner
 
 struct DummyMeasObj <: MeasObj

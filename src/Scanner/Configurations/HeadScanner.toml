@@ -1,0 +1,5 @@
+[DAQ]
+test=3
+[Robot]
+type="Dummy"
+pauseTime=1.0
