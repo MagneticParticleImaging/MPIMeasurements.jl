@@ -3,6 +3,7 @@ using Base.Test
 using Unitful
 using Compat
 using HDF5
+import MPIMeasurements: preMoveAction, postMoveAction
 
 # define Positions
 positions = loadTDesign(8,36,30u"mm")
@@ -19,13 +20,13 @@ mfMeasObj = MagneticFieldMeas(GaussMeter("/dev/ttyUSB2"),u"T",
 setStandardSettings(mfMeasObj.gaussMeter)
 
 # define preMoveAction
-function preMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
+function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
   println("moving to next position...")
 
 end
 
 # define postMoveAction
-function postMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
+function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
   println("post action: ", pos)
   sleep(1.0)
   getPosition(measObj, pos)
@@ -33,7 +34,7 @@ function postMA(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
   println(measObj.magneticField[end])
 end
 
-res = performTour!(robot, scannerSetup, positions, mfMeasObj, preMA, postMA)
+res = performTour!(robot, scannerSetup, positions, mfMeasObj)
 
 #move back to park position after measurement has finished
 movePark(robot)

@@ -3,6 +3,7 @@ using Base.Test
 using Unitful
 using Compat
 using HDF5
+import MPIMeasurements: preMoveAction, postMoveAction
 
 # define Grid
 shp = [3,3,3]
@@ -24,13 +25,13 @@ measObj = MyMeasObj(rp)
 #setStandardSettings(mfMeasObj.gaussMeter)
 
 # define preMoveAction
-function preMA(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")})
+function preMoveAction(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")}, index)
   println("moving to next position...")
 
 end
 
 # define postMoveAction
-function postMA(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")})
+function postMoveAction(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")}, index)
   println("post action: ", pos)
 
   newvoltage = rand()
@@ -43,7 +44,7 @@ function postMA(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")})
   #println(measObj.magneticField[end])
 end
 
-res = performTour!(robot, scannerSetup, positions, measObj, preMA, postMA)
+res = performTour!(robot, scannerSetup, positions, measObj)
 
 #move back to park position after measurement has finished
 movePark(robot)
