@@ -58,10 +58,22 @@ struct IselRobot <: AbstractRobot
   sd::SerialDevice
 end
 
+function queryIsel(sd::SerialDevice,cmd::String)
+  flush(sd.sp)
+  send(sd,string(cmd,sd.delim_write))
+  i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, 1, sd.timeout_ms)
+  if i!=1
+    error("Isel Robot did not respond!")
+  end
+  out = String( c )
+  flush(sd.sp)
+  return out
+end
+
 
 function IselRobot(portAdress::AbstractString)
-  pause_ms::Int = 100
-  timeout_ms::Int = 500
+  pause_ms::Int = 400
+  timeout_ms::Int = 20000
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Integer = 19200
@@ -72,6 +84,7 @@ function IselRobot(portAdress::AbstractString)
   try
     sp = SerialPort(portAdress)
     open(sp)
+    set_speed(sp, baudrate)
     IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
   catch ex
     println("Connection fail: ",ex)
@@ -80,30 +93,30 @@ end
 
 """ Initializes all axes in order Z,Y,X """
 function initZYX(robot::IselRobot)
-  ret = query(robot.sd, "@07")
+  ret = queryIsel(robot.sd, "@07")
   checkError(ret)
 end
 
 """ References all axes in order Z,Y,X """
 function refZYX(robot::IselRobot)
-  ret = querry(robot.sd, "@0R7")
+  ret = queryIsel(robot.sd, "@0R7")
   checkError(ret)
 end
 
 """ Initializes and references all axes in order Z,Y,X """
 function initRefZYX(robot::IselRobot)
-  initZYX(robot.sd)
-  refZYX(robot.sd)
+  initZYX(robot)
+  refZYX(robot)
 end
 
 """ Move Isel Robot to center"""
 function moveCenter(robot::IselRobot)
-  moveAbs(robot.sd, centerPos)
+  moveAbs(robot, centerPos)
 end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot.sd, parkPos);
+  moveAbs(robot, parkPos);
 end
 
 function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
@@ -113,7 +126,7 @@ function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
     ",",stepsY,",",velY,
     ",",stepsZ,",",velZ,
     ",",0,",",30)
-  ret = query(robot.sd, cmd)
+  ret = queryIsel(robot.sd, cmd)
   checkError(ret)
 end
 
@@ -121,14 +134,14 @@ end
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
 function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)
-  _moveRel(robot.sd,mm2Steps(distX),velX,mm2Steps(distY),velY,mm2Steps(distZ),velZ)
+  _moveRel(robot,mm2Steps(distX),velX,mm2Steps(distY),velY,mm2Steps(distZ),velZ)
 end
 
 """ Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"),
   distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))` using const defaultVelocity """
 function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"),
   distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
-  moveRel(robot.sd, distX, defaultVelocity[1],distY, defaultVelocity[2], distZ, defaultVelocity[3])
+  moveRel(robot, distX, defaultVelocity[1],distY, defaultVelocity[2], distZ, defaultVelocity[3])
 end
 
 function mm2Steps(dist::typeof(1.0u"mm"))
@@ -141,14 +154,14 @@ function steps2mm(steps)
 end
 
 function _getPos(robot::IselRobot)
-  ret = query(robot.sd, "@0P")
+  ret = queryIsel(robot.sd, "@0P")
   checkError(ret)
   return ret
 end
 
 """ Returns Pos in mm """
 function getPos(robot::IselRobot)
-  ret = query(robot.sd, "@0P")
+  ret = queryIsel(robot.sd, "@0P")
   checkError(ret)
   return parsePos(ret)
 end
@@ -160,13 +173,13 @@ end
 
 """ Simulates Reference Z,Y,X """
 function simRefZYX(robot::IselRobot)
-  ret = query(robot.sd, "@0N7")
+  ret = queryIsel(robot.sd, "@0N7")
   checkError(ret)
 end
 
 """ Sets the zero position for absolute moving at current axes position Z,Y,X """
 function setZeroPoint(robot::IselRobot)
-  ret = query(robot.sd, "@0n7")
+  ret = queryIsel(robot.sd, "@0n7")
   checkError(ret)
 end
 
@@ -174,7 +187,7 @@ function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
   cmd=string("@0M"," ",stepsX,",",velX,",",stepsY,",",velY,",",stepsZ,",",velZ,",",0,",",30)
-  ret = query(robot.sd, cmd)
+  ret = queryIsel(robot.sd, cmd)
   checkError(ret)
 end
 
@@ -192,7 +205,7 @@ end
 
 """ Sets Acceleration """
 function setAcceleration(robot::IselRobot,acceleration)
-  ret = query(robot.sd, string("@0J",acceleration))
+  ret = queryIsel(robot.sd, string("@0J",acceleration))
   checkError(ret)
 end
 
@@ -205,13 +218,13 @@ end
 """ Sets brake, brake=false no current on brake , brake=true current on brake """
 function setBrake(robot::IselRobot, brake::Bool)
   flag = brake ? 1 : 0
-  ret = query(robot.sd, string("@0g",flag))
+  ret = queryIsel(robot.sd, string("@0g",flag))
   checkError(ret)
 end
 
 """ Sets free, Freifahren axis, wenn Achse über den Referenzpunkt gefahren ist"""
 function setFree(robot::IselRobot, axis)
-  ret = query(robot.sd,  string("@0F",axis))
+  ret = queryIsel(robot.sd,  string("@0F",axis))
   checkError(ret)
 end
 
