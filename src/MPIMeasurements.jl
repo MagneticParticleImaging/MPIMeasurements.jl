@@ -1,4 +1,4 @@
-__precompile__()
+#__precompile__()
 module MPIMeasurements
 
 if !isdir(Pkg.dir("Redpitaya"))
@@ -16,6 +16,13 @@ if !isdir(Pkg.dir("TOML"))
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
 end
 
+using Compat
+using Reexport
+using IniFile
+@reexport using MPIFiles
+@reexport using Redpitaya
+@reexport using Unitful
+using TOML
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
@@ -28,13 +35,6 @@ if is_unix() && VERSION >= v"0.6"
   include("Robots/Robots.jl")
 end
 
-using Compat
-using Reexport
-using IniFile
-@reexport using MPIFiles
-@reexport using Redpitaya
-@reexport using Unitful
-
 import Redpitaya.receive
 import Redpitaya.query
 
@@ -42,12 +42,9 @@ if !haskey(ENV,"MPILIB_UI")
   ENV["MPILIB_UI"] = "PyPlot"
 end
 
-
 if ENV["MPILIB_UI"] == "PyPlot"
   using PyPlot
 end
-
-using TOML
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
