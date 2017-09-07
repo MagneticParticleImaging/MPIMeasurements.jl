@@ -1,17 +1,6 @@
 __precompile__()
 module MPIMeasurements
 
-using Compat
-using Reexport
-using IniFile
-@reexport using MPIFiles
-@reexport using Redpitaya
-@reexport using Unitful
-
-import Redpitaya.receive
-import Redpitaya.query
-
-
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
   Pkg.clone("https://github.com/tknopp/Redpitaya.jl.git")
@@ -38,6 +27,16 @@ if is_unix() && VERSION >= v"0.6"
   include("SerialDevices/SerialDevices.jl")
   include("Robots/Robots.jl")
 end
+
+using Compat
+using Reexport
+using IniFile
+@reexport using MPIFiles
+@reexport using Redpitaya
+@reexport using Unitful
+
+import Redpitaya.receive
+import Redpitaya.query
 
 if !haskey(ENV,"MPILIB_UI")
   ENV["MPILIB_UI"] = "PyPlot"
