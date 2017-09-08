@@ -1,9 +1,9 @@
 using MPIMeasurements
 using Unitful
 
-hr = IselRobot("/dev/ttyS0")
+hr = IselRobot("/dev/ttyUSB0")
 initRefZYX(hr)
-moveRel(hr,10.0u"mm", 5000, 20.0u"mm", 5000, 30.0u"mm", 5000)
+moveRel(hr,10.0u"mm", 5000, 0.0u"mm", 5000, 0.0u"mm", 5000)
 # Basic Test
 # using LibSerialPort
 # serialports = list_ports()

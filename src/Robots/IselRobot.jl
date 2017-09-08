@@ -1,9 +1,9 @@
 using Unitful
 
 export IselRobot
-export initZYX, refZYX, initRefZYX, simRefZYX
+export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
 export moveRel, moveAbs, movePark, moveCenter
-export getPos
+export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 
@@ -57,10 +57,10 @@ end
 
 function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
     minAcc=1,maxAcc=4000,minFreq=20,maxFreq=4000,stepsPerTurn=5000,gearSlope=5,
-    defaultVel=[1000,1000,1000],defCenterPos=[0,0,0],defParkPos=[0,0,0])
+    defaultVel=[10000,10000,10000],defCenterPos=[200000,100000,100000],defParkPos=[-200000,0,0],)
 
   pause_ms::Int = 400
-  timeout_ms::Int = 20000
+  timeout_ms::Int = 40000
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Integer = 19200
@@ -113,12 +113,12 @@ end
 
 """ Move Isel Robot to center"""
 function moveCenter(robot::IselRobot)
-  moveAbs(robot, steps2mm(robot.defCenterPos))
+  moveAbs(robot, steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm))
 end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, steps2mm(robot.defParkPos));
+  moveAbs(robot, steps2mm(robot.defParkPos[1],robot.stepsPermm),steps2mm(robot.defParkPos[2],robot.stepsPermm),steps2mm(robot.defParkPos[3],robot.stepsPermm));
 end
 
 function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
@@ -136,7 +136,7 @@ end
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
 function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)
-  _moveRel(robot,mm2Steps(distX),velX,mm2Steps(distY),velY,mm2Steps(distZ),velZ)
+  _moveRel(robot,mm2Steps(distX,robot.stepsPermm),velX,mm2Steps(distY,robot.stepsPermm),velY,mm2Steps(distZ,robot.stepsPermm),velZ)
 end
 
 """ Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"),
@@ -146,11 +146,11 @@ function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"),
   moveRel(robot, distX, robot.defaultVel[1],distY, robot.defaultVel[2], distZ, robot.defaultVel[3])
 end
 
-function mm2Steps(dist::typeof(1.0u"mm"))
+function mm2Steps(dist::typeof(1.0u"mm"),stepsPermm)
     return round(Int64,ustrip(dist)*stepsPermm)
 end
 
-function steps2mm(steps)
+function steps2mm(steps,stepsPermm)
   dist = steps/stepsPermm
   return dist*u"mm"
 end
@@ -196,13 +196,13 @@ end
 """ Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
 function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), velX, posY::typeof(1.0u"mm"), velY, posZ::typeof(1.0u"mm"), velZ)
-  _moveAbs(robot,mm2Steps(posX),velX,mm2Steps(posY),velY,mm2Steps(posZ),velZ)
+  _moveAbs(robot,mm2Steps(posX,robot.stepsPermm),velX,mm2Steps(posY,robot.stepsPermm),velY,mm2Steps(posZ,robot.stepsPermm),velZ)
 end
 
 """ Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveAbs(sd::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
-  _moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3])
+function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
+  moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3])
 end
 
 """ Sets Acceleration """
@@ -234,7 +234,7 @@ end
 function prepareRobot(robot::IselRobot)
   # check sensor for reference
   initRefZYX(robot)
-  moveAbs(robot, robot.defParkPos[1],robot.defaultVel[1],robot.defParkPos[2],robot.defaultVel[2],robot.defParkPos[3],robot.defaultVel[3])
+  _moveAbs(robot, robot.defCenterPos[1],robot.defaultVel[1],robot.defCenterPos[2],robot.defaultVel[2],robot.defCenterPos[3],robot.defaultVel[3])
   setZeroPoint(robot)
 end
 
