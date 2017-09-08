@@ -1,32 +1,36 @@
-export MPIScanner, getDAQ, getRobot, getGaussmeter
+export MPIScanner
 
 type MPIScanner
   params::Dict
+  daq::Union{AbstractDAQ,Void}
+  robot::Union{AbstractRobot,Void}
+  gaussmeter::Union{GaussMeter,Void}
+  recoMethod::Function
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
-    return new(params)
-  end
-end
 
-function getDAQ(scanner::MPIScanner)
-  if !haskey(scanner.params, "DAQ")
-    error("MPI Scanner has no DAQ installed!")
-  end
-  return DAQ(scanner.params["DAQ"])
-end
+    if !haskey(params, "DAQ")
+      warn("MPI Scanner has no DAQ installed!")
+      daq = nothing
+    else
+        daq = DAQ(params["DAQ"])
+    end
 
+    if !haskey(params, "Robot")
+      warn("MPI Scanner has no Robot installed!")
+      robot = nothing
+    else
+      robot = Robot(params["Robot"])
+    end
 
-function getRobot(scanner::MPIScanner)
-  if !haskey(scanner.params, "Robot")
-    error("MPI Scanner has no Robot installed!")
-  end
-  return Robot(scanner.params["Robot"])
-end
+    if !haskey(params, "Gaussmeter")
+      warn("MPI Scanner has no Gaussmeter installed!")
+      gaussMeter = nothing
+    else
+      gaussMeter = nothing
+    end
 
-function getGaussmeter(scanner::MPIScanner)
-  if !haskey(scanner.params, "Gaussmeter")
-    error("MPI Scanner has no Gaussmeter installed!")
+    return new(params,daq,robot,gaussMeter,()->())
   end
-  return # ????? (scanner.params["DAQ"])
 end

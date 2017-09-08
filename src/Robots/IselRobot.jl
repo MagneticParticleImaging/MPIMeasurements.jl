@@ -7,21 +7,6 @@ export getPos
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 
-const minVel = 30
-const maxVel = 40000
-const minAcceleration = 1
-const maxAcceleration = 4000
-const minstartStopFreq = 20
-const maxstartStopFreq = 4000
-const stepsPerTurn = 5000
-const gearSlope = 5 # 1 turn equals 5mm feed
-const stepsPermm =stepsPerTurn / gearSlope
-const defaultVelocity = [1000,1000,1000]
-const parkPos = [0.0,0.0,0.0]u"mm"
-const centerPos = [0.0,0.0,0.0]u"mm"
-const defCenterPos = [0,0,0]
-
-
 
 """Errorcodes Isel Robot """
 const iselErrorCodes = Dict(
@@ -56,22 +41,24 @@ over the mid/high level API call `methodswith(SerialDevice{IselRobot})`.
 """
 struct IselRobot <: AbstractRobot
   sd::SerialDevice
+  minVel::Integer
+  maxVel::Integer
+  minAcc::Integer
+  maxAcc::Integer
+  minFreq::Integer
+  maxFreq::Integer
+  stepsPerTurn::Integer
+  gearSlope::Integer
+  stepsPermm::Float64
+  defaultVel::Array{Int64,1}
+  defCenterPos::Array{Int64,1}
+  defParkPos::Array{Int64,1}
 end
 
-function queryIsel(sd::SerialDevice,cmd::String)
-  flush(sd.sp)
-  send(sd,string(cmd,sd.delim_write))
-  i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, 1, sd.timeout_ms)
-  if i!=1
-    error("Isel Robot did not respond!")
-  end
-  out = String( c )
-  flush(sd.sp)
-  return out
-end
+function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
+    minAcc=1,maxAcc=4000,minFreq=20,maxFreq=4000,stepsPerTurn=5000,gearSlope=5,
+    defaultVel=[1000,1000,1000],defCenterPos=[0,0,0],defParkPos=[0,0,0])
 
-
-function IselRobot(portAdress::AbstractString)
   pause_ms::Int = 400
   timeout_ms::Int = 20000
   delim_read::String = "\r"
@@ -85,10 +72,25 @@ function IselRobot(portAdress::AbstractString)
     sp = SerialPort(portAdress)
     open(sp)
     set_speed(sp, baudrate)
-    IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
+    return IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
+        ,minVel,maxVel,minAcc,maxAcc,minFreq,maxFreq,stepsPerTurn,gearSlope,
+        stepsPerTurn / gearSlope,defaultVel,defCenterPos,defParkPos)
   catch ex
     println("Connection fail: ",ex)
   end
+end
+
+""" queryIsel(sd::SerialDevice,cmd::String) """
+function queryIsel(sd::SerialDevice,cmd::String)
+  flush(sd.sp)
+  send(sd,string(cmd,sd.delim_write))
+  i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, 1, sd.timeout_ms)
+  if i!=1
+    error("Isel Robot did not respond!")
+  end
+  out = String( c )
+  flush(sd.sp)
+  return out
 end
 
 """ Initializes all axes in order Z,Y,X """
@@ -111,12 +113,12 @@ end
 
 """ Move Isel Robot to center"""
 function moveCenter(robot::IselRobot)
-  moveAbs(robot, centerPos)
+  moveAbs(robot, steps2mm(robot.defCenterPos))
 end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, parkPos);
+  moveAbs(robot, steps2mm(robot.defParkPos));
 end
 
 function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
@@ -141,7 +143,7 @@ end
   distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))` using const defaultVelocity """
 function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"),
   distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
-  moveRel(robot, distX, defaultVelocity[1],distY, defaultVelocity[2], distZ, defaultVelocity[3])
+  moveRel(robot, distX, robot.defaultVel[1],distY, robot.defaultVel[2], distZ, robot.defaultVel[3])
 end
 
 function mm2Steps(dist::typeof(1.0u"mm"))
@@ -200,7 +202,7 @@ end
 """ Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
 function moveAbs(sd::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
-  _moveAbs(robot,posX,defaultVelocity[1],posY,defaultVelocity[2],posZ,defaultVelocity[3])
+  _moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3])
 end
 
 """ Sets Acceleration """
@@ -232,7 +234,7 @@ end
 function prepareRobot(robot::IselRobot)
   # check sensor for reference
   initRefZYX(robot)
-  moveAbs(robot, defCenterPos[1],defaultVelocity[1],defCenterPos[2],defaultVelocity[2],defCenterPos[3],defaultVelocity[3])
+  moveAbs(robot, robot.defParkPos[1],robot.defaultVel[1],robot.defParkPos[2],robot.defaultVel[2],robot.defParkPos[3],robot.defaultVel[3])
   setZeroPoint(robot)
 end
 

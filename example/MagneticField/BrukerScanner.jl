@@ -9,7 +9,7 @@ import MPIMeasurements: preMoveAction, postMoveAction
 positions = loadTDesign(8,36,30u"mm")
 
 # create Scanner
-robot = brukerRobot("RobotServer")
+robot = BrukerRobot("RobotServer")
 scannerSetup = hallSensorRegularScanner
 
 mfMeasObj = MagneticFieldMeas(GaussMeter("/dev/ttyUSB2"),u"T",
@@ -18,21 +18,6 @@ mfMeasObj = MagneticFieldMeas(GaussMeter("/dev/ttyUSB2"),u"T",
 
 # Initialize GaussMeter with standard settings
 setStandardSettings(mfMeasObj.gaussMeter)
-
-# define preMoveAction
-function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
-  println("moving to next position...")
-
-end
-
-# define postMoveAction
-function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
-  println("post action: ", pos)
-  sleep(1.0)
-  getPosition(measObj, pos)
-  getXYZValues(measObj)
-  println(measObj.magneticField[end])
-end
 
 res = performTour!(robot, scannerSetup, positions, mfMeasObj)
 

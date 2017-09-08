@@ -17,7 +17,7 @@ function performTour!(robot::AbstractRobot, setup::RobotSetup, positions::Positi
 
   for (index,pos) in enumerate(positions)
     preMoveAction(measObj, pos, index)
-    moveAbs(robot, setup, pos) # comment for testing
+    moveAbsUnsafe(robot, pos) # comment for testing
     sleep(postMoveWaitTime)
     postMoveAction(measObj, pos, index)
   end
