@@ -1,12 +1,12 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export AbstractRobot, Robot
+export Robot
 
 include("Positions.jl")
 include("RobotSafety.jl")
 
-@compat abstract type AbstractRobot end
+
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::AbstractRobot, posX::typeof(1.0u"mm"),

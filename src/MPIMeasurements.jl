@@ -28,7 +28,10 @@ using TOML
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end
-export Device
+@compat abstract type AbstractRobot end
+@compat abstract type AbstractGaussMeter end
+export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot
+
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
