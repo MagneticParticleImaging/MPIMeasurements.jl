@@ -16,6 +16,8 @@ if !isdir(Pkg.dir("TOML"))
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
 end
 
+
+
 using Compat
 using Reexport
 using IniFile
@@ -23,6 +25,11 @@ using IniFile
 @reexport using Redpitaya
 @reexport using Unitful
 using TOML
+
+# abstract supertype for all possible serial devices
+@compat abstract type Device end
+export Device
+
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
@@ -33,6 +40,7 @@ if is_unix() && VERSION >= v"0.6"
   using LibSerialPort
   include("SerialDevices/SerialDevices.jl")
   include("Robots/Robots.jl")
+  include("GaussMeter/GaussMeter.jl")
 end
 
 import Redpitaya.receive
@@ -48,7 +56,6 @@ end
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
-include("GaussMeter/GaussMeter.jl")
 include("Scanner/Scanner.jl")
 include("Measurements/Measurements.jl")
 
