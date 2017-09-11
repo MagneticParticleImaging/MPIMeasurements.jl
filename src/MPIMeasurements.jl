@@ -35,7 +35,6 @@ using TOML
 export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot, MeasObj
 
 
-
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
@@ -45,9 +44,11 @@ if is_unix() && VERSION >= v"0.6"
   end
   using LibSerialPort
   include("SerialDevices/SerialDevices.jl")
-  include("Robots/Robots.jl")
   include("GaussMeter/GaussMeter.jl")
+  include("Measurements/Measurements.jl")
 end
+
+include("Robots/Robots.jl")
 
 import Redpitaya.receive
 import Redpitaya.query
@@ -63,7 +64,7 @@ end
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 include("Scanner/Scanner.jl")
-include("Measurements/Measurements.jl")
+
 
 
 end # module

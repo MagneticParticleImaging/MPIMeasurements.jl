@@ -50,7 +50,10 @@ function moveRelUnsafe(robot::AbstractRobot, xyzDist::Vector{typeof(1.0u"mm")})
     moveRel(robot,xyzDist[1],xyzDist[2],xyzDist[3])
 end
 
-include("IselRobot.jl")
+if is_unix() && VERSION >= v"0.6"
+  include("IselRobot.jl")
+end
+
 include("BrukerRobot.jl")
 include("DummyRobot.jl")
 
