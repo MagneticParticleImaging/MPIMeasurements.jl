@@ -30,7 +30,10 @@ using TOML
 @compat abstract type Device end
 @compat abstract type AbstractRobot end
 @compat abstract type AbstractGaussMeter end
-export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot
+# abstract supertype for all measObj etc.
+@compat abstract type MeasObj end
+export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot, MeasObj
+
 
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
