@@ -2,19 +2,19 @@ using MPIMeasurements
 using Unitful
 
 # Create Isel BaseScanner object
-iR = iselRobot("/dev/ttyS0")
-hS = Scanner{IselRobot}(scannerSymbols[3], iR, dSampleRegularScanner, ()->())
-initRefZYX(hR)
+iR = IselRobot("/dev/ttyS0")
+
+initRefZYX(iR)
 ################# Use case 1 Basic Move #######################################
 
 # Move absolue LowLevel no safetyCheck!
-movePark(hR)
-moveCenter(hR)
-getPos(hR)
-moveAbs(hR, 1.0u"mm", 0.0u"mm", 0.0u"mm")
+movePark(iR)
+moveCenter(iR)
+getPos(iR)
+moveAbs(iR, 1.0u"mm", 0.0u"mm", 0.0u"mm")
 
 # Move absolute MidLevel
 posXYZ = [1.0u"mm",0.0u"mm",0.0u"mm"]
-moveAbs(hS, posXYZ)
+moveAbs(iR, posXYZ)
 
 ################# Use case 2 Move and Measure #################################

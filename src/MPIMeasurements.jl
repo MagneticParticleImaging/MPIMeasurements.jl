@@ -48,8 +48,8 @@ end
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
-include("Scanner/Scanner.jl")
 include("GaussMeter/GaussMeter.jl")
+include("Scanner/Scanner.jl")
 include("Measurements/Measurements.jl")
 
 

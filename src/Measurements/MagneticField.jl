@@ -14,6 +14,20 @@ export saveMagneticFieldAsHDF5, MagneticFieldMeas, getXYZValues, getPosition
   magneticField::Vector{Vector{typeof(1.0u"T")}}
 end
 
+# define preMoveAction
+function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
+  println("moving to next position...")
+end
+
+# define postMoveAction
+function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
+  println("post action: ", pos)
+  sleep(1.0)
+  getPosition(measObj, pos)
+  getXYZValues(measObj)
+  println(measObj.magneticField[end])
+end
+
 function getXYZValues(measObj::MagneticFieldMeas)
     push!(measObj.magneticField, [getXValue(measObj.gaussMeter), getYValue(measObj.gaussMeter), getZValue(measObj.gaussMeter)]*measObj.unit)
 end

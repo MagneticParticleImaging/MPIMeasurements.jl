@@ -53,18 +53,6 @@ measIsSpectralLeakageCorrected = false
 studyIsSimulation = false
 studyIsCalibration = false
 [Robot]
-type="Isel"
-connection="/dev/ttyUSB0"
+type="Dummy"
 pauseTime=1.0
-minVel = 30
-maxVel = 30000
-minAcc = 1
-maxAcc = 4000
-minFreq = 20
-maxFreq = 4000
-stepsPerTurn = 5000
-gearSlope = 5 # 1 turn equals 5mm feed
-defaultVel = [10000,10000,10000]
-defCenterPos = [200000,0,0]
-defParkPos = [0,10000,10000]
 [Safety]
