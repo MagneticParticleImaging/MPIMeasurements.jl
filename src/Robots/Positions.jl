@@ -1,6 +1,6 @@
-using Unitful
+using Unitful, HDF5
 
-import Base: getindex, length, convert, start, done, next
+import Base: getindex, length, convert, start, done, next, write
 
 export AbstractPosition, ParkPosition, CenterPosition
 export Positions, CartesianGridPositions, ChebyshevGridPositions, MeanderingGridPositions, UniformRandomPositions, ArbitraryPositions, ShpericalTDesign
@@ -14,11 +14,41 @@ export loadTDesign
 @compat abstract type Positions end
 @compat abstract type GridPositions<:Positions end
 
+function Positions(file::HDF5File)
+
+  typ = h5read(file, "/positionsType")
+  if typ == "CartesianGrid"
+    positions = CartesianGridPositions(file)
+  else
+    error("Implement all the other grids!!!")
+  end
+
+  if exists(file, "/positionsMeandering") &&
+      h5read(file, "/positionsMeandering") == Int8(1)
+    positions = MeanderingGridPositions(positions)
+  end
+  return positions
+end
+
 # Cartesian grid
 type CartesianGridPositions{S,T} <: GridPositions where {S,T<:Unitful.Length}
   shape::Vector{Int}
   fov::Vector{S}
   center::Vector{T}
+end
+
+function CartesianGridPositions(file::HDF5File)
+  shape = h5read(file, "/positionsShape")
+  fov = h5read(file, "/positionsFov")*u"m"
+  center = h5read(file, "/positionsCenter")*u"m"
+  return CartesianGridPositions(shape,fov,center)
+end
+
+function write(file::HDF5File, positions::CartesianGridPositions)
+  write(file,"/positionsType", "CartesianGrid")
+  write(file, "/positionsShape", positions.shape)
+  write(file, "/positionsFov", ustrip(uconvert.(u"m", positions.fov)) )
+  write(file, "/positionsCenter", ustrip(uconvert.(u"m", positions.center)) )
 end
 
 function getindex(grid::CartesianGridPositions, i::Integer)
@@ -49,6 +79,11 @@ end
 # Meander regular grid positions
 type MeanderingGridPositions <: GridPositions
   grid::GridPositions
+end
+
+function write(file::HDF5File, positions::MeanderingGridPositions)
+  write(file,"/positionsMeandering", Int8(1))
+  write(file, positions.grid )
 end
 
 function getindex(grid::MeanderingGridPositions, i::Integer)

@@ -2,7 +2,7 @@ export measurementSystemMatrix, SystemMatrixRobotMeas
 
 struct SystemMatrixRobotMeas <: MeasObj
   daq::AbstractDAQ
-  robot::AbstractRobot
+  robot::Robot
   positions::Array{Vector{typeof(1.0u"mm")},1}
   signals::Array{Float32,4}
 end

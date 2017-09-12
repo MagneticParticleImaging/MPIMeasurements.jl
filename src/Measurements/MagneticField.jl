@@ -6,6 +6,8 @@ using HDF5
 
 export saveMagneticFieldAsHDF5, MagneticFieldMeas, getXYZValues, getPosition
 
+#TODO: Unit handling should be put into GaussMeter
+
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
   gaussMeter::GaussMeter
@@ -29,7 +31,7 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")
 end
 
 function getXYZValues(measObj::MagneticFieldMeas)
-    push!(measObj.magneticField, [getXValue(measObj.gaussMeter), getYValue(measObj.gaussMeter), getZValue(measObj.gaussMeter)]*measObj.unit)
+    push!(measObj.magneticField, getXYZValues(measObj.gaussMeter)*measObj.unit)
 end
 
 function getPosition(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
@@ -45,13 +47,17 @@ end
 #    end
 #end
 
-function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String, grad)
+function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String,
+        positions, params=Dict{String,Any}())
     h5open(filename, "w") do file
-      write(file, "/grad", ustrip(grad))
+      write(file, positions)
       write(file, "/unitCoords", "m")
       write(file, "/unitFields", "T")
-      write(file, "/coords", hcat(ustrip.(measObj.positions)...))
+      write(file, "/positions", hcat(ustrip.(measObj.positions)...))
       write(file, "/fields", hcat(ustrip.(measObj.magneticField)...))
+      for (key,value) in params
+        write(file, key, value)
+      end
     end
 end
 

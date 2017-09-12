@@ -28,17 +28,15 @@ using TOML
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end
-@compat abstract type AbstractRobot end
-@compat abstract type AbstractGaussMeter end
+@compat abstract type Robot end
+@compat abstract type GaussMeter end
 # abstract supertype for all measObj etc.
 @compat abstract type MeasObj end
-export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot, MeasObj
+export Device, Robot, GaussMeter, MeasObj
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 include("Safety/RobotSafety.jl")
-include("Scanner/Scanner.jl")
-
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
@@ -52,6 +50,7 @@ if is_unix() && VERSION >= v"0.6"
 end
 
 include("Robots/Robots.jl")
+include("Scanner/Scanner.jl")
 
 if is_unix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")

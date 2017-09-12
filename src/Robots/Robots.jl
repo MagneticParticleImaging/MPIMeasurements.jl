@@ -6,16 +6,16 @@ export Robot
 include("Positions.jl")
 
 # The following methods need to be implemented by a robot
-@mustimplement moveAbs(robot::AbstractRobot, posX::typeof(1.0u"mm"),
+@mustimplement moveAbs(robot::Robot, posX::typeof(1.0u"mm"),
   posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
-@mustimplement moveRel(robot::AbstractRobot, distX::typeof(1.0u"mm"),
+@mustimplement moveRel(robot::Robot, distX::typeof(1.0u"mm"),
     distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
-@mustimplement movePark(robot::AbstractRobot)
-@mustimplement moveCenter(robot::AbstractRobot)
-@mustimplement setBrake(robot::AbstractRobot,brake::Bool)
+@mustimplement movePark(robot::Robot)
+@mustimplement moveCenter(robot::Robot)
+@mustimplement setBrake(robot::Robot,brake::Bool)
 
-""" `moveAbs(robot::AbstractRobot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
-function moveAbs(robot::AbstractRobot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})
+""" `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
+function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})
   if length(xyzPos)!=3
     error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
   end
@@ -23,16 +23,16 @@ function moveAbs(robot::AbstractRobot, setup::RobotSetup, xyzPos::Vector{typeof(
   moveAbsUnsafe(robot,xyzPos)
 end
 
-""" `moveAbsUnsafe(robot::AbstractRobot, xyzPos::Vector{typeof(1.0u"mm")})` """
-function moveAbsUnsafe(robot::AbstractRobot, xyzPos::Vector{typeof(1.0u"mm")})
+""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0u"mm")})` """
+function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0u"mm")})
     if length(xyzPos)!=3
       error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
     end
     moveAbs(robot,xyzPos[1],xyzPos[2],xyzPos[3])
 end
 
-# """ `moveRel(robot::AbstractRobot, setup::RobotSetup, xyzDist::Vector{typeof(1.0u"mm")})` """
-# function moveRel(robot::AbstractRobot, setup::RobotSetup, xyzDist::Vector{typeof(1.0u"mm")})
+# """ `moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0u"mm")})` """
+# function moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0u"mm")})
 #   if length(xyzDist)!=3
 #     error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
 #   end
@@ -40,8 +40,8 @@ end
 #   moveRelUnsafe(robot,xyzDist)
 # end
 
-""" `moveRelUnsafe(robot::AbstractRobot, xyzDist::Vector{typeof(1.0u"mm")})` """
-function moveRelUnsafe(robot::AbstractRobot, xyzDist::Vector{typeof(1.0u"mm")})
+""" `moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0u"mm")})` """
+function moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0u"mm")})
     if length(xyzDist)!=3
       error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
     end

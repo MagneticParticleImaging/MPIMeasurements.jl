@@ -64,4 +64,14 @@ gearSlope = 5 # 1 turn equals 5mm feed
 defaultVel = [40000,40000,40000]
 defCenterPos = [0.095,0.113,0.115] # Hallsensor in center of magnetic field in meter!
 defSampleCenterPos = [0.010,0.0,0.0] # relative geometry distance to of sample mount to Hallsensor mount
+[GaussMeter]
+type="LakeShore"
+connection="/dev/ttyUSB1"
+coordinateTransformation=[1,0,0,0,1,0,0,0,1]
+range=2
+fast=true
 [Safety]
+setupName = "hallSensornoCoil"
+receiveCoil = "noCoil"
+robotMount = "hallSensor"
+clearance = "clearance"

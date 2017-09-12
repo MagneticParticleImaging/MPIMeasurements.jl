@@ -39,7 +39,7 @@ const iselErrorCodes = Dict(
 Initialize Isel Robot on port `portAdress`. For an overview
 over the mid/high level API call `methodswith(SerialDevice{IselRobot})`.
 """
-struct IselRobot <: AbstractRobot
+struct IselRobot <: Robot
   sd::SerialDevice
   minMaxVel::Array{Int64,1}
   minMaxAcc::Array{Int64,1}

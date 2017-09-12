@@ -1,16 +1,17 @@
-export GaussMeter
+export LakeShoreGaussMeter
 
-struct GaussMeter <: AbstractGaussMeter
+struct LakeShoreGaussMeter <: GaussMeter
   sd::SerialDevice
+  coordinateTransformation::Matrix{Float64}
 end
 
 """
-`GaussMeter(portAdress::AbstractString)`
+`LakeShoreGaussMeter(portAdress::AbstractString)`
 
 Initialize Model 460 3 Channel Gaußmeter on port `portAdress`. For an overview
-over the high level API call `methodswith(SerialDevice{GaussMeter})`.
+over the high level API call `methodswith(SerialDevice{LakeShoreGaussMeter})`.
 """
-function GaussMeter(portAdress::AbstractString)
+function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformation=eye(3))
 	pause_ms::Int=400
 	timeout_ms::Int=500
 	delim_read::String="\r\n"
@@ -43,7 +44,7 @@ function GaussMeter(portAdress::AbstractString)
 		if(readuntil(sp, delim_read, timeout_ms) == "0$delim_read")
 
 			println("No Errors found.")
-			return GaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write) )
+			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write) )
 		else
 			println("Errors found in the Device!")
 		end
@@ -55,14 +56,14 @@ end
 """
 Returns the manufacturerID, model number, derial number and firmware revision date
 """
-function identification(gauss::GaussMeter)
+function identification(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "*IDN?")
 end
 
 """
 The gaussmeter reports status based on test done at power up. 0 = no erors found, 1= erros found
 """
-function selfTest(gauss::GaussMeter)
+function selfTest(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "*TST?")
 	if out == "1"
 		return false
@@ -74,14 +75,14 @@ end
 """
 Returns the mode of the active channel DC = 0 AC = 1
 """
-function getMode(gauss::GaussMeter)
+function getMode(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "ACDC?")
 end
 
 """
 Set the mode for the channel DC = 0 AC = 1
 """
-function setMode(gauss::GaussMeter, channel::Char, mode::Char)
+function setMode(gauss::LakeShoreGaussMeter, channel::Char, mode::Char)
 	setActiveChannel(gauss, channel)
 	send(gauss.sd, "ACDC $mode")
 end
@@ -89,7 +90,7 @@ end
 """
 Set the mode of all channels DC = 0, AC = 1
 """
-function setAllMode(gauss::GaussMeter, mode::Char)
+function setAllMode(gauss::LakeShoreGaussMeter, mode::Char)
 	setMode(gauss, 'x', mode)
 	setMode(gauss, 'Y', mode)
 	setMode(gauss, 'Z', mode)
@@ -98,14 +99,14 @@ end
 """
 Returns the AC Mode RMS = 0, Peak = 1
 """
-function getPeakRMS(gauss::GaussMeter)
+function getPeakRMS(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "PRMS?")
 end
 
 """
 Set the AC mode for the channel RMS = 0, Peak = 1
 """
-function setPeakRMS(gauss::GaussMeter, channel::Char, mode::Char)
+function setPeakRMS(gauss::LakeShoreGaussMeter, channel::Char, mode::Char)
 	setActiveChannel(gauss, channel)
 	send(gauss.sd, "PRMS $mode")
 end
@@ -113,7 +114,7 @@ end
 """
 Returns the sleep mode status of the gaussmeter
 """
-function isInSleepMode(gauss::GaussMeter)
+function isInSleepMode(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "SLEEP?")
 	if out == "1"
 		return false
@@ -125,14 +126,14 @@ end
 """
 Sets the sleep mode state of the gaussmeter.  0 = on, 1 = off
 """
-function setSleepMode(gauss::GaussMeter, state::Char)
+function setSleepMode(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "SLEEP $state")
 end
 
 """
 Returns the state of the frontpanel lock
 """
-function isLocked(gauss::GaussMeter)
+function isLocked(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "LOCK?")
 	if out == "1"
 		return true
@@ -144,49 +145,49 @@ end
 """
 Fast data command mode query.  0 = on, 1 = off
 """
-function getFast(gauss::GaussMeter)
+function getFast(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "FAST?")
 end
 
 """
 Set fast data command mode.  0 = on, 1 = off
 """
-function setFast(gauss::GaussMeter, state::Char)
+function setFast(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "FAST $state")
 end
 
 """
 sets the state of the front panel lock. Locks all entries except the alarm keys. 1 = on, 0 = off
 """
-function setFrontPanelLock(gauss::GaussMeter, state::Char)
+function setFrontPanelLock(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "LOCK $state")
 end
 
 """
 Returns the active channel X, Y, Z, V = Vector Magnitude Channel
 """
-function getActiveChannel(gauss::GaussMeter)
+function getActiveChannel(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "CHNL?")
 end
 
 """
 Sets the active channel to X, Y, Z, V = Vector Magnitude Channel
 """
-function setActiveChannel(gauss::GaussMeter, channel::Char)
+function setActiveChannel(gauss::LakeShoreGaussMeter, channel::Char)
 	send(gauss.sd, "CHNL $channel")
 end
 
 """
 Returns the active used unit G = gauss, T = tesla
 """
-function getUnit(gauss::GaussMeter)
+function getUnit(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "UNIT?")
 end
 
 """
 Sets the active unit to `'G'` = gauss, `'T'` = tesla
 """
-function setUnit(gauss::GaussMeter, unit::Char)
+function setUnit(gauss::LakeShoreGaussMeter, unit::Char)
 	send(gauss.sd, "UNIT $unit")
 end
 
@@ -198,7 +199,7 @@ For HSE Probe. More Information in part 3.4 on page 3-7.
 	2						= +-30mT
 	3 = lowest	= +-3mT
 """
-function getRange(gauss::GaussMeter)
+function getRange(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "RANGE?")
 end
 
@@ -210,14 +211,14 @@ For HSE Probe. More Information in part 3.4 on page 3-7.
 	2						= +-30mT
 	3 = lowest	= +-3mT
 """
-function setRange(gauss::GaussMeter, range::Char)
+function setRange(gauss::LakeShoreGaussMeter, range::Char)
 	send(gauss.sd, "RANGE $range")
 end
 
 """
 Returns the state of auto ranging for the active channel
 """
-function isAutoRanging(gauss::GaussMeter)
+function isAutoRanging(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "AUTO?")
 	if out == "0"
 		return false
@@ -229,7 +230,7 @@ end
 """
 Set state of auto ranging for the active channel
 """
-function setAutoRanging(gauss::GaussMeter, state::Char)
+function setAutoRanging(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "AUTO $range")
 end
 
@@ -237,7 +238,7 @@ end
 """
 Returns the state of the probe of the active channel
 """
-function isProbeOn(gauss::GaussMeter)
+function isProbeOn(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "ONOFF?")
 	if out == "1"
 		return false
@@ -249,7 +250,7 @@ end
 """
 Sets probe on = 0 or off = 1 on specific channel
 """
-function setProbe(gauss::GaussMeter, channel::Char, state::Char)
+function setProbe(gauss::LakeShoreGaussMeter, channel::Char, state::Char)
 	setActiveChannel(gauss, channel)
 	send(gauss.sd, "ONOFF $state")
 end
@@ -257,7 +258,7 @@ end
 """
 Sets complete probe on = 0 or off = 1
 """
-function setCompleteProbe(gauss::GaussMeter, state::Char)
+function setCompleteProbe(gauss::LakeShoreGaussMeter, state::Char)
 	setProbe(gauss, 'X', state)
 	setProbe(gauss, 'Y', state)
 	setProbe(gauss, 'Z', state)
@@ -269,28 +270,28 @@ Returns the type of the probe
 	1 = High Stability (HST)
 	2 = Ultra-High Sensitivity (UHS)
 """
-function getProbeType(gauss::GaussMeter)
+function getProbeType(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "TYPE?")
 end
 
 """
 Returns the field value of the active channel
 """
-function getField(gauss::GaussMeter)
+function getField(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "FIELD?")
 end
 
 """
 Returns the field values of X, Y, Z , V = Vector Magnitude
 """
-function getAllFields(gauss::GaussMeter)
+function getAllFields(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "ALLF?")
 end
 
 """
 Returns the state of the field compensation
 """
-function isFieldComp(gauss::GaussMeter)
+function isFieldComp(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "FCOMP?")
 	if out == "0"
 		return false
@@ -302,14 +303,14 @@ end
 """
 Set the state of the field compensation. 1 = on, 0 = off
 """
-function setFieldComp(gauss::GaussMeter, state::Char)
+function setFieldComp(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "FCOMP $state")
 end
 
 """
 Returns the state of the temperatur compensation
 """
-function isTempComp(gauss::GaussMeter)
+function isTempComp(gauss::LakeShoreGaussMeter)
 	out = query(gauss.sd, "TCOMP?")
 	if out == "0"
 		return false
@@ -321,6 +322,6 @@ end
 """
 Set the state of the temperatur compensation. 1 = on, 0 = off
 """
-function setTempComp(gauss::GaussMeter, state::Char)
+function setTempComp(gauss::LakeShoreGaussMeter, state::Char)
 	send(gauss.sd, "TCOMP $state")
 end

@@ -13,7 +13,7 @@ positions = CartesianGridPositions(shp,fov,ctr)
 
 scanner = MPIScanner("DummyScanner.toml")
 
-robot = scanner.robot
+robot = getRobot(scanner)
 scannerSetup = hallSensorRegularScanner
 
 res = performTour!(robot, scannerSetup, positions, DummyMeasObj())

@@ -1,44 +1,56 @@
-export MPIScanner
+export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety
 
 type MPIScanner
   params::Dict
   daq::Union{AbstractDAQ,Void}
-  robot::Union{AbstractRobot,Void}
-  gaussmeter::Union{AbstractGaussMeter,Void}
+  robot::Union{Robot,Void}
+  gaussmeter::Union{GaussMeter,Void}
+  safty::Union{RobotSetup,Void}
   recoMethod::Function
-  robotSetup::Union{RobotSetup,Void}
+
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
-
-    if !haskey(params, "DAQ")
-      warn("MPI Scanner has no DAQ installed!")
-      daq = nothing
-    else
-        daq = DAQ(params["DAQ"])
-    end
-
-    if !haskey(params, "Robot")
-      warn("MPI Scanner has no Robot installed!")
-      robot = nothing
-    else
-      robot = Robot(params["Robot"])
-    end
-
-    if !haskey(params, "Gaussmeter")
-      warn("MPI Scanner has no Gaussmeter installed!")
-      gaussMeter = nothing
-    else
-      gaussMeter = nothing
-    end
-
-    if !haskey(params, "Safety")
-        warn("MPI Scanner has no robotSetup installed!")
-        robotSetup = nothing
-    else
-        robotSetup = RobotSetup(params["Safety"])
-    end
-
-    return new(params,daq,robot,gaussMeter,()->())
+    return new(params,nothing,nothing,nothing,nothing,()->())
   end
+end
+
+function getDAQ(scanner::MPIScanner)
+  if !haskey(scanner.params, "DAQ")
+    error("MPI Scanner has no DAQ installed!")
+  end
+  if scanner.daq == nothing
+    scanner.daq = DAQ(scanner.params["DAQ"])
+  end
+  return scanner.daq
+end
+
+function getRobot(scanner::MPIScanner)
+  if !haskey(scanner.params, "Robot")
+    error("MPI Scanner has no Robot installed!")
+  end
+  if scanner.robot == nothing
+    scanner.robot = Robot(scanner.params["Robot"])
+  end
+  return scanner.robot
+end
+
+function getGaussMeter(scanner::MPIScanner)
+  if !haskey(scanner.params, "GaussMeter")
+    error("MPI Scanner has no GaussMeter installed!")
+  end
+  if scanner.gaussmeter == nothing
+    scanner.gaussmeter = GaussMeter(scanner.params["GaussMeter"])
+  end
+  return scanner.gaussmeter
+end
+
+function getSafety(scanner::MPIScanner)
+  if !haskey(scanner.params, "Safety")
+    error("MPI Scanner has no Safety Module installed!")
+  end
+  if scanner.safty == nothing
+    scanner.safty = RobotSetup(scanner.params["Safety"])
+  end
+  return scanner.safty
 end

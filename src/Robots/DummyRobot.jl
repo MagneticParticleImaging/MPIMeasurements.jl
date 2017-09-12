@@ -1,6 +1,6 @@
 export DummyRobot
 
-struct DummyRobot <: AbstractRobot
+struct DummyRobot <: Robot
 end
 
 function moveAbs(robot::DummyRobot, posX::typeof(1.0u"mm"),

@@ -55,6 +55,8 @@ studyIsCalibration = false
 [Robot]
 type="Dummy"
 pauseTime=1.0
+[GaussMeter]
+type="Dummy"
 [Safety]
 setupName = "hallSensornoCoil"
 receiveCoil = "noCoil"

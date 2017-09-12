@@ -5,26 +5,23 @@ using Compat
 using HDF5
 
 # define Grid
-shp = [10,2,1]
+shape = [5,2,1]
 fov = [200.0,200.0,1.0]u"mm"
-ctr = [0,0,0]u"mm"
-positions = CartesianGridPositions(shp,fov,ctr)
+center = [0.0,0.0,0.0]u"mm"
+positions = CartesianGridPositions(shape,fov,center)
 
 # create Scanner
-scanner = MPIScanner("IselRobot.toml")
-robot = scanner.robot
-scannerSetup = hallSensorRegularScanner
+#scanner = MPIScanner("HeadScanner.toml")
+scanner = MPIScanner("DummyScanner.toml")
+robot = getRobot(scanner)
+safety = getSafety(scanner)
+gaussmeter = getGaussMeter(scanner)
 
-gaussmeter = GaussMeter("/dev/ttyUSB1")
+#TODO mT sollte man hier nicht angeben müssen. Das sollte im Gaussmeter gekapselt sein
 mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT",
                Vector{Vector{typeof(1.0u"m")}}(),Vector{Vector{typeof(1.0u"T")}}())
 
 
-# Initialize GaussMeter with standard settings
-setStandardSettings(mfMeasObj.gaussMeter)
-setAllRange(gaussmeter, '2')
-MPIMeasurements.setFast(gaussmeter, '1')
+@time res = performTour!(robot, safety, positions, mfMeasObj)
 
-@time res = performTour!(robot, scannerSetup, positions, mfMeasObj)
-
-saveMagneticFieldAsHDF5(mfMeasObj, "/home/labuser/TestBackground.hd5", 0.25u"Tm^-1")
+saveMagneticFieldAsHDF5(mfMeasObj, "/Users/knopp/TestBackground.h5", positions)

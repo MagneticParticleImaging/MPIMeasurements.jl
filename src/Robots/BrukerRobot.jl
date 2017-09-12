@@ -5,7 +5,7 @@ export movePark, moveCenter, mobeAbs, moveRel
 export getPos
 
 
-struct BrukerRobot <: AbstractRobot
+struct BrukerRobot <: Robot
   connectionName::String
 end
 
