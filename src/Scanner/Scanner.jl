@@ -4,7 +4,7 @@ type MPIScanner
   params::Dict
   daq::Union{AbstractDAQ,Void}
   robot::Union{AbstractRobot,Void}
-  gaussmeter::Union{GaussMeter,Void}
+  gaussmeter::Union{AbstractGaussMeter,Void}
   recoMethod::Function
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)

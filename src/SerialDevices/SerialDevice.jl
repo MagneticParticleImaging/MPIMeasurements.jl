@@ -1,7 +1,5 @@
 import Base: send
 
-# abstract supertype for all possible serial devices
-@compat abstract type Device end
 
 type SerialDevice
 	sp::SerialPort

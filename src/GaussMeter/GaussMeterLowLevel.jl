@@ -1,6 +1,6 @@
 export GaussMeter
 
-struct GaussMeter <: Device
+struct GaussMeter <: AbstractGaussMeter
   sd::SerialDevice
 end
 

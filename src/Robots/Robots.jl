@@ -1,12 +1,12 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export AbstractRobot, Robot
+export Robot
 
 include("Positions.jl")
 include("RobotSafety.jl")
 
-@compat abstract type AbstractRobot end
+
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::AbstractRobot, posX::typeof(1.0u"mm"),
@@ -51,7 +51,10 @@ function moveRelUnsafe(robot::AbstractRobot, xyzDist::Vector{typeof(1.0u"mm")})
     moveRel(robot,xyzDist[1],xyzDist[2],xyzDist[3])
 end
 
-include("IselRobot.jl")
+if is_unix() && VERSION >= v"0.6"
+  include("IselRobot.jl")
+end
+
 include("BrukerRobot.jl")
 include("DummyRobot.jl")
 

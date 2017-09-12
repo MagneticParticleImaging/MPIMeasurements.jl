@@ -1,8 +1,5 @@
 export performTour!
-export MeasObj
 
-# abstract supertype for all measObj etc.
-@compat abstract type MeasObj end
 
 """ `performTour(scanner::BaseScanner, grid::Positions, measObj::T, preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj}`
 Derive your own MeasObj from MeasObj for your purposes, and define your own pre/postMoveAction Function!

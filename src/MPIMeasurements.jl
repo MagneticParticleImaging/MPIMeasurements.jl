@@ -16,6 +16,8 @@ if !isdir(Pkg.dir("TOML"))
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
 end
 
+
+
 using Compat
 using Reexport
 using IniFile
@@ -23,6 +25,20 @@ using IniFile
 @reexport using Redpitaya
 @reexport using Unitful
 using TOML
+
+# abstract supertype for all possible serial devices
+@compat abstract type Device end
+@compat abstract type AbstractRobot end
+@compat abstract type AbstractGaussMeter end
+# abstract supertype for all measObj etc.
+@compat abstract type MeasObj end
+export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot, MeasObj
+
+include("DAQ/DAQ.jl")
+include("TransferFunction/TransferFunction.jl")
+include("Scanner/Scanner.jl")
+
+
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
   if !isdir(Pkg.dir("LibSerialPort"))
@@ -32,8 +48,15 @@ if is_unix() && VERSION >= v"0.6"
   end
   using LibSerialPort
   include("SerialDevices/SerialDevices.jl")
-  include("Robots/Robots.jl")
 end
+
+include("Robots/Robots.jl")
+
+if is_unix() && VERSION >= v"0.6"
+  include("GaussMeter/GaussMeter.jl")
+  include("Measurements/Measurements.jl")
+end
+
 
 import Redpitaya.receive
 import Redpitaya.query
@@ -46,11 +69,9 @@ if ENV["MPILIB_UI"] == "PyPlot"
   using PyPlot
 end
 
-include("DAQ/DAQ.jl")
-include("TransferFunction/TransferFunction.jl")
-include("GaussMeter/GaussMeter.jl")
-include("Scanner/Scanner.jl")
-include("Measurements/Measurements.jl")
+
+
+
 
 
 end # module
