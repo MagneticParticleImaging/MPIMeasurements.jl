@@ -36,6 +36,7 @@ export Device, AbstractRobot, AbstractGaussMeter, AbstractRobot, MeasObj
 
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
+include("Safety/RobotSafety.jl")
 include("Scanner/Scanner.jl")
 
 

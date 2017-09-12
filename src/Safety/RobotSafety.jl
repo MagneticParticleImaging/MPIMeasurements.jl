@@ -1,11 +1,11 @@
 using Unitful
 # export types
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
-DriveFieldAmplitude, GradientScan, RobotSetup
+DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 # export functions
 export convert2Unit, checkCoords
 # export defaults
-export deltaSample, mouseAdapter, regularScanner, reducedScanner, clearance,
+export deltaSample, hallSensor, mouseAdapter, brukerCoil, mouseCoil, clearance,
 dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner,
 mouseAdapterREDUCEDScanner, hallSensorRegularScanner,hallSensorREDUCEDScanner, validScannerGeometries
 
@@ -30,7 +30,7 @@ struct Circle <: Geometry
   name::String
 
   function Circle(diameter::typeof(1.0u"mm"), name::String)
-    if diameter < 1.0u"mm" || diameter > regularBrukerScannerdiameter
+    if diameter < 1.0u"mm"
       error("Circle does not fit in scanner...")
     else
       new(diameter, name)
@@ -85,7 +85,7 @@ struct ScannerGeo
   xMinRobot::typeof(1.0u"mm")
   xMaxRobot::typeof(1.0u"mm")
   function ScannerGeo(diameter::typeof(1.0u"mm"), name::String, xMinRobot::typeof(1.0u"mm"), xMaxRobot::typeof(1.0u"mm"))
-    if diameter < 1.0u"mm" || diameter > regularBrukerScannerdiameter
+    if diameter < 1.0u"mm"
       error("ScannerGeometry is not possible...")
     else
       new(diameter, name, xMinRobot, xMaxRobot)
@@ -141,21 +141,30 @@ hallSensor = Circle(48.0u"mm", "Hall Sensor");
 deltaSample = Circle(10.0u"mm", "Delta sample");
 
 # create given scanner diameter
-regularScanner = ScannerGeo(regularBrukerScannerdiameter, "regular scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
-reducedScanner = ScannerGeo(40.0u"mm", "reduced scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
+brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "burker coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
+mouseCoil = ScannerGeo(40.0u"mm", "mouse coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
+headCoil = ScannerGeo(150.0u"mm", "head coil scanner diameter", -300.0u"mm", 300.0u"mm");
+noCoil = ScannerGeo(400.0u"mm", "no coil scanner diameter", -300.0u"mm", 300.0u"mm");
 
 # standard clearance
 clearance = Clearance(0.9u"mm");
 
 # Standard Combination RobotSetup
-dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, regularScanner, clearance);
-mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, regularScanner, clearance);
-dSampleREDUCEDScanner = RobotSetup("dSampleREDUCEDScanner", deltaSample, reducedScanner, clearance);
-mouseAdapterREDUCEDScanner = RobotSetup("mouseAdapterREDUCEDScanner", mouseAdapter, reducedScanner, clearance);
-hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor,regularScanner, clearance)
-hallSensorREDUCEDScanner = RobotSetup("hallSensorREDUCEDScanner", hallSensor,reducedScanner, clearance)
+dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, brukerCoil, clearance);
+mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, brukerCoil, clearance);
+dSampleREDUCEDScanner = RobotSetup("dSampleREDUCEDScanner", deltaSample, mouseCoil, clearance);
+mouseAdapterREDUCEDScanner = RobotSetup("mouseAdapterREDUCEDScanner", mouseAdapter, mouseCoil, clearance);
+hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor,brukerCoil, clearance)
+hallSensorREDUCEDScanner = RobotSetup("hallSensorREDUCEDScanner", hallSensor,mouseCoil, clearance)
 
 validScannerGeometries = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner, mouseAdapterREDUCEDScanner, hallSensorRegularScanner, hallSensorREDUCEDScanner]
+
+function RobotSetup(params::Dict)
+    receiveCoil = getfield(MPIMeasurements,Symbol(params["receiveCoil"]))
+    robotMount = getfield(MPIMeasurements,Symbol(params["robotMount"]))
+    clearance = getfield(MPIMeasurements,Symbol(params["clearance"]))
+    return RobotSetup(params["setupName"],robotMount,receiveCoil,clearance)
+end
 
 @doc "convert2unit(data,unit) converts the data array (tuples) without units to
       an array with length units."->

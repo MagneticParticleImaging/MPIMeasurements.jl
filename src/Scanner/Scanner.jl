@@ -6,6 +6,7 @@ type MPIScanner
   robot::Union{AbstractRobot,Void}
   gaussmeter::Union{AbstractGaussMeter,Void}
   recoMethod::Function
+  robotSetup::Union{RobotSetup,Void}
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
@@ -29,6 +30,13 @@ type MPIScanner
       gaussMeter = nothing
     else
       gaussMeter = nothing
+    end
+
+    if !haskey(params, "Safety")
+        warn("MPI Scanner has no robotSetup installed!")
+        robotSetup = nothing
+    else
+        robotSetup = RobotSetup(params["Safety"])
     end
 
     return new(params,daq,robot,gaussMeter,()->())

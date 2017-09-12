@@ -56,3 +56,7 @@ studyIsCalibration = false
 type="Dummy"
 pauseTime=1.0
 [Safety]
+setupName = "hallSensornoCoil"
+receiveCoil = "noCoil"
+robotMount = "hallSensor"
+clearance = "clearance"
