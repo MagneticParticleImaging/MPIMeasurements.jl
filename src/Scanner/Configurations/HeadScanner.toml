@@ -64,8 +64,8 @@ minFreq = 20
 maxFreq = 4000
 stepsPerTurn = 5000
 gearSlope = 5 # 1 turn equals 5mm feed
-defaultVel = [10000,10000,10000]
-defCenterPos = [200000,100000,100000] # Hallsensor in center of magnetic field
-defParkPos = [-200000,0,0]
+defaultVel = [40000,40000,40000]
+defCenterPos = [95000,113000,115000] # Hallsensor in center of magnetic field
+defParkPos = [-95000,0,0]
 defSampleCenterPos = [10,0,0] # relative geometry distance to of sample mount to Hallsensor mount
 [Safety]

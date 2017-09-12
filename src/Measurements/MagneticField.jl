@@ -22,7 +22,7 @@ end
 # define postMoveAction
 function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
   println("post action: ", pos)
-  sleep(1.0)
+  sleep(0.05)
   getPosition(measObj, pos)
   getXYZValues(measObj)
   println(measObj.magneticField[end])

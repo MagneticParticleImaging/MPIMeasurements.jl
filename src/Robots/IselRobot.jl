@@ -57,7 +57,7 @@ end
 
 function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
     minAcc=1,maxAcc=4000,minFreq=20,maxFreq=4000,stepsPerTurn=5000,gearSlope=5,
-    defaultVel=[10000,10000,10000],defCenterPos=[200000,100000,100000],defParkPos=[-200000,0,0],)
+    defaultVel=[40000,40000,40000],defCenterPos=[95000,113000,115000],defParkPos=[-95000,0,0],)
 
   pause_ms::Int = 400
   timeout_ms::Int = 40000

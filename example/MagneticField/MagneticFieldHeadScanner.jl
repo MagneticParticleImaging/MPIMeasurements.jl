@@ -5,8 +5,8 @@ using Compat
 using HDF5
 
 # define Grid
-shp = [10,10,1]
-fov = [10.0,10.0,1.0]u"mm"
+shp = [10,2,1]
+fov = [200.0,200.0,1.0]u"mm"
 ctr = [0,0,0]u"mm"
 positions = CartesianGridPositions(shp,fov,ctr)
 
@@ -22,11 +22,8 @@ mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT",
 
 # Initialize GaussMeter with standard settings
 setStandardSettings(mfMeasObj.gaussMeter)
-setAllRange(gauss, '1')
+setAllRange(gaussmeter, '2')
 
-res = performTour!(robot, scannerSetup, positions, mfMeasObj)
+@time res = performTour!(robot, scannerSetup, positions, mfMeasObj)
 
-#move back to park position after measurement has finished
-movePark(robot)
-
-saveMagneticFieldAsHDF5(mfMeasObj, "/home/labuser/Desktop/TestBackground.hd5", 0.25u"Tm^-1")
+saveMagneticFieldAsHDF5(mfMeasObj, "/home/labuser/TestBackground.hd5", 0.25u"Tm^-1")
