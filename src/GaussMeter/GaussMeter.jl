@@ -11,7 +11,7 @@ Returns the value of the X channel
 """
 function getXValue(gauss::GaussMeter)
 	setActiveChannel(gauss, 'X')
-	return parse(Float32,getField(sd))
+	return parse(Float32,getField(gauss))
 end
 
 """
@@ -19,7 +19,7 @@ Returns the value of the Y channel
 """
 function getYValue(gauss::GaussMeter)
 	setActiveChannel(gauss, 'Y')
-	return parse(Float32,getField(sd))
+	return parse(Float32,getField(gauss))
 end
 
 """
@@ -27,7 +27,7 @@ Returns the value of the Z channel
 """
 function getZValue(gauss::GaussMeter)
 	setActiveChannel(gauss, 'Z')
-	return parse(Float32,getField(sd))
+	return parse(Float32,getField(gauss))
 end
 
 """
@@ -35,7 +35,7 @@ Returns the value of the vector magnitude sqrt(X² + Y² +Z²)
 """
 function getVectorMagnitude(gauss::GaussMeter)
 	setActiveChannel(gauss, 'V')
-	return parse(Float32,getField(sd))
+	return parse(Float32,getField(gauss))
 end
 
 """
@@ -87,7 +87,7 @@ end
 Sets the sleep mode on
 """
 function sleepModeOn(gauss::GaussMeter)
-	setSleepMode(sd, '0')
+	setSleepMode(gauss, '0')
 	return nothing
 end
 
@@ -95,7 +95,7 @@ end
 Sets the sleep mode off
 """
 function sleepModeOff(gauss::GaussMeter)
-	setSleepMode(sd, '1')
+	setSleepMode(gauss, '1')
 	return nothing
 end
 
@@ -103,7 +103,7 @@ end
 Locks the frontpanel
 """
 function lockOn(gauss::GaussMeter)
-	setFrontPanelLock(sd, '1')
+	setFrontPanelLock(gauss, '1')
 	return nothing
 end
 
@@ -111,7 +111,7 @@ end
 Unlocks the frontpanel
 """
 function lockOff(gauss::GaussMeter)
-	setFrontPanelLock(sd, '0')
+	setFrontPanelLock(gauss, '0')
 	return nothing
 end
 

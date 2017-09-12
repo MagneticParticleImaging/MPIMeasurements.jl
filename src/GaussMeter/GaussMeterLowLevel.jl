@@ -83,7 +83,7 @@ Set the mode for the channel DC = 0 AC = 1
 """
 function setMode(gauss::GaussMeter, channel::Char, mode::Char)
 	setActiveChannel(gauss, channel)
-	send(sd, "ACDC $mode")
+	send(gauss.sd, "ACDC $mode")
 end
 
 """
@@ -107,7 +107,7 @@ Set the AC mode for the channel RMS = 0, Peak = 1
 """
 function setPeakRMS(gauss::GaussMeter, channel::Char, mode::Char)
 	setActiveChannel(gauss, channel)
-	send(sd, "PRMS $mode")
+	send(gauss.sd, "PRMS $mode")
 end
 
 """
@@ -237,7 +237,7 @@ Sets probe on = 0 or off = 1 on specific channel
 """
 function setProbe(gauss::GaussMeter, channel::Char, state::Char)
 	setActiveChannel(gauss, channel)
-	send(sd, "ONOFF $state")
+	send(gauss.sd, "ONOFF $state")
 end
 
 """
