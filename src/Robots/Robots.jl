@@ -15,6 +15,7 @@ include("RobotSafety.jl")
     distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
 @mustimplement movePark(robot::AbstractRobot)
 @mustimplement moveCenter(robot::AbstractRobot)
+@mustimplement setBrake(robot::AbstractRobot,brake::Bool)
 
 """ `moveAbs(robot::AbstractRobot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
 function moveAbs(robot::AbstractRobot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})

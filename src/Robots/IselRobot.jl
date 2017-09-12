@@ -1,7 +1,7 @@
 using Unitful
 
 export IselRobot
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
+export initZYX, refZYX, initRefZYX, simRefZYX, prepareIselRobot
 export moveRel, moveAbs, movePark, moveCenter
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
@@ -81,11 +81,11 @@ function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
 end
 
 """ queryIsel(sd::SerialDevice,cmd::String) """
-function queryIsel(sd::SerialDevice,cmd::String)
+function queryIsel(sd::SerialDevice,cmd::String, byteLength=1)
   flush(sd.sp)
   send(sd,string(cmd,sd.delim_write))
-  i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, 1, sd.timeout_ms)
-  if i!=1
+  i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, byteLength, sd.timeout_ms)
+  if i!=byteLength
     error("Isel Robot did not respond!")
   end
   out = String( c )
@@ -155,22 +155,30 @@ function steps2mm(steps,stepsPermm)
   return dist*u"mm"
 end
 
-function _getPos(robot::IselRobot)
-  ret = queryIsel(robot.sd, "@0P")
-  checkError(ret)
-  return ret
+function _getPosRaw(robot::IselRobot)
+  ret = queryIsel(robot.sd, "@0P", 19)
+  checkError(string(ret[1]))
+  return ret[2:19]
 end
 
-""" Returns Pos in mm """
-function getPos(robot::IselRobot)
-  ret = queryIsel(robot.sd, "@0P")
-  checkError(ret)
+function _getPos(robot::IselRobot)
+  ret = _getPosRaw(robot)
   return parsePos(ret)
 end
 
 function parsePos(ret::AbstractString)
 # 18 hex values, 6 digits per Axis order XYZ
-  return ret
+  xPos=reinterpret(Int32, parse(UInt32,string("0x",ret[1:6])) << 8) >> 8
+  yPos=reinterpret(Int32, parse(UInt32,string("0x",ret[7:12])) << 8) >> 8
+  zPos=reinterpret(Int32, parse(UInt32,string("0x",ret[13:18])) << 8) >> 8
+  println(xPos,":",yPos,":",zPos)
+  return xPos,yPos,zPos
+end
+
+""" Returns Pos in mm """
+function getPos(robot::IselRobot)
+  xPos,yPos,zPos = _getPos(robot)
+  return [steps2mm(xPos,robot.stepsPermm),steps2mm(yPos,robot.stepsPermm),steps2mm(zPos,robot.stepsPermm)]
 end
 
 """ Simulates Reference Z,Y,X """
@@ -230,9 +238,17 @@ function setFree(robot::IselRobot, axis)
   checkError(ret)
 end
 
-""" `prepareRobot(sd::SerialDevice{IselRobot})` """
-function prepareRobot(robot::IselRobot)
+""" Sets the velocities of the axes x,y,z """
+function setVelocity(robot::IselRobot,xVel,yVel,zVel)
+  cmd = string("@0Id"," ",xVel,",",yVel,",",zVel,",",zVel)
+  ret = queryIsel(robot.sd, cmd)
+  checkError(ret)
+end
+
+""" `prepareIselRobot(sd::SerialDevice{IselRobot})` """
+function prepareIselRobot(robot::IselRobot)
   # check sensor for reference
+  setVelocity(robot,robot.defaultVel[1],robot.defaultVel[2],robot.defaultVel[3])
   initRefZYX(robot)
   _moveAbs(robot, robot.defCenterPos[1],robot.defaultVel[1],robot.defCenterPos[2],robot.defaultVel[2],robot.defCenterPos[3],robot.defaultVel[3])
   setZeroPoint(robot)

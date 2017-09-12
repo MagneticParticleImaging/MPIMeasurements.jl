@@ -6,8 +6,8 @@ using HDF5
 import MPIMeasurements: preMoveAction, postMoveAction
 
 # define Grid
-shp = [3,3,3]
-fov = [10.0,10.0,10.0]u"mm"
+shp = [3,3,1]
+fov = [10.0,10.0,1.0]u"mm"
 ctr = [0,0,0]u"mm"
 positions = CartesianGridPositions(shp,fov,ctr)
 

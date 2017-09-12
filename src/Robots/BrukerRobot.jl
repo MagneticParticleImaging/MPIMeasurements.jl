@@ -63,6 +63,10 @@ function moveRel(sd::BrukerRobot, distX::typeof(1.0u"mm"), distY::typeof(1.0u"mm
   error("moveRel for ", sd, " not implemented")
 end
 
+""" Empty on Purpose"""
+function setBrake(sd::BrukerRobot,brake::Bool)
+end
+
 function createMoveCommand(x::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"))
   cmd = BrukerCommand("goto $(ustrip(x)),$(ustrip(y)),$(ustrip(z))\n")
 end

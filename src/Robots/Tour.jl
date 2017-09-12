@@ -19,7 +19,9 @@ function performTour!(robot::AbstractRobot, setup::RobotSetup, positions::Positi
     preMoveAction(measObj, pos, index)
     moveAbsUnsafe(robot, pos) # comment for testing
     sleep(postMoveWaitTime)
+    setBrake(robot,false)
     postMoveAction(measObj, pos, index)
+    setBrake(robot,true)
   end
   return measObj
 end
