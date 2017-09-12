@@ -49,16 +49,26 @@ end
 
 function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String,
         positions, params=Dict{String,Any}())
-    h5open(filename, "w") do file
-      write(file, positions)
-      write(file, "/unitCoords", "m")
-      write(file, "/unitFields", "T")
-      write(file, "/positions", hcat(ustrip.(measObj.positions)...))
-      write(file, "/fields", hcat(ustrip.(measObj.magneticField)...))
-      for (key,value) in params
-        write(file, key, value)
-      end
+  h5open(filename, "w") do file
+    write(file, positions)
+    write(file, "/unitCoords", "m")
+    write(file, "/unitFields", "T")
+    write(file, "/positions", hcat(ustrip.(measObj.positions)...))
+    write(file, "/fields", hcat(ustrip.(measObj.magneticField)...))
+    for (key,value) in params
+      write(file, key, value)
     end
+  end
+end
+
+export loadMagneticField
+function loadMagneticField(filename::String)
+  res = h5open(filename, "r") do file
+    positions = Positions(file)
+    field = read(file, "/fields")
+    return positions, field
+  end
+  return res
 end
 
 # uconvert(u"T", 20u"mT")

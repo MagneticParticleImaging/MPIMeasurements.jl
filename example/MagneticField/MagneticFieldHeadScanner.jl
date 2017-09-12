@@ -24,4 +24,10 @@ mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT",
 
 @time res = performTour!(robot, safety, positions, mfMeasObj)
 
-saveMagneticFieldAsHDF5(mfMeasObj, "/Users/knopp/TestBackground.h5", positions)
+filenameField = "/Users/knopp/TestBackground.h5"
+saveMagneticFieldAsHDF5(mfMeasObj, filenameField, positions)
+
+pos, field = loadMagneticField(filenameField)
+
+MPISimulations.plotMagneticField(field, pos, 3, 1)
+

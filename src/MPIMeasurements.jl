@@ -11,6 +11,11 @@ if !isdir(Pkg.dir("MPIFiles"))
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
 
+if !isdir(Pkg.dir("MPISimulations"))
+  println("Installing MPISimulations...")
+  Pkg.clone("https://github.com/tknopp/MPISimulations.jl.git")
+end
+
 if !isdir(Pkg.dir("TOML"))
   println("Installing TOML...")
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
@@ -25,6 +30,7 @@ using IniFile
 @reexport using Redpitaya
 @reexport using Unitful
 using TOML
+using MPISimulations
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end

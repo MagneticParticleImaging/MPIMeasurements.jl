@@ -3,8 +3,6 @@ using Graphics: @mustimplement
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
 export Robot
 
-include("Positions.jl")
-
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0u"mm"),
   posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
