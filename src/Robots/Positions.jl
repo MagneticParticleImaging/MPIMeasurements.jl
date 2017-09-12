@@ -63,6 +63,22 @@ function getindex(grid::MeanderingGridPositions, i::Integer)
   return grid.grid[linidx]
 end
 
+function getPermutation(grid::MeanderingGridPositions)
+  N = tuple(shape(grid)...)
+
+  perm = Array{Int}(N)
+  for i in CartesianRange(N)
+    idx = [i[k] for k=1:length(i)]
+    for d=2:3
+      if isodd(sum(idx[d:3])-length(idx[d:3]))
+        idx[d-1] = N[d-1] + 1 - idx[d-1]
+      end
+    end
+    perm[i] = sub2ind(N,idx...)
+  end
+  return vec(perm)
+end
+
 #TODO Meander + BG
 # capsulate objects of type GridPositions and return to ParkPosition every so often
 
