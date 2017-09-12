@@ -23,6 +23,7 @@ mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT",
 # Initialize GaussMeter with standard settings
 setStandardSettings(mfMeasObj.gaussMeter)
 setAllRange(gaussmeter, '2')
+MPIMeasurements.setFast(gaussmeter, '1')
 
 @time res = performTour!(robot, scannerSetup, positions, mfMeasObj)
 

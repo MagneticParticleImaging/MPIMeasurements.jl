@@ -142,6 +142,20 @@ function isLocked(gauss::GaussMeter)
 end
 
 """
+Fast data command mode query.  0 = on, 1 = off
+"""
+function getFast(gauss::GaussMeter)
+	return query(gauss.sd, "FAST?")
+end
+
+"""
+Set fast data command mode.  0 = on, 1 = off
+"""
+function setFast(gauss::GaussMeter, state::Char)
+	send(gauss.sd, "FAST $state")
+end
+
+"""
 sets the state of the front panel lock. Locks all entries except the alarm keys. 1 = on, 0 = off
 """
 function setFrontPanelLock(gauss::GaussMeter, state::Char)
