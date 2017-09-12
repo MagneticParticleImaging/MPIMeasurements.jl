@@ -4,9 +4,6 @@ export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
 export Robot
 
 include("Positions.jl")
-include("RobotSafety.jl")
-
-
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::AbstractRobot, posX::typeof(1.0u"mm"),
@@ -62,10 +59,7 @@ function Robot(params::Dict)
   if params["type"] == "Dummy"
     return DummyRobot()
   elseif params["type"] == "Isel"
-    return IselRobot(params["connection"],minVel=params["minVel"],maxVel=params["maxVel"],
-    minAcc=params["minAcc"],maxAcc=params["maxAcc"],minFreq=params["minFreq"],
-    maxFreq=params["maxFreq"],stepsPerTurn=params["stepsPerTurn"],gearSlope=params["gearSlope"],
-    defaultVel=params["defaultVel"],defCenterPos=params["defCenterPos"],defParkPos=params["defParkPos"])
+    return IselRobot(params)
   elseif params["type"] == "Bruker"
     return BrukerRobot(params["connection"])
   else

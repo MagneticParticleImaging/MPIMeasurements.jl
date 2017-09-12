@@ -2,7 +2,7 @@ using Unitful
 
 export IselRobot
 export initZYX, refZYX, initRefZYX, simRefZYX, prepareIselRobot
-export moveRel, moveAbs, movePark, moveCenter
+export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveTeachPos
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
@@ -41,24 +41,18 @@ over the mid/high level API call `methodswith(SerialDevice{IselRobot})`.
 """
 struct IselRobot <: AbstractRobot
   sd::SerialDevice
-  minVel::Integer
-  maxVel::Integer
-  minAcc::Integer
-  maxAcc::Integer
-  minFreq::Integer
-  maxFreq::Integer
+  minMaxVel::Array{Int64,1}
+  minMaxAcc::Array{Int64,1}
+  minMaxFreq::Array{Int64,1}
   stepsPerTurn::Integer
   gearSlope::Integer
   stepsPermm::Float64
   defaultVel::Array{Int64,1}
-  defCenterPos::Array{Int64,1}
-  defParkPos::Array{Int64,1}
+  defCenterPos::Array{typeof(1.0u"mm"),1}
+  defSampleCenterPos::Array{typeof(1.0u"mm"),1}
 end
 
-function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
-    minAcc=1,maxAcc=4000,minFreq=20,maxFreq=4000,stepsPerTurn=5000,gearSlope=5,
-    defaultVel=[40000,40000,40000],defCenterPos=[95000,113000,115000],defParkPos=[-95000,0,0],)
-
+function IselRobot(params::Dict)
   pause_ms::Int = 400
   timeout_ms::Int = 40000
   delim_read::String = "\r"
@@ -67,14 +61,18 @@ function IselRobot(portAdress::AbstractString; minVel=30, maxVel=30000,
   ndatabits::Integer= 8
   parity::SPParity = SP_PARITY_NONE
   nstopbits::Integer = 1
-
+  stepsPermm = params["stepsPerTurn"] / params["gearSlope"]
+  defCenterPos = map(x->uconvert(u"mm",x), params["defCenterPos"]*u"m")
+  defSampleCenterPos = map(x->uconvert(u"mm",x), params["defSampleCenterPos"]*u"m")
   try
-    sp = SerialPort(portAdress)
+    sp = SerialPort(params["connection"])
     open(sp)
     set_speed(sp, baudrate)
-    return IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
-        ,minVel,maxVel,minAcc,maxAcc,minFreq,maxFreq,stepsPerTurn,gearSlope,
-        stepsPerTurn / gearSlope,defaultVel,defCenterPos,defParkPos)
+    iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
+        ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
+        stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos)
+    invertAxesYZ(iselRobot)
+    return iselRobot
   catch ex
     println("Connection fail: ",ex)
   end
@@ -118,7 +116,17 @@ end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, steps2mm(robot.defParkPos[1],robot.stepsPermm),steps2mm(robot.defParkPos[2],robot.stepsPermm),steps2mm(robot.defParkPos[3],robot.stepsPermm));
+  moveAbs(robot, steps2mm(-robot.defCenterPos[1],robot.stepsPermm),steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm));
+end
+
+""" Move Isel Robot to teach position """
+function moveTeachPos(robot::IselRobot)
+    moveAbs(robot,steps2mm(robot.defCenterPos[1],robot.stepsPermm),steps2mm(robot.defCenterPos[2],robot.stepsPermm),steps2mm(robot.defCenterPos[3],robot.stepsPermm))
+end
+
+""" Move Isel Robot to teach sample center position """
+function moveSampleCenterPos(robot::IselRobot)
+    moveAbs(robot,steps2mm(robot.defSampleCenterPos[1],robot.stepsPermm),steps2mm(robot.defSampleCenterPos[2],robot.stepsPermm),steps2mm(robot.defSampleCenterPos[3],robot.stepsPermm))
 end
 
 function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
@@ -175,10 +183,11 @@ function parsePos(ret::AbstractString)
   return xPos,yPos,zPos
 end
 
-""" Returns Pos in mm """
-function getPos(robot::IselRobot)
+""" Returns Pos in unit::Unitful.FreeUnits=u"mm" """
+function getPos(robot::IselRobot,unit::Unitful.FreeUnits=u"mm")
   xPos,yPos,zPos = _getPos(robot)
-  return [steps2mm(xPos,robot.stepsPermm),steps2mm(yPos,robot.stepsPermm),steps2mm(zPos,robot.stepsPermm)]
+  xyzPos = [steps2mm(xPos,robot.stepsPermm),steps2mm(yPos,robot.stepsPermm),steps2mm(zPos,robot.stepsPermm)]
+  return map(x->uconvert(unit,x),xyzPos)
 end
 
 """ Simulates Reference Z,Y,X """
@@ -245,12 +254,18 @@ function setVelocity(robot::IselRobot,xVel,yVel,zVel)
   checkError(ret)
 end
 
+""" Inverts the axes for y,z """
+function invertAxesYZ(robot::IselRobot)
+    ret = queryIsel(robot.sd, "@0ID6")
+    checkError(ret)
+end
+
 """ `prepareIselRobot(sd::SerialDevice{IselRobot})` """
 function prepareIselRobot(robot::IselRobot)
   # check sensor for reference
   setVelocity(robot,robot.defaultVel[1],robot.defaultVel[2],robot.defaultVel[3])
   initRefZYX(robot)
-  _moveAbs(robot, robot.defCenterPos[1],robot.defaultVel[1],robot.defCenterPos[2],robot.defaultVel[2],robot.defCenterPos[3],robot.defaultVel[3])
+  moveTeachPos(robot)
   setZeroPoint(robot)
 end
 

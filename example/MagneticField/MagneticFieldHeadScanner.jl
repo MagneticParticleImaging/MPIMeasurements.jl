@@ -11,8 +11,8 @@ ctr = [0,0,0]u"mm"
 positions = CartesianGridPositions(shp,fov,ctr)
 
 # create Scanner
-robot = IselRobot("/dev/ttyUSB0")
-#scanner = MPIScanner("HeadScanner.toml")
+scanner = MPIScanner("IselRobot.toml")
+robot = scanner.robot
 scannerSetup = hallSensorRegularScanner
 
 gaussmeter = GaussMeter("/dev/ttyUSB1")
