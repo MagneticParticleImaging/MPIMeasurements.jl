@@ -14,12 +14,12 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.095, 0.113, 0.116]
+defCenterPos = [0.1, 0.14100000000000001, 0.005]
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
 [Safety]
-receiveCoil = "noCoil" 
+receiveCoil = "noCoil"
 robotMount = "hallSensor"
 clearance = "clearance"
 setupName = "hallSensornoCoil"

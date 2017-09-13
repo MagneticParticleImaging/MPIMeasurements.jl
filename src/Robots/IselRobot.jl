@@ -73,6 +73,8 @@ function IselRobot(params::Dict)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
         stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos)
     invertAxesYZ(iselRobot)
+    initZYX(iselRobot)
+    setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
     return iselRobot
   catch ex
     println("Connection fail: ",ex)
@@ -112,22 +114,22 @@ end
 
 """ Move Isel Robot to center"""
 function moveCenter(robot::IselRobot)
-  moveAbs(robot, steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm))
+  moveAbs(robot, 0.0u"mm",0.0u"mm",0.0u"mm")
 end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, steps2mm(-robot.defCenterPos[1],robot.stepsPermm),steps2mm(0,robot.stepsPermm),steps2mm(0,robot.stepsPermm));
+  moveAbs(robot, -robot.defCenterPos[1],0.0u"mm",0.0u"mm");
 end
 
 """ Move Isel Robot to teach position """
 function moveTeachPos(robot::IselRobot)
-    moveAbs(robot,steps2mm(robot.defCenterPos[1],robot.stepsPermm),steps2mm(robot.defCenterPos[2],robot.stepsPermm),steps2mm(robot.defCenterPos[3],robot.stepsPermm))
+    moveAbs(robot,robot.defCenterPos[1],robot.defCenterPos[2],robot.defCenterPos[3])
 end
 
 """ Move Isel Robot to teach sample center position """
 function moveSampleCenterPos(robot::IselRobot)
-    moveAbs(robot,steps2mm(robot.defSampleCenterPos[1],robot.stepsPermm),steps2mm(robot.defSampleCenterPos[2],robot.stepsPermm),steps2mm(robot.defSampleCenterPos[3],robot.stepsPermm))
+    moveAbs(robot,robot.defSampleCenterPos[1],robot.defSampleCenterPos[2],robot.defSampleCenterPos[3])
 end
 
 function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
@@ -180,7 +182,7 @@ function parsePos(ret::AbstractString)
   xPos=reinterpret(Int32, parse(UInt32,string("0x",ret[1:6])) << 8) >> 8
   yPos=reinterpret(Int32, parse(UInt32,string("0x",ret[7:12])) << 8) >> 8
   zPos=reinterpret(Int32, parse(UInt32,string("0x",ret[13:18])) << 8) >> 8
-  println(xPos,":",yPos,":",zPos)
+  #println(xPos,":",yPos,":",zPos)
   return xPos,yPos,zPos
 end
 
@@ -264,20 +266,27 @@ end
 """ `prepareIselRobot(robot::IselRobot)` """
 function prepareIselRobot(robot::IselRobot)
   # check sensor for reference
-  setVelocity(robot,robot.defaultVel[1],robot.defaultVel[2],robot.defaultVel[3])
-  initRefZYX(robot)
-  moveTeachPos(robot)
-  setZeroPoint(robot)
+  tempTimeout = robot.sd.timeout_ms
+  try
+    robot.sd.timeout_ms = 180000
+    refZYX(robot)
+    moveTeachPos(robot)
+    setZeroPoint(robot)
+    movePark(robot)
+  finally
+    robot.sd.timeout_ms = tempTimeout
+  end
 end
 
 """ Sets robots zero position at current position and saves new teach position in file .toml
  `TeachPosition(robot::IselRobot,fileName::AbstractString)` """
 function TeachPosition(robot::IselRobot,fileName::AbstractString)
+    newTeachingPosition = getPos(robot,u"m")
     setZeroPoint(robot)
     # and most importantly change value defCenterPos in the .toml file to the new value
-    newTeachingPosition = getpos(robot,u"m")# note the defCenterPos is saved in meter not in millimeter
+    # note the defCenterPos is saved in meter not in millimeter
     saveTeachPosition(newTeachingPosition,fileName)
-    println("Changed \"defCenterPos\" to $(newTeachingPosition) in all .toml files using the this Isel Robot")
+    println("Changed \"defCenterPos\" to $(newTeachingPosition) in $(fileName) file using the this Isel Robot")
 end
 
 """ Saves teach position to .toml file
