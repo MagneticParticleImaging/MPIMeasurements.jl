@@ -6,6 +6,7 @@ export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveTeachPos
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
+export saveTeachPosition, TeachPosition
 
 
 """Errorcodes Isel Robot """
@@ -280,9 +281,14 @@ function TeachPosition(robot::IselRobot,fileName::AbstractString)
 end
 
 """ Saves teach position to .toml file
-`saveTeachPosition(position::Array{typeof(1.0u"m"),1},fileName::AbstractString)` """
-function saveTeachPosition(position::Array{typeof(1.0u"m"),1},fileName::AbstractString)
-
+`saveTeachPosition(position::Array{typeof(1.0u"m"),1},file::AbstractString)` """
+function saveTeachPosition(position::Array{typeof(1.0u"m"),1},file::AbstractString)
+    filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
+    params = TOML.parsefile(filename)
+    params["Robot"]["defCenterPos"] = ustrip(position)
+    open(filename,"w") do f
+        TOML.print(f,params)
+    end
 end
 
 function checkError(ret::AbstractString)

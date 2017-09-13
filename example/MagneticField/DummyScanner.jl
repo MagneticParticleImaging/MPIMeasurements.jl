@@ -12,11 +12,10 @@ ctr = [0,0,0]u"mm"
 positions = CartesianGridPositions(shp,fov,ctr)
 
 scanner = MPIScanner("DummyScanner.toml")
-
 robot = getRobot(scanner)
-scannerSetup = hallSensorRegularScanner
+safety = getSafety(scanner)
 
-res = performTour!(robot, scannerSetup, positions, DummyMeasObj())
+res = performTour!(robot, safety, positions, DummyMeasObj())
 
 #move back to park position after measurement has finished
 movePark(robot)

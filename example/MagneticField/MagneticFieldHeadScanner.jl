@@ -11,8 +11,7 @@ center = [0.0,0.0,0.0]u"mm"
 positions = CartesianGridPositions(shape,fov,center)
 
 # create Scanner
-#scanner = MPIScanner("HeadScanner.toml")
-scanner = MPIScanner("DummyScanner.toml")
+scanner = MPIScanner("HeadScanner.toml")
 robot = getRobot(scanner)
 safety = getSafety(scanner)
 gaussmeter = getGaussMeter(scanner)
@@ -24,10 +23,9 @@ mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT",
 
 @time res = performTour!(robot, safety, positions, mfMeasObj)
 
-filenameField = "/Users/knopp/TestBackground.h5"
+filenameField = joinpath(homedir(),"TestBackground.h5")
 saveMagneticFieldAsHDF5(mfMeasObj, filenameField, positions)
 
 pos, field = loadMagneticField(filenameField)
 
 MPISimulations.plotMagneticField(field, pos, 3, 1)
-
