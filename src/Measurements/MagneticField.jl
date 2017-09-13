@@ -4,16 +4,21 @@ using Unitful
 using Compat
 using HDF5
 
-export saveMagneticFieldAsHDF5, MagneticFieldMeas, getXYZValues, getPosition
+export saveMagneticFieldAsHDF5, MagneticFieldMeas
 
 #TODO: Unit handling should be put into GaussMeter
 
 # define measObj
 @compat struct MagneticFieldMeas <: MeasObj
-  gaussMeter::GaussMeter
+  gauss::GaussMeter
   unit::Unitful.FreeUnits
-  positions::Vector{Vector{typeof(1.0u"m")}}
-  magneticField::Vector{Vector{typeof(1.0u"T")}}
+  positions::Positions
+  pos::Matrix{typeof(1.0u"m")}
+  magneticField::Matrix{typeof(1.0u"T")}
+
+  MagneticFieldMeas(gauss, unit, positions) =
+    new(gauss, unit, positions, zeros(typeof(1.0u"m"),3,length(positions))
+                                 , zeros(typeof(1.0u"T"),3,length(positions)))
 end
 
 # define preMoveAction
@@ -25,21 +30,13 @@ end
 function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
   println("post action: ", pos)
   sleep(0.05)
-  getPosition(measObj, pos)
-  getXYZValues(measObj)
-  println(measObj.magneticField[end])
-end
-
-function getXYZValues(measObj::MagneticFieldMeas)
-    push!(measObj.magneticField, getXYZValues(measObj.gaussMeter)*measObj.unit)
-end
-
-function getPosition(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")})
-    push!(measObj.positions, pos)
+  measObj.pos[:,index] = pos
+  measObj.magneticField[:,index] = getXYZValues(measObj.gauss)*measObj.unit
+  println(measObj.magneticField[:,index])
 end
 
 #function setRange(measObj::MagneticFieldMeas)
-#    r = getRange(measObj.gaussMeter)
+#    r = getRange(measObj.gauss)
 #    if r == "0"
 #        measObj.unit = u"T"
 #    else
@@ -47,14 +44,14 @@ end
 #    end
 #end
 
-function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas, filename::String,
-        positions, params=Dict{String,Any}())
+function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas,
+       filename::String, params=Dict{String,Any}())
   h5open(filename, "w") do file
-    write(file, positions)
+    write(file, measObj.positions)
     write(file, "/unitCoords", "m")
     write(file, "/unitFields", "T")
-    write(file, "/positions", hcat(ustrip.(measObj.positions)...))
-    write(file, "/fields", hcat(ustrip.(measObj.magneticField)...))
+    write(file, "/positions", ustrip.(measObj.pos))
+    write(file, "/fields", ustrip.(measObj.magneticField))
     for (key,value) in params
       write(file, key, value)
     end

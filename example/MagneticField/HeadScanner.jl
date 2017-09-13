@@ -3,50 +3,34 @@ using Base.Test
 using Unitful
 using Compat
 using HDF5
-import MPIMeasurements: preMoveAction, postMoveAction
 
 # define Grid
-shp = [3,3,3]
-fov = [3.0,3.0,3.0]u"mm"
-ctr = [0,0,0]u"mm"
-positions = CartesianGridPositions(shp,fov,ctr)
+shape = [5,5,1]
+fov = [200.0,200.0,1.0]u"mm"
+center = [0.0,0.0,0.0]u"mm"
+positions = MeanderingGridPositions( CartesianGridPositions(shape,fov,center) )
 
-robot = DummyRobot()
-scannerSetup = hallSensorRegularScanner
-
-struct MyMeasObj <: MeasObj
-  rp::RedPitaya
-end
-
+# create Scanner
+#scanner = MPIScanner("HeadScanner.toml")
+scanner = MPIScanner("DummyScanner.toml")
+robot = getRobot(scanner)
+safety = getSafety(scanner)
+gauss = getGaussMeter(scanner)
 rp = RedPitaya("192.168.1.20")
-measObj = MyMeasObj(rp)
+waitTime = 10.0
+currRange = 1.0:3.0:10.0
+currents = hcat(hcat(currRange,zeros(length(currRange)))',
+                hcat(zeros(length(currRange)),currRange)',
+                hcat(currRange,currRange)')
 
-# Initialize GaussMeter with standard settings
-#setStandardSettings(mfMeasObj.gaussMeter)
+#TODO mT sollte man hier nicht angeben müssen. Das sollte im Gaussmeter gekapselt sein
+mfMeasObj = MagneticFieldSweepCurrentsMeas(rp, gauss, u"mT", positions, currents, waitTime)
 
-# define preMoveAction
-function preMoveAction(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")}, index)
-  println("moving to next position...")
+@time res = performTour!(robot, safety, positions, mfMeasObj)
 
-end
+filenameField = joinpath(homedir(),"TestBackground.h5")
+saveMagneticFieldAsHDF5(mfMeasObj, filenameField)
 
-# define postMoveAction
-function postMoveAction(measObj::MyMeasObj, pos::Vector{typeof(1.0u"mm")}, index)
-  println("post action: ", pos)
+pos, field = loadMagneticField(filenameField)
 
-  newvoltage = rand()
-  value(rp,"AOUT0",newvoltage)
-  println( "Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) " )
-
-  #sleep(1.0)
-  #getPosition(measObj, pos)
-  #getXYZValues(measObj)
-  #println(measObj.magneticField[end])
-end
-
-res = performTour!(robot, scannerSetup, positions, measObj)
-
-#move back to park position after measurement has finished
-movePark(robot)
-
-#saveMagneticFieldAsHDF5(mfMeasObj, "/home/nmrsu/measurmenttmp/2_5Tm.hd5", 2.5u"Tm^-1")
+MPISimulations.plotMagneticField(field, pos, 3, 1)
