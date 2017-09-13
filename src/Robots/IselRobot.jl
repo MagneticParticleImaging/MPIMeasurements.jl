@@ -260,13 +260,29 @@ function invertAxesYZ(robot::IselRobot)
     checkError(ret)
 end
 
-""" `prepareIselRobot(sd::SerialDevice{IselRobot})` """
+""" `prepareIselRobot(robot::IselRobot)` """
 function prepareIselRobot(robot::IselRobot)
   # check sensor for reference
   setVelocity(robot,robot.defaultVel[1],robot.defaultVel[2],robot.defaultVel[3])
   initRefZYX(robot)
   moveTeachPos(robot)
   setZeroPoint(robot)
+end
+
+""" Sets robots zero position at current position and saves new teach position in file .toml
+ `TeachPosition(robot::IselRobot,fileName::AbstractString)` """
+function TeachPosition(robot::IselRobot,fileName::AbstractString)
+    setZeroPoint(robot)
+    # and most importantly change value defCenterPos in the .toml file to the new value
+    newTeachingPosition = getpos(robot,u"m")# note the defCenterPos is saved in meter not in millimeter
+    saveTeachPosition(newTeachingPosition,fileName)
+    println("Changed \"defCenterPos\" to $(newTeachingPosition) in all .toml files using the this Isel Robot")
+end
+
+""" Saves teach position to .toml file
+`saveTeachPosition(position::Array{typeof(1.0u"m"),1},fileName::AbstractString)` """
+function saveTeachPosition(position::Array{typeof(1.0u"m"),1},fileName::AbstractString)
+
 end
 
 function checkError(ret::AbstractString)

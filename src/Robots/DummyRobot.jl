@@ -22,3 +22,7 @@ end
 function moveCenter(robot::DummyRobot)
   println("Moving to Center Position!")
 end
+
+function setBrake(robot::DummyRobot, brake::Bool)
+    println("Setting brake to $(brake) !")
+end

@@ -6,8 +6,9 @@ using HDF5
 
 # Do NOT call this as a script, use commands manual in console each at a time
 # Init robot
-scanner = MPIScanner("IselRobot.toml")
-robot = scanner.robot
+configFile="HeadScanner.toml"
+scanner = MPIScanner(configFile)
+robot = getRobot(scanner)
 
 # Reference robot und move to old teaching position
 initRefZYX(robot)
@@ -27,7 +28,4 @@ moveAbs(robot,robot.defCenterPos[1]+ 1.0u"mm",robot.defCenterPos[2],robot.defCen
 #...a few times moving manually with moveAbs or moveRel...
 #
 # if you have moved to your final new teaching position
-setZeroPoint(robot)
-# and most importantly change value defCenterPos in the .toml file to the new value
-newTeachingPosition = getpos(robot,u"m")# note the defCenterPos is saved in meter not in millimeter
-println("Change \"defCenterPos\" to $(newTeachingPosition) in all .toml files using the this Isel Robot")
+TeachPosition(robot,configFile)
