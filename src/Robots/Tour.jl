@@ -24,5 +24,6 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
       setBrake(robot,true)
     end
   end
+  moveCenter(robot)
   return measObj
 end

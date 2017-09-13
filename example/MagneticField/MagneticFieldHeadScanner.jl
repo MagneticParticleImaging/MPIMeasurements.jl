@@ -5,10 +5,10 @@ using Compat
 using HDF5
 
 # define Grid
-shape = [5,2,1]
+shape = [10,2,1]
 fov = [200.0,200.0,1.0]u"mm"
 center = [0.0,0.0,0.0]u"mm"
-positions = CartesianGridPositions(shape,fov,center)
+positions =MeanderingGridPositions( CartesianGridPositions(shape,fov,center) )
 
 # create Scanner
 scanner = MPIScanner("HeadScanner.toml")

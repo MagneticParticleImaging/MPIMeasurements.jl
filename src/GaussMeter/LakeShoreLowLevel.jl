@@ -12,7 +12,7 @@ Initialize Model 460 3 Channel Gaußmeter on port `portAdress`. For an overview
 over the high level API call `methodswith(SerialDevice{LakeShoreGaussMeter})`.
 """
 function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformation=eye(3))
-	pause_ms::Int=400
+	pause_ms::Int=20
 	timeout_ms::Int=500
 	delim_read::String="\r\n"
 	delim_write::String="\r\n"
