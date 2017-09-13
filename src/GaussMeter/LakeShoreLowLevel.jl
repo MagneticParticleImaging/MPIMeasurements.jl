@@ -44,7 +44,7 @@ function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformatio
 		if(readuntil(sp, delim_read, timeout_ms) == "0$delim_read")
 
 			println("No Errors found.")
-			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write) )
+			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write), reshape(coordinateTransformation,3,3) )
 		else
 			println("Errors found in the Device!")
 		end

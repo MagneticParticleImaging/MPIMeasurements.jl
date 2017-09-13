@@ -42,9 +42,9 @@ end
 Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::LakeShoreGaussMeter)
-    gauss.coordinateTransformation*[getXValue(measObj.gaussMeter),
-		 getYValue(measObj.gaussMeter),
-		 getZValue(measObj.gaussMeter)]
+    gauss.coordinateTransformation*[getXValue(gauss),
+		 getYValue(gauss),
+		 getZValue(gauss)]
 end
 
 """
