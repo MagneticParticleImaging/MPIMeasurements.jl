@@ -7,11 +7,12 @@ export getRange
 include("LakeShoreLowLevel.jl")
 
 function LakeShoreGaussMeter(params::Dict)
-  return LakeShoreGaussMeter(params["connection"], params["coordinateTransformation"])
+  gauss = LakeShoreGaussMeter(params["connection"], params["coordinateTransformation"])
 
-	setStandardSettings(mfMeasObj.gaussMeter)
-	setAllRange(gaussmeter, string(params["range"])[1])
-	setFast(gaussmeter, params["fast"] ? '1' : '0')
+  setStandardSettings(gauss)
+  setAllRange(gauss, string(params["range"])[1])
+  setFast(gauss, params["fast"] ? '1' : '0')
+  return gauss
 end
 
 """

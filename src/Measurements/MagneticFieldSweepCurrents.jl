@@ -16,11 +16,12 @@ export saveMagneticFieldAsHDF5, MagneticFieldSweepCurrentsMeas
   positions::Positions
   currents::Matrix{Float64}
   waitTime::Float64
+  voltToCurrent::Float64
   pos::Matrix{typeof(1.0u"m")}
   magneticField::Array{typeof(1.0u"T"),3}
 
-  MagneticFieldSweepCurrentsMeas(rp, gauss, unit, positions, currents, waitTime) =
-                 new(rp, gauss, unit, positions, currents, waitTime,
+  MagneticFieldSweepCurrentsMeas(rp, gauss, unit, positions, currents, waitTime, voltToCurrent) =
+                 new(rp, gauss, unit, positions, currents, waitTime, voltToCurrent,
                       zeros(typeof(1.0u"m"),3,length(positions)),
                       zeros(typeof(1.0u"T"),3,length(positions),size(currents,2)))
 end
@@ -42,10 +43,10 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
 
   for l=1:size(measObj.currents,2)
     current = measObj.currents[1,l]
-    value(measObj.rp,"AOUT0",measObj.currents[1,l])
-    value(measObj.rp,"AOUT1",measObj.currents[2,l])
+    value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
+    value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
     println( "Set DC source $(measObj.currents[1,l])  $(measObj.currents[2,l]) " )
-    sleep(0.1) # wait until magnet is on field
+    sleep(0.4) # wait until magnet is on field
     measObj.magneticField[:,index,l] = getXYZValues(measObj.gauss)*measObj.unit
     println(measObj.magneticField[:,index,l])
   end

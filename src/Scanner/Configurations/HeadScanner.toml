@@ -1,6 +1,6 @@
 [GaussMeter]
-coordinateTransformation = [1, 0, 0, 0, 1, 0, 0, 0, 1]
-range = 2
+coordinateTransformation = [0, 0, 1, 0, 1, 0, -1, 0, 0]
+range = 1
 fast = true
 type = "LakeShore"
 connection = "/dev/ttyUSB1"
