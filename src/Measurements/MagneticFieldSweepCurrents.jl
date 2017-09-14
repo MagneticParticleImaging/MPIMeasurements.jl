@@ -86,6 +86,12 @@ function loadMagneticField(filename::String)
   res = h5open(filename, "r") do file
     positions = Positions(file)
     field = read(file, "/fields")
+
+    if typeof(positions) == MeanderingGridPositions
+      field = field[:,getPermutation(positions),:]
+      positions = positions.grid
+    end
+
     return positions, field
   end
   return res

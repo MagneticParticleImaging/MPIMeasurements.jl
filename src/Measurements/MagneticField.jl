@@ -58,14 +58,5 @@ function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas,
   end
 end
 
-export loadMagneticField
-function loadMagneticField(filename::String)
-  res = h5open(filename, "r") do file
-    positions = Positions(file)
-    field = read(file, "/fields")
-    return positions, field
-  end
-  return res
-end
 
 # uconvert(u"T", 20u"mT")
