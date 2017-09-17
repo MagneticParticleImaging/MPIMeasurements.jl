@@ -28,7 +28,7 @@ end
 getindex(m::MeasLab, w::AbstractString) = G_.object(m.builder, w)
 
 function MeasLab(filenameConfig=nothing)
-
+  println("Starting MeasLab")
   uifile = joinpath(Pkg.dir("MPIMeasurements"),"example","measlab.xml")
 
   if filenameConfig != nothing
@@ -45,6 +45,8 @@ function MeasLab(filenameConfig=nothing)
                   nothing, nothing, Dict{Symbol,Any}(), mdfstore, nothing,
                   nothing, nothing, nothing)
 
+  println("Type constructed")
+
   m.cTD = Canvas()
   m.cFD = Canvas()
 
@@ -54,7 +56,7 @@ function MeasLab(filenameConfig=nothing)
   push!(m["boxFD"],m.cFD)
   setproperty!(m["boxFD"],:expand,m.cFD,true)
 
-
+  println("InvalidateBG")
   invalidateBG(C_NULL, m)
 
   Gtk.@sigatom setproperty!(m["lbInfo"],:use_markup,true)
@@ -74,7 +76,11 @@ function MeasLab(filenameConfig=nothing)
   #G_.modal(w,true)
   showall(w)
 
+  println("InitCallbacks")
+
   initCallbacks(m)
+
+  println("Finished")
 
   return m
 end
@@ -235,9 +241,9 @@ function showData(widgetptr::Ptr, m::MeasLab)
     maxTP = getproperty(m["adjMaxTP"], :value, Int64)
     minFr = getproperty(m["adjMinFre"], :value, Int64)
     maxFr = getproperty(m["adjMaxFre"], :value, Int64)
-    
+
     if getproperty(m["cbAverage"], :active, Bool)
-      data = vec(mean(m.data,4)[:,chan,patch,1]) 
+      data = vec(mean(m.data,4)[:,chan,patch,1])
     else
       data = vec(m.data[:,chan,patch,frame])
     end
@@ -273,6 +279,7 @@ function measurement(widgetptr::Ptr, m::MeasLab)
   params = getParams(m)
   filename = MPIMeasurements.measurement(m.daq, m.mdfstore, params,
                         controlPhase=true, bgdata=m.dataBGStore)
+
   updateStudies(C_NULL, m)
   updateExperiments(C_NULL, m)
 
@@ -364,3 +371,5 @@ function setParams(m::MeasLab, params)
   Gtk.@sigatom setproperty!(m["adjTracerConcentration"], :value, params["tracerConcentration"][1])
   Gtk.@sigatom setproperty!(m["entTracerSolute"], :text, params["tracerSolute"][1])
 end
+
+@time @profile m = MeasLab("MPS.toml")
