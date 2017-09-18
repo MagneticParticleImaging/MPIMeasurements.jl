@@ -30,7 +30,8 @@ end
 function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
                         pos::Vector{typeof(1.0u"mm")}, index)
   println("post action: ", pos)
-  sleep(0.05)
+  println("################## Index: ", index, " / ", length(measObj.positions))
+  #sleep(0.05)
   measObj.pos[:,index] = pos
 
   #println( "Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) " )
@@ -40,7 +41,10 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
     value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
     value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
     println( "Set DC source $(measObj.currents[1,l])  $(measObj.currents[2,l]) " )
-    sleep(0.4) # wait until magnet is on field
+
+    highField = (measObj.currents[1,l] > 5.0) || (measObj.currents[2,l] > 5.0)
+    setAllRange(measObj.gauss, highField ? '1' : '2')
+    sleep(0.6) # wait until magnet is on field
     measObj.magneticField[:,index,l] = getXYZValues(measObj.gauss)*measObj.unit
     println(measObj.magneticField[:,index,l])
   end

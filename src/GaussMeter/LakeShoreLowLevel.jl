@@ -79,6 +79,30 @@ function getMode(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "ACDC?")
 end
 
+function getMultiplier(gauss::LakeShoreGaussMeter)
+	res = query(gauss.sd, "FIELDM?")
+	if contains(res,"u")
+		return 1e-6
+	elseif contains(res,"m")
+		return 1e-3
+	elseif contains(res,"k")
+		return 1e3
+	else
+		return 1.0
+	end
+end
+
+
+function getAllMultipliers(gauss::LakeShoreGaussMeter)
+	setActiveChannel(gauss, 'X')
+	mx = getMultiplier(gauss)
+	setActiveChannel(gauss, 'Y')
+	my = getMultiplier(gauss)
+	setActiveChannel(gauss, 'Z')
+	mz = getMultiplier(gauss)
+	return [mx,my,mz]
+end
+
 """
 Set the mode for the channel DC = 0 AC = 1
 """
@@ -91,7 +115,7 @@ end
 Set the mode of all channels DC = 0, AC = 1
 """
 function setAllMode(gauss::LakeShoreGaussMeter, mode::Char)
-	setMode(gauss, 'x', mode)
+	setMode(gauss, 'X', mode)
 	setMode(gauss, 'Y', mode)
 	setMode(gauss, 'Z', mode)
 end
@@ -231,7 +255,19 @@ end
 Set state of auto ranging for the active channel
 """
 function setAutoRanging(gauss::LakeShoreGaussMeter, state::Char)
-	send(gauss.sd, "AUTO $range")
+	send(gauss.sd, "AUTO $state")
+end
+
+"""
+Set auto ranging of all channels
+"""
+function setAllAutoRanging(gauss::LakeShoreGaussMeter, state::Char)
+	setActiveChannel(gauss, 'X')
+	setAutoRanging(gauss,state)
+	setActiveChannel(gauss, 'Y')
+	setAutoRanging(gauss,state)
+	setActiveChannel(gauss, 'Z')
+	setAutoRanging(gauss,state)
 end
 
 
@@ -278,14 +314,28 @@ end
 Returns the field value of the active channel
 """
 function getField(gauss::LakeShoreGaussMeter)
-	return query(gauss.sd, "FIELD?")
+	field = "OL"
+    while contains(field, "OL")
+	  field = query(gauss.sd, "FIELD?")
+	  if contains(field, "OL")
+        sleep(3.0)
+	  end
+    end
+	return field
 end
 
 """
 Returns the field values of X, Y, Z , V = Vector Magnitude
 """
 function getAllFields(gauss::LakeShoreGaussMeter)
-	return query(gauss.sd, "ALLF?")
+	field = "OL,OL,OL,OL"
+    while contains(field, "OL")
+	  field = query(gauss.sd, "ALLF?")
+	  if contains(field, "OL")
+        sleep(3.0)
+	  end
+    end
+	return field
 end
 
 """

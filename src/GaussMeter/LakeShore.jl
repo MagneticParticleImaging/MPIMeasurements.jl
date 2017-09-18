@@ -10,7 +10,12 @@ function LakeShoreGaussMeter(params::Dict)
   gauss = LakeShoreGaussMeter(params["connection"], params["coordinateTransformation"])
 
   setStandardSettings(gauss)
-  setAllRange(gauss, string(params["range"])[1])
+
+  setAllAutoRanging(gauss, params["autoRanging"] ? '1' : '0')
+  if !params["autoRanging"]
+    setAllRange(gauss, string(params["range"])[1])
+  end
+
   setFast(gauss, params["fast"] ? '1' : '0')
   return gauss
 end
@@ -43,9 +48,9 @@ end
 Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::LakeShoreGaussMeter)
-    gauss.coordinateTransformation*[getXValue(gauss),
-		 getYValue(gauss),
-		 getZValue(gauss)]
+	field = parse.(Float32,split(getAllFields(gauss),","))[1:3]
+	multipliers = getAllMultipliers(gauss)
+    gauss.coordinateTransformation*(field.*multipliers)
 end
 
 """
@@ -157,10 +162,10 @@ Sets the standard settings
 	-complete probe on
 """
 function setStandardSettings(gauss::LakeShoreGaussMeter)
-	setAllRange(gauss, '0')
-	setAllMode(gauss, '0')
+	#setAllRange(gauss, '0')
+	#setAllMode(gauss, '0')
+	setAllAutoRanging(gauss, '1')
 	setUnitToTesla(gauss)
-	setAutoRanging(gauss, '0')
 	setCompleteProbe(gauss, '0')
 	println("Standard Settings set.")
 	println("Unit = Tesla, Range = lowest, Mode = DC, AutoRanging = off, Probe = on")
