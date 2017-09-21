@@ -21,6 +21,7 @@ numRxChannels(daq::AbstractDAQ) = daq["rxNumChannels"]
 numTxChannels(daq::AbstractDAQ) = length(daq["dfDivider"])
 
 include("RedPitaya.jl")
+include("RedPitayaNew.jl")
 include("RedPitayaScpi.jl")
 include("Measurements.jl")
 
@@ -29,6 +30,8 @@ function DAQ(params::Dict)
     return DAQRedPitaya(params)
   elseif params["daq"] == "RedPitayaScpi"
     return DAQRedPitayaScpi(params)
+  elseif params["daq"] == "RedPitayaNew"
+    return DAQRedPitayaNew(params)
   else
     error("$(params["daq"]) not yet implemented!")
   end
