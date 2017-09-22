@@ -118,6 +118,7 @@ function loadBGCorrData(filename)
 end
 
 
+using PyPlot
 function measurementCont(daq::AbstractDAQ)
   startTx(daq)
 
@@ -125,7 +126,7 @@ function measurementCont(daq::AbstractDAQ)
 
   try
       while true
-        uMeas, uRef = readData(daq,1, currentFrame(daq))
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
