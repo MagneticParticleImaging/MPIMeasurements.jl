@@ -1,6 +1,8 @@
-export DAQRedPitayaNew
+export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC
 
 import Base.write
+import PyPlot.disconnect
+
 
 type DAQRedPitayaNew <: AbstractDAQ
   params::Dict
@@ -13,6 +15,7 @@ function DAQRedPitayaNew(params)
   println(params["ip"])
   init(daq)
 
+  connectToServer(daq)
   return daq
 end
 
@@ -54,10 +57,10 @@ end
 
 function write_(io::IO, p)
   n=write(io, p)
-  println("I have written $n bytes p=$p")
+  #println("I have written $n bytes p=$p")
 end
 
-function startTx(daq::DAQRedPitayaNew)
+function connectToServer(daq::DAQRedPitayaNew)
   dfAmplitude = daq.params["dfStrength"]
   dec = daq.params["decimation"]
   freq = daq.params["dfFreq"]
@@ -94,11 +97,36 @@ function startTx(daq::DAQRedPitayaNew)
   sleep(1e-3)
 end
 
+function startTx(daq::DAQRedPitayaNew)
+  for d=1:length(daq["ip"])
+    write_(daq.sockets[d],UInt32(6))
+  end
+end
+
 function stopTx(daq::DAQRedPitayaNew)
+  for d=1:length(daq["ip"])
+    write_(daq.sockets[d],UInt32(7))
+  end
+end
+
+function disconnect(daq::DAQRedPitayaNew)
   for d=1:length(daq["ip"])
     write_(daq.sockets[d],UInt32(9))
     close(daq.sockets[d])
   end
+end
+
+function setSlowDAC(daq::DAQRedPitayaNew, value, channel, d=1)
+  write_(daq.sockets[d],UInt32(4))
+  write_(daq.sockets[d],UInt64(channel))
+  write_(daq.sockets[d],Float32(value))
+  return nothing
+end
+
+function getSlowADC(daq::DAQRedPitayaNew, channel, d=1)
+  write_(daq.sockets[d],UInt32(5))
+  write_(daq.sockets[d],UInt64(channel))
+  return read(daq.sockets[d],Float32)
 end
 
 function setTxParams(daq::DAQRedPitayaNew, amplitude, phase)
