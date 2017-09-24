@@ -127,6 +127,7 @@ function measurementCont(daq::AbstractDAQ; controlPhase=true)
   else
     setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
                      zeros(numTxChannels(daq)))
+    sleep(daq["controlPause"])
   end
 
   try
@@ -144,6 +145,7 @@ function measurementCont(daq::AbstractDAQ; controlPhase=true)
       if isa(x, InterruptException)
           println("Stop Tx")
           stopTx(daq)
+          disconnect(daq)
       else
         rethrow(x)
       end

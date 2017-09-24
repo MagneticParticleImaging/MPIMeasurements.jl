@@ -40,6 +40,7 @@ immutable ParamsTypeNew
   numSamplesPerPeriod::Int32
   numSamplesPerTxPeriod::Int32
   numPeriodsPerFrame::Int32
+  numPatches::Int32
   numFFChannels::Int32
   txEnabled::Bool
   ffEnabled::Bool
@@ -75,9 +76,10 @@ function connectToServer(daq::DAQRedPitayaNew)
   calib = zeros(Float32, 4, length(daq["ip"]))
   for d=1:length(daq["ip"])
     daq.sockets[d] = connect(daq["ip"][d],7777)
-    p = ParamsType(daq["numSampPerAveragedPeriod"],
+    p = ParamsTypeNew(daq["numSampPerAveragedPeriod"],
                    numSamplesPerTxPeriod[d],
                    daq["acqNumPeriods"],
+                   div(length(daq["acqFFValues"]),daq["acqNumFFChannels"]),
                    daq["acqNumFFChannels"],
                    true,
                    daq["acqNumPeriods"] > 1,
