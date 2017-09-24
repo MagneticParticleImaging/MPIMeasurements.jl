@@ -129,7 +129,9 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
   uRef = zeros(Int32,numSampPerAveragedPeriod,numTxChannels(daq),numPeriods,numFrames)
   wpRead = startFrame
   l=1
-  chunkSize = 2 #min(1,      )
+
+  chunkSize = max(1,  round(Int,1000000 / numSampPerAveragedFrame)  )
+  println("chunkSize = $chunkSize")
   while l<=numFrames
     wpWrite = currentFrame(daq) # TODO handle wpWrite overflow
     while wpRead >= wpWrite

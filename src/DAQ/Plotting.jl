@@ -7,7 +7,7 @@ function showDAQData(u)
   subplot(2,1,1)
   plot(u_)
   subplot(2,1,2)
-  semilogy(abs(rfft(u_)),"o-b",lw=2)
+  semilogy(abs.(rfft(u_)),"o-b",lw=2)
   sleep(0.1)
 end
 
@@ -37,7 +37,7 @@ function showAllDAQData(u, fignum=1)
     subplot(2,D,(d-1)*2+ 1)
     plot(u_)
     subplot(2,D,(d-1)*2+ 2)
-    semilogy(abs(rfft(u_)),"o-b",lw=2)
+    semilogy(abs.(rfft(u_)),"o-b",lw=2)
   end
   sleep(0.1)
 end
