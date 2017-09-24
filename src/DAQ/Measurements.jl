@@ -119,10 +119,15 @@ end
 
 
 using PyPlot
-function measurementCont(daq::AbstractDAQ)
+function measurementCont(daq::AbstractDAQ; controlPhase=true)
   startTx(daq)
 
-  controlLoop(daq)
+  if controlPhase
+    controlLoop(daq)
+  else
+    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
+                     zeros(numTxChannels(daq)))
+  end
 
   try
       while true
