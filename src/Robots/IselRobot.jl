@@ -7,6 +7,7 @@ export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 export saveTeachPosition, TeachPosition
+export readIOInput, writeIOOutput
 
 
 """Errorcodes Isel Robot """
@@ -75,7 +76,34 @@ function IselRobot(params::Dict)
     invertAxesYZ(iselRobot)
     initZYX(iselRobot)
     setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
-    return iselRobot
+    # check whether robot has been referenced or needs to be referenced
+    currPos = getPos(iselRobot)
+    moveRes = moveAbs(iselRobot,currPos[1], currPos[2], currPos[3],false)
+    if moveRes=="0"
+        display("IselRobot is referenced and ready to use!")
+        return iselRobot
+    elseif moveRes=="R"
+        display("IselRobot is NOT referenced and needs to be referenced!")
+        display("Remove all attached devices from the robot before the robot will be referenced and move around!")
+        display("Type \"REF\" in console to continue")
+        userInput=readline(STDIN)
+        if userInput=="REF"
+            display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
+            uIYes = readline(STDIN)
+            if uIYes == "yes"
+                prepareIselRobot(iselRobot)
+                display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
+                userInput=readline(STDIN)
+                return iselRobot
+            else
+                error("User failed to type \"yes\" to continue")
+            end
+        else
+            error("User failed to type \"REF\" to continue")
+        end
+    else
+        error("Not expected \"$(moveRes)\" feedback from robot")
+    end
   catch ex
     println("Connection fail: ",ex)
   end
@@ -205,24 +233,28 @@ function setZeroPoint(robot::IselRobot)
   checkError(ret)
 end
 
-function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
+function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ,isCheckError=true)
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
   cmd=string("@0M"," ",stepsX,",",velX,",",stepsY,",",velY,",",stepsZ,",",velZ,",",0,",",30)
   ret = queryIsel(robot.sd, cmd)
-  checkError(ret)
+  if isCheckError
+   return checkError(ret)
+  else
+   return ret
+  end
 end
 
 """ Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), velX, posY::typeof(1.0u"mm"), velY, posZ::typeof(1.0u"mm"), velZ)
-  _moveAbs(robot,mm2Steps(posX,robot.stepsPermm),velX,mm2Steps(posY,robot.stepsPermm),velY,mm2Steps(posZ,robot.stepsPermm),velZ)
+function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), velX, posY::typeof(1.0u"mm"), velY, posZ::typeof(1.0u"mm"), velZ,isCheckError=true)
+  _moveAbs(robot,mm2Steps(posX,robot.stepsPermm),velX,mm2Steps(posY,robot.stepsPermm),velY,mm2Steps(posZ,robot.stepsPermm),velZ,isCheckError)
 end
 
 """ Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
   distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
-  moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3])
+function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"),isCheckError=true)
+  moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3],isCheckError)
 end
 
 """ Sets Acceleration """
@@ -305,4 +337,36 @@ function checkError(ret::AbstractString)
     error("Command failed: ",iselErrorCodes[ret])
   end
   return nothing
+end
+
+""" `readIOInput(robot::IselRobot)` returns an `Array{Bool,1}` of the 1-8 input slots"""
+function readIOInput(robot::IselRobot)
+    ret = queryIsel(robot.sd, "@0b0", 3)
+    checkError(string(ret[1]))
+    inputBin = bin(parse(UInt8,string("0x",ret[2:3])))
+    inputArray = map(x->parse(Int64,x),collect(inputBin))
+    return convert(Array{Bool,1},inputArray)
+end
+
+""" `readIOInput(robot::IselRobot,input::Int64)` returns an Bool for the `input` slot"""
+function readIOInput(robot::IselRobot,input::Int64)
+    if 1<= input && input <= 8
+        return readIOInput(robot)[input]
+    else
+        error("input: $(input) needs to be between 1-8")
+    end
+end
+
+function _writeIOOutput(robot::IselRobot,output::String)
+    cmd = string("@0B0,", output)
+    ret = queryIsel(robot.sd, cmd)
+    checkError(ret)
+end
+
+""" `writeIOOutput(robot::IselRobot,output::Array{Bool,1})` output represents 1-8 output slots"""
+function writeIOOutput(robot::IselRobot,output::Array{Bool,1})
+    outputInt=convert(Array{Int64,1},output)
+    outputStrings = map(x->string(x),outputInt)
+    outputBin=parse(UInt8,string("0b",string(outputStrings...)))
+    _writeIOOutput(robot,dec(outputBin))
 end

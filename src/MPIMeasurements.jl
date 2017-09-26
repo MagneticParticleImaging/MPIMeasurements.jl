@@ -1,5 +1,13 @@
-#__precompile__()
+__precompile__()
 module MPIMeasurements
+
+using Compat
+using Reexport
+using IniFile
+using ProgressMeter
+
+@reexport using MPIFiles
+include("Robots/Robots.jl")
 
 if !isdir(Pkg.dir("Redpitaya"))
   println("Installing Redptaya...")
@@ -25,12 +33,15 @@ end
 
 using Compat
 using Reexport
-using IniFile
+#using IniFile
 @reexport using MPIFiles
 @reexport using Redpitaya
 @reexport using Unitful
 using TOML
-using MPISimulations
+using HDF5
+#using MPISimulations
+
+import Redpitaya: receive, query
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end
@@ -64,11 +75,8 @@ if is_unix() && VERSION >= v"0.6"
 end
 
 
-import Redpitaya.receive
-import Redpitaya.query
-
 if !haskey(ENV,"MPILIB_UI")
-  ENV["MPILIB_UI"] = "PyPlot"
+  ENV["MPILIB_UI"] = "Gtk"
 end
 
 if ENV["MPILIB_UI"] == "PyPlot"

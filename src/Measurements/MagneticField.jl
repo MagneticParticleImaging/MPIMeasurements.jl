@@ -1,9 +1,3 @@
-using MPIMeasurements
-using Base.Test
-using Unitful
-using Compat
-using HDF5
-
 export saveMagneticFieldAsHDF5, MagneticFieldMeas
 
 #TODO: Unit handling should be put into GaussMeter
