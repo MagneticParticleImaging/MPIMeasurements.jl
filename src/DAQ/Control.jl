@@ -38,7 +38,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
 ## TODO make me multidimensional
 
   amplitude, phase = calcFieldFromRef(daq,uRef)
-  
+
   println("reference amplitude=$amplitude phase=$phase")
 
   if abs(daq["dfStrength"][1] - amplitude)/daq["dfStrength"][1] <
@@ -47,6 +47,11 @@ function doControlStep(daq::AbstractDAQ, uRef)
     return true
   else
     daq["currTxPhase"] .-= phase
+    if daq["currTxPhase"][1] < -180
+      daq["currTxPhase"] .+= 360
+    elseif daq["currTxPhase"][1] > 180
+      daq["currTxPhase"] .-= 360
+    end
     daq["currTxAmp"] *=  daq["dfStrength"][1] / amplitude
 
     println("new tx amplitude=$(daq["currTxAmp"])) phase=$(daq["currTxPhase"])")

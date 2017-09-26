@@ -1,14 +1,15 @@
 [DAQ]
 ip = ["192.168.1.100"]
 #ip = ["192.168.1.20"]
-daq = "RedPitaya"
+daq = "RedPitayaNew"
 acqNumFGFrames = 200
 acqNumBGFrames = 200
 acqNumAverages = 1
-decimation = 64
+decimation = 16
 calibFieldToVolt = 23.0
 #calibRefToField = [0.05]
 calibRefToField = [0.02884]
+calibIntToVolt = [1.2957305E-4, 0.015548877, 0.002591461, 0.31097754]
 studyName = "default"
 studyExperiment = 0
 studyDescription = "n.a."
