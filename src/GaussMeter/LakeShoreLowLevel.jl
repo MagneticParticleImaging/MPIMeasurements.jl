@@ -91,7 +91,7 @@ end
 Set the mode of all channels DC = 0, AC = 1
 """
 function setAllMode(gauss::LakeShoreGaussMeter, mode::Char)
-	setMode(gauss, 'x', mode)
+	setMode(gauss, 'X', mode)
 	setMode(gauss, 'Y', mode)
 	setMode(gauss, 'Z', mode)
 end
@@ -194,10 +194,10 @@ end
 """
 Returns the range of the active channel. The range depends on the installed probe.
 For HSE Probe. More Information in part 3.4 on page 3-7.
-	0 = highest = +-3T
-	1						= +-300mT
-	2						= +-30mT
-	3 = lowest	= +-3mT
+	0 = highest = ±3T
+	1           = ±300mT
+	2           = ±30mT
+	3 = lowest  = ±3mT
 """
 function getRange(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "RANGE?")
@@ -206,10 +206,10 @@ end
 """
 Sets the range of the active channel. The range depends on the installed probe.
 For HSE Probe. More Information in part 3.4 on page 3-7.
-	0 = highest = +-3T
-	1						= +-300mT
-	2						= +-30mT
-	3 = lowest	= +-3mT
+	0 = highest = ±3T
+	1           = ±300mT
+	2           = ±30mT
+	3 = lowest  = ±3mT
 """
 function setRange(gauss::LakeShoreGaussMeter, range::Char)
 	send(gauss.sd, "RANGE $range")
@@ -282,7 +282,8 @@ function getField(gauss::LakeShoreGaussMeter)
 end
 
 """
-Returns the field values of X, Y, Z , V = Vector Magnitude
+Returns the field values of X, Y, Z and a fourth reading consiting of
+meaningless data.
 """
 function getAllFields(gauss::LakeShoreGaussMeter)
 	return query(gauss.sd, "ALLF?")

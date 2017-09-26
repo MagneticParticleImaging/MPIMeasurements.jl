@@ -64,7 +64,6 @@ For HSE Probe. More Information in part 3.4 on page 3-7.
 	2						= +-30mT
 	3 = lowest	= +-3mT
 
-
 Sets the range of the X channel
 """
 function setXRange(gauss::LakeShoreGaussMeter, range::Char)
