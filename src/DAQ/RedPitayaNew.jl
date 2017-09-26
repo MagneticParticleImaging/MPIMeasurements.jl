@@ -1,4 +1,4 @@
-export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC
+export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connectToServer
 
 import Base.write
 import PyPlot.disconnect
@@ -72,11 +72,12 @@ function connectToServer(daq::DAQRedPitayaNew)
 
 
   numSamplesPerTxPeriod = round.(Int32, daq["numSampPerPeriod"] )
+  numSampPerAveragedPeriod = daq["numSampPerPeriod"] * daq["acqNumAverages"]
 
   calib = zeros(Float32, 4, length(daq["ip"]))
   for d=1:length(daq["ip"])
     daq.sockets[d] = connect(daq["ip"][d],7777)
-    p = ParamsTypeNew(daq["numSampPerAveragedPeriod"],
+    p = ParamsTypeNew(numSampPerAveragedPeriod,
                    numSamplesPerTxPeriod[d],
                    daq["acqNumPeriods"],
                    div(length(daq["acqFFValues"]),daq["acqNumFFChannels"]),
@@ -152,7 +153,7 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
   numPeriods = daq["acqNumPeriods"]
 
   numSampPerFrame = numSampPerPeriod * numPeriods
-  numSampPerAveragedPeriod = daq["numSampPerAveragedPeriod"]
+  numSampPerAveragedPeriod =  numSampPerPeriod * numAverages
   numSampPerAveragedFrame = numSampPerAveragedPeriod * numPeriods
 
   uMeas = zeros(Int32,numSampPerAveragedPeriod,numRxChannels(daq),numPeriods,numFrames)
@@ -195,6 +196,9 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
 
   uMeas = mean(uMeas,2)
   uRef = mean(uRef,2)
+
+  uMeas = reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+  uRef = reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
 
   return uMeas, uRef
 end
