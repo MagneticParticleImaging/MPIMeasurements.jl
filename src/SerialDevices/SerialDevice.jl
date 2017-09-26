@@ -1,9 +1,7 @@
 import Base: send
 
-# abstract supertype for all possible serial devices
-@compat abstract type Device end
 
-type SerialDevice{T<:Device}
+type SerialDevice
 	sp::SerialPort
 	pause_ms::Int
 	timeout_ms::Int
@@ -63,7 +61,7 @@ end
 """
 Send querry to serial device and receive device answer. Returns a String
 """
-function querry(sd::SerialDevice,cmd::String)
+function query(sd::SerialDevice,cmd::String)
 	flush(sd.sp)
 	send(sd,string(cmd,sd.delim_write))
 	out = readuntil(sd.sp, sd.delim_read, sd.timeout_ms)

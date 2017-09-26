@@ -1,0 +1,5 @@
+[Robot]
+type="Bruker"
+connection="RobotServer"
+pauseTime=1.0
+[Safety]

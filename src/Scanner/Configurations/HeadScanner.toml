@@ -1,0 +1,78 @@
+[GaussMeter]
+coordinateTransformation = [0, 0, 1, 0, 1, 0, -1, 0, 0]
+range = 1
+fast = true
+autoRanging = false
+type = "LakeShore"
+connection = "/dev/ttyUSB1"
+
+[Robot]
+pauseTime = 1.0
+stepsPerTurn = 5000
+gearSlope = 5
+minMaxFreq = [20, 4000]
+defaultVel = [40000, 40000, 40000]
+defSampleCenterPos = [0.01, 0.0, 0.0]
+minMaxVel = [30, 40000]
+minMaxAcc = [1, 4000]
+defCenterPos = [0.1, 0.14100000000000001, 0.005]
+type = "Isel"
+connection = "/dev/ttyUSB0"
+
+[Safety]
+receiveCoil = "noCoil"
+robotMount = "hallSensor"
+clearance = "clearance"
+setupName = "hallSensornoCoil"
+
+[DAQ]
+daq = "RedPitaya"
+controlLoopPhaseAccuracy = 1
+tracerVendor = ["n.a."]
+scannerOperator = "default"
+measIsFrequencySelection = false
+scannerName = "MPS1"
+rxNumChannels = 1
+studyIsCalibration = false
+studyDescription = "n.a."
+tracerBatch = ["n.a."]
+controlLoopAmplitudeAccuracy = 0.04
+dfPhase = [0.0]
+rpGainSetting = [0, 1]
+scannerManufacturer = "IBI"
+measIsTransposed = false
+controlPause = 0.8
+tracerConcentration = [0.0]
+scannerTopology = "MPS"
+measIsBGCorrected = false
+acqNumAverages = 1
+studyName = "default"
+scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
+transferFunction = "PreinstalledUH"
+ip = ["192.168.1.20"]
+measIsFramePermutation = false
+studyIsSimulation = false
+acqNumBGFrames = 200
+acqNumFGFrames = 200
+measIsFourierTransformed = false
+acqNumFFChannels = 1
+studyExperiment = 0
+rxDataConversionFactor = [1.0, 0.0]
+acqNumPeriods = 1
+dfStrength = [0.02]
+datasetStore = "/opt/data/MPS1"
+dfBaseFrequency = 1.25e8
+dfWaveform = "sine"
+measIsSpectralLeakageCorrected = false
+acqFFLinear = false
+acqFFValues = [1.0]
+calibFieldToVolt = 23.0
+studySubject = "MNP sample"
+tracerVolume = [0.0]
+decimation = 64
+tracerSolute = ["Fe"]
+measIsTFCorrected = false
+dfDivider = [4800]
+tracerName = ["n.a."]
+calibRefToField = [0.02884]
+rxUnit = "V"

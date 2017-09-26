@@ -21,6 +21,7 @@ numRxChannels(daq::AbstractDAQ) = daq["rxNumChannels"]
 numTxChannels(daq::AbstractDAQ) = length(daq["dfDivider"])
 
 include("RedPitaya.jl")
+include("RedPitayaNew.jl")
 include("RedPitayaScpi.jl")
 include("Measurements.jl")
 
@@ -29,6 +30,8 @@ function DAQ(params::Dict)
     return DAQRedPitaya(params)
   elseif params["daq"] == "RedPitayaScpi"
     return DAQRedPitayaScpi(params)
+  elseif params["daq"] == "RedPitayaNew"
+    return DAQRedPitayaNew(params)
   else
     error("$(params["daq"]) not yet implemented!")
   end
@@ -47,9 +50,9 @@ function init(daq::AbstractDAQ)
   if !all(isinteger, daq["dfDivider"] / daq["decimation"])
     warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
   end
-  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"]  #*
-                                                                #daq["acqNumPeriods"]
-                                              )
+  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"])
+  daq["numSampPerAveragedPeriod"] = daq["numSampPerPeriod"] * daq["acqNumAverages"] 
+
   daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
   daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPeriods"]
 
