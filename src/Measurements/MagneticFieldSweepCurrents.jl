@@ -45,7 +45,7 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
     println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
     # set measurement range of gauss meter
     range = measObj.gaussRanges[l]
-    setAllRange(measObj.gauss, range)
+    setAllRange(measObj.gauss, Char("$range"[1]))
     # wait until magnet is on field
     sleep(0.6)
     # perform field measurment
@@ -53,10 +53,10 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
     measObj.magneticField[:,index,l] = magneticField
     # perform error estimation based on gauss meter specification
     magneticFieldError = zeros(typeof(1.0u"T"),3,2)
-    magneticFieldError[:,1] = abs(magneticField)*1e-3
+    magneticFieldError[:,1] = abs.(magneticField)*1e-3
     magneticFieldError[:,2] = getFieldError(range)
     measObj.magneticFieldError[:,index,l] = maximum(magneticFieldError,2)
-    
+
     println(uconvert.(u"mT",measObj.magneticField[:,index,l]))
   end
   value(measObj.rp,"AOUT0",0.0)
