@@ -1,8 +1,7 @@
-export getXValue,getYValue,getZValue,getVectorMagnitude
-export setXRange,setYRange,setZRange,setAllRange
+export getXYZValues
+export setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
-export setUnitToGauss,setUnitToTesla,setStandardSettings
-export getRange
+export setUnitToTesla,setStandardSettings
 
 include("LakeShoreLowLevel.jl")
 
@@ -21,53 +20,21 @@ function LakeShoreGaussMeter(params::Dict)
 end
 
 """
-Returns the value of the X channel
-"""
-function getXValue(gauss::LakeShoreGaussMeter)
-	setActiveChannel(gauss, 'X')
-	return parse(Float32,getField(gauss))
-end
-
-"""
-Returns the value of the Y channel
-"""
-function getYValue(gauss::LakeShoreGaussMeter)
-	setActiveChannel(gauss, 'Y')
-	return parse(Float32,getField(gauss))
-end
-
-"""
-Returns the value of the Z channel
-"""
-function getZValue(gauss::LakeShoreGaussMeter)
-	setActiveChannel(gauss, 'Z')
-	return parse(Float32,getField(gauss))
-end
-
-"""
 Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::LakeShoreGaussMeter)
 	field = parse.(Float32,split(getAllFields(gauss),","))[1:3]
 	multipliers = getAllMultipliers(gauss)
-    gauss.coordinateTransformation*(field.*multipliers)
-end
-
-"""
-Returns the value of the vector magnitude sqrt(X² + Y² +Z²)
-"""
-function getVectorMagnitude(gauss::LakeShoreGaussMeter)
-	setActiveChannel(gauss, 'V')
-	return parse(Float32,getField(gauss))
+    gauss.coordinateTransformation*(field.*multipliers)*u"T"
 end
 
 """
 Sets the range of the active channel. The range depends on the installed probe.
 For HSE Probe. More Information in part 3.4 on page 3-7.
-	0 = highest = +-3T
-	1						= +-300mT
-	2						= +-30mT
-	3 = lowest	= +-3mT
+	0 = highest = ±3T
+	1           = ±300mT
+	2           = ±30mT
+	3 = lowest  = ±3mT
 
 Sets the range of the X channel
 """
