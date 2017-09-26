@@ -51,7 +51,6 @@ function init(daq::AbstractDAQ)
     warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
   end
   daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"])
-  daq["numSampPerAveragedPeriod"] = daq["numSampPerPeriod"] * daq["acqNumAverages"] 
 
   daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
   daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPeriods"]

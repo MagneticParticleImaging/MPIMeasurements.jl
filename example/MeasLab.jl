@@ -306,6 +306,39 @@ function measurementBG(widgetptr::Ptr, m::MeasLab)
 end
 
 
+#=function measurementCont(daq::AbstractDAQ; controlPhase=true)
+  startTx(daq)
+
+  if controlPhase
+    controlLoop(daq)
+  else
+    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
+                     zeros(numTxChannels(daq)))
+    sleep(daq["controlPause"])
+  end
+
+  try
+      while true
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
+        amplitude, phase = calcFieldFromRef(daq,uRef)
+        println("reference amplitude=$amplitude phase=$phase")
+
+        showAllDAQData(uMeas,1)
+        showAllDAQData(uRef,2)
+        sleep(0.01)
+      end
+  catch x
+      if isa(x, InterruptException)
+          println("Stop Tx")
+          stopTx(daq)
+          disconnect(daq)
+      else
+        rethrow(x)
+      end
+  end
+end=#
+
+
 global const updating = Ref{Bool}(false)
 
 function updateData(m::MeasLab, data)
@@ -350,6 +383,12 @@ function getParams(m::MeasLab)
   params["tracerVolume"] = [getproperty(m["adjTracerVolume"], :value, Float64)]
   params["tracerConcentration"] = [getproperty(m["adjTracerConcentration"], :value, Float64)]
   params["tracerSolute"] = [getproperty(m["entTracerSolute"], :text, String)]
+
+  if params["acqNumAverages"] != m.daq.params["acqNumAverages"]
+    disconnect(m.daq)
+    m.daq.params["acqNumAverages"] = params["acqNumAverages"]
+    connectToServer(m.daq)
+  end
 
   return params
 end
