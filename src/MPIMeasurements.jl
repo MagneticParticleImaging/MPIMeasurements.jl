@@ -10,12 +10,12 @@ if !isdir(Pkg.dir("MPIFiles"))
   println("Installing MPIFiles...")
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
-
+#=
 if !isdir(Pkg.dir("MPISimulations"))
   println("Installing MPISimulations...")
   Pkg.clone("https://github.com/tknopp/MPISimulations.jl.git")
 end
-
+=#
 if !isdir(Pkg.dir("TOML"))
   println("Installing TOML...")
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
@@ -31,6 +31,7 @@ using Reexport
 @reexport using Unitful
 using TOML
 using HDF5
+using ProgressMeter
 #using MPISimulations
 
 import Redpitaya: receive, query

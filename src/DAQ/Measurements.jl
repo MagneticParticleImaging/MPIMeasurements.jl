@@ -1,4 +1,4 @@
-export measurement, measurementCont
+export measurement, measurementCont, measurementRepeatability
 
 function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
                      controlPhase=false )
@@ -118,14 +118,21 @@ function loadBGCorrData(filename)
 end
 
 
-function measurementCont(daq::AbstractDAQ)
+using PyPlot
+function measurementCont(daq::AbstractDAQ; controlPhase=true)
   startTx(daq)
 
-  controlLoop(daq)
+  if controlPhase
+    controlLoop(daq)
+  else
+    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
+                     zeros(numTxChannels(daq)))
+    sleep(daq["controlPause"])
+  end
 
   try
       while true
-        uMeas, uRef = readData(daq,1, currentFrame(daq))
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
@@ -138,8 +145,107 @@ function measurementCont(daq::AbstractDAQ)
       if isa(x, InterruptException)
           println("Stop Tx")
           stopTx(daq)
+          disconnect(daq)
       else
         rethrow(x)
       end
   end
+end
+
+
+
+
+
+
+
+
+
+
+
+function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetitions,
+                                  delay,
+                params_=Dict{String,Any}();
+                     kargs...)
+  merge!(daq.params, params_)
+
+  params = copy(daq.params)
+
+  # acquisition parameters
+  params["acqStartTime"] = Dates.unix2datetime(time())
+  params["acqGradient"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
+  params["acqOffsetField"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
+
+  # drivefield parameters
+  params["dfStrength"] = reshape(daq["dfStrength"],1,length(daq["dfStrength"]),1)
+  params["dfPhase"] = reshape(daq["dfPhase"],1,length(daq["dfPhase"]),1)
+  params["dfDivider"] = reshape(daq["dfDivider"],1,length(daq["dfDivider"]))
+
+  # receiver parameters
+  params["rxNumSamplingPoints"] = daq["numSampPerPeriod"] #FIXME rename internally
+
+  # transferFunction
+  if params["transferFunction"] != ""
+    numFreq = div(params["rxNumSamplingPoints"],2)+1
+    freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
+    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf_ = tf_receive_chain(params["transferFunction"])
+    for d=1:numRxChannels(daq)
+      tf[:,d] = tf_[freq,d]
+    end
+    params["rxTransferFunction"] = tf
+    params["rxInductionFactor"] = tf_.inductionFactor
+  end
+
+  # measurement
+  bgdata = measurement(daq; kargs...)
+  readline(STDIN)
+
+  # measurement
+  uFG = zeros(Int16, daq["numSampPerPeriod"],numRxChannels(daq),
+                  daq["acqNumPeriods"],daq["acqNumFGFrames"],numRepetitions)
+
+
+  @showprogress 1 "Computing..."  for l=1:numRepetitions
+    uFG[:,:,:,:,l] = measurement(daq; kargs...)
+    sleep(delay)
+  end
+
+  uFG = reshape(uFG, Val{4})
+
+  # calibration params  (needs to be called after calibration params!)
+  params["rxDataConversionFactor"] = dataConversionFactor(daq)
+
+  numBGFrames = size(bgdata,4)
+  params["measData"] = cat(4,bgdata,uFG)
+  params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames),
+                                zeros(Bool,daq["acqNumFGFrames"]*numRepetitions))
+  params["acqNumFrames"] = daq["acqNumFGFrames"]*numRepetitions + numBGFrames
+
+  MPIFiles.saveasMDF( filename, params )
+  return filename
+end
+
+
+
+function measurementRepeatability(daq::AbstractDAQ, mdf::MDFDatasetStore, numRepetitions,
+                                  delay, params=Dict{String,Any};
+                     kargs...)
+  merge!(daq.params, params)
+
+  name = params["studyName"]
+  path = joinpath( studydir(mdf), name)
+  subject = ""
+  date = ""
+
+  newStudy = Study(path,name,subject,date)
+
+  addStudy(mdf, newStudy)
+  expNum = getNewExperimentNum(mdf, newStudy)
+
+  daq["studyName"] = params["studyName"]
+  daq["experimentNumber"] = expNum
+
+  filename = joinpath(studydir(mdf),newStudy.name,string(expNum)*".mdf")
+  measurementRepeatability(daq, filename, numRepetitions, delay; kargs...)
+  return filename
 end
