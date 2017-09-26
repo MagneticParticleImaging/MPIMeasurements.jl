@@ -4,6 +4,8 @@ module MPIMeasurements
 using Compat
 using Reexport
 using IniFile
+using ProgressMeter
+
 @reexport using MPIFiles
 include("Robots/Robots.jl")
 

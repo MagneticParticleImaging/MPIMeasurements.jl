@@ -11,8 +11,8 @@ function showDAQData(u)
   sleep(0.1)
 end
 
-function showDAQData(daq,u)
-  u_ = vec(u[:,1,:,1])
+function showDAQData(daq,u,frame=1)
+  u_ = vec(u[:,1,:,frame])
   figure(1)
   clf()
   subplot(2,1,1)
