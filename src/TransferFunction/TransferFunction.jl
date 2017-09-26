@@ -123,13 +123,20 @@ function load_tf_fromVNA(filename::String)
       if contains(lines[3],"# kHz S MA R 50")
           ap = parse(Float64,strip(tmp[2]))
           aphi = parse(Float64,strip(tmp[3]))
-      elseif contains(lines[3],"# kHz S DB R 50")
-          ap = 10^(parse(Float64,strip(tmp[2]))/20)
-          aphi = parse(Float64,strip(tmp[3]))
+          f=f*1000
+        elseif contains(lines[3],"# kHz S DB R 50")
+            ap = 10^(parse(Float64,strip(tmp[2]))/20)
+            aphi = parse(Float64,strip(tmp[3]))
+            f=f*1000
+        elseif contains(lines[3],"# MHz S DB R 50")
+            ap = 10^(parse(Float64,strip(tmp[2]))/20)
+            aphi = parse(Float64,strip(tmp[3]))
+            f=f*1000000
       elseif contains(lines[3],"# kHz S RI R 50")
           tf_complex=parse(Float64,strip(tmp[2]))+im*parse(Float64,strip(tmp[3]))
           ap=abs(tf_complex);
           aphi=angle(tf_complex)
+          f=f*1000
       else
         println(lines[3])
         println(typeof(lines[3]))
@@ -137,7 +144,7 @@ function load_tf_fromVNA(filename::String)
       end
       push!(apdata, ap)
       push!(aϕdata, aphi)
-      push!(freq, f*1000)
+      push!(freq, f)
   end
   close(file)
   #apdata .*= (freq.*2*pi)
