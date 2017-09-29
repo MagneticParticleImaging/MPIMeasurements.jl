@@ -22,9 +22,13 @@ end
 DAQRedPitayaNew() = DAQRedPitayaNew(loadParams(_configFile("RedPitaya.ini")))
 
 function currentFrame(daq::DAQRedPitayaNew)
-  write_(daq.sockets[1],UInt32(1))
-  v = read(daq.sockets[1],Int64)
-  return v
+  cf = zeros(Int64, length(daq["ip"]))
+  for d=1:length(daq["ip"])
+    write_(daq.sockets[d],UInt32(1))
+    cf[d] = read(daq.sockets[d],Int64)
+  end
+  println("Current frame: $cf")
+  return minimum(cf)
 end
 
 export calibParams
@@ -37,6 +41,7 @@ function dataConversionFactor(daq::DAQRedPitayaNew) #default
 end
 
 immutable ParamsTypeNew
+  decimation::Int32
   numSamplesPerPeriod::Int32
   numSamplesPerTxPeriod::Int32
   numPeriodsPerFrame::Int32
@@ -77,15 +82,16 @@ function connectToServer(daq::DAQRedPitayaNew)
   calib = zeros(Float32, 4, length(daq["ip"]))
   for d=1:length(daq["ip"])
     daq.sockets[d] = connect(daq["ip"][d],7777)
-    p = ParamsTypeNew(numSampPerAveragedPeriod,
-                   numSamplesPerTxPeriod[d],
+    p = ParamsTypeNew(daq["decimation"],
+                   numSampPerAveragedPeriod,
+                   numSamplesPerTxPeriod,#[d],
                    daq["acqNumPeriods"],
                    div(length(daq["acqFFValues"]),daq["acqNumFFChannels"]),
                    daq["acqNumFFChannels"],
                    true,
                    daq["acqNumPeriods"] > 1,
                    daq["acqFFLinear"],
-                   true,
+                   d == 1,
                    daq["rpGainSetting"][1],
                    daq["rpGainSetting"][2],
                    false, false)
@@ -191,7 +197,7 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
     wpRead += chunk
   end
 
-  uMeas = reshape(uMeas, numSampPerPeriod, numAverages, numTxChannels(daq),numPeriods,numFrames)
+  uMeas = reshape(uMeas, numSampPerPeriod, numAverages, numRxChannels(daq),numPeriods,numFrames)
   uRef = reshape(uRef, numSampPerPeriod, numAverages, numTxChannels(daq),numPeriods,numFrames)
 
   uMeas = mean(uMeas,2)

@@ -23,36 +23,46 @@ function controlLoop(daq::AbstractDAQ)
 
 end
 
+function wrapPhase!(phases)
+  for d=1:length(phases)
+    if phases[d] < -180
+      phases[d] += 360
+    elseif phases[d] > 180
+      phases[d] -= 360
+    end
+  end
+  return phases
+end
 
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
-  a = 2*sum(float(uRef[:,1,1]).*daq["cosLUT"][:,1])
-  b = 2*sum(float(uRef[:,1,1]).*daq["sinLUT"][:,1])
+  amplitude = zeros(numTxChannels(daq))
+  phase = zeros(numTxChannels(daq))
+  for d=1:numTxChannels(daq)
+    a = 2*sum(float(uRef[:,d,1,1]).*daq["cosLUT"][:,d])
+    b = 2*sum(float(uRef[:,d,1,1]).*daq["sinLUT"][:,d])
 
-  println(" $(sqrt(a*a+b*b)) ")
-  amplitude = sqrt(a*a+b*b)*refToField(daq)[1]
-  phase = atan2(a,b) / pi * 180
+    #println(" $(sqrt(a*a+b*b)) ")
+    amplitude[d] = sqrt(a*a+b*b)*refToField(daq)[1]
+    phase[d] = atan2(a,b) / pi * 180
+  end
   return amplitude, phase
 end
 
 function doControlStep(daq::AbstractDAQ, uRef)
-## TODO make me multidimensional
 
   amplitude, phase = calcFieldFromRef(daq,uRef)
 
   println("reference amplitude=$amplitude phase=$phase")
 
-  if abs(daq["dfStrength"][1] - amplitude)/daq["dfStrength"][1] <
+  if norm(daq["dfStrength"] - amplitude) / norm(daq["dfStrength"]) <
               daq["controlLoopAmplitudeAccuracy"] &&
-     abs(phase) < daq["controlLoopPhaseAccuracy"]
+     norm(phase) < daq["controlLoopPhaseAccuracy"]
     return true
   else
     daq["currTxPhase"] .-= phase
-    if daq["currTxPhase"][1] < -180
-      daq["currTxPhase"] .+= 360
-    elseif daq["currTxPhase"][1] > 180
-      daq["currTxPhase"] .-= 360
-    end
-    daq["currTxAmp"] *=  daq["dfStrength"][1] / amplitude
+    wrapPhase!(daq["currTxPhase"])
+
+    daq["currTxAmp"] .*=  daq["dfStrength"] ./ amplitude
 
     println("new tx amplitude=$(daq["currTxAmp"])) phase=$(daq["currTxPhase"])")
     setTxParams(daq, daq["currTxAmp"], daq["currTxPhase"])
