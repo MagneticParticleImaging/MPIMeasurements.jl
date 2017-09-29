@@ -16,10 +16,10 @@ function DAQRedPitayaNew(params)
   init(daq)
 
   connectToServer(daq)
+
+  finalizer(daq, d -> disconnect(d))
   return daq
 end
-
-DAQRedPitayaNew() = DAQRedPitayaNew(loadParams(_configFile("RedPitaya.ini")))
 
 function currentFrame(daq::DAQRedPitayaNew)
   cf = zeros(Int64, length(daq["ip"]))
