@@ -1,7 +1,8 @@
-export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety
+export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams
 
 type MPIScanner
   params::Dict
+  generalParams::Dict
   daq::Union{AbstractDAQ,Void}
   robot::Union{Robot,Void}
   gaussmeter::Union{GaussMeter,Void}
@@ -11,9 +12,12 @@ type MPIScanner
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
-    return new(params,nothing,nothing,nothing,nothing,()->())
+    generalParams = params["General"]
+    return new(params,generalParams,nothing,nothing,nothing,nothing,()->())
   end
 end
+
+getGeneralParams(scanner::MPIScanner) = scanner.generalParams
 
 function getDAQ(scanner::MPIScanner)
   if !haskey(scanner.params, "DAQ")

@@ -1,7 +1,8 @@
-using MPIMeasurements
-using Gtk.ShortNames
+@time using MPIMeasurements
+@time using Gtk.ShortNames
+@time using GtkReactive
 ENV["WINSTON_OUTPUT"] = :gtk
-import Winston
+@time import Winston
 
 import Base: getindex
 import MPIMeasurements: measurement
@@ -9,6 +10,7 @@ import MPIMeasurements: measurement
 type MeasLab
   builder
   daq
+  generalParams
   data
   dataBG
   dataBGStore
@@ -23,6 +25,10 @@ type MeasLab
   currStudyName
   currExpNum
   experiments
+  btnMeasurement
+  updatingStudies
+  updatingExperiments
+  loadingData
 end
 
 getindex(m::MeasLab, w::AbstractString) = G_.object(m.builder, w)
@@ -34,16 +40,19 @@ function MeasLab(filenameConfig=nothing)
   if filenameConfig != nothing
     scanner = MPIScanner(filenameConfig)
     daq = getDAQ(scanner)
-    mdfstore = MDFDatasetStore( daq["datasetStore"] )
+    generalParams = getGeneralParams(scanner)
+    mdfstore = MDFDatasetStore( generalParams["datasetStore"] )
   else
     daq = nothing
     mdfstore = MDFDatasetStore( "/opt/data/MPS1" )
   end
 
   m = MeasLab( Builder(filename=uifile),
-                  daq, nothing, nothing, nothing, nothing, nothing,nothing,
+                  daq, generalParams, nothing, nothing, nothing, nothing, nothing,nothing,
                   nothing, nothing, Dict{Symbol,Any}(), mdfstore, nothing,
-                  nothing, nothing, nothing)
+                  nothing, nothing, nothing, nothing, false, false, false)
+
+  m.btnMeasurement = button(; widget=m["tbMeasure"])
 
   println("Type constructed")
 
@@ -64,7 +73,7 @@ function MeasLab(filenameConfig=nothing)
 
   if m.daq != nothing
     setInfoParams(m)
-    setParams(m, m.daq.params)
+    setParams(m, merge!(m.generalParams,toDict(m.daq.params)))
     Gtk.@sigatom setproperty!(m["entConfig"],:text,filenameConfig)
   else
     Gtk.@sigatom setproperty!(m["tbMeasure"],:sensitive,false)
@@ -76,9 +85,13 @@ function MeasLab(filenameConfig=nothing)
   #G_.modal(w,true)
   showall(w)
 
+  signal_connect(w, "delete-event") do widget, event
+    disconnect(m.daq)
+  end
+
   println("InitCallbacks")
 
-  initCallbacks(m)
+  @time initCallbacks(m)
 
   println("Finished")
 
@@ -86,117 +99,189 @@ function MeasLab(filenameConfig=nothing)
 end
 
 function initCallbacks(m)
-  signal_connect(measurement, m["tbMeasure"], "clicked", Void, (), false, m )
-  signal_connect(measurementBG, m["tbMeasureBG"], "clicked", Void, (), false, m)
-  signal_connect(showData, m["adjFrame"], "value_changed", Void, (), false, m )
-  signal_connect(showData, m["adjPatch"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["adjRxChan"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["adjMinTP"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["adjMaxTP"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["adjMinFre"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["adjMaxFre"], "value_changed", Void, (), false, m)
-  signal_connect(showData, m["cbShowBG"], "toggled", Void, (), false, m)
-  signal_connect(showData, m["cbAverage"], "toggled", Void, (), false, m)
-  signal_connect(showData, m["cbSubtractBG"], "toggled", Void, (), false, m)
-  signal_connect(loadExperiment, m["cbCorrTF"], "toggled", Void, (), false, m)
 
-  signal_connect(invalidateBG, m["adjDFStrength"], "value_changed", Void, (), false, m)
-  signal_connect(invalidateBG, m["adjNumPatches"], "value_changed", Void, (), false, m)
-  signal_connect(invalidateBG, m["adjNumPeriods"], "value_changed", Void, (), false, m)
-  signal_connect(reinitDAQ, m["adjNumPeriods"], "value_changed", Void, (), false, m)
 
-  m.signalHandler[:cbStudyNames] =
+
+  #@time signal_connect(measurement, m["tbMeasure"], "clicked", Void, (), false, m )
+  #@time signal_connect(measurementBG, m["tbMeasureBG"], "clicked", Void, (), false, m)
+
+  @time signal_connect(m["tbMeasure"], :clicked) do w
+    measurement(C_NULL, m)
+  end
+
+  @time signal_connect(m["tbMeasureBG"], :clicked) do w
+    measurementBG(C_NULL, m)
+  end
+
+  timer = nothing
+  @time signal_connect(m["tbContinous"], :toggled) do w
+    daq = m.daq
+    if getproperty(m["tbContinous"], :active, Bool)
+      params = merge!(m.generalParams,getParams(m))
+      MPIMeasurements.updateParams!(daq, params)
+      startTx(daq)
+      MPIMeasurements.controlLoop(daq)
+
+      function update_(::Timer)
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
+        #showDAQData(daq,vec(uMeas))
+        amplitude, phase = MPIMeasurements.calcFieldFromRef(daq,uRef)
+        println("reference amplitude=$amplitude phase=$phase")
+
+        updateData(m, uMeas)
+      end
+      timer = Timer(update_, 0.0, 0.2)
+    else
+      close(timer)
+      stopTx(daq)
+    end
+  end
+
+  @time for sl in ["adjFrame", "adjPatch","adjRxChan","adjMinTP","adjMaxTP",
+                   "adjMinFre","adjMaxFre"]
+    signal_connect(m[sl], "value_changed") do w
+      showData(C_NULL, m)
+    end
+  end
+
+  @time for cb in ["cbShowBG", "cbAverage","cbSubtractBG"]
+    signal_connect(m[cb], :toggled) do w
+      showData(C_NULL, m)
+    end
+  end
+
+  signal_connect(m["cbCorrTF"], :toggled) do w
+    loadExperiment(C_NULL, m)
+  end
+
+  signal_connect(m["cbExpNum"], :changed) do w
+    loadExperiment(C_NULL, m)
+  end
+
+  #@time signal_connect(showData, m["adjFrame"], "value_changed", Void, (), false, m )
+  #@time signal_connect(showData, m["adjPatch"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["adjRxChan"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["adjMinTP"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["adjMaxTP"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["adjMinFre"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["adjMaxFre"], "value_changed", Void, (), false, m)
+  #@time signal_connect(showData, m["cbShowBG"], "toggled", Void, (), false, m)
+  #@time signal_connect(showData, m["cbAverage"], "toggled", Void, (), false, m)
+  #@time signal_connect(showData, m["cbSubtractBG"], "toggled", Void, (), false, m)
+  #@time signal_connect(loadExperiment, m["cbCorrTF"], "toggled", Void, (), false, m)
+
+  @time signal_connect(invalidateBG, m["adjDFStrength"], "value_changed", Void, (), false, m)
+  @time signal_connect(invalidateBG, m["adjNumPatches"], "value_changed", Void, (), false, m)
+  @time signal_connect(invalidateBG, m["adjNumPeriods"], "value_changed", Void, (), false, m)
+  @time signal_connect(reinitDAQ, m["adjNumPeriods"], "value_changed", Void, (), false, m)
+
+  @time m.signalHandler[:cbStudyNames] =
       signal_connect(updateExperiments, m["cbStudyNames"], "changed", Void, (), false, m)
-  signal_connect(updateExperiments, m["entStudy"], "changed", Void, (), false, m)
-  m.signalHandler[:cbExpNum] =
-        signal_connect(loadExperiment, m["cbExpNum"], "changed", Void, (), false, m)
+  @time signal_connect(updateExperiments, m["entStudy"], "changed", Void, (), false, m)
 
-  updateStudies(C_NULL, m)
-  Gtk.@sigatom setproperty!(m["cbStudyNames"],:active,0)
+  #@time m.signalHandler[:cbExpNum] =
+  #      signal_connect(loadExperiment, m["cbExpNum"], "changed", Void, (), false, m)
+
+  @time updateStudies(C_NULL, m)
+  @time Gtk.@sigatom setproperty!(m["cbStudyNames"],:active,0)
 end
 
 function updateStudies(widgetptr::Ptr, m::MeasLab)
-  @Gtk.sigatom println("Updating Studies ...")
-  oldStudyName = m.currStudyName
-  m.currStudyName = getproperty(m["entStudy"], :text, String)
+  if !m.updatingStudies
+    m.updatingStudies = true
+    @Gtk.sigatom println("Updating Studies ...")
+    oldStudyName = m.currStudyName
+    m.currStudyName = getproperty(m["entStudy"], :text, String)
 
-  @Gtk.sigatom signal_handler_block(m["cbStudyNames"], m.signalHandler[:cbStudyNames])
+    #@Gtk.sigatom signal_handler_block(m["cbStudyNames"], m.signalHandler[:cbStudyNames])
 
-  if m.studies != nothing && !isempty(m.studies)
-    Gtk.@sigatom empty!(m["cbStudyNames"])
-  end
-  m.studies = getStudies( m.mdfstore )
-  for study in m.studies
-    Gtk.@sigatom push!(m["cbStudyNames"], study.name)
-  end
-  @Gtk.sigatom signal_handler_unblock(m["cbStudyNames"], m.signalHandler[:cbStudyNames])
-  #Gtk.@sigatom setproperty!(m["cbStudyNames"],:active,0)
-  if oldStudyName!= m.currStudyName
-    Gtk.@sigatom setproperty!(m["entStudy"], :text, m.currStudyName)
+    if m.studies != nothing && !isempty(m.studies)
+      Gtk.@sigatom empty!(m["cbStudyNames"])
+    end
+    m.studies = getStudies( m.mdfstore )
+    for study in m.studies
+      Gtk.@sigatom push!(m["cbStudyNames"], study.name)
+    end
+    #@Gtk.sigatom signal_handler_unblock(m["cbStudyNames"], m.signalHandler[:cbStudyNames])
+    #Gtk.@sigatom setproperty!(m["cbStudyNames"],:active,0)
+    if oldStudyName!= m.currStudyName
+      Gtk.@sigatom setproperty!(m["entStudy"], :text, m.currStudyName)
+    end
+    m.updatingStudies = false
   end
   return nothing
 end
 
 
 function updateExperiments(widgetptr::Ptr, m::MeasLab)
-  @Gtk.sigatom println("Updating Experiments ...")
-  m.currStudyName = getproperty(m["entStudy"], :text, String)
-  m.currExpNum = getproperty(m["cbExpNum"],:active,Int64)
+  if !m.updatingExperiments
+    m.updatingExperiments = true
+    @Gtk.sigatom println("Updating Experiments ...")
+    m.currStudyName = getproperty(m["entStudy"], :text, String)
+    m.currExpNum = getproperty(m["cbExpNum"],:active,Int64)
 
-  @Gtk.sigatom signal_handler_block(m["cbExpNum"], m.signalHandler[:cbExpNum])
+    #@Gtk.sigatom signal_handler_block(m["cbExpNum"], m.signalHandler[:cbExpNum])
 
-  if m.studies != nothing && in(m.currStudyName, [ s.name for s in m.studies] )
-    path = joinpath( studydir(m.mdfstore), m.currStudyName)
-    study = Study(path,m.currStudyName,"","")
+    if m.studies != nothing && in(m.currStudyName, [ s.name for s in m.studies] )
+      path = joinpath( studydir(m.mdfstore), m.currStudyName)
+      study = Study(path,m.currStudyName,"","")
 
-    if m.experiments != nothing && !isempty(m.experiments)
-      Gtk.@sigatom empty!(m["cbExpNum"])
+      if m.experiments != nothing && !isempty(m.experiments)
+        Gtk.@sigatom empty!(m["cbExpNum"])
+      end
+
+      m.experiments = getExperiments(m.mdfstore, study)
+
+      for exp in m.experiments
+        Gtk.@sigatom push!(m["cbExpNum"], "$(exp.num)")
+      end
+
     end
-    m.experiments = getExperiments(m.mdfstore, study)
-    for exp in m.experiments
-      Gtk.@sigatom push!(m["cbExpNum"], "$(exp.num)")
-    end
-
+    #@Gtk.sigatom signal_handler_unblock(m["cbExpNum"], m.signalHandler[:cbExpNum])
+    @Gtk.sigatom println("Finished Updating Experiments ...")
+    m.updatingExperiments = false
   end
-  @Gtk.sigatom signal_handler_unblock(m["cbExpNum"], m.signalHandler[:cbExpNum])
-  @Gtk.sigatom println("Finished Updating Experiments ...")
   return nothing
 end
 
 
 
 function loadExperiment(widgetptr::Ptr, m::MeasLab)
-  @Gtk.sigatom println("Loading Data ...")
-  m.currExpNum = getproperty(m["cbExpNum"],:active,Int64)
+  if !m.loadingData
+    m.loadingData = true
+    @Gtk.sigatom println("Loading Data ...")
+    m.currExpNum = getproperty(m["cbExpNum"],:active,Int64)
 
-  if m.experiments != nothing && m.currExpNum >= 0
-    f = MPIFile(m.experiments[m.currExpNum+1].path)
-    params = MPIFiles.loadMetadata(f)
-    params["acqNumFGFrames"] = acqNumFGFrames(f)
-    params["acqNumBGFrames"] = acqNumBGFrames(f)
-    setParams(m, params)
+    if m.experiments != nothing && m.currExpNum >= 0
+      f = MPIFile(m.experiments[m.currExpNum+1].path)
+      params = MPIFiles.loadMetadata(f)
+      params["acqNumFGFrames"] = acqNumFGFrames(f)
+      params["acqNumBGFrames"] = acqNumBGFrames(f)
+      setParams(m, params)
 
-    #u = MPIFiles.measDataConv(f)[:,:,:,measFGFrameIdx(f)]
-    u = getMeasurements(f, false, frames=measFGFrameIdx(f),
-                fourierTransform=false, bgCorrection=false,
-                 tfCorrection=getproperty(m["cbCorrTF"], :active, Bool))
-    #println(size(u))
+      #u = MPIFiles.measDataConv(f)[:,:,:,measFGFrameIdx(f)]
+      u = getMeasurements(f, false, frames=measFGFrameIdx(f),
+                  fourierTransform=false, bgCorrection=false,
+                   tfCorrection=getproperty(m["cbCorrTF"], :active, Bool))
+      #println(size(u))
 
-    m.freq = rxFrequencies(f) ./ 1000
-    m.timePoints = rxTimePoints(f) .* 1000
+      m.freq = rxFrequencies(f) ./ 1000
+      m.timePoints = rxTimePoints(f) .* 1000
 
-    if acqNumBGFrames(f) > 0
-      #m.dataBG = MPIFiles.measDataConv(f)[:,:,:,measBGFrameIdx(f)]
-      m.dataBG = getMeasurements(f, false, frames=measBGFrameIdx(f),
-            fourierTransform=false, bgCorrection=false,
-            tfCorrection=getproperty(m["cbCorrTF"], :active, Bool))
+      if acqNumBGFrames(f) > 0
+        #m.dataBG = MPIFiles.measDataConv(f)[:,:,:,measBGFrameIdx(f)]
+        m.dataBG = getMeasurements(f, false, frames=measBGFrameIdx(f),
+              fourierTransform=false, bgCorrection=false,
+              tfCorrection=getproperty(m["cbCorrTF"], :active, Bool))
 
-      Gtk.@sigatom setproperty!(m["cbBGAvailable"],:active,true)
-      Gtk.@sigatom setproperty!(m["lbInfo"],:label,"")
-    else
-      invalidateBG(C_NULL,m)
+        #Gtk.@sigatom setproperty!(m["cbBGAvailable"],:active,true)
+        #Gtk.@sigatom setproperty!(m["lbInfo"],:label,"")
+      else
+        invalidateBG(C_NULL,m)
+      end
+      updateData(m, u)
     end
-    updateData(m, u)
+    m.loadingData = false
   end
   return nothing
 end
@@ -212,8 +297,8 @@ end
 
 function reinitDAQ(widgetptr::Ptr, m::MeasLab)
   if m.daq != nothing
-    m.daq["acqNumPeriods"] = getproperty(m["adjNumPeriods"], :value, Int64)
-    MPIMeasurements.init(m.daq)
+    m.daq.params.acqNumPeriods = getproperty(m["adjNumPeriods"], :value, Int64)
+    reinit(m.daq)
     setInfoParams(m)
   end
   return nothing
@@ -221,14 +306,14 @@ end
 
 function setInfoParams(m::MeasLab)
 
-  if length(m.daq["dfFreq"]) > 1
-    freqStr = "$(join([ " $(round(x,2)) x" for x in m.daq["dfFreq"] ])[2:end-2]) Hz"
+  if length(m.daq.params.dfFreq) > 1
+    freqStr = "$(join([ " $(round(x,2)) x" for x in m.daq.params.dfFreq ])[2:end-2]) Hz"
   else
-    freqStr = "$(round(m.daq["dfFreq"][1],2)) Hz"
+    freqStr = "$(round(m.daq.params.dfFreq[1],2)) Hz"
   end
   Gtk.@sigatom setproperty!(m["entDFFreq"],:text,freqStr)
-  Gtk.@sigatom setproperty!(m["entDFPeriod"],:text,"$(m.daq["dfPeriod"]*1000) ms")
-  Gtk.@sigatom setproperty!(m["entFramePeriod"],:text,"$(m.daq["acqFramePeriod"]) s")
+  Gtk.@sigatom setproperty!(m["entDFPeriod"],:text,"$(m.daq.params.dfPeriod*1000) ms")
+  Gtk.@sigatom setproperty!(m["entFramePeriod"],:text,"$(m.daq.params.acqFramePeriod) s")
 end
 
 function showData(widgetptr::Ptr, m::MeasLab)
@@ -276,8 +361,10 @@ end
 function measurement(widgetptr::Ptr, m::MeasLab)
   Gtk.@sigatom  println("Calling measurement")
 
-  params = getParams(m)
-  filename = MPIMeasurements.measurement(m.daq, m.mdfstore, params,
+  params = merge!(m.generalParams,getParams(m))
+  params["acqNumFrames"] = params["acqNumFGFrames"]
+
+  filename = MPIMeasurements.measurement(m.daq, params, m.mdfstore,
                         controlPhase=true, bgdata=m.dataBGStore)
 
   updateStudies(C_NULL, m)
@@ -293,8 +380,8 @@ end
 function measurementBG(widgetptr::Ptr, m::MeasLab)
   Gtk.@sigatom println("Calling BG measurement")
 
-  params = getParams(m)
-  params["acqNumFGFrames"] = params["acqNumBGFrames"]
+  params = merge!(m.generalParams,getParams(m))
+  params["acqNumFrames"] = params["acqNumBGFrames"]
 
   u = MPIMeasurements.measurement(m.daq, params, controlPhase=true)
   m.dataBGStore = u
@@ -304,40 +391,6 @@ function measurementBG(widgetptr::Ptr, m::MeasLab)
   Gtk.@sigatom setproperty!(m["lbInfo"],:label,"")
   return nothing
 end
-
-
-#=function measurementCont(daq::AbstractDAQ; controlPhase=true)
-  startTx(daq)
-
-  if controlPhase
-    controlLoop(daq)
-  else
-    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
-                     zeros(numTxChannels(daq)))
-    sleep(daq["controlPause"])
-  end
-
-  try
-      while true
-        uMeas, uRef = readData(daq, 1, currentFrame(daq))
-        amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
-
-        showAllDAQData(uMeas,1)
-        showAllDAQData(uRef,2)
-        sleep(0.01)
-      end
-  catch x
-      if isa(x, InterruptException)
-          println("Stop Tx")
-          stopTx(daq)
-          disconnect(daq)
-      else
-        rethrow(x)
-      end
-  end
-end=#
-
 
 global const updating = Ref{Bool}(false)
 
@@ -367,7 +420,7 @@ end
 
 
 function getParams(m::MeasLab)
-  params = copy(m.daq.params)
+  params = toDict(m.daq.params)
 
   params["acqNumAverages"] = getproperty(m["adjNumAverages"], :value, Int64)
   params["acqNumFGFrames"] = getproperty(m["adjNumFGFrames"], :value, Int64)
@@ -376,7 +429,6 @@ function getParams(m::MeasLab)
   params["studyName"] = getproperty(m["entStudy"], :text, String)
   params["studyDescription"] = getproperty(m["entExpDescr"], :text, String)
   params["scannerOperator"] = getproperty(m["entOperator"], :text, String)
-  params["dfStrength"]=[getproperty(m["adjDFStrength"], :value, Float64)*1e-3] #TODO
   params["tracerName"] = [getproperty(m["entTracerName"], :text, String)]
   params["tracerBatch"] = [getproperty(m["entTracerBatch"], :text, String)]
   params["tracerVendor"] = [getproperty(m["entTracerVendor"], :text, String)]
@@ -384,11 +436,10 @@ function getParams(m::MeasLab)
   params["tracerConcentration"] = [getproperty(m["adjTracerConcentration"], :value, Float64)]
   params["tracerSolute"] = [getproperty(m["entTracerSolute"], :text, String)]
 
-  if params["acqNumAverages"] != m.daq.params["acqNumAverages"]
-    disconnect(m.daq)
-    m.daq.params["acqNumAverages"] = params["acqNumAverages"]
-    connectToServer(m.daq)
-  end
+  dfString = getproperty(m["entDFStrength"], :text, String)
+  params["dfStrength"] = parse.(Float64,split(dfString," x "))*1e-3
+  println("DF strength = $(params["dfStrength"])")
+
 
   return params
 end
@@ -396,12 +447,13 @@ end
 function setParams(m::MeasLab, params)
   Gtk.@sigatom setproperty!(m["adjNumAverages"], :value, params["acqNumAverages"])
   Gtk.@sigatom setproperty!(m["adjNumPeriods"], :value, params["acqNumPeriods"])
-  Gtk.@sigatom setproperty!(m["adjNumFGFrames"], :value, params["acqNumFGFrames"])
-  Gtk.@sigatom setproperty!(m["adjNumBGFrames"], :value, params["acqNumBGFrames"])
+  Gtk.@sigatom setproperty!(m["adjNumFGFrames"], :value, params["acqNumFrames"])
+  Gtk.@sigatom setproperty!(m["adjNumBGFrames"], :value, params["acqNumFrames"])
   Gtk.@sigatom setproperty!(m["entStudy"], :text, params["studyName"])
   Gtk.@sigatom setproperty!(m["entExpDescr"], :text, params["studyDescription"] )
   Gtk.@sigatom setproperty!(m["entOperator"], :text, params["scannerOperator"])
-  Gtk.@sigatom setproperty!(m["adjDFStrength"], :value, params["dfStrength"][1]*1e3)
+  dfString = *([ string(x*1e3," x ") for x in params["dfStrength"] ]...)[1:end-3]
+  Gtk.@sigatom setproperty!(m["entDFStrength"], :text, dfString)
 
   Gtk.@sigatom setproperty!(m["entTracerName"], :text, params["tracerName"][1])
   Gtk.@sigatom setproperty!(m["entTracerBatch"], :text, params["tracerBatch"][1])
@@ -411,4 +463,5 @@ function setParams(m::MeasLab, params)
   Gtk.@sigatom setproperty!(m["entTracerSolute"], :text, params["tracerSolute"][1])
 end
 
-@time @profile m = MeasLab("MPS.toml")
+#@time @profile m = MeasLab("MPS.toml")
+@time @profile m = MeasLab("HeadScanner.toml")
