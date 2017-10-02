@@ -463,5 +463,5 @@ function setParams(m::MeasLab, params)
   Gtk.@sigatom setproperty!(m["entTracerSolute"], :text, params["tracerSolute"][1])
 end
 
-#@time @profile m = MeasLab("MPS.toml")
-@time @profile m = MeasLab("HeadScanner.toml")
+@time @profile m = MeasLab("MPS.toml")
+#@time @profile m = MeasLab("HeadScanner.toml")
