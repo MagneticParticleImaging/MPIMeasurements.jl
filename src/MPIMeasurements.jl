@@ -29,7 +29,7 @@ using Reexport
 @reexport using MPIFiles
 @reexport using Redpitaya
 @reexport using Unitful
-using TOML
+@reexport using TOML
 using HDF5
 using ProgressMeter
 #using MPISimulations

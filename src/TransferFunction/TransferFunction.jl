@@ -220,8 +220,8 @@ function plot_tf(tf::TransferFunction; fignum=312)
   figure(fignum)
   clf
   subplot(2,1,1)
-  semilogy(freq./1000, abs(tf[freq]),lw=2,"r")
+  semilogy(freq./1000, abs.(tf[freq]),lw=2,"r")
   subplot(2,1,2)
-  plot(freq./1000, angle(tf[freq]),lw=2,"b")
+  plot(freq./1000, angle.(tf[freq]),lw=2,"b")
 
 end

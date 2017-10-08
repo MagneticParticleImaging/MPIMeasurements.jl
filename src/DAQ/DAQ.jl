@@ -62,3 +62,5 @@ function readDataControlled(daq::AbstractDAQ, numFrames)
   controlLoop(daq)
   readData(daq, numFrames, currentFrame(daq))
 end
+
+include("TransferFunction.jl")
