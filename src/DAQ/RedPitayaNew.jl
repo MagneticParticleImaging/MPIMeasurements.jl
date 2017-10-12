@@ -129,6 +129,7 @@ function connectToServer(daq::DAQRedPitayaNew)
       end
     end
     sleep(1e-6)
+    daq.isConnected = true
   end
   return nothing
 end
@@ -152,6 +153,7 @@ function disconnect(daq::DAQRedPitayaNew)
       write_(daq.sockets[d],UInt32(9))
       close(daq.sockets[d])
     end
+    daq.isConnected = false
   end
   return nothing
 end
