@@ -2,8 +2,13 @@ __precompile__()
 module MPIMeasurements
 
 if !isdir(Pkg.dir("Redpitaya"))
-  println("Installing Redptaya...")
+  println("Installing Redpitaya...")
   Pkg.clone("https://github.com/tknopp/Redpitaya.jl.git")
+end
+
+if !isdir(Pkg.dir("RedPitayaDAQServer"))
+  println("Installing RedPitayaDAQServer...")
+  Pkg.clone("https://github.com/tknopp/RedPitayaDAQServer.jl.git")
 end
 
 if !isdir(Pkg.dir("MPIFiles"))
@@ -27,7 +32,8 @@ using Compat
 using Reexport
 #using IniFile
 @reexport using MPIFiles
-@reexport using Redpitaya
+#@reexport using Redpitaya
+@reexport using RedPitayaDAQServer
 @reexport using Unitful
 @reexport using TOML
 using HDF5
@@ -35,6 +41,7 @@ using ProgressMeter
 #using MPISimulations
 
 import Redpitaya: receive, query
+import RedPitayaDAQServer: currentFrame, readData
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end

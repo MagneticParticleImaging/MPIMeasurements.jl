@@ -21,6 +21,7 @@ type DAQParams
   acqFFLinear::Bool
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
+  calibFieldToVolt::Vector{Float64}
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -68,6 +69,7 @@ function DAQParams(params)
     params["acqFFLinear"],
     reshape(params["calibIntToVolt"],4,:),
     params["calibRefToField"],
+    params["calibFieldToVolt"],
     params["currTxAmp"],
     params["currTxPhase"],
     params["controlPause"],
@@ -105,6 +107,7 @@ function toDict(p::DAQParams)
   params["controlPause"] = p.controlPause
   params["controlLoopAmplitudeAccuracy"] = p.controlLoopAmplitudeAccuracy
   params["controlLoopPhaseAccuracy"] = p.controlLoopPhaseAccuracy
+  params["calibFieldToVolt"] = p.calibFieldToVolt
 
   return params
 end

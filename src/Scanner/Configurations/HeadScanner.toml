@@ -26,7 +26,7 @@ clearance = "clearance"
 setupName = "hallSensornoCoil"
 
 [DAQ]
-ip = ["192.168.1.21", "192.168.1.22"]
+ip = ["192.168.1.12", "192.168.1.13"]
 #ip = ["10.167.6.172"]
 daq = "RedPitayaNew"
 acqNumFrames = 1
