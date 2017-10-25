@@ -14,6 +14,7 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   connectADC(rpc)
   daq = DAQRedPitayaScpiNew(p, rpc)
+  setACQParams(daq)
   return daq
 end
 

@@ -1,7 +1,7 @@
 [DAQ]
-#ip = ["192.168.1.100"]
+ip = ["192.168.1.100"]
 #ip = ["192.168.1.9"]
-ip = ["10.167.6.172"]
+#ip = ["10.167.6.172"]
 daq = "RedPitayaScpiNew"
 #daq = "RedPitayaNew"
 acqNumFrames = 1
