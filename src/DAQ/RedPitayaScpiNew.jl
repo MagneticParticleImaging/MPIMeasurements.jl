@@ -80,9 +80,12 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 end
 
 function startTx(daq::DAQRedPitayaScpiNew)
+  connect(daq.rpc)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
-  sleep(0.2)
+  while currentFrame(daq.rpc) < 0
+    sleep(0.2)
+  end
   return nothing
 end
 
@@ -91,10 +94,11 @@ function stopTx(daq::DAQRedPitayaScpiNew)
   setTxParams(daq, zeros(numTxChannels(daq)),
                    zeros(numTxChannels(daq)))
   stopADC(daq.rpc)
+  RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
 function disconnect(daq::DAQRedPitayaScpiNew)
-  RedPitayaDAQServer.disconnect(daq)
+  RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
 function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel, d=1)

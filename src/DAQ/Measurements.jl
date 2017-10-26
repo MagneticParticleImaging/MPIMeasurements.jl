@@ -119,8 +119,6 @@ function loadBGCorrData(filename)
   return u
 end
 
-
-using PyPlot
 function measurementCont(daq::AbstractDAQ; controlPhase=true)
   startTx(daq)
 

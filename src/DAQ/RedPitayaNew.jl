@@ -138,6 +138,9 @@ function startTx(daq::DAQRedPitayaNew)
   for d=1:length(daq.ip)
     write_(daq.sockets[d],UInt32(6))
   end
+  while currentFrame(daq) < 0
+    sleep(0.2)
+  end
   return nothing
 end
 
