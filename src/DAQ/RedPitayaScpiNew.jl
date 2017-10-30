@@ -19,11 +19,13 @@ function DAQRedPitayaScpiNew(params)
 end
 
 function reinit(daq::DAQRedPitayaScpiNew)
+  connect(daq.rpc)
   setACQParams(daq)
   return nothing
 end
 
 function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
+  connect(daq.rpc)
   daq.params = DAQParams(params_)
   setACQParams(daq)
 end
@@ -94,7 +96,7 @@ function stopTx(daq::DAQRedPitayaScpiNew)
   setTxParams(daq, zeros(numTxChannels(daq)),
                    zeros(numTxChannels(daq)))
   stopADC(daq.rpc)
-  RedPitayaDAQServer.disconnect(daq.rpc)
+  #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
 function disconnect(daq::DAQRedPitayaScpiNew)
