@@ -3,7 +3,7 @@ using GR
 export showDAQData
 function showDAQData(u)
   u_ = vec(u[:,1,:,1])
-  figure()
+  figure(figsize=(10,8))
   #clf()
   subplot(2,1,1)
   plot(u_)
@@ -14,7 +14,7 @@ end
 
 function showDAQData(daq,u,frame=1)
   u_ = vec(u[:,1,:,frame])
-  figure()
+  figure(figsize=(10,8))
   #clf()
   subplot(2,1,1)
   plot(u_)
@@ -31,7 +31,7 @@ end
 export showAllDAQData
 function showAllDAQData(u, fignum=1)
   D = size(u,2)
-  figure()#fignum)
+  figure(figsize=(10,8))#fignum)
   #clf()
   for d=1:D
     u_ = vec(u[:,d,:,:])

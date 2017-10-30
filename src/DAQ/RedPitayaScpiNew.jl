@@ -162,12 +162,13 @@ function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
 
   u = readData(daq.rpc, startFrame, numFrames)
 
-  u_ = reshape(u, 2, numSampPerPeriod, numAverages, numRxChannels(daq),numPeriods,numFrames)
+  u_ = reshape(u, 2, numSampPerPeriod, numAverages, numRxChannels(daq),
+                     numPeriods, numFrames)
 
   uAv = mean(u_,3)
 
-  uMeas = u[1,:,:,:,:] #reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
-  uRef = u[2,:,:,:,:] #reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+  uMeas = uAv[1,:,1,:,:,:] #reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+  uRef = uAv[2,:,1,:,:,:] #reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
 
   return uMeas, uRef
 end

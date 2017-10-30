@@ -8,7 +8,15 @@ params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=[20e-3]
+params["acqNumAverages"]=100
 
+
+println("MOVE THE SAMPLE OUT!")
+readline(STDIN)
+uBG = measurement(daq, params, controlPhase=true)
+
+println("PUT THE SAMPLE IN!")
+readline(STDIN)
 # This version does not store the data
 u = measurement(daq, params, controlPhase=true)
 
@@ -20,4 +28,6 @@ u = measurement(daq, params, controlPhase=true)
 
 #u = loadBGCorrData(filename)
 
-showDAQData(daq,u)
+showDAQData(daq,u.-uBG)
+
+disconnect(daq)

@@ -214,7 +214,7 @@ end
 
 
 function updateExperiments(widgetptr::Ptr, m::MeasLab)
-  if !m.updatingExperiments
+  if !m.updatingExperiments && !m.updatingStudies
     m.updatingExperiments = true
     @Gtk.sigatom println("Updating Experiments ...")
     m.currStudyName = getproperty(m["entStudy"], :text, String)
@@ -247,7 +247,7 @@ end
 
 
 function loadExperiment(widgetptr::Ptr, m::MeasLab)
-  if !m.loadingData
+  if !m.loadingData && !m.updatingExperiments && !m.updatingStudies
     m.loadingData = true
     @Gtk.sigatom println("Loading Data ...")
     m.currExpNum = getproperty(m["cbExpNum"],:active,Int64)
