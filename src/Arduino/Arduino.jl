@@ -19,7 +19,7 @@ function ArduinoSurveillanceUnit(portAdress::AbstractString)
     write(sp, "ConnectionEstablished$delim_write")
     if(readuntil(sp, delim_read, timeout_ms) == "ArduinoSurveillanceV1$delim_read")
             println("Connected to ArduinoSurveillanceUnit")
-            return ArduinoSurveillanceUnit(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart)
+            return ArduinoSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart)
     else
             println("Connected to WrongDevice")
     end
