@@ -9,66 +9,49 @@ export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
 
 include("Control.jl")
 include("Plotting.jl")
+include("Parameters.jl")
 
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
 @mustimplement setTxParams(daq::AbstractDAQ, amplitude, phase)
 @mustimplement currentFrame(daq::AbstractDAQ)
 @mustimplement readData(daq::AbstractDAQ, channel, startFrame, numPeriods)
-@mustimplement refToField(daq::AbstractDAQ)
+@mustimplement refToField(daq::AbstractDAQ, d::Int64)
 
-numRxChannels(daq::AbstractDAQ) = daq["rxNumChannels"]
-numTxChannels(daq::AbstractDAQ) = length(daq["dfDivider"])
+@mustimplement numRxChannels(daq::AbstractDAQ)
+numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 
-include("RedPitaya.jl")
+#include("RedPitaya.jl")
 include("RedPitayaNew.jl")
-include("RedPitayaScpi.jl")
+#include("RedPitayaScpi.jl")
 include("Measurements.jl")
+include("RedPitayaScpiNew.jl")
 
 function DAQ(params::Dict)
-  if params["daq"] == "RedPitaya"
+  #=if params["daq"] == "RedPitaya"
     return DAQRedPitaya(params)
   elseif params["daq"] == "RedPitayaScpi"
-    return DAQRedPitayaScpi(params)
-  elseif params["daq"] == "RedPitayaNew"
+    return DAQRedPitayaScpi(params)=#
+  if params["daq"] == "RedPitayaNew"
     return DAQRedPitayaNew(params)
+  elseif params["daq"] == "RedPitayaScpiNew"
+    return DAQRedPitayaScpiNew(params)
   else
     error("$(params["daq"]) not yet implemented!")
   end
 end
 
-getindex(daq::AbstractDAQ, param::String) = daq.params[param]
-function setindex!(daq::AbstractDAQ, value, param::String)
-  daq.params[param] = value
-end
-
-function init(daq::AbstractDAQ)
-  daq["dfFreq"] = daq["dfBaseFrequency"] ./ daq["dfDivider"]
-  daq["dfPeriod"] = lcm(daq["dfDivider"]) / daq["dfBaseFrequency"] #*
-                    #daq["acqNumPeriods"]
-
-  if !all(isinteger, daq["dfDivider"] / daq["decimation"])
-    warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
-  end
-  daq["numSampPerPeriod"] = round(Int, lcm(daq["dfDivider"]) / daq["decimation"])
-  daq["numSampPerAveragedPeriod"] = daq["numSampPerPeriod"] * daq["acqNumAverages"] 
-
-  daq["rxBandwidth"] = daq["dfBaseFrequency"] / daq["decimation"] / 2
-  daq["acqFramePeriod"] = daq["dfPeriod"] * daq["acqNumPeriods"]
-
-  D = numTxChannels(daq)
-  N = daq["numSampPerPeriod"]
+function initLUT(N,D, dfPeriod, dfFreq)
   sinLUT = zeros(N,D)
   cosLUT = zeros(N,D)
   for d=1:D
-    Y = round(Int64, daq["dfPeriod"]*daq["dfFreq"][d] )
+    Y = round(Int64, dfPeriod*dfFreq[d] )
     for n=1:N
       sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
       cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
     end
   end
-  daq["sinLUT"] = sinLUT
-  daq["cosLUT"] = cosLUT
+  return sinLUT, cosLUT
 end
 
 function dataConversionFactor(daq::AbstractDAQ) #default
@@ -82,3 +65,5 @@ function readDataControlled(daq::AbstractDAQ, numFrames)
   controlLoop(daq)
   readData(daq, numFrames, currentFrame(daq))
 end
+
+include("TransferFunction.jl")

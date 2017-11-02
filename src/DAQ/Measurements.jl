@@ -1,15 +1,15 @@
 export measurement, measurementCont, measurementRepeatability
 
-function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
+function measurement(daq::AbstractDAQ, params_::Dict;
                      controlPhase=false )
 
-  merge!(daq.params, params)
+  updateParams!(daq, params_)
 
   startTx(daq)
   if controlPhase
     controlLoop(daq)
   else
-    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
+    setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
   end
   currFr = currentFrame(daq)
@@ -20,7 +20,7 @@ function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
   #    uMeas = mean(uMeas,2)
   #  buffer[:,n] = uMeas
   #end
-  uMeas, uRef = readData(daq, daq["acqNumFGFrames"], currFr)
+  uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
   stopTx(daq)
 
@@ -28,11 +28,15 @@ function measurement(daq::AbstractDAQ, params=Dict{String,Any}();
 end
 
 # high level: This stores as MDF
-function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any}();
+function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
                      bgdata=nothing, kargs...)
-  merge!(daq.params, params_)
 
-  params = copy(daq.params)
+  params = copy(params_)
+  #merge!(params, toDict(daq.params))
+
+  # measurement
+  params["acqNumFrames"] = params["acqNumFGFrames"]
+  uFG = measurement(daq, params; kargs...)
 
   # acquisition parameters
   params["acqStartTime"] = Dates.unix2datetime(time())
@@ -40,17 +44,18 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
   params["acqOffsetField"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
 
   # drivefield parameters
-  params["dfStrength"] = reshape(daq["dfStrength"],1,length(daq["dfStrength"]),1)
-  params["dfPhase"] = reshape(daq["dfPhase"],1,length(daq["dfPhase"]),1)
-  params["dfDivider"] = reshape(daq["dfDivider"],1,length(daq["dfDivider"]))
+  params["dfStrength"] = reshape(daq.params.dfStrength,1,length(daq.params.dfStrength),1)
+  params["dfPhase"] = reshape(daq.params.dfPhase,1,length(daq.params.dfPhase),1)
+  params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
 
   # receiver parameters
-  params["rxNumSamplingPoints"] = daq["numSampPerPeriod"] #FIXME rename internally
+  params["rxNumSamplingPoints"] = daq.params.numSampPerPeriod #FIXME rename internally
+  params["rxNumChannels"] = numRxChannels(daq)
 
   # transferFunction
   if params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
-    freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
+    freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
     tf = zeros(Complex128, numFreq, numRxChannels(daq) )
     tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
@@ -60,21 +65,18 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
     params["rxInductionFactor"] = tf_.inductionFactor
   end
 
-  # measurement
-  uFG = measurement(daq; kargs...)
-
   # calibration params  (needs to be called after calibration params!)
   params["rxDataConversionFactor"] = dataConversionFactor(daq)
 
   if bgdata == nothing
-    params["measIsBGFrame"] = zeros(Bool,daq["acqNumFGFrames"])
+    params["measIsBGFrame"] = zeros(Bool,params["acqNumFGFrames"])
     params["measData"] = uFG
-    params["acqNumFrames"] = daq["acqNumFGFrames"]
+    params["acqNumFrames"] = params["acqNumFGFrames"]
   else
     numBGFrames = size(bgdata,4)
     params["measData"] = cat(4,bgdata,uFG)
-    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,daq["acqNumFGFrames"]))
-    params["acqNumFrames"] = daq["acqNumFGFrames"] + numBGFrames
+    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,params["acqNumFGFrames"]))
+    params["acqNumFrames"] = params["acqNumFGFrames"] + numBGFrames
   end
 
   MPIFiles.saveasMDF( filename, params )
@@ -82,9 +84,9 @@ function measurement(daq::AbstractDAQ, filename::String, params_=Dict{String,Any
 end
 
 
-function measurement(daq::AbstractDAQ, mdf::MDFDatasetStore, params=Dict{String,Any};
+function measurement(daq::AbstractDAQ, params::Dict, mdf::MDFDatasetStore;
                      kargs...)
-  merge!(daq.params, params)
+  #merge!(daq.params, params)
 
   name = params["studyName"]
   path = joinpath( studydir(mdf), name)
@@ -96,11 +98,11 @@ function measurement(daq::AbstractDAQ, mdf::MDFDatasetStore, params=Dict{String,
   addStudy(mdf, newStudy)
   expNum = getNewExperimentNum(mdf, newStudy)
 
-  daq["studyName"] = params["studyName"]
-  daq["experimentNumber"] = expNum
+  #daq["studyName"] = params["studyName"]
+  params["experimentNumber"] = expNum
 
   filename = joinpath(studydir(mdf),newStudy.name,string(expNum)*".mdf")
-  measurement(daq, filename; kargs...)
+  measurement(daq, params, filename; kargs...)
   return filename
 end
 
@@ -117,8 +119,6 @@ function loadBGCorrData(filename)
   return u
 end
 
-
-using PyPlot
 function measurementCont(daq::AbstractDAQ; controlPhase=true)
   startTx(daq)
 

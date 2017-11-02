@@ -1,47 +1,79 @@
-export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC
+export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connectToServer,
+       reinit, setTxParamsAll
 
 import Base.write
 import PyPlot.disconnect
 
 
+
 type DAQRedPitayaNew <: AbstractDAQ
-  params::Dict
-  sockets::Vector{Any}
-  calib
+  params::DAQParams
+  sockets::Vector{TCPSocket}
+  ip::Vector{String}
+  isConnected::Bool
 end
 
+
 function DAQRedPitayaNew(params)
-  daq = DAQRedPitayaNew(params,Vector{Any}(length(params["ip"])),zeros(4))
-  println(params["ip"])
-  init(daq)
+  p = DAQParams(params)
+  D = length(params["ip"])
+
+  daq = DAQRedPitayaNew(p, Vector{TCPSocket}(D), params["ip"], false)
+
+  println(daq.ip)
 
   connectToServer(daq)
+
+  finalizer(daq, d -> disconnect(d))
   return daq
 end
 
-DAQRedPitayaNew() = DAQRedPitayaNew(loadParams(_configFile("RedPitaya.ini")))
+function reinit(daq::DAQRedPitayaNew)
+  disconnect(daq)
+  sleep(0.3)
+  connectToServer(daq)
+  return nothing
+end
+
+function updateParams!(daq::DAQRedPitayaNew, params_::Dict)
+  disconnect(daq)
+  sleep(0.1)
+  daq.params = DAQParams(params_)
+  connectToServer(daq)
+end
+
+numRxChannels(daq::DAQRedPitayaNew) = length(daq.ip)
 
 function currentFrame(daq::DAQRedPitayaNew)
-  write_(daq.sockets[1],UInt32(1))
-  v = read(daq.sockets[1],Int64)
-  return v
+  cf = zeros(Int64, length(daq.ip))
+  for d=1:length(daq.ip)
+    write_(daq.sockets[d],UInt32(1))
+    cf[d] = read(daq.sockets[d],Int64)
+  end
+  println("Current frame: $cf")
+  return minimum(cf)
 end
 
 export calibParams
 function calibParams(daq::DAQRedPitayaNew, d)
-  return reshape(daq.params["calibIntToVolt"],4,:)[:,d]
+  return daq.params.calibIntToVolt[:,d]
+  #return reshape(daq.params["calibIntToVolt"],4,:)[:,d]
 end
 
-function dataConversionFactor(daq::DAQRedPitayaNew) #default
-  return daq.calib[1:2,:]
+function dataConversionFactor(daq::DAQRedPitayaNew)
+  return daq.params.calibIntToVolt[1:2,:]
 end
 
 immutable ParamsTypeNew
+  decimation::Int32
   numSamplesPerPeriod::Int32
-  numSamplesPerTxPeriod::Int32
   numPeriodsPerFrame::Int32
   numPatches::Int32
   numFFChannels::Int32
+  modulus1::Int32
+  modulus2::Int32
+  modulus3::Int32
+  modulus4::Int32
   txEnabled::Bool
   ffEnabled::Bool
   ffLinear::Bool
@@ -62,60 +94,71 @@ function write_(io::IO, p)
 end
 
 function connectToServer(daq::DAQRedPitayaNew)
-  dfAmplitude = daq.params["dfStrength"]
-  dec = daq.params["decimation"]
-  freq = daq.params["dfFreq"]
+  if !daq.isConnected
+    dfAmplitude = daq.params.dfStrength
+    dec = daq.params.decimation
+    freq = daq.params.dfFreq
 
+    numSampPerAveragedPeriod = daq.params.numSampPerPeriod * daq.params.acqNumAverages
 
-  #  daq["acqFFValues"] = collect(linspace(0,1,10))
-  #  daq["acqNumPeriods"] = length(daq["acqFFValues"])
+    modulus = ones(Int32,4)
+    modulus[1:length(daq.params.dfDivider)] = daq.params.dfDivider
 
-
-  numSamplesPerTxPeriod = round.(Int32, daq["numSampPerPeriod"] )
-
-  calib = zeros(Float32, 4, length(daq["ip"]))
-  for d=1:length(daq["ip"])
-    daq.sockets[d] = connect(daq["ip"][d],7777)
-    p = ParamsTypeNew(daq["numSampPerAveragedPeriod"],
-                   numSamplesPerTxPeriod[d],
-                   daq["acqNumPeriods"],
-                   div(length(daq["acqFFValues"]),daq["acqNumFFChannels"]),
-                   daq["acqNumFFChannels"],
-                   true,
-                   daq["acqNumPeriods"] > 1,
-                   daq["acqFFLinear"],
-                   true,
-                   daq["rpGainSetting"][1],
-                   daq["rpGainSetting"][2],
-                   false, false)
-    write_(daq.sockets[d],p)
-    println("ParamsType has $(sizeof(p)) bytes")
-    if daq["acqNumPeriods"] > 1
-      write_(daq.sockets[d],map(Float32,daq["acqFFValues"]))
+    for d=1:length(daq.ip)
+      daq.sockets[d] = connect(daq.ip[d],7777)
+      p = ParamsTypeNew(daq.params.decimation,
+                     numSampPerAveragedPeriod,
+                     daq.params.acqNumPeriods,
+                     div(length(daq.params.acqFFValues),daq.params.acqNumFFChannels),
+                     daq.params.acqNumFFChannels,
+                     modulus[1],
+                     modulus[2],
+                     modulus[3],
+                     modulus[4],
+                     true,
+                     daq.params.acqNumPeriods > 1,
+                     daq.params.acqFFLinear,
+                     d == 1,
+                     true,
+                     true,
+                     false, false)
+      write_(daq.sockets[d],p)
+      println("ParamsType has $(sizeof(p)) bytes")
+      if daq.params.acqNumPeriods > 1
+        write_(daq.sockets[d],map(Float32,daq.params.acqFFValues))
+      end
     end
-    calib[:,d] = calibParams(daq,d)
+    sleep(1e-6)
+    daq.isConnected = true
   end
-  daq.calib = calib
-  sleep(1e-3)
+  return nothing
 end
 
 function startTx(daq::DAQRedPitayaNew)
-  for d=1:length(daq["ip"])
+  for d=1:length(daq.ip)
     write_(daq.sockets[d],UInt32(6))
   end
+  while currentFrame(daq) < 0
+    sleep(0.2)
+  end
+  return nothing
 end
 
 function stopTx(daq::DAQRedPitayaNew)
-  for d=1:length(daq["ip"])
+  for d=1:length(daq.ip)
     write_(daq.sockets[d],UInt32(7))
   end
 end
 
 function disconnect(daq::DAQRedPitayaNew)
-  for d=1:length(daq["ip"])
-    write_(daq.sockets[d],UInt32(9))
-    close(daq.sockets[d])
+  if daq.isConnected
+    for d=1:length(daq.ip)
+      write_(daq.sockets[d],UInt32(9))
+      close(daq.sockets[d])
+    end
+    daq.isConnected = false
   end
+  return nothing
 end
 
 function setSlowDAC(daq::DAQRedPitayaNew, value, channel, d=1)
@@ -133,26 +176,46 @@ end
 
 function setTxParams(daq::DAQRedPitayaNew, amplitude, phase)
   for d=1:numTxChannels(daq)
-    write_(daq.sockets[d],UInt32(3))
-    write_(daq.sockets[d],Float64(amplitude[d]))
-    write_(daq.sockets[d],Float64(0.0))
-    write_(daq.sockets[d],Float64(phase[d]))
-    write_(daq.sockets[d],Float64(0.0))
+    tmpAmp = zeros(Float32,4)
+    tmpAmp[d] = amplitude[d]
+    tmpPhase = zeros(Float32,4)
+    tmpPhase[d] = phase[d]
+    setTxParamsAll(daq,d,tmpAmp,tmpPhase)
   end
 end
 
-refToField(daq::DAQRedPitayaNew) = daq.calib[3,1]*daq["calibRefToField"]
+function setTxParamsAll(daq::DAQRedPitayaNew,d::Integer,
+                        amplitude::Vector{Float32},
+                        phase::Vector{Float32},
+                        modulusFac::Vector{UInt32} = ones(UInt32,4))
+  write_(daq.sockets[d],UInt32(3))
+  # modulus factor A
+  write_(daq.sockets[d],modulusFac)
+  # modulus factor B
+  write_(daq.sockets[d],modulusFac)
+  # amplitudes channel A
+  write_(daq.sockets[d],amplitude)
+  # amplitudes channel B
+  write_(daq.sockets[d],zeros(Float32,4))
+  # phases channel A
+  write_(daq.sockets[d],phase)
+  # phases channel B
+  write_(daq.sockets[d],zeros(Float32,4))
+end
+
+#TODO: calibRefToField should be multidimensional
+refToField(daq::DAQRedPitayaNew, d::Int64) = daq.params.calibRefToField[d]
 
 function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
-  dec = daq["decimation"]
-  numSampPerPeriod = daq["numSampPerPeriod"]
+  dec = daq.params.decimation
+  numSampPerPeriod = daq.params.numSampPerPeriod
   numSamp = numSampPerPeriod*numFrames
-  numAverages = daq["acqNumAverages"]
+  numAverages = daq.params.acqNumAverages
   numAllFrames = numAverages*numFrames
-  numPeriods = daq["acqNumPeriods"]
+  numPeriods = daq.params.acqNumPeriods
 
   numSampPerFrame = numSampPerPeriod * numPeriods
-  numSampPerAveragedPeriod = daq["numSampPerAveragedPeriod"]
+  numSampPerAveragedPeriod =  numSampPerPeriod * numAverages
   numSampPerAveragedFrame = numSampPerAveragedPeriod * numPeriods
 
   uMeas = zeros(Int32,numSampPerAveragedPeriod,numRxChannels(daq),numPeriods,numFrames)
@@ -176,6 +239,8 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
 
     println("Read from $wpRead until $(wpRead+chunk-1), WpWrite $(wpWrite), chunk=$(chunk)")
 
+    #TODO decouple Tx from Rx Channels
+
     for d=1:numRxChannels(daq)
       write(daq.sockets[d],UInt32(2))
       write(daq.sockets[d],UInt64(wpRead))
@@ -190,11 +255,14 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
     wpRead += chunk
   end
 
-  uMeas = reshape(uMeas, numSampPerPeriod, numAverages, numTxChannels(daq),numPeriods,numFrames)
+  uMeas = reshape(uMeas, numSampPerPeriod, numAverages, numRxChannels(daq),numPeriods,numFrames)
   uRef = reshape(uRef, numSampPerPeriod, numAverages, numTxChannels(daq),numPeriods,numFrames)
 
   uMeas = mean(uMeas,2)
   uRef = mean(uRef,2)
+
+  uMeas = reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+  uRef = reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
 
   return uMeas, uRef
 end
