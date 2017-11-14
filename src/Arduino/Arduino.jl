@@ -91,7 +91,7 @@ function parsebool(s::Char)
     end
 end
 
-function GetStaus(Arduino::ArduinoSurveillanceUnit)
+function GetErrorStatus(Arduino::ArduinoSurveillanceUnit)
     Errorcode=ArduinoCommand(Arduino,"GET:STATUS");
     ErrorcodeBool=[parsebool(x) for x in Errorcode]
     return ErrorcodeBool
