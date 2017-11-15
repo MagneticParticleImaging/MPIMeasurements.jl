@@ -1,5 +1,50 @@
+[GaussMeter]
+coordinateTransformation = [0, 0, -1, 0, 1, 0, 1, 0, 0]
+range = 1
+fast = true
+autoRanging = false
+type = "LakeShore"
+connection = "/dev/ttyUSB1"
+
 [Robot]
 type="Bruker"
 connection="RobotServer"
 pauseTime=1.0
+
 [Safety]
+receiveCoil = "noCoil"
+robotMount = "hallSensor"
+clearance = "clearance"
+setupName = "hallSensornoCoil"
+
+[General]
+studyName = "default"
+studyExperiment = 0
+studyDescription = "n.a."
+studySubject = "MNP sample"
+studyIsSimulation = false
+studyIsCalibration = false
+tracerName = ["n.a."]
+tracerBatch = ["n.a."]
+tracerVendor = ["n.a."]
+tracerVolume = [0.0]
+tracerConcentration = [0.0]
+tracerSolute = ["Fe"]
+scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
+scannerOperator = "default"
+scannerManufacturer = "Bruker"
+scannerName = "Bruker Scanner"
+scannerTopology = "FFP MPI"
+measIsTransposed = false
+measIsBGCorrected = false
+measIsTFCorrected = false
+measIsFramePermutation = false
+measIsFrequencySelection = false
+measIsFourierTransformed = false
+measIsSpectralLeakageCorrected = false
+rpGainSetting = [0,1]
+datasetStore = "/opt/data/measurementsmeasurements"
+transferFunction = ""
+dfWaveform = "sine"
+rxUnit = "V"
+rxDataConversionFactor = [1.0, 0.0]
