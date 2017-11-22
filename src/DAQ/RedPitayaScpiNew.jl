@@ -107,13 +107,15 @@ function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel, d=1)
   #write_(daq.sockets[d],UInt32(4))
   #write_(daq.sockets[d],UInt64(channel))
   #write_(daq.sockets[d],Float32(value))
+  setSlowDAC(daq.rpc, d, channel, value)
+
   return nothing
 end
 
 function getSlowADC(daq::DAQRedPitayaScpiNew, channel, d=1)
   #write_(daq.sockets[d],UInt32(5))
   #write_(daq.sockets[d],UInt64(channel))
-  return read(daq.sockets[d],Float32)
+  return getSlowADC(daq.rpc, d, channel)   #read(daq.sockets[d],Float32)
 end
 
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
