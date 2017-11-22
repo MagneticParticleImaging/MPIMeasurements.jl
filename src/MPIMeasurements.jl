@@ -41,7 +41,7 @@ using ProgressMeter
 #using MPISimulations
 
 import Redpitaya: receive, query
-import RedPitayaDAQServer: currentFrame, readData
+import RedPitayaDAQServer: currentFrame, readData, setSlowDAC, getSlowADC
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end
