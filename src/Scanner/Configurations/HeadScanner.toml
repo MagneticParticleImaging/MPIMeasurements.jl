@@ -1,3 +1,7 @@
+[SurveillanceUnit]
+type = "Dummy"
+connection = "/dev/ttyUSB???"
+
 [GaussMeter]
 coordinateTransformation = [0, 0, -1, 0, -1, 0, -1, 0, 0]
 range = 1

@@ -1,11 +1,16 @@
-#using SerialPorts
 export ArduinoSurveillanceUnit
 
-struct ArduinoSurveillanceUnit <: Arduino
+struct ArduinoSurveillanceUnit <: SurveillanceUnit
   sd::SerialDevice
   CommandStart::String
   CommandEnd::String
   delim::String
+end
+
+function ArduinoSurveillanceUnit(params::Dict)
+  # Here we could put more parameters into the TOML file
+  su = ArduinoSurveillanceUnit(params["connection"])
+  return su
 end
 
 
@@ -66,7 +71,7 @@ function ArDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
     CheckACQ(Arduino,ACQ)
 end
 
-function GetTemperatures(Arduino::ArduinoSurveillanceUnit)
+function getTemperatures(Arduino::ArduinoSurveillanceUnit)
     Temps=ArduinoCommand(Arduino, "GET:TEMP");
     TempDelim="T";
     return split(Temps,TempDelim);

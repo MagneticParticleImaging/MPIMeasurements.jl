@@ -47,7 +47,8 @@ import RedPitayaDAQServer: currentFrame, readData, setSlowDAC, getSlowADC
 @compat abstract type Device end
 @compat abstract type Robot end
 @compat abstract type GaussMeter end
-@compat abstract type Arduino end
+@compat abstract type SurveillanceUnit end
+
 # abstract supertype for all measObj etc.
 @compat abstract type MeasObj end
 export Device, Robot, GaussMeter, MeasObj
@@ -73,7 +74,7 @@ include("Scanner/Scanner.jl")
 if is_unix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")
   include("Measurements/Measurements.jl")
-  include("Arduino/Arduino.jl")
+  include("SurveillanceUnit/SurveillanceUnit.jl")
 end
 
 
