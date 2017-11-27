@@ -1,4 +1,4 @@
-__precompile__()
+#__precompile__()
 module MPIMeasurements
 
 if !isdir(Pkg.dir("Redpitaya"))

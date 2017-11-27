@@ -4,7 +4,8 @@ export saveMagneticFieldAsHDF5, MagneticFieldSweepCurrentsMeas
 
 # define measObj
 @compat struct MagneticFieldSweepCurrentsMeas <: MeasObj
-  rp::RedPitaya
+  su::SurveillanceUnit
+  daq::AbstractDAQ
   gauss::GaussMeter
   positions::Positions
   currents::Matrix{Float64}
@@ -15,8 +16,8 @@ export saveMagneticFieldAsHDF5, MagneticFieldSweepCurrentsMeas
   magneticField::Array{typeof(1.0u"T"),3}
   magneticFieldError::Array{typeof(1.0u"T"),3}
 
-  MagneticFieldSweepCurrentsMeas(rp, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent) =
-                 new(rp, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent,
+  MagneticFieldSweepCurrentsMeas(su, daq, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent) =
+                 new(su, daq, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent,
                       zeros(typeof(1.0u"m"),3,length(positions)),
                       zeros(typeof(1.0u"T"),3,length(positions),size(currents,2)),
                       zeros(typeof(1.0u"T"),3,length(positions),size(currents,2)))
@@ -40,8 +41,11 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
 
   for l=1:size(measObj.currents,2)
     # set current at DC sources
-    value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
-    value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
+    #value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
+    #value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
+    setSlowDAC(measObj.daq, measObj.currents[1,l]*measObj.voltToCurrent, 0)
+    setSlowDAC(measObj.daq, measObj.currents[2,l]*measObj.voltToCurrent, 1)
+
     println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
     # set measurement range of gauss meter
     range = measObj.gaussRanges[l]
@@ -59,8 +63,8 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
 
     println(uconvert.(u"mT",measObj.magneticField[:,index,l]))
   end
-  value(measObj.rp,"AOUT0",0.0)
-  value(measObj.rp,"AOUT1",0.0)
+  setSlowDAC(measObj.daq, 0.0, 0)
+  setSlowDAC(measObj.daq, 0.0, 1)
 
   sleep(measObj.waitTime)
 
