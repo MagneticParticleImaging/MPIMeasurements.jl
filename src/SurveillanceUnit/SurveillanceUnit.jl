@@ -6,7 +6,7 @@ include("ArduinoSurveillanceUnit.jl")
 function SurveillanceUnit(params::Dict)
 	if params["type"] == "Dummy"
     return DummySurveillanceUnit()
-  elseif params["type"] == "Adruino"
+  elseif params["type"] == "Arduino"
     return ArduinoSurveillanceUnit(params)
   else
     error("Cannot create SurveillanceUnit!")
