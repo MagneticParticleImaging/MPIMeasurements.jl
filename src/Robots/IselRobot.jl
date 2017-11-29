@@ -88,10 +88,12 @@ function IselRobot(params::Dict)
         display("Type \"REF\" in console to continue")
         userInput=readline(STDIN)
         if userInput=="REF"
-            display("Are you sure you have remove everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
+            display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
             uIYes = readline(STDIN)
             if uIYes == "yes"
                 prepareIselRobot(iselRobot)
+                display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
+                userInput=readline(STDIN)
                 return iselRobot
             else
                 error("User failed to type \"yes\" to continue")

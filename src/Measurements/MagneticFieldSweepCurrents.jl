@@ -4,19 +4,22 @@ export saveMagneticFieldAsHDF5, MagneticFieldSweepCurrentsMeas
 
 # define measObj
 @compat struct MagneticFieldSweepCurrentsMeas <: MeasObj
-  rp::RedPitaya
+  su::SurveillanceUnit
+  daq::AbstractDAQ
   gauss::GaussMeter
-  unit::Unitful.FreeUnits
   positions::Positions
   currents::Matrix{Float64}
+  gaussRanges::Vector{Int}
   waitTime::Float64
   voltToCurrent::Float64
   pos::Matrix{typeof(1.0u"m")}
   magneticField::Array{typeof(1.0u"T"),3}
+  magneticFieldError::Array{typeof(1.0u"T"),3}
 
-  MagneticFieldSweepCurrentsMeas(rp, gauss, unit, positions, currents, waitTime, voltToCurrent) =
-                 new(rp, gauss, unit, positions, currents, waitTime, voltToCurrent,
+  MagneticFieldSweepCurrentsMeas(su, daq, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent) =
+                 new(su, daq, gauss, positions, currents, gausMeterRanges, waitTime, voltToCurrent,
                       zeros(typeof(1.0u"m"),3,length(positions)),
+                      zeros(typeof(1.0u"T"),3,length(positions),size(currents,2)),
                       zeros(typeof(1.0u"T"),3,length(positions),size(currents,2)))
 end
 
@@ -37,32 +40,47 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
   #println( "Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) " )
 
   for l=1:size(measObj.currents,2)
-    current = measObj.currents[1,l]
-    value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
-    value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
-    println( "Set DC source $(measObj.currents[1,l])  $(measObj.currents[2,l]) " )
+    # set current at DC sources
+    #value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)
+    #value(measObj.rp,"AOUT1",measObj.currents[2,l]*measObj.voltToCurrent)
+    setSlowDAC(measObj.daq, measObj.currents[1,l]*measObj.voltToCurrent, 0)
+    setSlowDAC(measObj.daq, measObj.currents[2,l]*measObj.voltToCurrent, 1)
 
-    highField = (measObj.currents[1,l] > 5.0) || (measObj.currents[2,l] > 5.0)
-    setAllRange(measObj.gauss, highField ? '1' : '2')
-    sleep(0.6) # wait until magnet is on field
-    measObj.magneticField[:,index,l] = getXYZValues(measObj.gauss)*measObj.unit
-    println(measObj.magneticField[:,index,l])
+    println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
+    # set measurement range of gauss meter
+    range = measObj.gaussRanges[l]
+    setAllRange(measObj.gauss, Char("$range"[1]))
+    # wait until magnet is on field
+    sleep(0.6)
+    # perform field measurment
+    magneticField = getXYZValues(measObj.gauss)
+    measObj.magneticField[:,index,l] = magneticField
+    # perform error estimation based on gauss meter specification
+    magneticFieldError = zeros(typeof(1.0u"T"),3,2)
+    magneticFieldError[:,1] = abs.(magneticField)*1e-3
+    magneticFieldError[:,2] = getFieldError(range)
+    measObj.magneticFieldError[:,index,l] = maximum(magneticFieldError,2)
+
+    println(uconvert.(u"mT",measObj.magneticField[:,index,l]))
   end
-  value(measObj.rp,"AOUT0",0.0)
-  value(measObj.rp,"AOUT1",0.0)
+  setSlowDAC(measObj.daq, 0.0, 0)
+  setSlowDAC(measObj.daq, 0.0, 1)
 
   sleep(measObj.waitTime)
 
 end
 
-#function setRange(measObj::MagneticFieldMeas)
-#    r = getRange(measObj.gauss)
-#    if r == "0"
-#        measObj.unit = u"T"
-#    else
-#        measObj.unit =  u"mT"
-#    end
-#end
+function getFieldError(range::Int)
+    if range == 0
+        return 150u"μT"
+    elseif range == 1
+        return 15u"μT"
+    elseif range == 2
+        return 1.5u"μT"
+    elseif range == 3
+        return 0.15u"μT"
+    end
+end
 
 function saveMagneticFieldAsHDF5(measObj::MagneticFieldSweepCurrentsMeas,
        filename::String, params=Dict{String,Any}())
@@ -72,6 +90,7 @@ function saveMagneticFieldAsHDF5(measObj::MagneticFieldSweepCurrentsMeas,
     write(file, "/unitFields", "T")
     write(file, "/positions", ustrip.(measObj.pos))
     write(file, "/fields", ustrip.(measObj.magneticField))
+    write(file, "/fieldsError", ustrip.(measObj.magneticFieldError))
     write(file, "/currents", measObj.currents)
     for (key,value) in params
       write(file, key, value)
@@ -94,5 +113,3 @@ function loadMagneticField(filename::String)
   end
   return res
 end
-
-# uconvert(u"T", 20u"mT")
