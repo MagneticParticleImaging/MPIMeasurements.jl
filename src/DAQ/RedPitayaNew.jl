@@ -2,8 +2,6 @@ export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connec
        reinit, setTxParamsAll
 
 import Base.write
-import PyPlot.disconnect
-
 
 
 type DAQRedPitayaNew <: AbstractDAQ
