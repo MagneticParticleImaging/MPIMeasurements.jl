@@ -119,17 +119,15 @@ function loadBGCorrData(filename)
   return u
 end
 
-
-using PyPlot
 function measurementCont(daq::AbstractDAQ; controlPhase=true)
   startTx(daq)
 
   if controlPhase
     controlLoop(daq)
   else
-    setTxParams(daq, daq["calibFieldToVolt"].*daq["dfStrength"],
+    setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
-    sleep(daq["controlPause"])
+    sleep(daq.params.controlPause)
   end
 
   try
@@ -139,8 +137,10 @@ function measurementCont(daq::AbstractDAQ; controlPhase=true)
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
 
-        showAllDAQData(uMeas,1)
-        showAllDAQData(uRef,2)
+        u = cat(2, uMeas, uRef)
+        #showAllDAQData(uMeas,1)
+        #showAllDAQData(uRef,2)
+        showAllDAQData(u,1)
         sleep(0.01)
       end
   catch x

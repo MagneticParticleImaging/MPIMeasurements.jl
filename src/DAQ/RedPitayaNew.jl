@@ -2,8 +2,6 @@ export DAQRedPitayaNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connec
        reinit, setTxParamsAll
 
 import Base.write
-import PyPlot.disconnect
-
 
 
 type DAQRedPitayaNew <: AbstractDAQ
@@ -129,6 +127,7 @@ function connectToServer(daq::DAQRedPitayaNew)
       end
     end
     sleep(1e-6)
+    daq.isConnected = true
   end
   return nothing
 end
@@ -136,6 +135,9 @@ end
 function startTx(daq::DAQRedPitayaNew)
   for d=1:length(daq.ip)
     write_(daq.sockets[d],UInt32(6))
+  end
+  while currentFrame(daq) < 0
+    sleep(0.2)
   end
   return nothing
 end
@@ -152,6 +154,7 @@ function disconnect(daq::DAQRedPitayaNew)
       write_(daq.sockets[d],UInt32(9))
       close(daq.sockets[d])
     end
+    daq.isConnected = false
   end
   return nothing
 end

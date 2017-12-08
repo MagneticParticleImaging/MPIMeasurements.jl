@@ -109,8 +109,8 @@ end
 
 function load_tf_fromVNA(filename::String)
   R = 50.0 #Ω
-  N=5# Turns
-  A=1.3e-3^2*pi;
+  N=10 #5# Turns
+  A=7.4894*10.0^-4 #m^2 #1.3e-3^2*pi;
   file = open(filename)
   lines = readlines(file)
   apdata = Float64[]
@@ -134,7 +134,7 @@ function load_tf_fromVNA(filename::String)
             f=f*1000000
       elseif contains(lines[3],"# kHz S RI R 50")
           tf_complex=parse(Float64,strip(tmp[2]))+im*parse(Float64,strip(tmp[3]))
-          ap=abs(tf_complex);
+          ap=abs.(tf_complex);
           aphi=angle(tf_complex)
           f=f*1000
       else

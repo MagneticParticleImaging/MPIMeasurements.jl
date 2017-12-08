@@ -1,4 +1,5 @@
-export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams
+export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
+      getSurveillanceUnit
 
 type MPIScanner
   params::Dict
@@ -7,13 +8,14 @@ type MPIScanner
   robot::Union{Robot,Void}
   gaussmeter::Union{GaussMeter,Void}
   safty::Union{RobotSetup,Void}
+  surveillanceUnit::Union{SurveillanceUnit,Void}
   recoMethod::Function
 
   function MPIScanner(file::String)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
-    return new(params,generalParams,nothing,nothing,nothing,nothing,()->())
+    return new(params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())
   end
 end
 
@@ -57,4 +59,14 @@ function getSafety(scanner::MPIScanner)
     scanner.safty = RobotSetup(scanner.params["Safety"])
   end
   return scanner.safty
+end
+
+function getSurveillanceUnit(scanner::MPIScanner)
+  if !haskey(scanner.params, "SurveillanceUnit")
+    error("MPI Scanner has no SurveillanceUnit installed!")
+  end
+  if scanner.surveillanceUnit == nothing
+    scanner.surveillanceUnit = SurveillanceUnit(scanner.params["SurveillanceUnit"])
+  end
+  return scanner.surveillanceUnit
 end
