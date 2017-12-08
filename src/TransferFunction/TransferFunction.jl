@@ -24,7 +24,7 @@ type TransferFunction
 end
 
 function TransferFunction(freq_, ampdata, phasedata, args...)
-  data = ampdata.*exp(im.*phasedata)
+  data = ampdata.*exp.(im.*phasedata)
   return TransferFunction(freq_, data, args...)
 end
 
@@ -214,14 +214,24 @@ end
 
 
 
-function plot_tf(tf::TransferFunction; fignum=312)
+function plot_tf(tf::TransferFunction; fignum=312, filename=nothing)
   freq = linspace(tf.freq[1],tf.freq[end],1000)
 
   figure(fignum)
   clf
   subplot(2,1,1)
   semilogy(freq./1000, abs.(tf[freq]),lw=2,"r")
+  #xlabel("frequency / kHz")
+  ylabel("amplitude / a.u.")
+
   subplot(2,1,2)
   plot(freq./1000, angle.(tf[freq]),lw=2,"b")
+  xlabel("frequency / kHz")
+  ylabel("phase / rad")
 
+  if filename != nothing
+    savefig(filename)
+  end
 end
+
+
