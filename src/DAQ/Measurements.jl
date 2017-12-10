@@ -119,7 +119,11 @@ function loadBGCorrData(filename)
   return u
 end
 
-function measurementCont(daq::AbstractDAQ; controlPhase=true)
+function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}(); controlPhase=true)
+  if !isempty(params)
+    updateParams!(daq, params)
+  end
+  
   startTx(daq)
 
   if controlPhase
