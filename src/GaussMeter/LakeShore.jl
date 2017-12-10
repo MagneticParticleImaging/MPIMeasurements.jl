@@ -1,7 +1,7 @@
 export getXYZValues
 export setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
-export setUnitToTesla,setStandardSettings
+export setUnitToTesla,setStandardSettings, getFieldError
 
 include("LakeShoreLowLevel.jl")
 
@@ -70,6 +70,18 @@ function setAllRange(gauss::LakeShoreGaussMeter, range::Char)
 	setYRange(gauss, range)
 	setZRange(gauss, range)
 	return nothing
+end
+
+function getFieldError(range::Int)
+    if range == 0
+        return 150u"μT"
+    elseif range == 1
+        return 15u"μT"
+    elseif range == 2
+        return 1.5u"μT"
+    elseif range == 3
+        return 0.15u"μT"
+    end
 end
 
 """

@@ -42,18 +42,6 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")
   println(measObj.magneticField[:,index])
 end
 
-function getFieldError(range::Int)
-    if range == 0
-        return 150u"μT"
-    elseif range == 1
-        return 15u"μT"
-    elseif range == 2
-        return 1.5u"μT"
-    elseif range == 3
-        return 0.15u"μT"
-    end
-end
-
 function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas,
        filename::String, params=Dict{String,Any}())
   h5open(filename, "w") do file
