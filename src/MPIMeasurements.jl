@@ -42,6 +42,8 @@ using ProgressMeter
 
 import Redpitaya: receive, query
 import RedPitayaDAQServer: currentFrame, readData, setSlowDAC, getSlowADC
+import Base.write
+#import PyPlot.disconnect
 
 # abstract supertype for all possible serial devices
 @compat abstract type Device end
@@ -78,13 +80,13 @@ if is_unix() && VERSION >= v"0.6"
 end
 
 
-if !haskey(ENV,"MPILIB_UI")
-  ENV["MPILIB_UI"] = "Gtk"
-end
+#if !haskey(ENV,"MPILIB_UI")
+#  ENV["MPILIB_UI"] = "Gtk"
+#end
 
-if ENV["MPILIB_UI"] == "PyPlot"
-  using PyPlot
-end
+#if ENV["MPILIB_UI"] == "PyPlot"
+#  using PyPlot
+#end
 
 
 

@@ -1,9 +1,6 @@
 export DAQRedPitayaScpiNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connectToServer,
        reinit, setTxParamsAll
 
-import Base.write
-import PyPlot.disconnect
-
 type DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
   rpc::RedPitayaCluster
@@ -67,16 +64,17 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     end
   end
 
-  # TODO
-  #div(length(daq.params.acqFFValues),daq.params.acqNumFFChannels),
-  #daq.params.acqNumFFChannels,
-
-  # TODO
-
-  #     if daq.params.acqNumPeriods > 1
-  #      write_(daq.sockets[d],map(Float32,daq.params.acqFFValues))
-  #    end
-  #
+  # upload multi-patch LUT
+  if daq.params.acqNumPeriods > 1
+    numSlowDACChan(master(daq.rpc), 1)
+    if length(daq.params.acqFFValues) == daq.params.acqNumPeriods
+      setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
+    else
+      # If numPeriods is larger than the LUT we repeat the values
+      setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
+              inner=div(daq.params.acqNumPeriods, length(daq.params.acqFFValues))))
+    end
+  end
 
   return nothing
 end
