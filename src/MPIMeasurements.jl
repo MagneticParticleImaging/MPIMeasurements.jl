@@ -41,7 +41,8 @@ using ProgressMeter
 #using MPISimulations
 
 import Redpitaya: receive, query
-import RedPitayaDAQServer: currentFrame, readData, setSlowDAC, getSlowADC
+import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
+                           setSlowDAC, getSlowADC
 import Base.write
 #import PyPlot.disconnect
 

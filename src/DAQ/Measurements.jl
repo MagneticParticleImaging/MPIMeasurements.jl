@@ -14,12 +14,6 @@ function measurement(daq::AbstractDAQ, params_::Dict;
   end
   currFr = currentFrame(daq)
 
-  #buffer = zeros(Float32,numSampPerPeriod, numChannels, numFrames)
-  #for n=1:numFrames
-  #  uMeas = readData(daq, 1, currFr+(n-1)*numAverages, numAverages)
-  #    uMeas = mean(uMeas,2)
-  #  buffer[:,n] = uMeas
-  #end
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
   stopTx(daq)
@@ -123,7 +117,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}(); cont
   if !isempty(params)
     updateParams!(daq, params)
   end
-  
+
   startTx(daq)
 
   if controlPhase

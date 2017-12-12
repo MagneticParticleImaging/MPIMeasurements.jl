@@ -1,4 +1,4 @@
-export DAQRedPitayaScpiNew, disconnect, currentFrame, setSlowDAC, getSlowADC, connectToServer,
+export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
        reinit, setTxParamsAll
 
 type DAQRedPitayaScpiNew <: AbstractDAQ
@@ -29,7 +29,7 @@ end
 
 numRxChannels(daq::DAQRedPitayaScpiNew) = length(daq.rpc)
 currentFrame(daq::DAQRedPitayaScpiNew) = currentFrame(daq.rpc)
-
+currentPeriod(daq::DAQRedPitayaScpiNew) = currentPeriod(daq.rpc)
 
 export calibParams
 function calibParams(daq::DAQRedPitayaScpiNew, d)
@@ -169,6 +169,27 @@ function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
 
   uMeas = uAv[1,:,1,:,:,:] #reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
   uRef = uAv[2,:,1,:,:,:] #reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+
+  return uMeas, uRef
+end
+
+function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
+  dec = daq.params.decimation
+  numSampPerPeriod = daq.params.numSampPerPeriod
+  numSamp = numSampPerPeriod*numPeriods
+  numAverages = daq.params.acqNumAverages
+  numAllFrames = numAverages*numPeriods
+
+  numSampPerAveragedPeriod =  numSampPerPeriod * numAverages
+
+  u = readDataPeriods(daq.rpc, startPeriod, numPeriods)
+
+  u_ = reshape(u, 2, numSampPerPeriod, numAverages, numRxChannels(daq), numPeriods)
+
+  uAv = mean(u_,3)
+
+  uMeas = uAv[1,:,1,:,:,:]
+  uRef = uAv[2,:,1,:,:,:]
 
   return uMeas, uRef
 end

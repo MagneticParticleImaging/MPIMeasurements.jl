@@ -9,8 +9,8 @@ function controlLoop(daq::AbstractDAQ)
 
   controlPhaseDone = false
   while !controlPhaseDone
-    frame = currentFrame(daq)
-    @time uMeas, uRef = readData(daq, 1, frame)
+    period = currentPeriod(daq)
+    @time uMeas, uRef = readDataPeriods(daq, 1, period)
 
     controlPhaseDone = doControlStep(daq, uRef)
 
@@ -37,7 +37,7 @@ function calcFieldFromRef(daq::AbstractDAQ, uRef)
     c1 = calibParams(daq, d)[3:4]
     c2 = refToField(daq, d)
 
-    uVolt = c1[1].*float(uRef[:,d,1,1]) .+ c1[2]
+    uVolt = c1[1].*float(uRef[:,d,1]) .+ c1[2]
 
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])

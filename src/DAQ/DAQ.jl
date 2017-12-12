@@ -3,7 +3,8 @@ using Graphics: @mustimplement
 import Base: setindex!, getindex
 
 export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
-      readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor
+      readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
+      readDataPeriod, currentPeriod
 
 @compat abstract type AbstractDAQ end
 
@@ -15,7 +16,8 @@ include("Parameters.jl")
 @mustimplement stopTx(daq::AbstractDAQ)
 @mustimplement setTxParams(daq::AbstractDAQ, amplitude, phase)
 @mustimplement currentFrame(daq::AbstractDAQ)
-@mustimplement readData(daq::AbstractDAQ, channel, startFrame, numPeriods)
+@mustimplement readData(daq::AbstractDAQ, startFrame, numFrames)
+@mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 
 @mustimplement numRxChannels(daq::AbstractDAQ)
