@@ -297,7 +297,7 @@ end
 
 function reinitDAQ(widgetptr::Ptr, m::MeasLab)
   if m.daq != nothing
-    m.daq.params.acqNumPeriods = getproperty(m["adjNumPeriods"], :value, Int64)
+    m.daq.params.acqNumPeriodsPerFrame = getproperty(m["adjNumPeriods"], :value, Int64)
     reinit(m.daq)
     setInfoParams(m)
   end
@@ -425,7 +425,7 @@ function getParams(m::MeasLab)
   params["acqNumAverages"] = getproperty(m["adjNumAverages"], :value, Int64)
   params["acqNumFGFrames"] = getproperty(m["adjNumFGFrames"], :value, Int64)
   params["acqNumBGFrames"] = getproperty(m["adjNumBGFrames"], :value, Int64)
-  params["acqNumPeriods"] = getproperty(m["adjNumPeriods"], :value, Int64)
+  params["acqNumPeriodsPerFrame"] = getproperty(m["adjNumPeriods"], :value, Int64)
   params["studyName"] = getproperty(m["entStudy"], :text, String)
   params["studyDescription"] = getproperty(m["entExpDescr"], :text, String)
   params["scannerOperator"] = getproperty(m["entOperator"], :text, String)
@@ -446,7 +446,7 @@ end
 
 function setParams(m::MeasLab, params)
   Gtk.@sigatom setproperty!(m["adjNumAverages"], :value, params["acqNumAverages"])
-  Gtk.@sigatom setproperty!(m["adjNumPeriods"], :value, params["acqNumPeriods"])
+  Gtk.@sigatom setproperty!(m["adjNumPeriods"], :value, params["acqNumPeriodsPerFrame"])
   Gtk.@sigatom setproperty!(m["adjNumFGFrames"], :value, params["acqNumFrames"])
   Gtk.@sigatom setproperty!(m["adjNumBGFrames"], :value, params["acqNumFrames"])
   Gtk.@sigatom setproperty!(m["entStudy"], :text, params["studyName"])

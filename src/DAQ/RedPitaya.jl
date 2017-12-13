@@ -79,10 +79,10 @@ function startTx(daq::DAQRedPitaya)
     daq.sockets[d] = connect(daq["ip"][d],7777)
     p = ParamsType(daq["numSampPerPeriod"],
                    numSamplesPerTxPeriod[d],
-                   daq["acqNumPeriods"],
+                   daq["acqNumPeriodsPerFrame"],
                    daq["acqNumFFChannels"],
                    true,
-                   daq["acqNumPeriods"] > 1,
+                   daq["acqNumPeriodsPerFrame"] > 1,
                    daq["acqFFLinear"],
                    true,
                    daq["rpGainSetting"][1],
@@ -90,7 +90,7 @@ function startTx(daq::DAQRedPitaya)
                    false, false)
     write_(daq.sockets[d],p)
     println("ParamsType has $(sizeof(p)) bytes")
-    if daq["acqNumPeriods"] > 1
+    if daq["acqNumPeriodsPerFrame"] > 1
       write_(daq.sockets[d],map(Float32,daq["acqFFValues"]))
     end
     calib[:,d] = calibParams(daq,d)
@@ -122,7 +122,7 @@ function readData(daq::DAQRedPitaya, numFrames, startFrame)
   numSamp = numSampPerPeriod*numFrames
   numAverages = daq["acqNumAverages"]
   numAllFrames = numAverages*numFrames
-  numPeriods = daq["acqNumPeriods"]
+  numPeriods = daq["acqNumPeriodsPerFrame"]
 
   numSampPerFrame = numSampPerPeriod * numPeriods
 

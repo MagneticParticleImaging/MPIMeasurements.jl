@@ -106,7 +106,7 @@ function connectToServer(daq::DAQRedPitayaNew)
       daq.sockets[d] = connect(daq.ip[d],7777)
       p = ParamsTypeNew(daq.params.decimation,
                      numSampPerAveragedPeriod,
-                     daq.params.acqNumPeriods,
+                     daq.params.acqNumPeriodsPerFrame,
                      div(length(daq.params.acqFFValues),daq.params.acqNumFFChannels),
                      daq.params.acqNumFFChannels,
                      modulus[1],
@@ -114,7 +114,7 @@ function connectToServer(daq::DAQRedPitayaNew)
                      modulus[3],
                      modulus[4],
                      true,
-                     daq.params.acqNumPeriods > 1,
+                     daq.params.acqNumPeriodsPerFrame > 1,
                      daq.params.acqFFLinear,
                      d == 1,
                      true,
@@ -122,7 +122,7 @@ function connectToServer(daq::DAQRedPitayaNew)
                      false, false)
       write_(daq.sockets[d],p)
       println("ParamsType has $(sizeof(p)) bytes")
-      if daq.params.acqNumPeriods > 1
+      if daq.params.acqNumPeriodsPerFrame > 1
         write_(daq.sockets[d],map(Float32,daq.params.acqFFValues))
       end
     end
@@ -210,7 +210,7 @@ function readData(daq::DAQRedPitayaNew, numFrames, startFrame)
   numSamp = numSampPerPeriod*numFrames
   numAverages = daq.params.acqNumAverages
   numAllFrames = numAverages*numFrames
-  numPeriods = daq.params.acqNumPeriods
+  numPeriods = daq.params.acqNumPeriodsPerFrame
 
   numSampPerFrame = numSampPerPeriod * numPeriods
   numSampPerAveragedPeriod =  numSampPerPeriod * numAverages

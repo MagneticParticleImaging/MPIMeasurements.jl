@@ -9,7 +9,7 @@ type DAQParams
   dfPhase::Vector{Float64}
   dfPeriod::Float64
   rxBandwidth::Float64
-  acqNumPeriods::Int64
+  acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
   acqNumFrames::Int64
   acqFramePeriod::Float64
@@ -42,7 +42,7 @@ function DAQParams(params)
 
   rxBandwidth = params["dfBaseFrequency"] / params["decimation"] / 2
 
-  acqFramePeriod = dfPeriod * params["acqNumPeriods"]
+  acqFramePeriod = dfPeriod * params["acqNumPeriodsPerFrame"]
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfPeriod, dfFreq)
 
@@ -57,7 +57,7 @@ function DAQParams(params)
     params["dfPhase"],
     dfPeriod,
     rxBandwidth,
-    params["acqNumPeriods"],
+    params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
     params["acqNumFrames"],
     acqFramePeriod,
@@ -92,7 +92,7 @@ function toDict(p::DAQParams)
   params["dfPhase"] = p.dfPhase
   params["dfPeriod"] = p.dfPeriod
   params["rxBandwidth"] = p.rxBandwidth
-  params["acqNumPeriods"] = p.acqNumPeriods
+  params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
   params["acqNumFrames"] = p.acqNumFrames
   params["acqFramePeriod"] = p.acqFramePeriod

@@ -13,7 +13,7 @@ params["dfStrength"]=[10e-3]
 
 x = linspace(0,1,10)
 params["acqFFValues"] = repeat( cat(1,x,reverse(x[2:end-1])),inner=5)
-params["acqNumPeriods"]=length(params["acqFFValues"])
+params["acqNumPeriodsPerFrame"]=length(params["acqFFValues"])
 
 
 measurementCont(daq, params, controlPhase=true)

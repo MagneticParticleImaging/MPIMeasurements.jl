@@ -51,7 +51,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 
   decimation(daq.rpc, daq.params.decimation)
   samplesPerPeriod(daq.rpc, numSampPerAveragedPeriod)
-  periodsPerFrame(daq.rpc, daq.params.acqNumPeriods)
+  periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
 
   masterTrigger(daq.rpc, false)
   ramWriterMode(daq.rpc, "TRIGGERED")
@@ -65,14 +65,14 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   end
 
   # upload multi-patch LUT
-  if daq.params.acqNumPeriods > 1
+  if daq.params.acqNumPeriodsPerFrame > 1
     numSlowDACChan(master(daq.rpc), 1)
-    if length(daq.params.acqFFValues) == daq.params.acqNumPeriods
+    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame
       setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
     else
       # If numPeriods is larger than the LUT we repeat the values
       setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
-              inner=div(daq.params.acqNumPeriods, length(daq.params.acqFFValues))))
+              inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
     end
   end
 
@@ -154,7 +154,7 @@ function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   numSamp = numSampPerPeriod*numFrames
   numAverages = daq.params.acqNumAverages
   numAllFrames = numAverages*numFrames
-  numPeriods = daq.params.acqNumPeriods
+  numPeriods = daq.params.acqNumPeriodsPerFrame
 
   numSampPerFrame = numSampPerPeriod * numPeriods
   numSampPerAveragedPeriod =  numSampPerPeriod * numAverages

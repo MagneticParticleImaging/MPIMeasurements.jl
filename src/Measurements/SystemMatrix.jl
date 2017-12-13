@@ -27,7 +27,7 @@ function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
   end
 
   numSampPerPeriod = daq["numSampPerPeriod"]
-  numPeriods = daq["acqNumPeriods"]
+  numPeriods = daq["acqNumPeriodsPerFrame"]
 
   signals = zeros(Float32,numSampPerPeriod,numRxChannels(daq),numPeriods,length(positions))
 

@@ -202,7 +202,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
 
   # measurement
   uFG = zeros(Int16, daq["numSampPerPeriod"],numRxChannels(daq),
-                  daq["acqNumPeriods"],daq["acqNumFGFrames"],numRepetitions)
+                  daq["acqNumPeriodsPerFrame"],daq["acqNumFGFrames"],numRepetitions)
 
 
   @showprogress 1 "Computing..."  for l=1:numRepetitions
