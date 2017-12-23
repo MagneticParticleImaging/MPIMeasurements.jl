@@ -7,14 +7,15 @@ export saveMagneticFieldAsHDF5, MagneticFieldMeas
   gauss::GaussMeter
   positions::Positions
   gaussRange::Int
-  pos::Matrix{typeof(1.0u"m")}
-  magneticField::Matrix{typeof(1.0u"T")}
-  magneticFieldError::Matrix{typeof(1.0u"T")}
+  pos::Array{typeof(1.0u"m"),2}
+  magneticField::Array{typeof(1.0u"T"),3}
+  magneticFieldError::Array{typeof(1.0u"T"),3}
 
-  MagneticFieldMeas(gauss, positions, gausMeterRange) =
-    new(gauss, positions, gausMeterRange, zeros(typeof(1.0u"m"),3,length(positions))
-                              , zeros(typeof(1.0u"T"),3,length(positions))
-                              , zeros(typeof(1.0u"T"),3,length(positions)))
+  MagneticFieldMeas(gauss, positions, gausMeterRange, numMeasPerPos=1) =
+    new(gauss, positions, gausMeterRange,
+                   zeros(typeof(1.0u"m"),3,length(positions)),
+                   zeros(typeof(1.0u"T"),3,numMeasPerPos,length(positions)),
+                   zeros(typeof(1.0u"T"),3,numMeasPerPos,length(positions)))
 end
 
 # define preMoveAction
@@ -30,16 +31,19 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")
   # set measurement range of gauss meter
   range = measObj.gaussRange
   setAllRange(measObj.gauss, Char("$range"[1]))
-  # perform field measurment
-  magneticField = getXYZValues(measObj.gauss)
-  measObj.magneticField[:,index] = magneticField
-  # perform error estimation based on gauss meter specification
-  magneticFieldError = zeros(typeof(1.0u"T"),3,2)
-  magneticFieldError[:,1] = abs.(magneticField)*1e-3
-  magneticFieldError[:,2] = getFieldError(range)
-  measObj.magneticFieldError[:,index] = sum(magneticFieldError,2)
 
-  println(measObj.magneticField[:,index])
+  for l=1:size(measObj.magneticField,2)
+    # perform field measurment
+    magneticField = getXYZValues(measObj.gauss)
+    measObj.magneticField[:,l,index] = magneticField
+    # perform error estimation based on gauss meter specification
+    magneticFieldError = zeros(typeof(1.0u"T"),3,2)
+    magneticFieldError[:,1] = abs.(magneticField)*1e-3
+    magneticFieldError[:,2] = getFieldError(range)
+    measObj.magneticFieldError[:,l,index] = sum(magneticFieldError,2)
+
+    println(measObj.magneticField[:,l,index])
+  end
 end
 
 function saveMagneticFieldAsHDF5(measObj::MagneticFieldMeas,
