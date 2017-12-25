@@ -23,20 +23,11 @@ include("Parameters.jl")
 @mustimplement numRxChannels(daq::AbstractDAQ)
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 
-#include("RedPitaya.jl")
-include("RedPitayaNew.jl")
-#include("RedPitayaScpi.jl")
 include("Measurements.jl")
 include("RedPitayaScpiNew.jl")
 
 function DAQ(params::Dict)
-  #=if params["daq"] == "RedPitaya"
-    return DAQRedPitaya(params)
-  elseif params["daq"] == "RedPitayaScpi"
-    return DAQRedPitayaScpi(params)=#
-  if params["daq"] == "RedPitayaNew"
-    return DAQRedPitayaNew(params)
-  elseif params["daq"] == "RedPitayaScpiNew"
+  if params["daq"] == "RedPitayaScpiNew"
     return DAQRedPitayaScpiNew(params)
   else
     error("$(params["daq"]) not yet implemented!")
