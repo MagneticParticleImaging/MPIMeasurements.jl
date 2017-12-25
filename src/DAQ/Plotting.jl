@@ -35,9 +35,9 @@ function showAllDAQData(u, fignum=1)
   #clf()
   for d=1:D
     u_ = vec(u[:,d,:,:])
-    subplot(2,D,(d-1)*2+ 1)
+    subplot(D,2,(d-1)*2+ 1)
     plot(u_)
-    subplot(2,D,(d-1)*2+ 2)
+    subplot(D,2,(d-1)*2+ 2)
     semilogy(abs.(rfft(u_)))#,"o-b",lw=2)
   end
   sleep(0.1)

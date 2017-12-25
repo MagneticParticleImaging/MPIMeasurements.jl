@@ -27,7 +27,6 @@ function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
   setACQParams(daq)
 end
 
-numRxChannels(daq::DAQRedPitayaScpiNew) = length(daq.rpc)
 currentFrame(daq::DAQRedPitayaScpiNew) = currentFrame(daq.rpc)
 currentPeriod(daq::DAQRedPitayaScpiNew) = currentPeriod(daq.rpc)
 
@@ -42,38 +41,28 @@ function dataConversionFactor(daq::DAQRedPitayaScpiNew)
 end
 
 function setACQParams(daq::DAQRedPitayaScpiNew)
-
-  dfAmplitude = daq.params.dfStrength
-  dec = daq.params.decimation
-  freq = daq.params.dfFreq
-
-  numSampPerAveragedPeriod = daq.params.numSampPerPeriod * daq.params.acqNumAverages
-
   decimation(daq.rpc, daq.params.decimation)
-  samplesPerPeriod(daq.rpc, numSampPerAveragedPeriod)
+  samplesPerPeriod(daq.rpc, daq.params.numSampPerPeriod * daq.params.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
 
   masterTrigger(daq.rpc, false)
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "RASTERIZED")
-  modulus = ones(Int,4)
-  modulus[1:length(daq.params.dfDivider)] = daq.params.dfDivider
-  for d=1:numTxChannels(daq)
-    for e=1:length(daq.params.dfDivider)
-      modulusDAC(daq.rpc, d, 1, e, modulus[e])
+
+  for d=1:(2*length(daq.rpc))
+    for e=1:length(daq.params.rpModulus)
+      modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
     end
   end
 
   # upload multi-patch LUT
-  if daq.params.acqNumPeriodsPerFrame > 1
-    numSlowDACChan(master(daq.rpc), 1)
-    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame
-      setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
-    else
-      # If numPeriods is larger than the LUT we repeat the values
-      setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
-              inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
-    end
+  numSlowDACChan(master(daq.rpc), 1)
+  if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame
+    setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
+  else
+    # If numPeriods is larger than the LUT we repeat the values
+    setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
+            inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
   end
 
   return nothing
@@ -101,38 +90,29 @@ function disconnect(daq::DAQRedPitayaScpiNew)
   RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel, d=1)
-  #write_(daq.sockets[d],UInt32(4))
-  #write_(daq.sockets[d],UInt64(channel))
-  #write_(daq.sockets[d],Float32(value))
-  setSlowDAC(daq.rpc, d, channel, value)
+function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel)
+
+  setSlowDAC(daq.rpc, channel, value)
 
   return nothing
 end
 
-function getSlowADC(daq::DAQRedPitayaScpiNew, channel, d=1)
-  #write_(daq.sockets[d],UInt32(5))
-  #write_(daq.sockets[d],UInt64(channel))
-  return getSlowADC(daq.rpc, d, channel)   #read(daq.sockets[d],Float32)
+function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
+  return getSlowADC(daq.rpc, channel)
 end
 
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
   for d=1:numTxChannels(daq)
-    for e=1:4
-      if e==d
-        amp = round(Int, 8192 * amplitude[d])
-        ph = phase[d] / 180 * pi #+ pi/2
-      else
-        amp = 0
-        ph = 0.0
-      end
-      amplitudeDAC(daq.rpc, d, 1, e, amp)
-      phaseDAC(daq.rpc, d, 1, e, ph )
-      modulusFactorDAC(daq.rpc, d, 1, e, 1)
-    end
+    amp = round(Int, 8192 * amplitude[d])
+    ph = phase[d] / 180 * pi #+ pi/2
+    e = daq.params.dfChanToModulusIdx[d]
+    amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
+    phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
+    modulusFactorDAC(daq.rpc, daq.params.dfChanIdx[d], e, 1)
   end
 end
 
+#=
 function setTxParamsAll(daq::DAQRedPitayaScpiNew,d::Integer,
                         amplitude::Vector{Float32},
                         phase::Vector{Float32},
@@ -144,52 +124,36 @@ function setTxParamsAll(daq::DAQRedPitayaScpiNew,d::Integer,
     modulusFactorDAC(rp, d, 1, e, modulusFac[e] )
   end
 end
+=#
 
 #TODO: calibRefToField should be multidimensional
 refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
+
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
-  dec = daq.params.decimation
-  numSampPerPeriod = daq.params.numSampPerPeriod
-  numSamp = numSampPerPeriod*numFrames
-  numAverages = daq.params.acqNumAverages
-  numAllFrames = numAverages*numFrames
-  numPeriods = daq.params.acqNumPeriodsPerFrame
-
-  numSampPerFrame = numSampPerPeriod * numPeriods
-  numSampPerAveragedPeriod =  numSampPerPeriod * numAverages
-  numSampPerAveragedFrame = numSampPerAveragedPeriod * numPeriods
-
   u = readData(daq.rpc, startFrame, numFrames)
 
-  u_ = reshape(u, 2, numSampPerPeriod, numAverages, numRxChannels(daq),
-                     numPeriods, numFrames)
+  u_ = reshape(u, daq.params.numSampPerPeriod, daq.params.acqNumAverages, 2*length(daq.rpc),
+                     daq.params.acqNumPeriodsPerFrame, numFrames)
 
-  uAv = mean(u_,3)
+  uAv = mean(u_,2)
 
-  uMeas = uAv[1,:,1,:,:,:] #reshape(uMeas,numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
-  uRef = uAv[2,:,1,:,:,:] #reshape(uRef, numSampPerPeriod, numTxChannels(daq),numPeriods,numFrames)
+  uMeas = uAv[:,1,daq.params.rxChanIdx,:,:]
+  uRef = uAv[:,1,daq.params.refChanIdx,:,:]
 
   return uMeas, uRef
 end
 
 function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
-  dec = daq.params.decimation
-  numSampPerPeriod = daq.params.numSampPerPeriod
-  numSamp = numSampPerPeriod*numPeriods
-  numAverages = daq.params.acqNumAverages
-  numAllFrames = numAverages*numPeriods
-
-  numSampPerAveragedPeriod =  numSampPerPeriod * numAverages
-
   u = readDataPeriods(daq.rpc, startPeriod, numPeriods)
 
-  u_ = reshape(u, 2, numSampPerPeriod, numAverages, numRxChannels(daq), numPeriods)
+  u_ = reshape(u, daq.params.numSampPerPeriod, daq.params.acqNumAverages,
+                                                 2*length(daq.rpc), numPeriods)
 
-  uAv = mean(u_,3)
+  uAv = mean(u_,2)
 
-  uMeas = uAv[1,:,1,:,:,:]
-  uRef = uAv[2,:,1,:,:,:]
+  uMeas = uAv[:,1,daq.params.rxChanIdx,:]
+  uRef = uAv[:,1,daq.params.refChanIdx,:]
 
   return uMeas, uRef
 end

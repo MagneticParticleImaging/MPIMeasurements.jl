@@ -20,8 +20,8 @@ include("Parameters.jl")
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 
-@mustimplement numRxChannels(daq::AbstractDAQ)
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
+numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
 include("Measurements.jl")
 include("RedPitayaScpiNew.jl")

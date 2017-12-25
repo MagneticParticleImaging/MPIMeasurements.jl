@@ -27,6 +27,11 @@ type DAQParams
   controlPause::Float64
   controlLoopAmplitudeAccuracy::Float64
   controlLoopPhaseAccuracy::Float64
+  rxChanIdx::Vector{Int64}
+  refChanIdx::Vector{Int64}
+  dfChanIdx::Vector{Int64}
+  rpModulus::Vector{Int64}
+  dfChanToModulusIdx::Vector{Int64} #RP specific
 end
 
 
@@ -47,6 +52,8 @@ function DAQParams(params)
   sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfPeriod, dfFreq)
 
   D = length(params["dfDivider"])
+
+  dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
 
   params = DAQParams(
     params["decimation"],
@@ -74,9 +81,13 @@ function DAQParams(params)
     params["currTxPhase"],
     params["controlPause"],
     params["controlLoopAmplitudeAccuracy"],
-    params["controlLoopPhaseAccuracy"]
+    params["controlLoopPhaseAccuracy"],
+    params["rxChanIdx"],
+    params["refChanIdx"],
+    params["dfChanIdx"],
+    params["rpModulus"],
+    dfChanToModulusIdx
    )
-
 
   return params
 end
@@ -108,6 +119,10 @@ function toDict(p::DAQParams)
   params["controlLoopAmplitudeAccuracy"] = p.controlLoopAmplitudeAccuracy
   params["controlLoopPhaseAccuracy"] = p.controlLoopPhaseAccuracy
   params["calibFieldToVolt"] = p.calibFieldToVolt
+  params["rxChanIdx"] = p.rxChanIdx
+  params["refChanIdx"] = p.refChanIdx
+  params["dfChanIdx"] = p.dfChanIdx
+  params["rpModulus"] = p.rpModulus
 
   return params
 end

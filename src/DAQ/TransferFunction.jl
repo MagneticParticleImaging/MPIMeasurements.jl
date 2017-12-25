@@ -6,7 +6,7 @@ Measure the transfer function of all receive chains
 
 We use the last frequency of the send channels
 =#
-function measureTransferFunction(daq::DAQRedPitayaNew)
+function measureTransferFunction(daq::DAQRedPitayaScpiNew)
 
   modulus = 4800 # TODO adapt me
   numFreq = div(modulus,daq.params.decimation*2)-1
