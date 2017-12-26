@@ -29,16 +29,24 @@ end
 
 
 export showAllDAQData
-function showAllDAQData(u, fignum=1)
+function showAllDAQData(u; showFT=true, fignum=1)
   D = size(u,2)
   figure(figsize=(10,8))#fignum)
   #clf()
-  for d=1:D
-    u_ = vec(u[:,d,:,:])
-    subplot(D,2,(d-1)*2+ 1)
-    plot(u_)
-    subplot(D,2,(d-1)*2+ 2)
-    semilogy(abs.(rfft(u_)))#,"o-b",lw=2)
+  if showFT
+    for d=1:D
+      u_ = vec(u[:,d,:,:])
+      subplot(D,2,(d-1)*2+ 1)
+      plot(u_)
+      subplot(D,2,(d-1)*2+ 2)
+      semilogy(abs.(rfft(u_)))#,"o-b",lw=2)
+    end
+  else
+    for d=1:D
+      u_ = vec(u[:,d,:,:])
+      subplot(D,1,d)
+      plot(u_)
+    end
   end
-  sleep(0.1)
+  sleep(0.01)
 end

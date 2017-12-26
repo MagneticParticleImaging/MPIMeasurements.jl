@@ -17,7 +17,8 @@ function measurement(daq::AbstractDAQ, params_::Dict;
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
   stopTx(daq)
-
+  disconnect(daq)
+  
   return uMeas
 end
 
@@ -113,7 +114,8 @@ function loadBGCorrData(filename)
   return u
 end
 
-function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}(); controlPhase=true)
+function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
+                        controlPhase=true, showFT=true)
   if !isempty(params)
     updateParams!(daq, params)
   end
@@ -138,7 +140,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}(); cont
         u = cat(2, uMeas, uRef)
         #showAllDAQData(uMeas,1)
         #showAllDAQData(uRef,2)
-        showAllDAQData(u,1)
+        showAllDAQData(u, showFT=showFT)
         sleep(0.01)
       end
   catch x
