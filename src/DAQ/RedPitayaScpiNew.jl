@@ -49,7 +49,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "RASTERIZED")
 
-  for d=1:(2*length(daq.rpc))
+  for d=1:numChan(daq.rpc)
     for e=1:length(daq.params.rpModulus)
       modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
     end
@@ -131,29 +131,19 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
 
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
-  u = readData(daq.rpc, startFrame, numFrames)
+  u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages)
 
-  u_ = reshape(u, daq.params.numSampPerPeriod, daq.params.acqNumAverages, 2*length(daq.rpc),
-                     daq.params.acqNumPeriodsPerFrame, numFrames)
-
-  uAv = mean(u_,2)
-
-  uMeas = uAv[:,1,daq.params.rxChanIdx,:,:]
-  uRef = uAv[:,1,daq.params.refChanIdx,:,:]
+  uMeas = u[:,daq.params.rxChanIdx,:,:]
+  uRef = u[:,daq.params.refChanIdx,:,:]
 
   return uMeas, uRef
 end
 
 function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
-  u = readDataPeriods(daq.rpc, startPeriod, numPeriods)
+  u = readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
 
-  u_ = reshape(u, daq.params.numSampPerPeriod, daq.params.acqNumAverages,
-                                                 2*length(daq.rpc), numPeriods)
-
-  uAv = mean(u_,2)
-
-  uMeas = uAv[:,1,daq.params.rxChanIdx,:]
-  uRef = uAv[:,1,daq.params.refChanIdx,:]
+  uMeas = u[:,daq.params.rxChanIdx,:]
+  uRef = u[:,daq.params.refChanIdx,:]
 
   return uMeas, uRef
 end
