@@ -1,5 +1,5 @@
 export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       reinit, setTxParamsAll
+       setTxParamsAll
 
 type DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
@@ -9,16 +9,9 @@ end
 function DAQRedPitayaScpiNew(params)
   p = DAQParams(params)
   rpc = RedPitayaCluster(params["ip"])
-  connectADC(rpc)
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
   return daq
-end
-
-function reinit(daq::DAQRedPitayaScpiNew)
-  connect(daq.rpc)
-  setACQParams(daq)
-  return nothing
 end
 
 function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
@@ -69,6 +62,7 @@ end
 
 function startTx(daq::DAQRedPitayaScpiNew)
   connect(daq.rpc)
+  connectADC(daq.rpc)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
   while currentFrame(daq.rpc) < 0
