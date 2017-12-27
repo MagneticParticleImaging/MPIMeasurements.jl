@@ -33,11 +33,11 @@ end
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
   amplitude = zeros(numTxChannels(daq))
   phase = zeros(numTxChannels(daq))
+  c1 = calibIntToVoltRef(daq)
   for d=1:numTxChannels(daq)
-    c1 = calibParams(daq, d)[3:4]
     c2 = refToField(daq, d)
 
-    uVolt = c1[1].*float(uRef[:,d,1]) .+ c1[2]
+    uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
 
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])

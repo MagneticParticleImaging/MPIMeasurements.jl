@@ -30,14 +30,13 @@ end
 currentFrame(daq::DAQRedPitayaScpiNew) = currentFrame(daq.rpc)
 currentPeriod(daq::DAQRedPitayaScpiNew) = currentPeriod(daq.rpc)
 
-export calibParams
-function calibParams(daq::DAQRedPitayaScpiNew, d)
-  return daq.params.calibIntToVolt[:,d]
-  #return reshape(daq.params["calibIntToVolt"],4,:)[:,d]
+
+function calibIntToVoltRx(daq::DAQRedPitayaScpiNew)
+  return daq.params.calibIntToVolt[:,daq.params.rxChanIdx]
 end
 
-function dataConversionFactor(daq::DAQRedPitayaScpiNew)
-  return daq.params.calibIntToVolt[1:2,:]
+function calibIntToVoltRef(daq::DAQRedPitayaScpiNew)
+  return daq.params.calibIntToVolt[:,daq.params.refChanIdx]
 end
 
 function setACQParams(daq::DAQRedPitayaScpiNew)

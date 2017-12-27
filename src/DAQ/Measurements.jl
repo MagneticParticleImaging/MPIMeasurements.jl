@@ -18,7 +18,7 @@ function measurement(daq::AbstractDAQ, params_::Dict;
 
   stopTx(daq)
   disconnect(daq)
-  
+
   return uMeas
 end
 
@@ -61,7 +61,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   end
 
   # calibration params  (needs to be called after calibration params!)
-  params["rxDataConversionFactor"] = dataConversionFactor(daq)
+  params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
 
   if bgdata == nothing
     params["measIsBGFrame"] = zeros(Bool,params["acqNumFGFrames"])
