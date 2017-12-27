@@ -9,9 +9,8 @@ params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=[10e-3]
-params["decimation"]=32
-params["acqNumFrames"]=1000
-params["acqNumAverages"]=100
+params["acqNumFrames"]=100
+params["acqNumAverages"]=10
 
 x = linspace(0,1,5)
 #params["acqFFValues"] = [0.0]
