@@ -30,7 +30,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   #merge!(params, toDict(daq.params))
 
   # measurement
-  params["acqNumFrames"] = params["acqNumFGFrames"]
+  #params["acqNumFrames"] = params["acqNumFGFrames"]
   uFG = measurement(daq, params; kargs...)
 
   # acquisition parameters
@@ -48,7 +48,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   params["rxNumChannels"] = numRxChannels(daq)
 
   # transferFunction
-  if params["transferFunction"] != ""
+  if haskey(params, "transferFunction") && params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
     tf = zeros(Complex128, numFreq, numRxChannels(daq) )
@@ -63,15 +63,23 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   # calibration params  (needs to be called after calibration params!)
   params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
 
+  params["measIsFourierTransformed"] = false
+  params["measIsSpectralLeakageCorrected"] = false
+  params["measIsTFCorrected"] = false
+  params["measIsFrequencySelection"] = false
+  params["measIsBGCorrected"] = false
+  params["measIsTransposed"] = false
+  params["measIsFramePermutation"] = false
+
   if bgdata == nothing
-    params["measIsBGFrame"] = zeros(Bool,params["acqNumFGFrames"])
+    params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
     params["measData"] = uFG
-    params["acqNumFrames"] = params["acqNumFGFrames"]
+    #params["acqNumFrames"] = params["acqNumFGFrames"]
   else
     numBGFrames = size(bgdata,4)
     params["measData"] = cat(4,bgdata,uFG)
-    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,params["acqNumFGFrames"]))
-    params["acqNumFrames"] = params["acqNumFGFrames"] + numBGFrames
+    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]))
+    params["acqNumFrames"] = params["acqNumFrames"] + numBGFrames
   end
 
   MPIFiles.saveasMDF( filename, params )
