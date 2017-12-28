@@ -67,7 +67,13 @@ function doControlStep(daq::AbstractDAQ, uRef)
     daq.params.currTxAmp[:] .*=  daq.params.dfStrength ./ amplitude
 
     println("new tx amplitude=$(daq.params.currTxAmp)) phase=$(daq.params.currTxPhase)")
-    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+
+    try
+      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+    catch
+      plot(vec(uRef))
+      error("Could not control")
+    end
     return false
   end
 end
