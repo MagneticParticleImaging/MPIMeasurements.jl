@@ -17,4 +17,5 @@ x = linspace(0,1,5)
 params["acqFFValues"] = repeat( cat(1,x,reverse(x[2:end-1])),inner=5)
 params["acqNumPeriodsPerFrame"]=length(params["acqFFValues"])
 
-u = measurement(daq, params, controlPhase=false);
+#u = measurement(daq, params, controlPhase=false)
+filename = measurement(daq, params, MDFStore, controlPhase=true)
