@@ -61,6 +61,9 @@ function doControlStep(daq::AbstractDAQ, uRef)
      norm(phase) < daq.params.controlLoopPhaseAccuracy
     return true
   else
+    oldTxPhase = copy(daq.params.currTxPhase)
+    oldTxAmp = copy(daq.params.currTxAmp)
+
     daq.params.currTxPhase[:] .-= phase
     wrapPhase!(daq.params.currTxPhase)
 
@@ -72,7 +75,10 @@ function doControlStep(daq::AbstractDAQ, uRef)
       setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
     catch
       plot(vec(uRef))
-      error("Could not control")
+      println("Could not control")
+      daq.params.currTxPhase[:] = oldTxPhase
+      daq.params.currTxAmp[:] = oldTxAmp
+      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
     end
     return false
   end

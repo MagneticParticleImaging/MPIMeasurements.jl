@@ -1,5 +1,5 @@
 export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       setTxParamsAll
+       setTxParamsAll, disconnect
 
 type DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
@@ -11,6 +11,7 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
+  #disconnect(daq)
   return daq
 end
 
