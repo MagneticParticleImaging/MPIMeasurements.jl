@@ -7,7 +7,7 @@ type DAQParams
   dfFreq::Vector{Float64}
   dfStrength::Vector{Float64}
   dfPhase::Vector{Float64}
-  dfPeriod::Float64
+  dfCycle::Float64
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
@@ -38,7 +38,7 @@ end
 function DAQParams(params)
 
   dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
-  dfPeriod = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
+  dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
   if !all(isinteger, params["dfDivider"] / params["decimation"])
     warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
@@ -47,9 +47,9 @@ function DAQParams(params)
 
   rxBandwidth = params["dfBaseFrequency"] / params["decimation"] / 2
 
-  acqFramePeriod = dfPeriod * params["acqNumPeriodsPerFrame"]
+  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
-  sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfPeriod, dfFreq)
+  sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfCycle, dfFreq)
 
   D = length(params["dfDivider"])
 
@@ -62,7 +62,7 @@ function DAQParams(params)
     dfFreq,
     params["dfStrength"],
     params["dfPhase"],
-    dfPeriod,
+    dfCycle,
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
@@ -101,7 +101,7 @@ function toDict(p::DAQParams)
   params["dfFreq"] = p.dfFreq
   params["dfStrength"] = p.dfStrength
   params["dfPhase"] = p.dfPhase
-  params["dfPeriod"] = p.dfPeriod
+  params["dfCycle"] = p.dfCycle
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod

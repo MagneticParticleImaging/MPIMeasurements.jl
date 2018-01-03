@@ -312,7 +312,7 @@ function setInfoParams(m::MeasLab)
     freqStr = "$(round(m.daq.params.dfFreq[1],2)) Hz"
   end
   Gtk.@sigatom setproperty!(m["entDFFreq"],:text,freqStr)
-  Gtk.@sigatom setproperty!(m["entDFPeriod"],:text,"$(m.daq.params.dfPeriod*1000) ms")
+  Gtk.@sigatom setproperty!(m["entDFPeriod"],:text,"$(m.daq.params.dfCycle*1000) ms")
   Gtk.@sigatom setproperty!(m["entFramePeriod"],:text,"$(m.daq.params.acqFramePeriod) s")
 end
 
