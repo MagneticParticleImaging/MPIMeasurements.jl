@@ -81,17 +81,9 @@ if is_unix() && VERSION >= v"0.6"
 end
 
 
-#if !haskey(ENV,"MPILIB_UI")
-#  ENV["MPILIB_UI"] = "Gtk"
-#end
-
-#if ENV["MPILIB_UI"] == "PyPlot"
-#  using PyPlot
-#end
-
-
-
-
+function __init__()
+    Unitful.register(MPIMeasurements)
+end
 
 
 end # module
