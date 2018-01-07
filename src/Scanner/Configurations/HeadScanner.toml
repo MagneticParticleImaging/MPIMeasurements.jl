@@ -1,5 +1,5 @@
 [GaussMeter]
-coordinateTransformation = [0, 0.11, -1, 0, -1, 0.01, -1, -0.01, 0]
+coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
 range = 1
 fast = true
 autoRanging = false
@@ -30,7 +30,7 @@ tracerBatch = ["n.a."]
 scannerTopology = "MPS"
 measIsBGCorrected = false
 studyName = "default"
-datasetStore = "/opt/data/MPS1"
+datasetStore = "/opt/data/HeadScanner"
 rpGainSetting = [0, 1]
 scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
 rxUnit = "V"
