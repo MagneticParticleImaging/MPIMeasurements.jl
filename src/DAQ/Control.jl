@@ -78,6 +78,11 @@ function doControlStep(daq::AbstractDAQ, uRef)
       println("Could not control")
       daq.params.currTxPhase[:] = oldTxPhase
       daq.params.currTxAmp[:] = oldTxAmp
+
+      stopTx(daq)
+      disconnect(daq)
+      startTx(daq)
+
       setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
     end
     return false
