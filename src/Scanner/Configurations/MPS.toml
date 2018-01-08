@@ -1,14 +1,11 @@
 [DAQ]
 ip = ["192.168.1.100"]
-#ip = ["192.168.1.9"]
-#ip = ["10.167.6.172"]
 daq = "RedPitayaScpiNew"
-#daq = "RedPitayaNew"
 acqNumFrames = 1
 acqNumFGFrames = 200
 acqNumBGFrames = 200
 acqNumAverages = 1
-decimation = 16
+decimation = 32
 calibFieldToVolt = [23.0]
 #calibRefToField = [0.05]
 calibRefToField = [0.02884]
@@ -27,6 +24,12 @@ controlLoopPhaseAccuracy = 1.0
 controlLoopAmplitudeAccuracy = 0.04
 currTxAmp = [0.1]
 currTxPhase = [0.0]
+rxChanIdx = [1]#,3,4]
+refChanIdx = [2]
+dfChanIdx = [1]
+rpModulus = [4800,4864,4800,4800]
+
+
 
 
 [General]
