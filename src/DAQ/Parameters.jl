@@ -32,11 +32,13 @@ type DAQParams
   dfChanIdx::Vector{Int64}
   rpModulus::Vector{Int64}
   dfChanToModulusIdx::Vector{Int64} #RP specific
+  txLimitVolt::Vector{Float64}
 end
 
 
 function DAQParams(params)
 
+  D = length(params["dfDivider"])
   dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
   dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
@@ -49,11 +51,18 @@ function DAQParams(params)
 
   acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
-  sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfCycle, dfFreq)
+  sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-  D = length(params["dfDivider"])
+
 
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
+
+  if !haskey(params, "currTxAmp")
+    params["currTxAmp"] = params["txLimitVolt"] ./ 10
+  end
+  if !haskey(params, "currTxPhase")
+    params["currTxPhase"] = zeros(D)
+  end
 
   params = DAQParams(
     params["decimation"],
@@ -86,7 +95,8 @@ function DAQParams(params)
     params["refChanIdx"],
     params["dfChanIdx"],
     params["rpModulus"],
-    dfChanToModulusIdx
+    dfChanToModulusIdx,
+    params["txLimitVolt"]
    )
 
   return params
@@ -123,6 +133,7 @@ function toDict(p::DAQParams)
   params["refChanIdx"] = p.refChanIdx
   params["dfChanIdx"] = p.dfChanIdx
   params["rpModulus"] = p.rpModulus
+  params["txLimitVolt"] = p.txLimitVolt
 
   return params
 end

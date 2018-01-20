@@ -61,30 +61,26 @@ function doControlStep(daq::AbstractDAQ, uRef)
      norm(phase) < daq.params.controlLoopPhaseAccuracy
     return true
   else
-    oldTxPhase = copy(daq.params.currTxPhase)
-    oldTxAmp = copy(daq.params.currTxAmp)
+    newTxPhase = daq.params.currTxPhase .- phase
+    wrapPhase!(newTxPhase)
 
-    daq.params.currTxPhase[:] .-= phase
-    wrapPhase!(daq.params.currTxPhase)
+    newTxAmp = daq.params.currTxAmp .* daq.params.dfStrength ./ amplitude
 
-    daq.params.currTxAmp[:] .*=  daq.params.dfStrength ./ amplitude
+    println("new tx amplitude=$(newTxAmp)) phase=$(newTxPhase)")
 
-    println("new tx amplitude=$(daq.params.currTxAmp)) phase=$(daq.params.currTxPhase)")
-
-    try
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
-    catch
+    if all( newTxAmp .< daq.params.txLimitVolt )
+      daq.params.currTxAmp[:] = newTxAmp
+      daq.params.currTxPhase[:] = newTxPhase
+    else
       plot(vec(uRef))
       println("Could not control")
-      daq.params.currTxPhase[:] = oldTxPhase
-      daq.params.currTxAmp[:] = oldTxAmp
 
       stopTx(daq)
       disconnect(daq)
       startTx(daq)
-
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
     end
+    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+
     return false
   end
 end

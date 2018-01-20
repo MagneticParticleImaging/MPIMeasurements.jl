@@ -96,6 +96,10 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
 end
 
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
+  if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )
+    error("This should never happen!!! \n Tx voltage is above the limit")
+  end
+
   for d=1:numTxChannels(daq)
     amp = round(Int, 8192 * amplitude[d])
     ph = phase[d] / 180 * pi #+ pi/2
@@ -104,6 +108,7 @@ function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
     phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
     modulusFactorDAC(daq.rpc, daq.params.dfChanIdx[d], e, 1)
   end
+  return nothing
 end
 
 #=
