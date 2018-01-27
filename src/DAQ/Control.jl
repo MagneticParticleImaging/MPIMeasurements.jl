@@ -68,7 +68,14 @@ function doControlStep(daq::AbstractDAQ, uRef)
 
     println("new tx amplitude=$(newTxAmp)) phase=$(newTxPhase)")
 
-    if all( newTxAmp .< daq.params.txLimitVolt )
+    deviation = abs.( daq.params.currTxAmp ./ amplitude .-
+                     daq.params.calibFieldToVolt ) ./ daq.params.calibFieldToVolt
+
+    println("We expected $(daq.params.calibFieldToVolt) and
+            got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation")
+
+    if all( newTxAmp .< daq.params.txLimitVolt ) &&
+       maximum( deviation ) < 0.1
       daq.params.currTxAmp[:] = newTxAmp
       daq.params.currTxPhase[:] = newTxPhase
     else
