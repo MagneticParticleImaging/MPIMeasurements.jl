@@ -1,13 +1,12 @@
 [DAQ]
 ip = ["192.168.1.100"]
 daq = "RedPitayaScpiNew"
-acqNumFrames = 1
+acqNumFrames = 10
 acqNumFGFrames = 200
 acqNumBGFrames = 200
-acqNumAverages = 1
+acqNumAverages = 1000
 decimation = 32
-calibFieldToVolt = [23.0]
-#calibRefToField = [0.05]
+calibFieldToVolt = [8.94]
 calibRefToField = [0.02884]
 calibIntToVolt = [1.2957305E-4, 0.015548877, 0.002591461, 0.31097754]
 dfStrength = [20e-3]
