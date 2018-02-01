@@ -33,6 +33,7 @@ type DAQParams
   rpModulus::Vector{Int64}
   dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
+  controlPhase::Bool
 end
 
 
@@ -53,8 +54,6 @@ function DAQParams(params)
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-
-
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
 
   if !haskey(params, "currTxAmp")
@@ -62,6 +61,9 @@ function DAQParams(params)
   end
   if !haskey(params, "currTxPhase")
     params["currTxPhase"] = zeros(D)
+  end
+  if !haskey(params, "controlPhase")
+    params["controlPhase"] = true
   end
 
   params = DAQParams(
@@ -96,7 +98,8 @@ function DAQParams(params)
     params["dfChanIdx"],
     params["rpModulus"],
     dfChanToModulusIdx,
-    params["txLimitVolt"]
+    params["txLimitVolt"],
+    params["controlPhase"]
    )
 
   return params
@@ -134,6 +137,7 @@ function toDict(p::DAQParams)
   params["dfChanIdx"] = p.dfChanIdx
   params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
+  params["controlPhase"] = p.controlPhase
 
   return params
 end
