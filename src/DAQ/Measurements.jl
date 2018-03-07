@@ -1,9 +1,12 @@
 export measurement, measurementCont, measurementRepeatability
 
 function measurement(daq::AbstractDAQ, params_::Dict;
-                     controlPhase=false )
-
+                     kargs... )
   updateParams!(daq, params_)
+  measurement_(daq; kargs...)
+end
+
+function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
 
   startTx(daq)
   if controlPhase
