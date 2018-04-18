@@ -162,6 +162,101 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
   end
 end
 
+export measurementContReadAndSave
+function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{String,Any}();
+                        controlPhase=true, showFT=true)
+  if !isempty(params)
+    updateParams!(daq, params)
+  end
+
+  startTx(daq)
+
+  if controlPhase
+    controlLoop(daq)
+  else
+    setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
+                     zeros(numTxChannels(daq)))
+    sleep(daq.params.controlPause)
+  end
+
+  uMeas, uRef = readData(daq, 1, currentFrame(daq))
+
+  x  = [0.0;collect(156 + linspace(-40,40,9))]
+  xx = cat(1,x,x,x)
+  y = repeat([-11.2],inner=10)
+  yy = cat(1,y-10.0,y,y+10.0)
+  S = zeros(length(uMeas),length(xx))
+  readline(STDIN)
+
+  try
+      for k=1:length(xx)
+        moveAbs(robot,xx[k]*1.0u"mm",yy[k]*1.0u"mm",71.0u"mm")
+        sleep(6.0)
+
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
+        #showDAQData(daq,vec(uMeas))
+        amplitude, phase = calcFieldFromRef(daq,uRef)
+        println("reference amplitude=$amplitude phase=$phase")
+
+        u = cat(2, uMeas, uRef)
+        #showAllDAQData(uMeas,1)
+        #showAllDAQData(uRef,2)
+        showAllDAQData(u, showFT=showFT)
+
+        S[:,k] = vec(uMeas)
+        println("New Pos")
+      end
+  catch x
+      if isa(x, InterruptException)
+          println("Stop Tx")
+          stopTx(daq)
+          disconnect(daq)
+      else
+        rethrow(x)
+      end
+  end
+
+  yy = collect(-11.2 + linspace(-40,40,9))
+  S2 = zeros(length(uMeas),length(yy))
+
+  println("switch the phantoms")
+  readline(STDIN)
+
+  try
+      for k=1:length(yy)
+        moveAbs(robot,146.0u"mm",yy[k]*1.0u"mm",81.0u"mm")
+        sleep(6.0)
+
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
+        #showDAQData(daq,vec(uMeas))
+        amplitude, phase = calcFieldFromRef(daq,uRef)
+        println("reference amplitude=$amplitude phase=$phase")
+
+        u = cat(2, uMeas, uRef)
+        #showAllDAQData(uMeas,1)
+        #showAllDAQData(uRef,2)
+        showAllDAQData(u, showFT=showFT)
+
+        S2[:,k] = vec(uMeas)
+        println("New Pos")
+      end
+  catch x
+      if isa(x, InterruptException)
+          println("Stop Tx")
+          stopTx(daq)
+          disconnect(daq)
+      else
+        rethrow(x)
+      end
+  end
+
+
+
+  stopTx(daq)
+  disconnect(daq)
+  return S,S2
+end
+
 
 
 
