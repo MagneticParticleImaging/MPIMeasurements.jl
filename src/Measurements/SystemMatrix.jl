@@ -4,14 +4,14 @@ struct SystemMatrixRobotMeas <: MeasObj
   su::SurveillanceUnit
   daq::AbstractDAQ
   robot::Robot
-  positions::Positions
+  positions::GridPositions
   signals::Array{Float32,4}
   waitTime::Float64
   voltToCurrent::Float64
   currents::Vector{Float64}
 end
 
-function measurementSystemMatrix(su, daq, robot, safety, positions::Positions,
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
                     currents, params_::Dict;
                     controlPhase=true, waitTime = 4.0,
                     voltToCurrent = 0.08547008547008547)
@@ -70,22 +70,64 @@ end
 
 
 
-
 # high level: This stores as MDF
-function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
-                      filename::String, params_=Dict{String,Any}();
-                     bgdata=nothing, kargs...)
-  merge!(daq.params, params_)
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                      filename::String, currents, params_::Dict;
+                       kargs...)
 
-  params = copy(daq.params)
+  params = copy(params_)
 
-  # TODO
+  measObj = measurementSystemMatrix(su, daq, robot, safety, positions,
+                      currents, params_; kargs...)
+
+  # acquisition parameters
+  params["acqStartTime"] = Dates.unix2datetime(time())
+  params["acqGradient"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
+  params["acqOffsetField"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
+
+  # drivefield parameters
+  params["dfStrength"] = reshape(daq.params.dfStrength,1,length(daq.params.dfStrength),1)
+  params["dfPhase"] = reshape(daq.params.dfPhase,1,length(daq.params.dfPhase),1)
+  params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
+
+  # receiver parameters
+  params["rxNumSamplingPoints"] = daq.params.numSampPerPeriod #FIXME rename internally
+  params["rxNumChannels"] = numRxChannels(daq)
+
+  # calibration params  (needs to be called after calibration params!)
+  params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
+
+  params["measIsFourierTransformed"] = false
+  params["measIsSpectralLeakageCorrected"] = false
+  params["measIsTFCorrected"] = false
+  params["measIsFrequencySelection"] = false
+  params["measIsBGCorrected"] = false
+  params["measIsTransposed"] = false
+  params["measIsFramePermutation"] = false
+
+  params["acqNumFrames"] = length(positions)
+
+  # TODO FIXME -> determine bg frames from positions
+  params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
+  params["measData"] = measObj.signals
+
+  #params["calibSNR"] TODO during conversion
+  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(positions))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(positions))))
+  params["calibSize"] = shape(positions)
+  params["calibOrder"] = "xyz"
+  #params["calibDeltaSampleSize"] = 1.0
+  params["calibMethod"] = "robot"
+
+  MPIFiles.saveasMDF( filename, params )
+  return filename
 end
+
 
 
 function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
                           mdf::MDFDatasetStore, params=Dict{String,Any};
-                     kargs...)
+                          kargs...)
   merge!(daq.params, params)
 
  #TODO
