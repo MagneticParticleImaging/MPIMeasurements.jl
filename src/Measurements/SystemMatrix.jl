@@ -108,13 +108,17 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
   params["acqNumFrames"] = length(positions)
 
   # TODO FIXME -> determine bg frames from positions
-  params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
+  params["measIsBGFrame"] = isa(positions,BreakpointGridPositions) ?
+                             MPIFiles.getmask(positions) :
+                             zeros(Bool,params["acqNumFrames"])
   params["measData"] = measObj.signals
 
+  subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
+
   #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(positions))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(positions))))
-  params["calibSize"] = shape(positions)
+  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(subgrid))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(subgrid))))
+  params["calibSize"] = shape(subgrid)
   params["calibOrder"] = "xyz"
   #params["calibDeltaSampleSize"] = 1.0
   params["calibMethod"] = "robot"

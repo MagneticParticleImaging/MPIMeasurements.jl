@@ -6,7 +6,10 @@ filename = "systemMatrix.mdf"
 shp = [9,1,1]
 fov = [90.0,1.0,1.0]u"mm"
 ctr = [156.0,-11.2,71.0]u"mm"
-positions = CartesianGridPositions(shp,fov,ctr)
+
+positions = BreakpointGridPositions(
+        CartesianGridPositions(shp,fov,ctr),
+        [1,11], [0.0,0.0,0.0]u"mm")
 
 scanner = MPIScanner("HeadScanner.toml")
 robot = getRobot(scanner)
@@ -30,4 +33,4 @@ params["acqNumPeriodsPerFrame"] = 1 #length(params["acqFFValues"])
 currents = [10.0, 10.0]
 
 data = measurementSystemMatrix(su, daq, robot, safety, positions, filename,
-                    currents, params, controlPhase=true, waitTime = 1.0, voltToCurrent = 0.08547008547008547)
+                    currents, params, controlPhase=false, waitTime = 1.0, voltToCurrent = 0.08547008547008547)
