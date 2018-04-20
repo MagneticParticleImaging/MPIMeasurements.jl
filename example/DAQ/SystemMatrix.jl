@@ -24,6 +24,7 @@ params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=[5e-3]
 params["acqNumAverages"]=1000
+params["calibDeltaSampleSize"] = [10.0,10.0,10.0]u"mm"
 
 x = linspace(0,1,3)
 params["acqFFValues"] = []
