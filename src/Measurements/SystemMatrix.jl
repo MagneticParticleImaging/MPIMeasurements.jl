@@ -124,7 +124,7 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
   params["calibOrder"] = "xyz"
   if haskey(params, "calibDeltaSampleSize")
     params["calibDeltaSampleSize"] =
-       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"]))
+       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
   end
   params["calibMethod"] = "robot"
 

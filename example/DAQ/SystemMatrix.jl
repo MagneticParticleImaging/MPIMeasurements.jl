@@ -3,13 +3,13 @@ using MPIMeasurements
 filename = "systemMatrix.mdf"
 
 # define Grid
-shp = [9,1,1]
-fov = [90.0,1.0,1.0]u"mm"
+shp = [5,3,1]
+fov = [90.0,30.0,1.0]u"mm"
 ctr = [156.0,-11.2,71.0]u"mm"
 
 positions = BreakpointGridPositions(
-        CartesianGridPositions(shp,fov,ctr),
-        [1,11], [0.0,0.0,0.0]u"mm")
+        MeanderingGridPositions( CartesianGridPositions(shp,fov,ctr) ),
+        [1,11], [0.0,0.0,0.0]u"mm" )
 
 scanner = MPIScanner("HeadScanner.toml")
 robot = getRobot(scanner)
