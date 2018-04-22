@@ -99,6 +99,8 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
+enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool) = enableSlowDAC(daq.rpc,enable)
+
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
   if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
