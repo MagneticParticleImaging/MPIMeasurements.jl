@@ -50,8 +50,8 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 
   # upload multi-patch LUT TODO!!!
   if length(daq.params.acqFFValues) > 0
-    numSlowDACChan(master(daq.rpc), 1)
-    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame
+    numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
+    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame*daq.params.acqNumFFChannels
       setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
     else
       # If numPeriods is larger than the LUT we repeat the values
