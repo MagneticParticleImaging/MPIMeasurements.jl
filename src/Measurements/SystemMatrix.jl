@@ -131,17 +131,26 @@ function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPo
   params["acqNumFrames"] = length(positions)
 
   # TODO FIXME -> determine bg frames from positions
-  params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
+  params["measIsBGFrame"] = isa(positions,BreakpointGridPositions) ?
+                             MPIFiles.getmask(positions) :
+                             zeros(Bool,params["acqNumFrames"])
   params["measData"] = measObj.signals
 
-  #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(positions))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(positions))))
-  params["calibSize"] = shape(positions)
-  params["calibOrder"] = "xyz"
-  params["calibDeltaSampleSize"] = Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
-  params["calibMethod"] = "robot"
+  subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
 
+  params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
+
+  #params["calibSNR"] TODO during conversion
+  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(subgrid))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(subgrid))))
+  params["calibSize"] = shape(subgrid)
+  params["calibOrder"] = "xyz"
+  if haskey(params, "calibDeltaSampleSize")
+    params["calibDeltaSampleSize"] =
+       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
+  end
+  params["calibMethod"] = "robot"
+ 
   MPIFiles.saveasMDF( filename, params )
   return filename
 end
@@ -309,15 +318,24 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
   params["acqNumFrames"] = length(positions)
 
   # TODO FIXME -> determine bg frames from positions
-  params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
+  params["measIsBGFrame"] = isa(positions,BreakpointGridPositions) ?
+                             MPIFiles.getmask(positions) :
+                             zeros(Bool,params["acqNumFrames"])
   params["measData"] = measObj.signals
 
+  subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
+
+  params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
+
   #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(positions))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(positions))))
-  params["calibSize"] = shape(positions)
+  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(subgrid))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(subgrid))))
+  params["calibSize"] = shape(subgrid)
   params["calibOrder"] = "xyz"
-  params["calibDeltaSampleSize"] = Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
+  if haskey(params, "calibDeltaSampleSize")
+    params["calibDeltaSampleSize"] =
+       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
+  end
   params["calibMethod"] = "robot"
 
   MPIFiles.saveasMDF( filename, params )
