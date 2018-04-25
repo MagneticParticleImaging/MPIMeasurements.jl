@@ -65,6 +65,18 @@ function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(
     setTxParams(measObj.daq, measObj.daq.params.currTxAmp, measObj.daq.params.currTxPhase)
   end
 
+  currFr = currentFrame(measObj.daq)
+  uMeas, uRef = readData(measObj.daq, 1, currFr)
+
+  u = cat(2, uMeas, uRef)
+
+  showAllDAQData(u, showFT=true)
+
+  setSlowDAC(measObj.daq, measObj.currents[1,1]*measObj.voltToCurrent, 0)
+  setSlowDAC(measObj.daq, measObj.currents[2,1]*measObj.voltToCurrent, 1)
+
+  sleep(1.0)
+
   for l=1:size(measObj.currents,2)
     # set current at DC sources
     setSlowDAC(measObj.daq, measObj.currents[1,l]*measObj.voltToCurrent, 0)
@@ -72,7 +84,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(
 
     println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
     # wait until magnet is on field
-    sleep(0.3)
+    sleep(0.4)
     # perform MPI measurement
     currFr = currentFrame(measObj.daq)
     uMeas, uRef = readData(measObj.daq, 1, currFr)
@@ -150,7 +162,7 @@ function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPo
        Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
   end
   params["calibMethod"] = "robot"
- 
+
   MPIFiles.saveasMDF( filename, params )
   return filename
 end
