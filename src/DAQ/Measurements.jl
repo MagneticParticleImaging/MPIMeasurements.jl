@@ -64,7 +64,9 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   end
 
   # calibration params  (needs to be called after calibration params!)
-  params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
+  calib = zeros(2,numRxChannels(daq))
+  calib[1,:] = 1.0
+  params["rxDataConversionFactor"] = calib # calibIntToVoltRx(daq)
 
   params["measIsFourierTransformed"] = false
   params["measIsSpectralLeakageCorrected"] = false

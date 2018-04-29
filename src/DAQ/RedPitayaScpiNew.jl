@@ -141,6 +141,12 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages)
 
+  c = daq.params.calibIntToVolt
+  for d=1:size(u,2)
+    u[:,d,:,:] .*= c[1,d]
+    u[:,d,:,:] .+= c[2,d]
+  end
+
   uMeas = u[:,daq.params.rxChanIdx,:,:]
   uRef = u[:,daq.params.refChanIdx,:,:]
 
@@ -149,6 +155,12 @@ end
 
 function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
   u = readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
+
+  c = daq.params.calibIntToVolt
+  for d=1:size(u,2)
+    u[:,d,:,:] .*= c[1,d]
+    u[:,d,:,:] .+= c[2,d]
+  end
 
   uMeas = u[:,daq.params.rxChanIdx,:]
   uRef = u[:,daq.params.refChanIdx,:]
