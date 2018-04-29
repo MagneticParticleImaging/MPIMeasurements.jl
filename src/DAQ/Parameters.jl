@@ -34,6 +34,7 @@ type DAQParams
   dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
   controlPhase::Bool
+  acqFFSequence::String
 end
 
 
@@ -66,12 +67,13 @@ function DAQParams(params)
     params["controlPhase"] = true
   end
 
-  if haskey(params,"acqFFSequence")
-    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
-                                    params["acqFFSequence"]*".csv"))
-    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
-    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2) 
+  if !haskey(params,"acqFFSequence")
+    params["acqFFSequence"] = "None"
   end
+  params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+  params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+  params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
 
   params = DAQParams(
     params["decimation"],
@@ -106,7 +108,8 @@ function DAQParams(params)
     params["rpModulus"],
     dfChanToModulusIdx,
     params["txLimitVolt"],
-    params["controlPhase"]
+    params["controlPhase"],
+    params["acqFFSequence"]
    )
 
   return params
@@ -145,6 +148,7 @@ function toDict(p::DAQParams)
   params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
   params["controlPhase"] = p.controlPhase
+  params["acqFFSequence"] = p.acqFFSequence
 
   return params
 end
