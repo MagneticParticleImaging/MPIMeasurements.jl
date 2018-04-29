@@ -66,6 +66,13 @@ function DAQParams(params)
     params["controlPhase"] = true
   end
 
+  if haskey(params,"acqFFSequence")
+    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2) 
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],

@@ -127,6 +127,8 @@ end
 
 function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
                         controlPhase=true, showFT=true)
+  println("Starting Measurement...")
+
   if !isempty(params)
     updateParams!(daq, params)
   end
@@ -163,6 +165,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         rethrow(x)
       end
   end
+  return nothing
 end
 
 export measurementContReadAndSave

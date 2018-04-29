@@ -11,6 +11,17 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
+  if !masterTrigger(daq.rpc)
+    ramWriterMode(daq.rpc, "TRIGGERED")
+    modeDAC(daq.rpc, "RASTERIZED")
+
+    for d=1:numChan(daq.rpc)
+      for e=1:length(daq.params.rpModulus)
+        modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
+      end
+    end
+    masterTrigger(daq.rpc, true)
+  end
   #disconnect(daq)
   return daq
 end
@@ -38,15 +49,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.numSampPerPeriod * daq.params.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
 
-  masterTrigger(daq.rpc, false)
-  ramWriterMode(daq.rpc, "TRIGGERED")
-  modeDAC(daq.rpc, "RASTERIZED")
-
-  for d=1:numChan(daq.rpc)
-    for e=1:length(daq.params.rpModulus)
-      modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
-    end
-  end
+  #masterTrigger(daq.rpc, false)
 
   # upload multi-patch LUT TODO!!!
   if length(daq.params.acqFFValues) > 0
@@ -67,11 +70,11 @@ end
 
 function startTx(daq::DAQRedPitayaScpiNew)
   connect(daq.rpc)
-  connectADC(daq.rpc)
+  #connectADC(daq.rpc)
   startADC(daq.rpc)
-  masterTrigger(daq.rpc, true)
+  #masterTrigger(daq.rpc, true)
   while currentFrame(daq.rpc) < 0
-    sleep(0.2)
+    sleep(0.1)
   end
   return nothing
 end
