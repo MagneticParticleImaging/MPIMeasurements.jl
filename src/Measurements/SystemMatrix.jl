@@ -169,7 +169,7 @@ end
 
 
 
-function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
+function measurementSystemMatrixSlowFF(scanner::MPIScanner, positions::Positions,
                           mdf::MDFDatasetStore, params=Dict{String,Any};
                           kargs...)
   merge!(daq.params, params)
@@ -204,16 +204,11 @@ struct SystemMatrixRobotMeas <: MeasObj
   positions::GridPositions
   signals::Array{Float32,4}
   waitTime::Float64
-  voltToCurrent::Float64
-  currents::Vector{Float64}
-  manualSeFo::Bool
   controlPhase::Bool
 end
 
 function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                    currents, params_::Dict;
-                    controlPhase=true, waitTime = 4.0,
-                    voltToCurrent = 0.08547008547008547, manualSeFo=true)
+                     params_::Dict; controlPhase=true, waitTime = 4.0)
 
   updateParams!(daq, params_)
 
@@ -234,8 +229,7 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
 
   signals = zeros(Float32,numSampPerPeriod,numRxChannels(daq),numPeriods,length(positions))
 
-  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime,
-                                  voltToCurrent, currents, manualSeFo, controlPhase)
+  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime, controlPhase)
 
   res = performTour!(robot, safety, positions, measObj)
 
@@ -256,11 +250,6 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
   println("post action: ", pos)
   println("################## Index: ", index, " / ", length(measObj.positions))
 
-  if measObj.manualSeFo
-    setSlowDAC(measObj.daq, measObj.currents[1]*measObj.voltToCurrent, 0)
-    setSlowDAC(measObj.daq, measObj.currents[2]*measObj.voltToCurrent, 1)
-  end
-
   if measObj.controlPhase
     controlLoop(measObj.daq)
   else
@@ -268,24 +257,18 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
   end
 
   enableSlowDAC(measObj.daq, true)
-  sleep(0.6)
+  sleep(5.0)
 
   currFr = currentFrame(measObj.daq)
-  uMeas, uRef = readData(measObj.daq, 1, currFr)
+  uMeas, uRef = readData(measObj.daq, 1, currFr+1)
   enableSlowDAC(measObj.daq, false)
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 
   u = cat(2, uMeas, uRef)
 
-  showAllDAQData(u, showFT=true)
+  showAllDAQData(u[:,:,1:1,1], showFT=true)
 
   measObj.signals[:,:,:,index] = mean(uMeas,4)
-
-
-  if measObj.manualSeFo
-    setSlowDAC(measObj.daq, 0.0, 0)
-    setSlowDAC(measObj.daq, 0.0, 1)
-  end
 
   sleep(measObj.waitTime)
 end
@@ -294,13 +277,12 @@ end
 
 # high level: This stores as MDF
 function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                      filename::String, currents, params_::Dict;
+                      filename::String, params_::Dict;
                        kargs...)
 
   params = copy(params_)
 
-  measObj = measurementSystemMatrix(su, daq, robot, safety, positions,
-                      currents, params_; kargs...)
+  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
 
   # acquisition parameters
   params["acqStartTime"] = Dates.unix2datetime(time())
