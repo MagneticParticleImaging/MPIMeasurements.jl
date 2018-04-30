@@ -42,7 +42,7 @@ using ProgressMeter
 
 import Redpitaya: receive, query
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC
+                           setSlowDAC, getSlowADC, enableSlowDAC
 import Base.write
 #import PyPlot.disconnect
 

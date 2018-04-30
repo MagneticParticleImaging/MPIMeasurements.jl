@@ -39,21 +39,26 @@ measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
 
 [SurveillanceUnit]
-type = "Arduino"
-connection = "/dev/ttyACM0"
+type = "Dummy"
+#type = "Arduino"
+#connection = "/dev/ttyACM0"
 
 [Robot]
-pauseTime = 1.0
-stepsPerTurn = 5000
-gearSlope = 5
-minMaxFreq = [20, 4000]
-defaultVel = [40000, 40000, 40000]
-defSampleCenterPos = [0.01, 0.0, 0.0]
-minMaxVel = [30, 40000]
-minMaxAcc = [1, 4000]
-defCenterPos = [0.099, 0.128, 0.043000000000000003]
-type = "Isel"
-connection = "/dev/ttyUSB0"
+type="Dummy"
+pauseTime=1.0
+
+#[Robot]
+#pauseTime = 1.0
+#stepsPerTurn = 5000
+#gearSlope = 5
+#minMaxFreq = [20, 4000]
+#defaultVel = [40000, 40000, 40000]
+#defSampleCenterPos = [0.01, 0.0, 0.0]
+#minMaxVel = [30, 40000]
+#minMaxAcc = [1, 4000]
+#defCenterPos = [0.099, 0.128, 0.043000000000000003]
+#type = "Isel"
+#connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "noCoil"
@@ -65,13 +70,16 @@ setupName = "hallSensornoCoil"
 daq = "RedPitayaScpiNew"
 controlLoopPhaseAccuracy = 1.0
 #ip = ["192.168.1.102"]
-ip = ["192.168.1.100"]#, "192.168.1.27"]
+#ip = ["192.168.1.100"]#, "192.168.1.27"]
+#ip = ["rp-f044d6"]
+#ip = ["rp-f04972.local"]
+ip = ["rp-f04972.local", "rp-f044d6.local"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
-calibFieldToVolt = [150.9762491038963]
+calibFieldToVolt = [20]
 acqNumBGFrames = 200
 acqNumFGFrames = 200
 rxNumChannels = 1
-controlPause = 0.8
+controlPause = 0.2
 controlPhase = true
 decimation = 32
 acqNumFrames = 1
@@ -80,14 +88,15 @@ dfStrength = [0.005]
 txLimitVolt = [0.8]
 controlLoopAmplitudeAccuracy = 0.04
 dfPhase = [0.0]
-calibRefToField = [0.011627906976744186]
+calibRefToField = [0.05]
 dfBaseFrequency = 1.25e8
 acqNumPeriodsPerFrame = 1
-acqNumFFChannels = 1
-acqFFValues = [1]
+#acqNumFFChannels = 1
+#acqFFValues = []
+acqFFSequence = "HeadScanner17Simple"
 acqFFLinear = false
 acqNumAverages = 1
-rxChanIdx = [1]#,3,4]
+rxChanIdx = [1,3,4]
 refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]

@@ -11,6 +11,17 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
+  if !masterTrigger(daq.rpc)
+    ramWriterMode(daq.rpc, "TRIGGERED")
+    modeDAC(daq.rpc, "RASTERIZED")
+
+    for d=1:numChan(daq.rpc)
+      for e=1:length(daq.params.rpModulus)
+        modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
+      end
+    end
+    masterTrigger(daq.rpc, true)
+  end
   #disconnect(daq)
   return daq
 end
@@ -38,24 +49,20 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.numSampPerPeriod * daq.params.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
 
-  masterTrigger(daq.rpc, false)
-  ramWriterMode(daq.rpc, "TRIGGERED")
-  modeDAC(daq.rpc, "RASTERIZED")
+  #masterTrigger(daq.rpc, false)
 
-  for d=1:numChan(daq.rpc)
-    for e=1:length(daq.params.rpModulus)
-      modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
-    end
-  end
-
-  # upload multi-patch LUT
-  numSlowDACChan(master(daq.rpc), 1)
-  if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame
-    setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
-  else
-    # If numPeriods is larger than the LUT we repeat the values
-    setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
+  # upload multi-patch LUT TODO!!!
+  if length(daq.params.acqFFValues) > 0
+    numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
+    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame*daq.params.acqNumFFChannels
+      setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
+    else
+      # If numPeriods is larger than the LUT we repeat the values
+      setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
             inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
+    end
+  else
+    numSlowDACChan(master(daq.rpc), 0)
   end
 
   return nothing
@@ -63,11 +70,11 @@ end
 
 function startTx(daq::DAQRedPitayaScpiNew)
   connect(daq.rpc)
-  connectADC(daq.rpc)
+  #connectADC(daq.rpc)
   startADC(daq.rpc)
-  masterTrigger(daq.rpc, true)
+  #masterTrigger(daq.rpc, true)
   while currentFrame(daq.rpc) < 0
-    sleep(0.2)
+    sleep(0.1)
   end
   return nothing
 end
@@ -94,6 +101,8 @@ end
 function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
+
+enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool) = enableSlowDAC(daq.rpc,enable)
 
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
   if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )
@@ -132,6 +141,12 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages)
 
+  c = daq.params.calibIntToVolt
+  for d=1:size(u,2)
+    u[:,d,:,:] .*= c[1,d]
+    u[:,d,:,:] .+= c[2,d]
+  end
+
   uMeas = u[:,daq.params.rxChanIdx,:,:]
   uRef = u[:,daq.params.refChanIdx,:,:]
 
@@ -140,6 +155,12 @@ end
 
 function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
   u = readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
+
+  c = daq.params.calibIntToVolt
+  for d=1:size(u,2)
+    u[:,d,:,:] .*= c[1,d]
+    u[:,d,:,:] .+= c[2,d]
+  end
 
   uMeas = u[:,daq.params.rxChanIdx,:]
   uRef = u[:,daq.params.refChanIdx,:]

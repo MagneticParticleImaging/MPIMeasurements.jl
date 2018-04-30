@@ -33,6 +33,8 @@ type DAQParams
   rpModulus::Vector{Int64}
   dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
+  controlPhase::Bool
+  acqFFSequence::String
 end
 
 
@@ -53,8 +55,6 @@ function DAQParams(params)
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-
-
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
 
   if !haskey(params, "currTxAmp")
@@ -63,6 +63,17 @@ function DAQParams(params)
   if !haskey(params, "currTxPhase")
     params["currTxPhase"] = zeros(D)
   end
+  if !haskey(params, "controlPhase")
+    params["controlPhase"] = true
+  end
+
+  if !haskey(params,"acqFFSequence")
+    params["acqFFSequence"] = "None"
+  end
+  params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+  params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+  params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
 
   params = DAQParams(
     params["decimation"],
@@ -96,7 +107,9 @@ function DAQParams(params)
     params["dfChanIdx"],
     params["rpModulus"],
     dfChanToModulusIdx,
-    params["txLimitVolt"]
+    params["txLimitVolt"],
+    params["controlPhase"],
+    params["acqFFSequence"]
    )
 
   return params
@@ -134,6 +147,8 @@ function toDict(p::DAQParams)
   params["dfChanIdx"] = p.dfChanIdx
   params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
+  params["controlPhase"] = p.controlPhase
+  params["acqFFSequence"] = p.acqFFSequence
 
   return params
 end
