@@ -15,7 +15,7 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
   end
-  currFr = currentFrame(daq)
+  currFr = currentFrame(daq)+1
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
@@ -64,7 +64,9 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   end
 
   # calibration params  (needs to be called after calibration params!)
-  params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
+  calib = zeros(2,numRxChannels(daq))
+  calib[1,:] = 1.0
+  params["rxDataConversionFactor"] = calib # calibIntToVoltRx(daq)
 
   params["measIsFourierTransformed"] = false
   params["measIsSpectralLeakageCorrected"] = false
@@ -127,6 +129,8 @@ end
 
 function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
                         controlPhase=true, showFT=true)
+  println("Starting Measurement...")
+
   if !isempty(params)
     updateParams!(daq, params)
   end
@@ -143,7 +147,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
 
   try
       while true
-        uMeas, uRef = readData(daq, 1, currentFrame(daq))
+        uMeas, uRef = readData(daq, 1, currentFrame(daq)+1)
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
@@ -152,7 +156,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         #showAllDAQData(uMeas,1)
         #showAllDAQData(uRef,2)
         showAllDAQData(u, showFT=showFT)
-        sleep(0.01)
+        sleep(0.2)
       end
   catch x
       if isa(x, InterruptException)
@@ -163,6 +167,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         rethrow(x)
       end
   end
+  return nothing
 end
 
 export measurementContReadAndSave

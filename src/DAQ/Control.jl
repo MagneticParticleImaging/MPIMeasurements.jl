@@ -33,11 +33,12 @@ end
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
   amplitude = zeros(numTxChannels(daq))
   phase = zeros(numTxChannels(daq))
-  c1 = calibIntToVoltRef(daq)
+  #c1 = calibIntToVoltRef(daq)
   for d=1:numTxChannels(daq)
     c2 = refToField(daq, d)
 
-    uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
+    #uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
+    uVolt = float(uRef[:,d,1])
 
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])
@@ -75,16 +76,16 @@ function doControlStep(daq::AbstractDAQ, uRef)
             got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation")
 
     if all( newTxAmp .< daq.params.txLimitVolt ) &&
-       maximum( deviation ) < 0.1
+       maximum( deviation ) < 0.2
       daq.params.currTxAmp[:] = newTxAmp
       daq.params.currTxPhase[:] = newTxPhase
     else
       plot(vec(uRef))
       println("Could not control")
 
-      stopTx(daq)
-      disconnect(daq)
-      startTx(daq)
+      #stopTx(daq)
+      #disconnect(daq)
+      #startTx(daq)
     end
     setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
 
