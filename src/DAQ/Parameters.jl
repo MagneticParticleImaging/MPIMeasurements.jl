@@ -70,10 +70,16 @@ function DAQParams(params)
   if !haskey(params,"acqFFSequence")
     params["acqFFSequence"] = "None"
   end
-  params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+  if params["acqFFSequence"] != "None"
+    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
                                     params["acqFFSequence"]*".csv"))
-  params["acqNumFFChannels"] = size(params["acqFFValues"],1)
-  params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+  else
+    params["acqFFValues"] = zeros(0,0)
+    params["acqNumFFChannels"] = 1
+    params["acqNumPeriodsPerFrame"] = 1
+  end
 
   params = DAQParams(
     params["decimation"],

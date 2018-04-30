@@ -76,16 +76,16 @@ function doControlStep(daq::AbstractDAQ, uRef)
             got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation")
 
     if all( newTxAmp .< daq.params.txLimitVolt ) &&
-       maximum( deviation ) < 0.1
+       maximum( deviation ) < 0.2
       daq.params.currTxAmp[:] = newTxAmp
       daq.params.currTxPhase[:] = newTxPhase
     else
       plot(vec(uRef))
       println("Could not control")
 
-      stopTx(daq)
-      disconnect(daq)
-      startTx(daq)
+      #stopTx(daq)
+      #disconnect(daq)
+      #startTx(daq)
     end
     setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
 
