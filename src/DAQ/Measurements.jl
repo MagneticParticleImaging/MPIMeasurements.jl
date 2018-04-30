@@ -15,7 +15,7 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
   end
-  currFr = currentFrame(daq)+1
+  currFr = currentFrame(daq)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
@@ -147,7 +147,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
 
   try
       while true
-        uMeas, uRef = readData(daq, 1, currentFrame(daq)+1)
+        uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
