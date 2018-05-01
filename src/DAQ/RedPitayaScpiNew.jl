@@ -54,6 +54,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   # upload multi-patch LUT TODO!!!
   if length(daq.params.acqFFValues) > 0
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
+    slowDACInterpolation(master(daq.rpc), daq.params.acqFFLinear)
     if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame*daq.params.acqNumFFChannels
       setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
     else
