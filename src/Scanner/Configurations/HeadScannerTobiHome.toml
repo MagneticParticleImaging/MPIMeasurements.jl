@@ -37,6 +37,10 @@ rxUnit = "V"
 scannerManufacturer = "IBI"
 measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
+calibGridShape = [3,3,3]
+calibGridFOV = [10.0,10.0,10.0]
+calibGridCenter = [0.0,0.0,0.0]
+calibNumBGMeasurements = 2
 
 [SurveillanceUnit]
 type = "Dummy"

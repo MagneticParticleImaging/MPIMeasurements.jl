@@ -1,4 +1,4 @@
-export performTour!
+export performTour!, postMoveAction, preMoveAction
 
 
 """ `performTour(scanner::BaseScanner, grid::Positions, measObj::T, preMoveAction::Function, postMoveAction::Function) where {T<:MeasObj}`

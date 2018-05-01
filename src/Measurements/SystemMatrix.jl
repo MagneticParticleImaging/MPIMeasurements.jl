@@ -1,5 +1,7 @@
 export measurementSystemMatrix, SystemMatrixRobotMeas, measurementSystemMatrixSlowFF, SystemMatrixRobotMeasSlowFF
 
+import MPIFiles.saveasMDF
+
 struct SystemMatrixRobotMeasSlowFF <: MeasObj
   su::SurveillanceUnit
   daq::AbstractDAQ
@@ -207,7 +209,14 @@ struct SystemMatrixRobotMeas <: MeasObj
   controlPhase::Bool
 end
 
-function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+function SystemMatrixRobotMeas(scanner, positions::GridPositions,params_::Dict; kargs...)
+  return SystemMatrixRobotMeas(getSurveillanceUnit(scanner),
+                               getDAQ(scanner),
+                               getRobot(scanner),
+                               getSafety(scanner), positions, params_; kargs...)
+end
+
+function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
                      params_::Dict; controlPhase=true, waitTime = 4.0)
 
   updateParams!(daq, params_)
@@ -230,6 +239,13 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
   signals = zeros(Float32,numSampPerPeriod,numRxChannels(daq),numPeriods,length(positions))
 
   measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime, controlPhase)
+  return measObj
+end
+
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                     params_::Dict; kargs...)
+
+  measObj = SystemMatrixRobotMeas(su, daq, robot, safety, positions, params; kargs...)
 
   res = performTour!(robot, safety, positions, measObj)
 
@@ -257,20 +273,21 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
   end
 
   enableSlowDAC(measObj.daq, true)
-  sleep(5.0)
+  sleep(1.0)
 
   currFr = currentFrame(measObj.daq)
-  uMeas, uRef = readData(measObj.daq, 1, currFr+1)
+  uMeas, uRef = readData(measObj.daq, 1, currFr)
   enableSlowDAC(measObj.daq, false)
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 
-  u = cat(2, uMeas, uRef)
+  #u = cat(2, uMeas, uRef)
 
-  showAllDAQData(u[:,:,1:1,1], showFT=true)
+  #showAllDAQData(u[:,:,1:1,1], showFT=true)
 
   measObj.signals[:,:,:,index] = mean(uMeas,4)
 
-  sleep(measObj.waitTime)
+  #sleep(measObj.waitTime)
+  return uMeas, uRef
 end
 
 
@@ -280,9 +297,16 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
                       filename::String, params_::Dict;
                        kargs...)
 
+  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
+  saveasMDF(filename, measObj, params_)
+end
+
+function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
+
   params = copy(params_)
 
-  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
+  daq = measObj.daq
+  positions = measObj.positions
 
   # acquisition parameters
   params["acqStartTime"] = Dates.unix2datetime(time())
