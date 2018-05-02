@@ -1,7 +1,7 @@
 using Unitful
 
 export IselRobot
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareIselRobot
+export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
 export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveTeachPos
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
@@ -77,36 +77,29 @@ function IselRobot(params::Dict)
     initZYX(iselRobot)
     setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
     # check whether robot has been referenced or needs to be referenced
-    currPos = getPos(iselRobot)
-    moveRes = moveAbs(iselRobot,currPos[1], currPos[2], currPos[3],false)
-    if moveRes=="0"
-        display("IselRobot is referenced and ready to use!")
-        return iselRobot
-    elseif moveRes=="R"
-        display("IselRobot is NOT referenced and needs to be referenced!")
-        display("Remove all attached devices from the robot before the robot will be referenced and move around!")
-        display("Type \"REF\" in console to continue")
-        userInput=readline(STDIN)
-        if userInput=="REF"
-            display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
-            uIYes = readline(STDIN)
-            if uIYes == "yes"
-                prepareIselRobot(iselRobot)
-                display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
-                userInput=readline(STDIN)
-                return iselRobot
-            else
-                error("User failed to type \"yes\" to continue")
-            end
-        else
-            error("User failed to type \"REF\" to continue")
-        end
-    else
-        error("Not expected \"$(moveRes)\" feedback from robot")
+    if !haskey(params,"doReferenceCheck") || params["doReferenceCheck"]
+      referenced = isReferenced(iselRobot)
+      if !referenced
+        userGuidedPreparation(iselRobot)
+      end
     end
+
   catch ex
     println("Connection fail: ",ex)
   end
+end
+
+function isReferenced(robot::IselRobot)
+  currPos = getPos(iselRobot)
+  moveRes = moveAbs(iselRobot,currPos[1], currPos[2], currPos[3],false)
+  if moveRes=="0"
+    return true
+  elseif moveRes=="R"
+    return false
+  else
+      error("Not expected \"$(moveRes)\" feedback from robot")
+  end
+  return false
 end
 
 """ queryIsel(sd::SerialDevice,cmd::String) """
@@ -295,8 +288,8 @@ function invertAxesYZ(robot::IselRobot)
     checkError(ret)
 end
 
-""" `prepareIselRobot(robot::IselRobot)` """
-function prepareIselRobot(robot::IselRobot)
+""" `prepareRobot(robot::IselRobot)` """
+function prepareRobot(robot::IselRobot)
   # check sensor for reference
   tempTimeout = robot.sd.timeout_ms
   try

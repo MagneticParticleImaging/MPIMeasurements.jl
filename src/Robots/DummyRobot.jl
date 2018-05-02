@@ -1,6 +1,9 @@
 export DummyRobot
 
-struct DummyRobot <: Robot
+mutable struct DummyRobot <: Robot
+  referenced::Bool
+
+  DummyRobot() = new(false)
 end
 
 function moveAbs(robot::DummyRobot, posX::typeof(1.0u"mm"),
@@ -26,3 +29,10 @@ end
 function setBrake(robot::DummyRobot, brake::Bool)
     println("Setting brake to $(brake) !")
 end
+
+function prepareRobot(robot::DummyRobot)
+  println("Doing Dummy Reference Drive!")
+  robot.referenced = true
+end
+
+isReferenced(robot::DummyRobot) = robot.referenced
