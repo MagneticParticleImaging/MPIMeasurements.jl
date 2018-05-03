@@ -22,6 +22,7 @@ type DAQParams
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
+  calibFFCurrentToVolt::Float64
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -81,6 +82,10 @@ function DAQParams(params)
     params["acqNumPeriodsPerFrame"] = 1
   end
 
+  if !haskey(params,"calibFFCurrentToVolt")
+    params["calibFFCurrentToVolt"] = 0.0
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -103,6 +108,7 @@ function DAQParams(params)
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
+    params["calibFFCurrentToVolt"],
     params["currTxAmp"],
     params["currTxPhase"],
     params["controlPause"],
@@ -142,6 +148,7 @@ function toDict(p::DAQParams)
   params["acqFFLinear"] = p.acqFFLinear
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
+  params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
   params["currTxAmp"] = p.currTxAmp
   params["currTxPhase"] = p.currTxPhase
   params["controlPause"] = p.controlPause

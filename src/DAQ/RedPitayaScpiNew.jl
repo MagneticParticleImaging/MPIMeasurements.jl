@@ -56,10 +56,12 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
     slowDACInterpolation(master(daq.rpc), daq.params.acqFFLinear)
     if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame*daq.params.acqNumFFChannels
-      setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues)
+      setSlowDACLUT(master(daq.rpc),
+          daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
     else
       # If numPeriods is larger than the LUT we repeat the values
-      setSlowDACLUT(master(daq.rpc), repeat(vec(daq.params.acqFFValues),
+      setSlowDACLUT(master(daq.rpc),
+          repeat(vec(daq.params.acqFFValues).*daq.params.calibFFCurrentToVolt,
             inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
     end
   else
@@ -94,7 +96,7 @@ end
 
 function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel)
 
-  setSlowDAC(daq.rpc, channel, value)
+  setSlowDAC(daq.rpc, channel, value.*daq.param.calibFFCurrentToVolt)
 
   return nothing
 end

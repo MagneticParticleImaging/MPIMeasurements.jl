@@ -9,15 +9,13 @@ struct SystemMatrixRobotMeasSlowFF <: MeasObj
   positions::GridPositions
   signals::Array{Float32,4}
   waitTime::Float64
-  voltToCurrent::Float64
   currents::Matrix{Float64}
   controlPhase::Bool
 end
 
 function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPositions,
                     currents, params_::Dict;
-                    controlPhase=true, waitTime = 4.0,
-                    voltToCurrent = 0.08547008547008547)
+                    controlPhase=true, waitTime = 4.0)
 
   updateParams!(daq, params_)
 
@@ -40,7 +38,7 @@ function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPo
   signals = zeros(Float32,numSampPerPeriod,numRxChannels(daq),numPatches,length(positions))
 
   measObj = SystemMatrixRobotMeasSlowFF(su, daq, robot, positions, signals, waitTime,
-                                  voltToCurrent, currents, controlPhase)
+                                  currents, controlPhase)
 
   res = performTour!(robot, safety, positions, measObj)
 
@@ -74,15 +72,15 @@ function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(
 
   showAllDAQData(u, showFT=true)
 
-  setSlowDAC(measObj.daq, measObj.currents[1,1]*measObj.voltToCurrent, 0)
-  setSlowDAC(measObj.daq, measObj.currents[2,1]*measObj.voltToCurrent, 1)
+  setSlowDAC(measObj.daq, measObj.currents[1,1], 0)
+  setSlowDAC(measObj.daq, measObj.currents[2,1], 1)
 
   sleep(1.0)
 
   for l=1:size(measObj.currents,2)
     # set current at DC sources
-    setSlowDAC(measObj.daq, measObj.currents[1,l]*measObj.voltToCurrent, 0)
-    setSlowDAC(measObj.daq, measObj.currents[2,l]*measObj.voltToCurrent, 1)
+    setSlowDAC(measObj.daq, measObj.currents[1,l], 0)
+    setSlowDAC(measObj.daq, measObj.currents[2,l], 1)
 
     println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
     # wait until magnet is on field
