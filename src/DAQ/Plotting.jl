@@ -9,7 +9,7 @@ function showDAQData(u)
   plot(u_)
   subplot(2,1,2)
   semilogy(abs.(rfft(u_)))#,"o-b",lw=2)
-  sleep(0.1)
+  sleep(0.01)
 end
 
 function showDAQData(daq,u,frame=1)
@@ -23,7 +23,7 @@ function showDAQData(daq,u,frame=1)
   freq = (0:(length(uhat)-1)) * daq.params.dfBaseFrequency / daq.params.dfDivider[1,1,1]  / 10
 
   semilogy(freq,uhat)#,"o-b",lw=2)
-  sleep(0.1)
+  sleep(0.01)
 end
 
 

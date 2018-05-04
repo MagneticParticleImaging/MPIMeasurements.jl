@@ -22,6 +22,7 @@ type DAQParams
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
+  calibFFCurrentToVolt::Float64
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -34,6 +35,7 @@ type DAQParams
   dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
   controlPhase::Bool
+  acqFFSequence::String
 end
 
 
@@ -66,6 +68,24 @@ function DAQParams(params)
     params["controlPhase"] = true
   end
 
+  if !haskey(params,"acqFFSequence")
+    params["acqFFSequence"] = "None"
+  end
+  if params["acqFFSequence"] != "None"
+    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+  else
+    params["acqFFValues"] = zeros(0,0)
+    params["acqNumFFChannels"] = 1
+    params["acqNumPeriodsPerFrame"] = 1
+  end
+
+  if !haskey(params,"calibFFCurrentToVolt")
+    params["calibFFCurrentToVolt"] = 0.0
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -88,6 +108,7 @@ function DAQParams(params)
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
+    params["calibFFCurrentToVolt"],
     params["currTxAmp"],
     params["currTxPhase"],
     params["controlPause"],
@@ -99,7 +120,8 @@ function DAQParams(params)
     params["rpModulus"],
     dfChanToModulusIdx,
     params["txLimitVolt"],
-    params["controlPhase"]
+    params["controlPhase"],
+    params["acqFFSequence"]
    )
 
   return params
@@ -126,6 +148,7 @@ function toDict(p::DAQParams)
   params["acqFFLinear"] = p.acqFFLinear
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
+  params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
   params["currTxAmp"] = p.currTxAmp
   params["currTxPhase"] = p.currTxPhase
   params["controlPause"] = p.controlPause
@@ -138,6 +161,7 @@ function toDict(p::DAQParams)
   params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
   params["controlPhase"] = p.controlPhase
+  params["acqFFSequence"] = p.acqFFSequence
 
   return params
 end

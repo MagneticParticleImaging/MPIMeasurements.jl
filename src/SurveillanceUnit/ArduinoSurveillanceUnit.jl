@@ -11,6 +11,7 @@ function ArduinoSurveillanceUnit(params::Dict)
   # Here we could put more parameters into the TOML file
   su = ArduinoSurveillanceUnit(params["connection"])
   DisableWatchDog(su)
+  DisableSurveillance(su)
   return su
 end
 
