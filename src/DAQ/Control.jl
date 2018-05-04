@@ -10,7 +10,7 @@ function controlLoop(daq::AbstractDAQ)
   controlPhaseDone = false
   while !controlPhaseDone
     period = currentPeriod(daq)
-    @time uMeas, uRef = readDataPeriods(daq, 1, period)
+    @time uMeas, uRef = readDataPeriods(daq, 1, period+1)
 
     controlPhaseDone = doControlStep(daq, uRef)
 

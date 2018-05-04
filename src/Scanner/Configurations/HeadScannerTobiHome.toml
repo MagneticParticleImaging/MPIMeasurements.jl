@@ -41,6 +41,7 @@ calibGridShape = [3,3,3]
 calibGridFOV = [10.0,10.0,10.0]
 calibGridCenter = [0.0,0.0,0.0]
 calibNumBGMeasurements = 2
+calibBGPos = [0.0,0.0,0.0]
 
 [SurveillanceUnit]
 type = "Dummy"
@@ -98,7 +99,7 @@ acqNumPeriodsPerFrame = 1
 #acqNumFFChannels = 1
 #acqFFValues = []
 acqFFSequence = "HeadScanner17Simple"
-acqFFLinear = true
+acqFFLinear = false
 acqNumAverages = 1
 rxChanIdx = [1,3,4]
 refChanIdx = [2]
