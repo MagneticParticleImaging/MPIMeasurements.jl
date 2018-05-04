@@ -6,8 +6,8 @@ DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 export convert2Unit, checkCoords
 # export defaults
 export deltaSample, hallSensor, mouseAdapter, brukerCoil, mouseCoil, clearance,
-dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner,
-mouseAdapterREDUCEDScanner, hallSensorRegularScanner,hallSensorREDUCEDScanner, validScannerGeometries
+dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner,
+mouseAdapterMouseScanner, hallSensorRegularScanner,hallSensorMouseScanner, validScannerGeometries
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
@@ -143,6 +143,7 @@ deltaSample = Circle(10.0u"mm", "Delta sample");
 # create given scanner diameter
 brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "burker coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
 mouseCoil = ScannerGeo(40.0u"mm", "mouse coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
+ratCoil = ScannerGeo(72.0u"mm", "rat coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot)
 headCoil = ScannerGeo(150.0u"mm", "head coil scanner diameter", -300.0u"mm", 300.0u"mm");
 noCoil = ScannerGeo(400.0u"mm", "no coil scanner diameter", -300.0u"mm", 300.0u"mm");
 
@@ -152,12 +153,22 @@ clearance = Clearance(0.9u"mm");
 # Standard Combination RobotSetup
 dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, brukerCoil, clearance);
 mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, brukerCoil, clearance);
-dSampleREDUCEDScanner = RobotSetup("dSampleREDUCEDScanner", deltaSample, mouseCoil, clearance);
-mouseAdapterREDUCEDScanner = RobotSetup("mouseAdapterREDUCEDScanner", mouseAdapter, mouseCoil, clearance);
-hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor,brukerCoil, clearance)
-hallSensorREDUCEDScanner = RobotSetup("hallSensorREDUCEDScanner", hallSensor,mouseCoil, clearance)
+dSampleMouseScanner = RobotSetup("dSampleMouseScanner", deltaSample, mouseCoil, clearance);
+mouseAdapterMouseScanner = RobotSetup("mouseAdapterMouseScanner", mouseAdapter, mouseCoil, clearance);
+dSampleRatScanner = RobotSetup("dSampleRatScanner", deltaSample, ratCoil, clearance);
+mouseAdapterRatScanner = RobotSetup("mouseAdapterRatScanner", mouseAdapter, ratCoil, clearance);
 
-validScannerGeometries = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner, mouseAdapterREDUCEDScanner, hallSensorRegularScanner, hallSensorREDUCEDScanner]
+hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor, brukerCoil, clearance)
+hallSensorMouseScanner = RobotSetup("hallSensorMouseScanner", hallSensor, mouseCoil, clearance)
+hallSensorRatScanner = RobotSetup("hallSensorMouseScanner", hallSensor, ratCoil, clearance)
+
+validScannerGeometries = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner, mouseAdapterMouseScanner,
+ dSampleRatScanner, mouseAdapterRatScanner, hallSensorRegularScanner, hallSensorMouseScanner, hallSensorRatScanner]
+
+ @doc "Returns all validated Scanner geometries!"->
+function getValidScannerGeometries()
+    return validScannerGeometries
+end
 
 function RobotSetup(params::Dict)
     receiveCoil = getfield(MPIMeasurements,Symbol(params["receiveCoil"]))
