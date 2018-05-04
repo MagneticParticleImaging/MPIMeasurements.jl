@@ -1,6 +1,6 @@
 using MPIMeasurements
 
-scanner = MPIScanner("HeadScannerTobiHome.toml")
+scanner = MPIScanner("HeadScanner.toml")
 daq = getDAQ(scanner)
 
 params = toDict(daq.params)
@@ -19,4 +19,4 @@ params["acqNumAverages"]=100
 
 enableSlowDAC(daq,true)
 println("Starting Measurement...")
-measurementCont(daq, params, controlPhase=true, showFT=false)
+measurementCont(daq, params, controlPhase=true, showFT=true)

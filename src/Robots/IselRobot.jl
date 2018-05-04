@@ -83,15 +83,15 @@ function IselRobot(params::Dict)
         userGuidedPreparation(iselRobot)
       end
     end
-
+    return iselRobot
   catch ex
     println("Connection fail: ",ex)
   end
 end
 
 function isReferenced(robot::IselRobot)
-  currPos = getPos(iselRobot)
-  moveRes = moveAbs(iselRobot,currPos[1], currPos[2], currPos[3],false)
+  currPos = getPos(robot)
+  moveRes = moveAbs(robot,currPos[1], currPos[2], currPos[3],false)
   if moveRes=="0"
     return true
   elseif moveRes=="R"

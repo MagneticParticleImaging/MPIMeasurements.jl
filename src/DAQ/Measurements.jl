@@ -16,6 +16,9 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
                      zeros(numTxChannels(daq)))
   end
   currFr = currentFrame(daq)
+  while currFr <=1
+    currFr = currentFrame(daq)
+  end
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 

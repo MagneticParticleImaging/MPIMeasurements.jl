@@ -73,6 +73,7 @@ end
 
 include("Robots/Robots.jl")
 include("Scanner/Scanner.jl")
+include("Sequences/Sequences.jl")
 
 if is_unix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")

@@ -40,6 +40,7 @@ dfWaveform = "sine"
 calibGridShape = [9,5,1]
 calibGridFOV = [90.0,50.0,10.0]
 calibGridCenter = [153.0,-11.2,71.0]
+calibBGPos = [-60.0,-11.2,71.0]
 calibNumBGMeasurements = 2
 
 [SurveillanceUnit]
@@ -91,9 +92,10 @@ acqNumPeriodsPerFrame = 1
 acqNumFFChannels = 2
 acqFFValues = [1.0,1.0]
 acqFFLinear = false
-acqFFSequence = "None"
+acqFFSequence = "Static"
 acqNumAverages = 5000
 rxChanIdx = [1]#,3]#,4]
 refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
+calibFFCurrentToVolt = 0.08547008547008547
