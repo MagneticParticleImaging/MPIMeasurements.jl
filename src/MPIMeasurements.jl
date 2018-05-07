@@ -71,8 +71,9 @@ if is_unix() && VERSION >= v"0.6"
   include("SerialDevices/SerialDevices.jl")
 end
 
-include("Robots/Robots.jl")
+#include("Robots/Robots.jl")
 include("Scanner/Scanner.jl")
+include("Robots/Robots.jl")
 include("Sequences/Sequences.jl")
 
 if is_unix() && VERSION >= v"0.6"

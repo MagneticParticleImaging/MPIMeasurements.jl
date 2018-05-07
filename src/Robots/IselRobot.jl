@@ -2,7 +2,7 @@ using Unitful
 
 export IselRobot
 export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
-export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveTeachPos
+export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
@@ -123,7 +123,11 @@ end
 
 """ References all axes in order Z,Y,X """
 function refZYX(robot::IselRobot)
-  ret = queryIsel(robot.sd, "@0R7")
+  ret = queryIsel(robot.sd, "@0R1")
+  checkError(ret)
+  ret = queryIsel(robot.sd, "@0R4")
+  checkError(ret)
+  ret = queryIsel(robot.sd, "@0R2")
   checkError(ret)
 end
 
@@ -145,6 +149,7 @@ end
 
 """ Move Isel Robot to teach position """
 function moveTeachPos(robot::IselRobot)
+    moveAbs(robot, 0.0u"mm" ,robot.defCenterPos[2],robot.defCenterPos[3])
     moveAbs(robot,robot.defCenterPos[1],robot.defCenterPos[2],robot.defCenterPos[3])
 end
 
@@ -305,12 +310,13 @@ end
 
 """ Sets robots zero position at current position and saves new teach position in file .toml
  `TeachPosition(robot::IselRobot,fileName::AbstractString)` """
-function TeachPosition(robot::IselRobot,fileName::AbstractString)
+function TeachPosition(scanner::MPIScanner,robot::IselRobot,fileName::AbstractString)
     newTeachingPosition = getPos(robot,u"m")
     setZeroPoint(robot)
     # and most importantly change value defCenterPos in the .toml file to the new value
     # note the defCenterPos is saved in meter not in millimeter
     saveTeachPosition(newTeachingPosition,fileName)
+    scanner.params["Robot"]["defCenterPos"] = ustrip(newTeachingPosition)
     println("Changed \"defCenterPos\" to $(newTeachingPosition) in $(fileName) file using the this Isel Robot")
 end
 
