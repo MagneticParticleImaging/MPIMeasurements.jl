@@ -76,7 +76,7 @@ function startTx(daq::DAQRedPitayaScpiNew)
   #connectADC(daq.rpc)
   startADC(daq.rpc)
   #masterTrigger(daq.rpc, true)
-  while currentPeriod(daq.rpc) < 0
+  while currentPeriod(daq.rpc) < 1
     sleep(0.1)
   end
   return nothing

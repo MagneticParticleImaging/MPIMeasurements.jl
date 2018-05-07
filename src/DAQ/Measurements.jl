@@ -15,12 +15,10 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
   end
-  currFr = currentFrame(daq)
-  while currFr <=1
-    currFr = currentFrame(daq)
-  end
+  #currFr = currentFrame(daq)
+  currFr = enableSlowDAC(daq, true)
 
-  uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
+  uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr+1)
 
   stopTx(daq)
   disconnect(daq)
