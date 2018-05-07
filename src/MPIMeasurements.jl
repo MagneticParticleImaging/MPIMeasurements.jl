@@ -35,6 +35,7 @@ using Reexport
 #@reexport using Redpitaya
 @reexport using RedPitayaDAQServer
 @reexport using Unitful
+@reexport using Unitful.DefaultSymbols
 @reexport using TOML
 using HDF5
 using ProgressMeter
