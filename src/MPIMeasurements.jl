@@ -60,6 +60,7 @@ export Device, Robot, GaussMeter, MeasObj
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 include("Safety/RobotSafety.jl")
+include("Safety/KnownSetups.jl")
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"

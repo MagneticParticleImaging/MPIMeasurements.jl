@@ -62,10 +62,10 @@ type = "Isel"
 connection = "/dev/ttyUSB0"
 
 [Safety]
-receiveCoil = "noCoil"
-robotMount = "hallSensor"
+receiveCoil = "headCoil"
+robotMount = "deltaSample"
 clearance = "clearance"
-setupName = "hallSensornoCoil"
+setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"
