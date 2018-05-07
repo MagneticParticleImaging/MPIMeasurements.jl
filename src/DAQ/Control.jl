@@ -38,7 +38,7 @@ function calcFieldFromRef(daq::AbstractDAQ, uRef)
     c2 = refToField(daq, d)
 
     #uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
-    uVolt = float(uRef[:,d,1])
+    uVolt = float(uRef[1:daq.params.numSampPerPeriod,d,1])
 
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])
