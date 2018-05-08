@@ -27,11 +27,10 @@ include("Measurements.jl")
 include("RedPitayaScpiNew.jl")
 
 function DAQ(params::Dict)
-  if params["daq"] == "RedPitayaScpiNew"
-    return DAQRedPitayaScpiNew(params)
-  else
+  if params["daq"] != "RedPitayaScpiNew"
     error("$(params["daq"]) not yet implemented!")
   end
+  return DAQRedPitayaScpiNew(params)
 end
 
 function initLUT(N,D, dfCycle, dfFreq)

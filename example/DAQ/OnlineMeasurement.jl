@@ -8,13 +8,15 @@ params = toDict(daq.params)
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=[10e-3]
-params["acqNumAverages"]=1
-
-x = linspace(0,1,3)
+params["dfStrength"]=[5e-3]  #[5e-3]
+params["acqNumAverages"]=100
+#params["calibFieldToVolt"]=[1]
+#x = linspace(0,1,6)
 #params["acqFFValues"] = [0.0]
-params["acqFFValues"] = repeat( cat(1,x,reverse(x[2:end-1])),inner=5)
-params["acqNumPeriodsPerFrame"]=length(params["acqFFValues"])
+#params["acqNumFFChannels"] = 2
+#params["acqFFValues"] = repeat( x, inner=10)
+#params["acqNumPeriodsPerFrame"]= div(length(params["acqFFValues"]),params["acqNumFFChannels"])
 
-
-measurementCont(daq, params, controlPhase=true, showFT=false)
+enableSlowDAC(daq,true)
+println("Starting Measurement...")
+measurementCont(daq, params, controlPhase=true, showFT=true)

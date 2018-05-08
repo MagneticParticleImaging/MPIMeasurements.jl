@@ -14,6 +14,7 @@ type DAQParams
   acqNumFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
+  acqNumSubperiods::Int64
   sinLUT::Matrix{Float64}
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
@@ -22,6 +23,7 @@ type DAQParams
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
+  calibFFCurrentToVolt::Float64
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -32,11 +34,15 @@ type DAQParams
   dfChanIdx::Vector{Int64}
   rpModulus::Vector{Int64}
   dfChanToModulusIdx::Vector{Int64} #RP specific
+  txLimitVolt::Vector{Float64}
+  controlPhase::Bool
+  acqFFSequence::String
 end
 
 
 function DAQParams(params)
 
+  D = length(params["dfDivider"])
   dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
   dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
@@ -49,11 +55,42 @@ function DAQParams(params)
 
   acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
-  sinLUT, cosLUT = initLUT(numSampPerPeriod, length(params["dfDivider"]), dfCycle, dfFreq)
-
-  D = length(params["dfDivider"])
+  sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
+
+  if !haskey(params, "currTxAmp")
+    params["currTxAmp"] = params["txLimitVolt"] ./ 10
+  end
+  if !haskey(params, "currTxPhase")
+    params["currTxPhase"] = zeros(D)
+  end
+  if !haskey(params, "controlPhase")
+    params["controlPhase"] = true
+  end
+
+  if !haskey(params,"acqFFSequence")
+    params["acqFFSequence"] = "None"
+  end
+  if params["acqFFSequence"] != "None"
+    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+  else
+    params["acqFFValues"] = zeros(0,0)
+    params["acqNumFFChannels"] = 1
+    params["acqNumPeriodsPerFrame"] = 1
+  end
+
+  if !haskey(params,"calibFFCurrentToVolt")
+    params["calibFFCurrentToVolt"] = 0.0
+  end
+
+
+  if !haskey(params,"acqNumSubperiods")
+    params["acqNumSubperiods"] = 1
+  end
 
   params = DAQParams(
     params["decimation"],
@@ -69,6 +106,7 @@ function DAQParams(params)
     params["acqNumFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
+    params["acqNumSubperiods"],
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
@@ -77,6 +115,7 @@ function DAQParams(params)
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
+    params["calibFFCurrentToVolt"],
     params["currTxAmp"],
     params["currTxPhase"],
     params["controlPause"],
@@ -86,7 +125,10 @@ function DAQParams(params)
     params["refChanIdx"],
     params["dfChanIdx"],
     params["rpModulus"],
-    dfChanToModulusIdx
+    dfChanToModulusIdx,
+    params["txLimitVolt"],
+    params["controlPhase"],
+    params["acqFFSequence"]
    )
 
   return params
@@ -106,6 +148,7 @@ function toDict(p::DAQParams)
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
   params["acqNumFrames"] = p.acqNumFrames
+  params["acqNumSubperiods"] = p.acqNumSubperiods
   params["acqFramePeriod"] = p.acqFramePeriod
   params["acqNumAverages"] = p.acqNumAverages
   params["acqNumFFChannels"] = p.acqNumFFChannels
@@ -113,6 +156,7 @@ function toDict(p::DAQParams)
   params["acqFFLinear"] = p.acqFFLinear
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
+  params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
   params["currTxAmp"] = p.currTxAmp
   params["currTxPhase"] = p.currTxPhase
   params["controlPause"] = p.controlPause
@@ -123,6 +167,9 @@ function toDict(p::DAQParams)
   params["refChanIdx"] = p.refChanIdx
   params["dfChanIdx"] = p.dfChanIdx
   params["rpModulus"] = p.rpModulus
+  params["txLimitVolt"] = p.txLimitVolt
+  params["controlPhase"] = p.controlPhase
+  params["acqFFSequence"] = p.acqFFSequence
 
   return params
 end

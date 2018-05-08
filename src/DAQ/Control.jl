@@ -10,7 +10,7 @@ function controlLoop(daq::AbstractDAQ)
   controlPhaseDone = false
   while !controlPhaseDone
     period = currentPeriod(daq)
-    @time uMeas, uRef = readDataPeriods(daq, 1, period)
+    @time uMeas, uRef = readDataPeriods(daq, 1, period+1)
 
     controlPhaseDone = doControlStep(daq, uRef)
 
@@ -33,11 +33,12 @@ end
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
   amplitude = zeros(numTxChannels(daq))
   phase = zeros(numTxChannels(daq))
-  c1 = calibIntToVoltRef(daq)
+  #c1 = calibIntToVoltRef(daq)
   for d=1:numTxChannels(daq)
     c2 = refToField(daq, d)
 
-    uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
+    #uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
+    uVolt = float(uRef[1:daq.params.numSampPerPeriod,d,1])
 
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])
@@ -61,30 +62,33 @@ function doControlStep(daq::AbstractDAQ, uRef)
      norm(phase) < daq.params.controlLoopPhaseAccuracy
     return true
   else
-    oldTxPhase = copy(daq.params.currTxPhase)
-    oldTxAmp = copy(daq.params.currTxAmp)
+    newTxPhase = daq.params.currTxPhase .- phase
+    wrapPhase!(newTxPhase)
 
-    daq.params.currTxPhase[:] .-= phase
-    wrapPhase!(daq.params.currTxPhase)
+    newTxAmp = daq.params.currTxAmp .* daq.params.dfStrength ./ amplitude
 
-    daq.params.currTxAmp[:] .*=  daq.params.dfStrength ./ amplitude
+    println("new tx amplitude=$(newTxAmp)) phase=$(newTxPhase)")
 
-    println("new tx amplitude=$(daq.params.currTxAmp)) phase=$(daq.params.currTxPhase)")
+    deviation = abs.( daq.params.currTxAmp ./ amplitude .-
+                     daq.params.calibFieldToVolt ) ./ daq.params.calibFieldToVolt
 
-    try
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
-    catch
+    println("We expected $(daq.params.calibFieldToVolt) and
+            got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation")
+
+    if all( newTxAmp .< daq.params.txLimitVolt ) &&
+       maximum( deviation ) < 0.2
+      daq.params.currTxAmp[:] = newTxAmp
+      daq.params.currTxPhase[:] = newTxPhase
+    else
       plot(vec(uRef))
       println("Could not control")
-      daq.params.currTxPhase[:] = oldTxPhase
-      daq.params.currTxAmp[:] = oldTxAmp
 
-      stopTx(daq)
-      disconnect(daq)
-      startTx(daq)
-
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+      #stopTx(daq)
+      #disconnect(daq)
+      #startTx(daq)
     end
+    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+
     return false
   end
 end

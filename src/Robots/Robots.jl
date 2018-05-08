@@ -1,7 +1,7 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot
+export Robot, isReferenced, prepareRobot
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0u"mm"),
@@ -11,6 +11,8 @@ export Robot
 @mustimplement movePark(robot::Robot)
 @mustimplement moveCenter(robot::Robot)
 @mustimplement setBrake(robot::Robot,brake::Bool)
+@mustimplement prepareRobot(robot::Robot)
+@mustimplement isReferenced(robot::Robot)
 
 """ `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
 function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})
@@ -44,6 +46,27 @@ function moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0u"mm")})
       error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
     end
     moveRel(robot,xyzDist[1],xyzDist[2],xyzDist[3])
+end
+
+function userGuidedPreparation(robot::Robot)
+  display("IselRobot is NOT referenced and needs to be referenced!")
+  display("Remove all attached devices from the robot before the robot will be referenced and move around!")
+  display("Type \"REF\" in console to continue")
+  userInput=readline(STDIN)
+  if userInput=="REF"
+      display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
+      uIYes = readline(STDIN)
+      if uIYes == "yes"
+          prepareRobot(robot)
+          display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
+          userInput=readline(STDIN)
+          return
+      else
+          error("User failed to type \"yes\" to continue")
+      end
+  else
+      error("User failed to type \"REF\" to continue")
+  end
 end
 
 if is_unix() && VERSION >= v"0.6"

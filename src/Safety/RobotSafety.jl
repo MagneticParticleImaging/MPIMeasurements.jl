@@ -4,10 +4,6 @@ export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume
 DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 # export functions
 export convert2Unit, checkCoords
-# export defaults
-export deltaSample, hallSensor, mouseAdapter, brukerCoil, mouseCoil, clearance,
-dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner,
-mouseAdapterREDUCEDScanner, hallSensorRegularScanner,hallSensorREDUCEDScanner, validScannerGeometries
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
@@ -134,30 +130,6 @@ type RobotSetup
   scannerGeo::ScannerGeo
   clearance::Clearance
 end
-
-# create given test geometries
-mouseAdapter = Circle(38.0u"mm", "Mouse adapter");
-hallSensor = Circle(36.0u"mm", "Hall Sensor");
-deltaSample = Circle(10.0u"mm", "Delta sample");
-
-# create given scanner diameter
-brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "burker coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
-mouseCoil = ScannerGeo(40.0u"mm", "mouse coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
-headCoil = ScannerGeo(150.0u"mm", "head coil scanner diameter", -300.0u"mm", 300.0u"mm");
-noCoil = ScannerGeo(400.0u"mm", "no coil scanner diameter", -300.0u"mm", 300.0u"mm");
-
-# standard clearance
-clearance = Clearance(0.9u"mm");
-
-# Standard Combination RobotSetup
-dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, brukerCoil, clearance);
-mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, brukerCoil, clearance);
-dSampleREDUCEDScanner = RobotSetup("dSampleREDUCEDScanner", deltaSample, mouseCoil, clearance);
-mouseAdapterREDUCEDScanner = RobotSetup("mouseAdapterREDUCEDScanner", mouseAdapter, mouseCoil, clearance);
-hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor,brukerCoil, clearance)
-hallSensorREDUCEDScanner = RobotSetup("hallSensorREDUCEDScanner", hallSensor,mouseCoil, clearance)
-
-validScannerGeometries = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleREDUCEDScanner, mouseAdapterREDUCEDScanner, hallSensorRegularScanner, hallSensorREDUCEDScanner]
 
 function RobotSetup(params::Dict)
     receiveCoil = getfield(MPIMeasurements,Symbol(params["receiveCoil"]))
