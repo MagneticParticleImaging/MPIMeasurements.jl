@@ -12,8 +12,8 @@ connection="RobotServer"
 pauseTime=1.0
 
 [Safety]
-receiveCoil = "noCoil"
-robotMount = "hallSensor"
+receiveCoil = "mouseCoil"
+robotMount = "mouseAdapter"
 clearance = "clearance"
 setupName = "hallSensornoCoil"
 
@@ -43,7 +43,7 @@ measIsFrequencySelection = false
 measIsFourierTransformed = false
 measIsSpectralLeakageCorrected = false
 rpGainSetting = [0,1]
-datasetStore = "/opt/data/measurementsmeasurements"
+datasetStore = "/opt/data/"
 transferFunction = ""
 dfWaveform = "sine"
 rxUnit = "V"

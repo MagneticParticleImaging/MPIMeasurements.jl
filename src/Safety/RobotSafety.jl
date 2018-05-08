@@ -131,6 +131,12 @@ type RobotSetup
   clearance::Clearance
 end
 
+"""
+* validScannerGeos = [brukerCoil, mouseCoil, ratCoil, headCoil]
+* validObjects = [deltaSample, hallSensor, mouseAdapter, samplePhantom]
+* validRobotSetups = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner, mouseAdapterMouseScanner,
+ dSampleRatScanner, mouseAdapterRatScanner, hallSensorRegularScanner, hallSensorMouseScanner, hallSensorRatScanner]
+"""
 function RobotSetup(params::Dict)
     receiveCoil = getfield(MPIMeasurements,Symbol(params["receiveCoil"]))
     robotMount = getfield(MPIMeasurements,Symbol(params["robotMount"]))
