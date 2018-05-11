@@ -1,6 +1,6 @@
 export deltaSample, hallSensor, mouseAdapter, brukerCoil, mouseCoil, headCoil,ratCoil, clearance,
 dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner,
-mouseAdapterMouseScanner, hallSensorRegularScanner, hallSensorMouseScanner, validRobotSetups,
+mouseAdapterMouseScanner, hallSensorRegularScanner, hallSensorMouseScanner, getValidRobotSetups,
  getValidScannerGeos, getValidObjects
 
 # create given geometries
