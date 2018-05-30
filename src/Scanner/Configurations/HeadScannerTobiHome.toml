@@ -38,7 +38,7 @@ scannerManufacturer = "IBI"
 measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
 calibGridShape = [3,3,3]
-calibGridFOV = [10.0,10.0,10.0]
+calibGridFOV = [0.10,0.10,0.10]
 calibGridCenter = [0.0,0.0,0.0]
 calibNumBGMeasurements = 2
 calibBGPos = [0.0,0.0,0.0]
@@ -66,10 +66,10 @@ pauseTime=1.0
 #connection = "/dev/ttyUSB0"
 
 [Safety]
-receiveCoil = "noCoil"
-robotMount = "hallSensor"
+receiveCoil = "headCoil"
+robotMount = "deltaSample"
 clearance = "clearance"
-setupName = "hallSensornoCoil"
+setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"

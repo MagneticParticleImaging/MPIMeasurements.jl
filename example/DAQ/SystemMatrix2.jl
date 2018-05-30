@@ -7,7 +7,7 @@ filename = "systemMatrix.h5"
 shp = [9,1,1]
 fov = [90.0,1.0,1.0]u"mm"
 ctr = [156.0,-11.2,71.0]u"mm"
-positions = CartesianGridPositions(shp,fov,ctr)
+positions = RegularGridPositions(shp,fov,ctr)
 
 scanner = MPIScanner("HeadScanner.toml")
 robot = getRobot(scanner)

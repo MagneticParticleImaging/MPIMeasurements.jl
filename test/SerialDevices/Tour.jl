@@ -7,7 +7,7 @@ using Compat
 shp = [3,3,3]
 fov = [3.0,3.0,3.0]u"mm"
 ctr = [0,0,0]u"mm"
-positions = CartesianGridPositions(shp,fov,ctr)
+positions = RegularGridPositions(shp,fov,ctr)
 
 # create Robot
 dR = DummyRobot()

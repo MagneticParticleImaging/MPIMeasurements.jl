@@ -8,7 +8,7 @@ using HDF5
 shape = [10,10,1]
 fov = [200.0,200.0,1.0]u"mm"
 center = [0.0,0.0,0.0]u"mm"
-positions = MeanderingGridPositions( CartesianGridPositions(shape,fov,center) )
+positions = MeanderingGridPositions( RegularGridPositions(shape,fov,center) )
 
 # create Scanner
 scanner = MPIScanner("HeadScanner.toml")

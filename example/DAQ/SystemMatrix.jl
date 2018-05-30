@@ -8,7 +8,7 @@ fov = [90.0,30.0,1.0]u"mm"
 ctr = [156.0,-11.2,71.0]u"mm"
 
 positions = BreakpointGridPositions(
-        MeanderingGridPositions( CartesianGridPositions(shp,fov,ctr) ),
+        MeanderingGridPositions( RegularGridPositions(shp,fov,ctr) ),
         [1,11], [0.0,0.0,0.0]u"mm" )
 
 scanner = MPIScanner("HeadScanner.toml")
