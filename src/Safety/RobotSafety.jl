@@ -3,7 +3,7 @@ using Unitful
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
 DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 # export functions
-export convert2Unit, checkCoords
+export convert2Unit, checkCoords, CheckDeltaSample
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
@@ -436,4 +436,18 @@ end
 type CoordsError <: Exception
     message::String
     coordTable
+end
+
+function checkDeltaSample(scanDiameter::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"), clearance::typeof(1.0u"mm")=1.0u"mm")
+    deltaSample = Circle(10.0u"mm", "Delta sample");
+    scanRad = scanDiameter/2;
+    dSDiameter = deltaSample.diameter/2;
+    delta = scanRad - sqrt(y^2+z^2) - (dSDiameter);
+    delta_y = (abs(y)+dSDiameter*sin(atan(abs(y/z)))) - scanRad*sin(atan(abs(y/z)));
+    delta_z = (abs(z)+dSDiameter*cos(atan(abs(y/z)))) - scanRad*cos(atan(abs(y/z)));
+    if delta > clearance
+        return :VALID, delta, delta_y, delta_z
+    else
+        return :INVALID, delta, delta_y, delta_z
+    end
 end
