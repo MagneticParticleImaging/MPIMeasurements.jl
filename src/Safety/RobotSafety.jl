@@ -3,7 +3,7 @@ using Unitful
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
 DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 # export functions
-export convert2Unit, checkCoords, CheckDeltaSample
+export convert2Unit, checkCoords, checkDeltaSample
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
