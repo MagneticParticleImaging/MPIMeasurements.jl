@@ -441,13 +441,15 @@ end
 function checkDeltaSample(scanDiameter::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"), clearance::typeof(1.0u"mm")=1.0u"mm")
     deltaSample = Circle(10.0u"mm", "Delta sample");
     scanRad = scanDiameter/2;
-    dSDiameter = deltaSample.diameter/2;
-    delta = scanRad - sqrt(y^2+z^2) - (dSDiameter);
-    delta_y = (abs(y)+dSDiameter*sin(atan(abs(y/z)))) - scanRad*sin(atan(abs(y/z)));
-    delta_z = (abs(z)+dSDiameter*cos(atan(abs(y/z)))) - scanRad*cos(atan(abs(y/z)));
+    dSRadius = deltaSample.diameter/2;
+    delta = scanRad - sqrt(y^2+z^2) - (dSRadius);
+    delta_y = -(abs(y)+dSRadius*sin(atan(abs(y/z)))) + scanRad*sin(atan(abs(y/z)));
+    delta_z = -(abs(z)+dSRadius*cos(atan(abs(y/z)))) + scanRad*cos(atan(abs(y/z)));
+    space_z= sqrt((scanRad-dSRadius-1u"mm")^2-y^2)-z;
+    space_y= sqrt((scanRad-dSRadius-1u"mm")^2-z^2)-y;
     if delta > clearance
-        return :VALID, delta, delta_y, delta_z
+        return :VALID, delta, space_y,space_z,delta_y, delta_z
     else
-        return :INVALID, delta, delta_y, delta_z
+        return :INVALID, delta, space_y,space_z,delta_y, delta_z
     end
 end
