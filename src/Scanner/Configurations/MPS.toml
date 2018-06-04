@@ -17,7 +17,7 @@ rxNumChannels = 1
 controlPause = 0.8
 acqNumFFChannels = 1
 acqFFValues = [1.0]
-acqFFSequence = "None"
+acqFFSequence = "NoneFile"
 acqNumPeriodsPerFrame = 1
 acqFFLinear = false
 controlLoopPhaseAccuracy = 1.0
@@ -28,7 +28,9 @@ refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
 
-
+[Robot]
+type="Dummy"
+pauseTime=1.0
 
 
 [General]
