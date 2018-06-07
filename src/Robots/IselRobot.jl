@@ -144,7 +144,7 @@ end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, -robot.defCenterPos[1],0.0u"mm",0.0u"mm");
+  moveAbs(robot, 350u"mm"-robot.defCenterPos[1],0.0u"mm",0.0u"mm");
 end
 
 """ Move Isel Robot to teach position """
