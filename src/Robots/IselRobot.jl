@@ -91,10 +91,13 @@ end
 
 function isReferenced(robot::IselRobot)
   currPos = getPos(robot)
-  moveRes = moveAbs(robot,currPos[1], currPos[2], currPos[3],false)
+  # need to add 0.01u"mm", otherwise moveAbs returns 0 although it is no longer referenced
+  moveRes = moveAbs(robot,currPos[1]+0.01u"mm", currPos[2], currPos[3],false)
   if moveRes=="0"
     return true
   elseif moveRes=="R"
+    return false
+  elseif moveRes=="2"
     return false
   else
       error("Not expected \"$(moveRes)\" feedback from robot")
@@ -144,7 +147,7 @@ end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, 350u"mm"-robot.defCenterPos[1],0.0u"mm",0.0u"mm");
+  moveAbs(robot, 370u"mm"-robot.defCenterPos[1],0.0u"mm",0.0u"mm");
 end
 
 """ Move Isel Robot to teach position """

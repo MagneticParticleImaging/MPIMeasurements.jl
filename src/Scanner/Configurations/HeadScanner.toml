@@ -33,7 +33,7 @@ scannerTopology = "MPS"
 measIsBGCorrected = false
 studyName = "default"
 datasetStore = "/opt/data/HeadScanner"
-calibBGPos = [-0.25, 0.0, 0.0]
+calibBGPos = [0.33, 0.0, 0.0]
 rpGainSetting = [0, 1]
 calibGridFOV = [0.09, 0.05, 0.01]
 calibGridCenter = [0.0, 0.0, 0.0]
@@ -45,7 +45,7 @@ dfWaveform = "sine"
 
 [SurveillanceUnit]
 type = "Arduino"
-connection = "/dev/ttyACM0"
+connection = "/dev/ttyACM1"
 
 [Robot]
 pauseTime = 1.0
@@ -56,14 +56,14 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.065, 0.1225, 0.06]
+defCenterPos = [0.065, 0.121, 0.06]
 doReferenceCheck = true
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"
-robotMount = "deltaSample"
+robotMount = "samplePhantom"
 clearance = "clearance"
 setupName = "deltaSampleheadCoil"
 
