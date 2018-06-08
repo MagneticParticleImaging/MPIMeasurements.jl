@@ -3,7 +3,7 @@ using Unitful
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
 DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
 # export functions
-export convert2Unit, checkCoords
+export convert2Unit, checkCoords, checkDeltaSample
 
 # Robot Constants
 const xMinBrukerRobot = -85.0u"mm";
@@ -131,6 +131,12 @@ type RobotSetup
   clearance::Clearance
 end
 
+"""
+* validScannerGeos = [brukerCoil, mouseCoil, ratCoil, headCoil]
+* validObjects = [deltaSample, hallSensor, mouseAdapter, samplePhantom]
+* validRobotSetups = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner, mouseAdapterMouseScanner,
+ dSampleRatScanner, mouseAdapterRatScanner, hallSensorRegularScanner, hallSensorMouseScanner, hallSensorRatScanner]
+"""
 function RobotSetup(params::Dict)
     receiveCoil = getfield(MPIMeasurements,Symbol(params["receiveCoil"]))
     robotMount = getfield(MPIMeasurements,Symbol(params["robotMount"]))
@@ -430,4 +436,20 @@ end
 type CoordsError <: Exception
     message::String
     coordTable
+end
+
+function checkDeltaSample(scanDiameter::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"), clearance::typeof(1.0u"mm")=1.0u"mm")
+    deltaSample = Circle(10.0u"mm", "Delta sample");
+    scanRad = scanDiameter/2;
+    dSRadius = deltaSample.diameter/2;
+    delta = scanRad - sqrt(y^2+z^2) - (dSRadius);
+    delta_y = -(abs(y)+dSRadius*sin(atan(abs(y/z)))) + scanRad*sin(atan(abs(y/z)));
+    delta_z = -(abs(z)+dSRadius*cos(atan(abs(y/z)))) + scanRad*cos(atan(abs(y/z)));
+    space_z= sqrt((scanRad-dSRadius-1u"mm")^2-y^2)-z;
+    space_y= sqrt((scanRad-dSRadius-1u"mm")^2-z^2)-y;
+    if delta > clearance
+        return :VALID, delta, space_y,space_z,delta_y, delta_z
+    else
+        return :INVALID, delta, space_y,space_z,delta_y, delta_z
+    end
 end

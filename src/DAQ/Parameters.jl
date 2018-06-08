@@ -14,6 +14,7 @@ type DAQParams
   acqNumFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
+  acqNumSubperiods::Int64
   sinLUT::Matrix{Float64}
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
@@ -86,6 +87,11 @@ function DAQParams(params)
     params["calibFFCurrentToVolt"] = 0.0
   end
 
+
+  if !haskey(params,"acqNumSubperiods")
+    params["acqNumSubperiods"] = 1
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -100,6 +106,7 @@ function DAQParams(params)
     params["acqNumFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
+    params["acqNumSubperiods"],
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
@@ -141,6 +148,7 @@ function toDict(p::DAQParams)
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
   params["acqNumFrames"] = p.acqNumFrames
+  params["acqNumSubperiods"] = p.acqNumSubperiods
   params["acqFramePeriod"] = p.acqFramePeriod
   params["acqNumAverages"] = p.acqNumAverages
   params["acqNumFFChannels"] = p.acqNumFFChannels
