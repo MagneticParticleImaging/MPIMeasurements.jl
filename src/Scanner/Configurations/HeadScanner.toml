@@ -1,5 +1,6 @@
 [GaussMeter]
-coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
+# coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
+coordinateTransformation = [0.0, 0.0, -1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 0.0]
 range = 1
 fast = true
 autoRanging = false
@@ -45,7 +46,7 @@ dfWaveform = "sine"
 
 [SurveillanceUnit]
 type = "Arduino"
-connection = "/dev/ttyACM1"
+connection = "/dev/ttyACM0"
 
 [Robot]
 pauseTime = 1.0
@@ -69,7 +70,7 @@ setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"
-controlLoopPhaseAccuracy = 1.0
+controlLoopPhaseAccuracy = 0.5
 acqFFLinear = false
 acqFFValues = [1.0, 1.0]
 ip = ["192.168.1.100", "192.168.1.101"]
@@ -78,7 +79,7 @@ controlPhase = true
 calibFieldToVolt = [150.9762491038963]
 calibFFCurrentToVolt = 0.08547008547008547
 acqNumBGFrames = 200
-rxChanIdx = [1, 3]
+rxChanIdx = [1,3,4]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
 rpModulus = [4800, 4864, 4800, 4800]
@@ -90,7 +91,7 @@ dfDivider = [4864]
 acqNumPeriodsPerFrame = 1
 dfStrength = [0.005]
 refChanIdx = [2]
-controlLoopAmplitudeAccuracy = 0.04
+controlLoopAmplitudeAccuracy = 0.003
 acqNumAverages = 5000
 dfPhase = [0.0]
 dfChanIdx = [1]
