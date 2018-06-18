@@ -1,5 +1,6 @@
 [GaussMeter]
-coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
+# coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
+coordinateTransformation = [0.0, 0.0, -1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 0.0]
 range = 1
 fast = true
 autoRanging = false
@@ -33,7 +34,7 @@ scannerTopology = "MPS"
 measIsBGCorrected = false
 studyName = "default"
 datasetStore = "/opt/data/HeadScanner"
-calibBGPos = [-0.25, 0.0, 0.0]
+calibBGPos = [0.33, 0.0, 0.0]
 rpGainSetting = [0, 1]
 calibGridFOV = [0.09, 0.05, 0.01]
 calibGridCenter = [0.0, 0.0, 0.0]
@@ -56,29 +57,29 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.252, 0.1168, 0.111]
+defCenterPos = [0.065, 0.121, 0.06]
 doReferenceCheck = true
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"
-robotMount = "deltaSample"
+robotMount = "samplePhantom"
 clearance = "clearance"
 setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"
-controlLoopPhaseAccuracy = 1.0
+controlLoopPhaseAccuracy = 0.5
 acqFFLinear = false
 acqFFValues = [1.0, 1.0]
-ip = ["192.168.1.100"]
+ip = ["192.168.1.100", "192.168.1.101"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = true
 calibFieldToVolt = [150.9762491038963]
 calibFFCurrentToVolt = 0.08547008547008547
 acqNumBGFrames = 200
-rxChanIdx = [1]
+rxChanIdx = [1,3,4]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
 rpModulus = [4800, 4864, 4800, 4800]
@@ -90,11 +91,11 @@ dfDivider = [4864]
 acqNumPeriodsPerFrame = 1
 dfStrength = [0.005]
 refChanIdx = [2]
-controlLoopAmplitudeAccuracy = 0.04
+controlLoopAmplitudeAccuracy = 0.003
 acqNumAverages = 5000
 dfPhase = [0.0]
 dfChanIdx = [1]
-calibRefToField = [0.011627906976744186]
+calibRefToField = [0.014385964912280702]
 acqFFSequence = "Static"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8

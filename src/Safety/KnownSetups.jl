@@ -13,10 +13,10 @@ mouseAdapter = Circle(38.0u"mm", "Mouse adapter");
 brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "burker coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
 mouseCoil = ScannerGeo(40.0u"mm", "mouse coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot);
 ratCoil = ScannerGeo(72.0u"mm", "rat coil scanner diameter", xMinBrukerRobot, xMaxBrukerRobot)
-headCoil = ScannerGeo(150.0u"mm", "head coil scanner diameter", -270.0u"mm", 75.0u"mm");
+headCoil = ScannerGeo(170.0u"mm", "head coil scanner diameter", -65.0u"mm", 340.0u"mm");
 
 # standard clearance
-clearance = Clearance(0.9u"mm");
+clearance = Clearance(1.0u"mm");
 
 validScannerGeos = [brukerCoil, mouseCoil, ratCoil, headCoil]
 validObjects = [deltaSample, hallSensor, mouseAdapter, samplePhantom]

@@ -29,3 +29,5 @@ moveAbs(robot,robot.defCenterPos[1]+ 1.0u"mm",robot.defCenterPos[2],robot.defCen
 #
 # if you have moved to your final new teaching position
 TeachPosition(scanner, robot, configFile)
+
+# change and test bacground position !!!
