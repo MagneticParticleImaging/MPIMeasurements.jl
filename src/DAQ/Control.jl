@@ -81,6 +81,14 @@ function doControlStep(daq::AbstractDAQ, uRef)
       daq.params.currTxPhase[:] = newTxPhase
     else
       plot(vec(uRef))
+      # c= Gtk.Canvas()
+      #
+      #w = Gtk.Window(c,"Test")
+      #p = Winston.plot(1:100);
+      #display(c,p)
+      #showall(w)
+      #
+
       println("Could not control")
 
       #stopTx(daq)

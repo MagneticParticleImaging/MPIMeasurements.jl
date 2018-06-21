@@ -77,6 +77,8 @@ function startTx(daq::DAQRedPitayaScpiNew)
   #connectADC(daq.rpc)
   startADC(daq.rpc)
   #masterTrigger(daq.rpc, true)
+  daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
+
   while currentPeriod(daq.rpc) < 1
     sleep(0.1)
   end
