@@ -95,7 +95,7 @@ function DAQParams(params)
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
-    params["dfDivider"],
+    div.(params["dfDivider"],params["decimation"]),
     dfFreq,
     params["dfStrength"],
     params["dfPhase"],
