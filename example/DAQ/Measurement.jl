@@ -8,7 +8,7 @@ params = toDict(daq.params)
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=[10e-3]
+params["dfStrength"]=[1e-3]
 params["acqNumFrames"]=100
 params["acqNumAverages"]=10
 

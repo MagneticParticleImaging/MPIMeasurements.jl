@@ -19,4 +19,4 @@ params["acqNumAverages"]=100
 
 enableSlowDAC(daq,true)
 println("Starting Measurement...")
-measurementCont(daq, params, controlPhase=true, showFT=true)
+measurementCont(daq, params, controlPhase=false, showFT=true)

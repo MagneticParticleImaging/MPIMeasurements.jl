@@ -15,6 +15,24 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
                      zeros(numTxChannels(daq)))
   end
+
+  if daq.params.acqNumPeriodsPerFrame > 1 && daq.params.acqNumFFChannels == 2
+    curr1 = daq.params.acqFFValues[1,2]
+    curr2 = daq.params.acqFFValues[1,1]
+    println("C1=$curr1")
+    println("C2=$curr2")
+    setSlowDAC(daq, curr1, 0)
+    setSlowDAC(daq, curr2, 1)
+    sleep(0.5)
+  end
+
+  #currFr = enableSlowDAC(measObj.daq, true)
+
+  #uMeas, uRef = readData(measObj.daq, 1, currFr+1)
+  #enableSlowDAC(measObj.daq, false)
+  #setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
+
+
   #currFr = currentFrame(daq)
   currFr = enableSlowDAC(daq, true)
 
@@ -45,7 +63,8 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   # drivefield parameters
   params["dfStrength"] = reshape(daq.params.dfStrength,1,length(daq.params.dfStrength),1)
   params["dfPhase"] = reshape(daq.params.dfPhase,1,length(daq.params.dfPhase),1)
-  params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
+  divider = div.(daq.params.dfDivider,daq.params.decimation)
+  params["dfDivider"] = reshape(divider,1,length(divider))
 
   # receiver parameters
   params["rxNumSamplingPoints"] = daq.params.numSampPerPeriod #FIXME rename internally

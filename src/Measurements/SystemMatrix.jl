@@ -276,7 +276,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
   println("C2=$curr2")
   setSlowDAC(measObj.daq, curr1, 0)
   setSlowDAC(measObj.daq, curr2, 1)
-  sleep(0.2)
+  sleep(0.5)
 
 
   currFr = enableSlowDAC(measObj.daq, true)

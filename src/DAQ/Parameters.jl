@@ -47,7 +47,7 @@ function DAQParams(params)
   dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
   if !all(isinteger, params["dfDivider"] / params["decimation"])
-    warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
+    warn("$(params["dfDivider"]) cannot be divided by $(params["decimation"])")
   end
   numSampPerPeriod = round(Int, lcm(params["dfDivider"]) / params["decimation"])
 
@@ -95,7 +95,7 @@ function DAQParams(params)
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
-    div.(params["dfDivider"],params["decimation"]),
+    params["dfDivider"],#div.(params["dfDivider"],params["decimation"]),
     dfFreq,
     params["dfStrength"],
     params["dfPhase"],
