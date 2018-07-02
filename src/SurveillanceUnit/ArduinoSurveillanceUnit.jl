@@ -144,12 +144,12 @@ function ResetArduino(Arduino::ArduinoSurveillanceUnit)
     CheckACQ(Arduino,ACQ)
 end
 
-function EnableACPower(Arduino::ArduinoSurveillanceUnit)
+function enableACPower(Arduino::ArduinoSurveillanceUnit)
     ACQ=ArduinoCommand(Arduino,"ENABLE:AC");
     CheckACQ(Arduino,ACQ)
 end
 
-function DisableACPower(Arduino::ArduinoSurveillanceUnit)
+function disableACPower(Arduino::ArduinoSurveillanceUnit)
     ACQ=ArduinoCommand(Arduino,"DISABLE:AC");
     CheckACQ(Arduino,ACQ)
 end

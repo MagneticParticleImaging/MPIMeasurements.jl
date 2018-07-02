@@ -1,5 +1,7 @@
 using Graphics: @mustimplement
 
+export enableACPower, disableACPower, getTemperatures
+
 include("DummySurveillanceUnit.jl")
 include("ArduinoSurveillanceUnit.jl")
 
@@ -13,4 +15,6 @@ function SurveillanceUnit(params::Dict)
   end
 end
 
-@mustimplement getTemperatures(gauss::SurveillanceUnit)
+@mustimplement getTemperatures(su::SurveillanceUnit)
+@mustimplement enableACPower(su::SurveillanceUnit)
+@mustimplement disableACPower(su::SurveillanceUnit)
