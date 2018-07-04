@@ -80,6 +80,7 @@ include("Sequences/Sequences.jl")
 
 if is_unix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")
+  include("FOTemp/FOTemp.jl")
   include("Measurements/Measurements.jl")
   include("SurveillanceUnit/SurveillanceUnit.jl")
 end
