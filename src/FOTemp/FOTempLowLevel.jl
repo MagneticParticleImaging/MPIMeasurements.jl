@@ -1,5 +1,3 @@
-export FOTemp, gettemperature, gettemperatures, logtemperature, logtemperatures
-
 struct FOTemp <: Device
   sd::SerialDevice
 end
