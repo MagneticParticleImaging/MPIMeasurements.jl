@@ -16,7 +16,8 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
                      zeros(numTxChannels(daq)))
   end
 
-  if daq.params.acqNumPeriodsPerFrame > 1 && daq.params.acqNumFFChannels == 2
+  #if daq.params.acqNumPeriodsPerFrame > 1 && daq.params.acqNumFFChannels == 2
+  if daq.params.acqNumFFChannels == 2
     curr1 = daq.params.acqFFValues[1,2]
     curr2 = daq.params.acqFFValues[1,1]
     println("C1=$curr1")

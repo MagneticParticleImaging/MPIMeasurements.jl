@@ -272,7 +272,8 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
     setTxParams(measObj.daq, measObj.daq.params.currTxAmp, measObj.daq.params.currTxPhase)
   end
 
-  if measObj.daq.params.acqNumPeriodsPerFrame > 1 && measObj.daq.params.acqNumFFChannels == 2
+  #if measObj.daq.params.acqNumPeriodsPerFrame > 1 && measObj.daq.params.acqNumFFChannels == 2
+  if measObj.daq.params.acqNumFFChannels == 2
     curr1 = measObj.daq.params.acqFFValues[1,2]
     curr2 = measObj.daq.params.acqFFValues[1,1]
     println("C1=$curr1")
