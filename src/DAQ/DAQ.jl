@@ -25,12 +25,16 @@ numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
 include("Measurements.jl")
 include("RedPitayaScpiNew.jl")
+include("DummyRedPitaya.jl")
 
 function DAQ(params::Dict)
-  if params["daq"] != "RedPitayaScpiNew"
+  if params["daq"] == "RedPitayaScpiNew"
+    return DAQRedPitayaScpiNew(params)
+  elseif params["daq"] == "DummyDAQRedPitaya"
+    return DummyDAQRedPitaya(params)
+  else
     error("$(params["daq"]) not yet implemented!")
   end
-  return DAQRedPitayaScpiNew(params)
 end
 
 function initLUT(N,D, dfCycle, dfFreq)
