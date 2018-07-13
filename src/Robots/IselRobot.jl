@@ -283,11 +283,29 @@ function setFree(robot::IselRobot, axis)
   checkError(ret)
 end
 
+""" Gets the default IselRobot velocities of the axes x,y,z """
+function getDefaultVelocity(robot::IselRobot)
+    return robot.defaultVel
+end
+
 """ Sets the velocities of the axes x,y,z """
-function setVelocity(robot::IselRobot,xVel,yVel,zVel)
+function setVelocity(robot::IselRobot, vel::Array{Int64,1})
+    setVelocity(robot::IselRobot,vel[1],vel[2],vel[3])
+end
+
+""" Sets the velocities of the axes x,y,z """
+function setVelocity(robot::IselRobot,xVel::Int64,yVel::Int64,zVel::Int64)
+  minVel = robot.minMaxVel[1]
+  maxVel = robot.minMaxVel[2]
+  if minVel <= xVel && xVel <= maxVel && minVel <= yVel && yVel <= maxVel &&
+      minVel <= zVel && zVel <= maxVel
   cmd = string("@0Id"," ",xVel,",",yVel,",",zVel,",",zVel)
   ret = queryIsel(robot.sd, cmd)
   checkError(ret)
+  else
+      error("Velocities set not in the range of [30,40000],
+       you are trying to set xVel: ", xVel," yVel: ", yVel," zVel: ",zVel)
+  end
 end
 
 """ Inverts the axes for y,z """

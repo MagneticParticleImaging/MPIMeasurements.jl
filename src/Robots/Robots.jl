@@ -13,6 +13,8 @@ export Robot, isReferenced, prepareRobot
 @mustimplement setBrake(robot::Robot,brake::Bool)
 @mustimplement prepareRobot(robot::Robot)
 @mustimplement isReferenced(robot::Robot)
+@mustimplement getDefaultVelocity(robot::Robot)
+@mustimplement setVelocity(robot::Robot,vel::Array{Int64,1})
 
 """ `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
 function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})
