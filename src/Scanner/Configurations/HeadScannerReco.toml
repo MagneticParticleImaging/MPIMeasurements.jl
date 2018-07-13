@@ -52,18 +52,18 @@ type = "Dummy"
 type="Dummy"
 pauseTime=1.0
 
-#[Robot]
-#pauseTime = 1.0
-#stepsPerTurn = 5000
-#gearSlope = 5
-#minMaxFreq = [20, 4000]
-#defaultVel = [40000, 40000, 40000]
-#defSampleCenterPos = [0.01, 0.0, 0.0]
-#minMaxVel = [30, 40000]
-#minMaxAcc = [1, 4000]
-#defCenterPos = [0.099, 0.128, 0.043000000000000003]
-#type = "Isel"
-#connection = "/dev/ttyUSB0"
+# [Robot]
+# pauseTime = 1.0
+# stepsPerTurn = 5000
+# gearSlope = 5
+# minMaxFreq = [20, 4000]
+# defaultVel = [40000, 40000, 40000]
+# defSampleCenterPos = [0.01, 0.0, 0.0]
+# minMaxVel = [30, 40000]
+# minMaxAcc = [1, 4000]
+# defCenterPos = [0.099, 0.128, 0.043000000000000003]
+# type = "Isel"
+# connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"

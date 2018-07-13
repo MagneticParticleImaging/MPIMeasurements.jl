@@ -36,7 +36,7 @@ function prepareRobot(robot::DummyRobot)
 end
 
 isReferenced(robot::DummyRobot) = robot.referenced
-getDefaultVelocity(robot::DummyRobot) = zeros(3)
+getDefaultVelocity(robot::DummyRobot) = zeros(3)+20000
 
 function setVelocity(robot::DummyRobot, vel::Array{Int64,1})
     println("Setting velcities for Dummy Robot!")
