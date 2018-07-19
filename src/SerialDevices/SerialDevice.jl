@@ -1,5 +1,6 @@
 import Base: send
 
+export getSerialDevices
 
 type SerialDevice
 	sp::SerialPort
@@ -76,4 +77,29 @@ argument triggers a call to `sp_free_port` in the C library if set to `true`.
 function Base.close(sd::SerialDevice; delete::Bool=false)
 	sd.sp = close(sd.sp,delete=delete)
 	return sd
+end
+
+"""
+Read out current Serial Ports, returns `Array{String,1}`
+"""
+function getSerialDevices()
+    nports_guess=64
+    ports = sp_list_ports()
+    devices=Array{String,1}()
+    portArray=unsafe_wrap(Array, ports, nports_guess, false)
+    for k=1:length(portArray)
+      #println(portArray[k])
+        if portArray[k] == C_NULL
+          return devices
+        else
+          try
+            device=sp_get_port_name(portArray[k])
+            push!(devices,device)
+            #println(device)
+          catch e
+            println(e)
+          end
+        end
+    end
+    return devices
 end
