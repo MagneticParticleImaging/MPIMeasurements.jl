@@ -14,7 +14,7 @@ customPhantom = Rectangle(70.0u"mm",70.0u"mm", "Custom Phantom")
 brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Burker Coil", xMinBrukerRobot, xMaxBrukerRobot);
 mouseCoil = ScannerGeo(40.0u"mm", "Mouse Coil", xMinBrukerRobot, xMaxBrukerRobot);
 ratCoil = ScannerGeo(72.0u"mm", "Rat Coil", xMinBrukerRobot, xMaxBrukerRobot)
-headCoil = ScannerGeo(170.0u"mm", "Head Coil", -65.0u"mm", 340.0u"mm");
+headCoil = ScannerGeo(170.0u"mm", "Head Coil", -65.0u"mm", 365.0u"mm");
 
 # standard clearance
 clearance = Clearance(1.0u"mm");
