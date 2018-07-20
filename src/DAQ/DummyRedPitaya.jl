@@ -2,13 +2,15 @@
 
 type DummyDAQRedPitaya <: AbstractDAQ
     params::DAQParams
+
+    function DummyDAQRedPitaya(params)
+        p = DAQParams(params)
+        return new(p)
+    end
 end
 
 
-function DummyDAQRedPitaya(params)
-    p = DAQParams(params)
-    return DummyDAQRedPitaya(p)
-end
+
 
 
 function startTx(daq::DummyDAQRedPitaya)
