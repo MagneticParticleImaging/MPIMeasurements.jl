@@ -41,7 +41,6 @@ calibGridShape = [3,3,3]
 calibGridFOV = [0.10,0.10,0.10]
 calibGridCenter = [0.0,0.0,0.0]
 calibNumBGMeasurements = 2
-calibBGPos = [0.0,0.0,0.0]
 
 [SurveillanceUnit]
 type = "Dummy"

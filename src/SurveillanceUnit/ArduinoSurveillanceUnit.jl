@@ -153,3 +153,8 @@ function disableACPower(Arduino::ArduinoSurveillanceUnit)
     ACQ=ArduinoCommand(Arduino,"DISABLE:AC");
     CheckACQ(Arduino,ACQ)
 end
+
+function NOTAUS(Arduino::ArduinoSurveillanceUnit)
+    ACQ=ArduinoCommand(Arduino,"NOTAUS");
+    CheckACQ(Arduino,ACQ)
+end

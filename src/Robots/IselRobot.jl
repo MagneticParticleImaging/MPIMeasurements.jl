@@ -52,6 +52,7 @@ struct IselRobot <: Robot
   defaultVel::Array{Int64,1}
   defCenterPos::Array{typeof(1.0u"mm"),1}
   defSampleCenterPos::Array{typeof(1.0u"mm"),1}
+  defParkPos::Array{typeof(1.0u"mm"),1}
 end
 
 function IselRobot(params::Dict)
@@ -66,13 +67,15 @@ function IselRobot(params::Dict)
   stepsPermm = params["stepsPerTurn"] / params["gearSlope"]
   defCenterPos = map(x->uconvert(u"mm",x), params["defCenterPos"]*u"m")
   defSampleCenterPos = map(x->uconvert(u"mm",x), params["defSampleCenterPos"]*u"m")
+  defParkPos = map(x->uconvert(u"mm",x),params["defParkPos"]*u"m")
+  defParkPos[1] = defParkPos[1] - defCenterPos[1] # maxX 420mm minus current teaching Pos = new Park Pos
   try
     sp = SerialPort(params["connection"])
     open(sp)
     set_speed(sp, baudrate)
     iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
-        stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos)
+        stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos)
     invertAxesYZ(iselRobot)
     initZYX(iselRobot)
     setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
@@ -147,7 +150,7 @@ end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, 370u"mm"-robot.defCenterPos[1],0.0u"mm",0.0u"mm");
+  moveAbs(robot, robot.defParkPos[1], 0.0u"mm", 0.0u"mm");
 end
 
 """ Move Isel Robot to teach position """
