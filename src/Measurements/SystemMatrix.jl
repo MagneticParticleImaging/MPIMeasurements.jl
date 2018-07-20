@@ -214,6 +214,13 @@ function SystemMatrixRobotMeas(scanner, positions::GridPositions,params_::Dict; 
                                getSafety(scanner), positions, params_; kargs...)
 end
 
+function SystemMatrixRobotMeas(scanner, safety, positions::GridPositions,params_::Dict; kargs...)
+  return SystemMatrixRobotMeas(getSurveillanceUnit(scanner),
+                               getDAQ(scanner),
+                               getRobot(scanner),
+                               safety, positions, params_; kargs...)
+end
+
 function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
                      params_::Dict; controlPhase=true, waitTime = 4.0)
 

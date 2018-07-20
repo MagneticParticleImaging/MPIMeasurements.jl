@@ -1,7 +1,9 @@
+using Graphics: @mustimplement
 using Unitful
+import HDF5.name
 # export types
 export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
-DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety
+DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety, name
 # export functions
 export convert2Unit, checkCoords, checkDeltaSample
 
@@ -20,6 +22,7 @@ struct Clearance
 end
 
 abstract type Geometry end
+@mustimplement name(geometry::Geometry)
 
 struct Circle <: Geometry
   diameter::typeof(1.0u"mm")
@@ -33,6 +36,7 @@ struct Circle <: Geometry
     end
   end
 end
+name(geometry::Circle) = geometry.name
 
 struct Rectangle <: Geometry
   width::typeof(1.0u"mm")
@@ -47,6 +51,7 @@ struct Rectangle <: Geometry
     end
   end
 end
+name(geometry::Rectangle) = geometry.name
 
 struct Hexagon <: Geometry
   width::typeof(1.0u"mm")
@@ -60,6 +65,7 @@ struct Hexagon <: Geometry
     end
   end
 end
+name(geometry::Hexagon) = geometry.name
 
 struct Triangle <: Geometry
   width::typeof(1.0u"mm")
@@ -74,6 +80,7 @@ struct Triangle <: Geometry
     end
   end
 end
+name(geometry::Triangle) = geometry.name
 
 struct ScannerGeo
   diameter::typeof(1.0u"mm")
