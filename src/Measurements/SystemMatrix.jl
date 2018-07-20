@@ -290,10 +290,10 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
     sleep(0.5)
   end
 
-  currFr = enableSlowDAC(measObj.daq, true)
+  currFr = enableSlowDAC(measObj.daq, true, 1)
 
   uMeas, uRef = readData(measObj.daq, 1, currFr+1)
-  enableSlowDAC(measObj.daq, false)
+
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 
   #u = cat(2, uMeas, uRef)

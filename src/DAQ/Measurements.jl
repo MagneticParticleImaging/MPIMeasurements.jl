@@ -27,15 +27,7 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     sleep(0.5)
   end
 
-  #currFr = enableSlowDAC(measObj.daq, true)
-
-  #uMeas, uRef = readData(measObj.daq, 1, currFr+1)
-  #enableSlowDAC(measObj.daq, false)
-  #setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
-
-
-  #currFr = currentFrame(daq)
-  currFr = enableSlowDAC(daq, true)
+  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr+1)
 
