@@ -74,9 +74,9 @@ function ArDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
 end
 
 function getTemperatures(Arduino::ArduinoSurveillanceUnit)
-    Temps=ArduinoCommand(Arduino, "GET:TEMP");
-    TempDelim="T";
-    return split(Temps,TempDelim);
+    Temps=ArduinoCommand(Arduino, "GET:TEMP")
+    TempDelim="T"
+    return parse.(Float64,split(Temps,TempDelim))
 end
 
 function GetDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)

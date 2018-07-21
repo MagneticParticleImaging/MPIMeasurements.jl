@@ -92,6 +92,8 @@ function IselRobot(params::Dict)
   end
 end
 
+parkPos(robot::IselRobot) = robot.defParkPos
+
 function isReferenced(robot::IselRobot)
   currPos = getPos(robot)
   # need to add 0.01u"mm", otherwise moveAbs returns 0 although it is no longer referenced

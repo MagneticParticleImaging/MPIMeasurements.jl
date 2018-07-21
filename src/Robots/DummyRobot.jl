@@ -37,6 +37,7 @@ end
 
 isReferenced(robot::DummyRobot) = robot.referenced
 getDefaultVelocity(robot::DummyRobot) = zeros(3)+20000
+parkPos(robot::DummyRobot) = [0.0u"mm",0.0u"mm",0.0u"mm"]
 
 function setVelocity(robot::DummyRobot, vel::Array{Int64,1})
     println("Setting velcities for Dummy Robot!")

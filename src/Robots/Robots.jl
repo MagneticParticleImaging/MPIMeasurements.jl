@@ -1,7 +1,7 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot, isReferenced, prepareRobot, getDefaultVelocity, setVelocity
+export Robot, isReferenced, prepareRobot, getDefaultVelocity, setVelocity, parkPos
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0u"mm"),
@@ -15,6 +15,7 @@ export Robot, isReferenced, prepareRobot, getDefaultVelocity, setVelocity
 @mustimplement isReferenced(robot::Robot)
 @mustimplement getDefaultVelocity(robot::Robot)
 @mustimplement setVelocity(robot::Robot,vel::Array{Int64,1})
+@mustimplement parkPos(robot::Robot)
 
 """ `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})` """
 function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0u"mm")})
