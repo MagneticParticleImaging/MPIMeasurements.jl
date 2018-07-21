@@ -51,11 +51,11 @@ function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPo
   return measObj
 end
 
-function preMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Vector{typeof(1.0u"mm")}, index)
+function preMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Vector{typeof(1.0Unitful.mm)}, index)
   println("moving to next position...")
 end
 
-function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(1.0u"mm"),1}, index)
+function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(1.0Unitful.mm),1}, index)
   println("post action: ", pos)
   println("################## Index: ", index, " / ", length(measObj.positions))
 
@@ -82,7 +82,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeasSlowFF, pos::Array{typeof(
     setSlowDAC(measObj.daq, measObj.currents[1,l], 0)
     setSlowDAC(measObj.daq, measObj.currents[2,l], 1)
 
-    println( "Set DC source $(measObj.currents[1,l]*u"A")  $(measObj.currents[2,l]*u"A")" )
+    println( "Set DC source $(measObj.currents[1,l]*Unitful.A)  $(measObj.currents[2,l]*Unitful.A)" )
     # wait until magnet is on field
     sleep(0.4)
     # perform MPI measurement
@@ -153,13 +153,13 @@ function measurementSystemMatrixSlowFF(su, daq, robot, safety, positions::GridPo
   params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
 
   #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(subgrid))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(subgrid))))
+  params["calibFov"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
   params["calibSize"] = shape(subgrid)
   params["calibOrder"] = "xyz"
   if haskey(params, "calibDeltaSampleSize")
     params["calibDeltaSampleSize"] =
-       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
+       Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"])))
   end
   params["calibMethod"] = "robot"
 
@@ -265,11 +265,11 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
   return measObj
 end
 
-function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0u"mm")}, index)
+function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
   println("moving to next position...")
 end
 
-function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"mm"),1}, index)
+function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Unitful.mm),1}, index)
   println("post action: ", pos)
   println("################## Index: ", index, " / ", length(measObj.positions))
 
@@ -358,13 +358,13 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
 
   #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(u"m", fieldOfView(subgrid))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(u"m", fieldOfViewCenter(subgrid))))
+  params["calibFov"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
   params["calibSize"] = shape(subgrid)
   params["calibOrder"] = "xyz"
   if haskey(params, "calibDeltaSampleSize")
     params["calibDeltaSampleSize"] =
-       Float64.(ustrip.(uconvert.(u"m", params["calibDeltaSampleSize"])))
+       Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"])))
   end
   params["calibMethod"] = "robot"
 

@@ -50,16 +50,16 @@ function getPos(sd::BrukerRobot)
   sendCommand(sd,BrukerCommand(pos));
 end
 
-""" `moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
-  posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))` """
-function moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
-  posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
+""" `moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm),
+  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))` """
+function moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm),
+  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))
   cmd = createMoveCommand(posX,posY,posZ)
   res = _sendCommand(sd, cmd)
 end
 
 """ Not Implemented """
-function moveRel(sd::BrukerRobot, distX::typeof(1.0u"mm"), distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
+function moveRel(sd::BrukerRobot, distX::typeof(1.0Unitful.mm), distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
   error("moveRel for ", sd, " not implemented")
 end
 
@@ -70,7 +70,7 @@ getDefaultVelocity(robot::BrukerRobot) = zeros(3)
 function setVelocity(robot::BrukerRobot, vel::Array{Int64,1})
 end
 
-function createMoveCommand(x::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"))
+function createMoveCommand(x::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm))
   cmd = BrukerCommand("goto $(ustrip(x)),$(ustrip(y)),$(ustrip(z))\n")
 end
 

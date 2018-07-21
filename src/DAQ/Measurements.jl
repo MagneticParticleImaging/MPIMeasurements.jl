@@ -211,7 +211,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
 
   try
       for k=1:length(xx)
-        moveAbs(robot,xx[k]*1.0u"mm",yy[k]*1.0u"mm",71.0u"mm")
+        moveAbs(robot,xx[k]*1.0Unitful.mm,yy[k]*1.0Unitful.mm,71.0Unitful.mm)
         sleep(6.0)
 
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
@@ -245,7 +245,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
 
   try
       for k=1:length(yy)
-        moveAbs(robot,146.0u"mm",yy[k]*1.0u"mm",81.0u"mm")
+        moveAbs(robot,146.0Unitful.mm,yy[k]*1.0Unitful.mm,81.0Unitful.mm)
         sleep(6.0)
 
         uMeas, uRef = readData(daq, 1, currentFrame(daq))

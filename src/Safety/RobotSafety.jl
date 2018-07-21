@@ -8,15 +8,15 @@ DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety, name
 export convert2Unit, checkCoords, checkDeltaSample
 
 # Robot Constants
-const xMinBrukerRobot = -85.0u"mm";
-const xMaxBrukerRobot = 225.0u"mm";
-const minClearance = 0.5u"mm";
-const regularBrukerScannerdiameter = 118.0u"mm";
-const maxDriveFieldAmplitude = 14.0u"mT";
-const maxWantedVolumeX = 300.0u"mm";
+const xMinBrukerRobot = -85.0Unitful.mm;
+const xMaxBrukerRobot = 225.0Unitful.mm;
+const minClearance = 0.5Unitful.mm;
+const regularBrukerScannerdiameter = 118.0Unitful.mm;
+const maxDriveFieldAmplitude = 14.0Unitful.mT;
+const maxWantedVolumeX = 300.0Unitful.mm;
 
 struct Clearance
-  distance::typeof(1.0u"mm")
+  distance::typeof(1.0Unitful.mm)
   Clearance(distance) = distance < minClearance ? error("Clearance below minimum") :
   new(distance)
 end
@@ -25,11 +25,11 @@ abstract type Geometry end
 @mustimplement name(geometry::Geometry)
 
 struct Circle <: Geometry
-  diameter::typeof(1.0u"mm")
+  diameter::typeof(1.0Unitful.mm)
   name::String
 
-  function Circle(diameter::typeof(1.0u"mm"), name::String)
-    if diameter < 1.0u"mm"
+  function Circle(diameter::typeof(1.0Unitful.mm), name::String)
+    if diameter < 1.0Unitful.mm
       error("Circle does not fit in scanner...")
     else
       new(diameter, name)
@@ -39,12 +39,12 @@ end
 name(geometry::Circle) = geometry.name
 
 struct Rectangle <: Geometry
-  width::typeof(1.0u"mm")
-  height::typeof(1.0u"mm")
+  width::typeof(1.0Unitful.mm)
+  height::typeof(1.0Unitful.mm)
   name::String
 
-  function Rectangle(width::typeof(1.0u"mm"), height::typeof(1.0u"mm"), name::String)
-    if width < 1.0u"mm" || height < 1.0u"mm"
+  function Rectangle(width::typeof(1.0Unitful.mm), height::typeof(1.0Unitful.mm), name::String)
+    if width < 1.0Unitful.mm || height < 1.0Unitful.mm
       error("Rectangle does not fit in scanner...")
     else
       new(width, height, name)
@@ -54,11 +54,11 @@ end
 name(geometry::Rectangle) = geometry.name
 
 struct Hexagon <: Geometry
-  width::typeof(1.0u"mm")
-  height::typeof(1.0u"mm")
+  width::typeof(1.0Unitful.mm)
+  height::typeof(1.0Unitful.mm)
   name::String
-  function Hexagon(width::typeof(1.0u"mm"), height::typeof(1.0u"mm"), name::String)
-    if width < 1.0u"mm" || height < 1.0u"mm"
+  function Hexagon(width::typeof(1.0Unitful.mm), height::typeof(1.0Unitful.mm), name::String)
+    if width < 1.0Unitful.mm || height < 1.0Unitful.mm
       error("Hexagon does not fit in scanner...")
     else
       new(width, height, name)
@@ -68,12 +68,12 @@ end
 name(geometry::Hexagon) = geometry.name
 
 struct Triangle <: Geometry
-  width::typeof(1.0u"mm")
-  height::typeof(1.0u"mm")
+  width::typeof(1.0Unitful.mm)
+  height::typeof(1.0Unitful.mm)
   name::String
 
-  function Triangle(width::typeof(1.0u"mm"), height::typeof(1.0u"mm"), name::String)
-    if width < 1.0u"mm" || height < 1.0u"mm"
+  function Triangle(width::typeof(1.0Unitful.mm), height::typeof(1.0Unitful.mm), name::String)
+    if width < 1.0Unitful.mm || height < 1.0Unitful.mm
       error("Triangle does not fit in scanner...")
     else
       new(width, height, name)
@@ -83,12 +83,12 @@ end
 name(geometry::Triangle) = geometry.name
 
 struct ScannerGeo
-  diameter::typeof(1.0u"mm")
+  diameter::typeof(1.0Unitful.mm)
   name::String
-  xMinRobot::typeof(1.0u"mm")
-  xMaxRobot::typeof(1.0u"mm")
-  function ScannerGeo(diameter::typeof(1.0u"mm"), name::String, xMinRobot::typeof(1.0u"mm"), xMaxRobot::typeof(1.0u"mm"))
-    if diameter < 1.0u"mm"
+  xMinRobot::typeof(1.0Unitful.mm)
+  xMaxRobot::typeof(1.0Unitful.mm)
+  function ScannerGeo(diameter::typeof(1.0Unitful.mm), name::String, xMinRobot::typeof(1.0Unitful.mm), xMaxRobot::typeof(1.0Unitful.mm))
+    if diameter < 1.0Unitful.mm
       error("ScannerGeometry is not possible...")
     else
       new(diameter, name, xMinRobot, xMaxRobot)
@@ -97,11 +97,11 @@ struct ScannerGeo
 end
 
 struct WantedVolume
-     x_dim::typeof(1.0u"mm")
-     y_dim::typeof(1.0u"mm")
-     z_dim::typeof(1.0u"mm")
+     x_dim::typeof(1.0Unitful.mm)
+     y_dim::typeof(1.0Unitful.mm)
+     z_dim::typeof(1.0Unitful.mm)
 
-     function WantedVolume(x_dim::typeof(1.0u"mm"), y_dim::typeof(1.0u"mm"), z_dim::typeof(1.0u"mm"))
+     function WantedVolume(x_dim::typeof(1.0Unitful.mm), y_dim::typeof(1.0Unitful.mm), z_dim::typeof(1.0Unitful.mm))
        if x_dim > maxWantedVolumeX || y_dim > regularBrukerScannerdiameter || z_dim > regularBrukerScannerdiameter
          error("Your wanted volume is bigger than the scanner...")
        else
@@ -111,11 +111,11 @@ struct WantedVolume
 end
 
 struct DriveFieldAmplitude
-  amp_x::typeof(1.0u"mT")
-  amp_y::typeof(1.0u"mT")
-  amp_z::typeof(1.0u"mT")
+  amp_x::typeof(1.0Unitful.mT)
+  amp_y::typeof(1.0Unitful.mT)
+  amp_z::typeof(1.0Unitful.mT)
 
-  function DriveFieldAmplitude(amp_x::typeof(1.0u"mT"), amp_y::typeof(1.0u"mT"), amp_z::typeof(1.0u"mT"))
+  function DriveFieldAmplitude(amp_x::typeof(1.0Unitful.mT), amp_y::typeof(1.0Unitful.mT), amp_z::typeof(1.0Unitful.mT))
    if amp_x > maxDriveFieldAmplitude || amp_y > maxDriveFieldAmplitude || amp_z > maxDriveFieldAmplitude
      error("Ask Bruker for a higher drive field amplitude...")
    else
@@ -125,9 +125,9 @@ struct DriveFieldAmplitude
 end
 
 struct GradientScan
-  strength::typeof(1.0u"T/m")
+  strength::typeof(1.0Unitful.T/Unitful.m)
 
-  GradientScan(strength) = strength > 2.5u"T/m" || strength < 0.1u"T/m" ?
+  GradientScan(strength) = strength > 2.5Unitful.T/Unitful.m || strength < 0.1Unitful.T/Unitful.m ?
   error("Buy a new scanner which has more than 2.5T/m...:)") : new(strength)
 end
 
@@ -171,12 +171,12 @@ function convert2Unit{T,U}(data::Array{T,2}, unit::Unitful.Units{U ,Unitful.Dime
          return data * unit;
 end
 
-checkCoords(robotSetup::RobotSetup, coord::Vector{typeof(1.0u"mm")})=checkCoords(robotSetup, [coord[1] coord[2] coord[3]])
+checkCoords(robotSetup::RobotSetup, coord::Vector{typeof(1.0Unitful.mm)})=checkCoords(robotSetup, [coord[1] coord[2] coord[3]])
 @doc "checkCoords(robotSetup, coords; plotresults) is used to check if the chosen test coordinates are inside the allowed range
       of the roboter movement. If invalid points exist a list with all points will be presented
       to the user. Only the following test geometry types will be accepted: circle, rectangle, hexagon and triangle.
       The positions of the test objects will be plotted if at least one coordinate is invalid and plotresults=true."->
-function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0u"mm"),2}; plotresults = false)
+function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm),2}; plotresults = false)
   geo = robotSetup.objGeo;
   scanner = robotSetup.scannerGeo;
   clearance = robotSetup.clearance;
@@ -445,15 +445,15 @@ type CoordsError <: Exception
     coordTable
 end
 
-function checkDeltaSample(scanDiameter::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"), clearance::typeof(1.0u"mm")=1.0u"mm")
-    deltaSample = Circle(10.0u"mm", "Delta sample");
+function checkDeltaSample(scanDiameter::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm), clearance::typeof(1.0Unitful.mm)=1.0Unitful.mm)
+    deltaSample = Circle(10.0Unitful.mm, "Delta sample");
     scanRad = scanDiameter/2;
     dSRadius = deltaSample.diameter/2;
     delta = scanRad - sqrt(y^2+z^2) - (dSRadius);
     delta_y = -(abs(y)+dSRadius*sin(atan(abs(y/z)))) + scanRad*sin(atan(abs(y/z)));
     delta_z = -(abs(z)+dSRadius*cos(atan(abs(y/z)))) + scanRad*cos(atan(abs(y/z)));
-    space_z= sqrt((scanRad-dSRadius-1u"mm")^2-y^2)-z;
-    space_y= sqrt((scanRad-dSRadius-1u"mm")^2-z^2)-y;
+    space_z= sqrt((scanRad-dSRadius-1Unitful.mm)^2-y^2)-z;
+    space_y= sqrt((scanRad-dSRadius-1Unitful.mm)^2-z^2)-y;
     if delta > clearance
         return :VALID, delta, space_y,space_z,delta_y, delta_z
     else

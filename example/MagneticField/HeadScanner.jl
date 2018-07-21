@@ -6,8 +6,8 @@ using HDF5
 
 # define Grid
 shape = [10,10,1]
-fov = [200.0,200.0,1.0]u"mm"
-center = [0.0,0.0,0.0]u"mm"
+fov = [200.0,200.0,1.0]Unitful.mm
+center = [0.0,0.0,0.0]Unitful.mm
 positions = MeanderingGridPositions( RegularGridPositions(shape,fov,center) )
 
 # create Scanner
@@ -25,7 +25,7 @@ currents = hcat(hcat(currRange,zeros(length(currRange)))',
 voltToCurrent = 0.08547008547008547
 
 #TODO mT sollte man hier nicht angeben müssen. Das sollte im Gaussmeter gekapselt sein
-mfMeasObj = MagneticFieldSweepCurrentsMeas(rp, gauss, u"mT", positions,
+mfMeasObj = MagneticFieldSweepCurrentsMeas(rp, gauss, Unitful.mT, positions,
                                            currents, waitTime, voltToCurrent)
 
 @time res = performTour!(robot, safety, positions, mfMeasObj)

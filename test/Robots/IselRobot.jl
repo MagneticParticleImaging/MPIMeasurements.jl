@@ -3,7 +3,7 @@ using Unitful
 
 hr = MPIScanner("IselRobot.toml")
 initRefZYX(hr)
-moveAbs(hr,10.0u"mm",0.0u"mm",0.0u"mm")
+moveAbs(hr,10.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
 # Basic Test
 # using LibSerialPort
 # serialports = list_ports()

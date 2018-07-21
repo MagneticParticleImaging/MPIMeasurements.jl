@@ -4,11 +4,11 @@ filename = "systemMatrix.mdf"
 
 # define Grid
 shp = [9,1,1]
-fov = [90.0,90.0,1.0]u"mm"
-ctr = [156.0,-11.2,71.0]u"mm"
+fov = [90.0,90.0,1.0]Unitful.mm
+ctr = [156.0,-11.2,71.0]Unitful.mm
 
 positions = BreakpointGridPositions( RegularGridPositions(shp,fov,ctr),
-        [1,11], [0.0,0.0,0.0]u"mm" )
+        [1,11], [0.0,0.0,0.0]Unitful.mm )
 
 scanner = MPIScanner("HeadScanner.toml")
 robot = getRobot(scanner)
@@ -23,7 +23,7 @@ params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
 params["dfStrength"]=[5e-3]
 params["acqNumAverages"]=1000
-params["calibDeltaSampleSize"] = [10.0,10.0,10.0]u"mm"
+params["calibDeltaSampleSize"] = [10.0,10.0,10.0]Unitful.mm
 
 x = linspace(0,1,3)
 params["acqFFValues"] = []

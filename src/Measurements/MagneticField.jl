@@ -7,27 +7,27 @@ export saveMagneticFieldAsHDF5, MagneticFieldMeas
   gauss::GaussMeter
   positions::Positions
   gaussRange::Int
-  pos::Array{typeof(1.0u"m"),2}
-  magneticField::Array{typeof(1.0u"T"),3}
-  magneticFieldError::Array{typeof(1.0u"T"),3}
+  pos::Array{typeof(1.0Unitful.m),2}
+  magneticField::Array{typeof(1.0Unitful.T),3}
+  magneticFieldError::Array{typeof(1.0Unitful.T),3}
   timestamp::Array{String,2}
   pause::Float64
 
   MagneticFieldMeas(gauss, positions, gausMeterRange, numMeasPerPos=1, pause=0.0) =
     new(gauss, positions, gausMeterRange,
-                   zeros(typeof(1.0u"m"),3,length(positions)),
-                   zeros(typeof(1.0u"T"),3,numMeasPerPos,length(positions)),
-                   zeros(typeof(1.0u"T"),3,numMeasPerPos,length(positions)),
+                   zeros(typeof(1.0Unitful.m),3,length(positions)),
+                   zeros(typeof(1.0Unitful.T),3,numMeasPerPos,length(positions)),
+                   zeros(typeof(1.0Unitful.T),3,numMeasPerPos,length(positions)),
                    Array{String,2}(numMeasPerPos,length(positions)), pause)
 end
 
 # define preMoveAction
-function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
+function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
   println("moving to next position...")
 end
 
 # define postMoveAction
-function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")}, index)
+function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
   println("post action: ", pos)
   sleep(0.05)
   measObj.pos[:,index] = pos
@@ -41,7 +41,7 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0u"mm")
     measObj.timestamp[l,index] = string(now())
     measObj.magneticField[:,l,index] = magneticField
     # perform error estimation based on gauss meter specification
-    magneticFieldError = zeros(typeof(1.0u"T"),3,2)
+    magneticFieldError = zeros(typeof(1.0Unitful.T),3,2)
     magneticFieldError[:,1] = abs.(magneticField)*1e-3
     magneticFieldError[:,2] = getFieldError(range)
     measObj.magneticFieldError[:,l,index] = sum(magneticFieldError,2)
