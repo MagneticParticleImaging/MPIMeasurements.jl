@@ -237,7 +237,7 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
                      zeros(numTxChannels(daq)))
   end
   setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
-  enableSlowDAC(daq, false)
+  #enableSlowDAC(daq, false)
 
   numSampPerPeriod = daq.params.numSampPerPeriod
   numPeriods = daq.params.acqNumPeriodsPerFrame
@@ -280,7 +280,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
   end
 
   #if measObj.daq.params.acqNumPeriodsPerFrame > 1 && measObj.daq.params.acqNumFFChannels == 2
-  if measObj.daq.params.acqNumFFChannels == 2
+  #=if measObj.daq.params.acqNumFFChannels == 2
     curr1 = measObj.daq.params.acqFFValues[1,2]
     curr2 = measObj.daq.params.acqFFValues[1,1]
     println("C1=$curr1")
@@ -288,17 +288,13 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0u"m
     setSlowDAC(measObj.daq, curr1, 0)
     setSlowDAC(measObj.daq, curr2, 1)
     sleep(0.5)
-  end
+  end=#
 
   currFr = enableSlowDAC(measObj.daq, true, 1)
 
   uMeas, uRef = readData(measObj.daq, 1, currFr+1)
 
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
-
-  #u = cat(2, uMeas, uRef)
-
-  #showAllDAQData(u[:,:,1:1,1], showFT=true)
 
   measObj.signals[:,:,:,index] = mean(uMeas,4)
 
