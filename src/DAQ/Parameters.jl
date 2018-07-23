@@ -37,6 +37,8 @@ type DAQParams
   txLimitVolt::Vector{Float64}
   controlPhase::Bool
   acqFFSequence::String
+  ffRampUpTime::Float64
+  ffRampUpFraction::Float64
 end
 
 
@@ -92,6 +94,14 @@ function DAQParams(params)
     params["acqNumSubperiods"] = 1
   end
 
+  if !haskey(params,"ffRampUpTime")
+    params["ffRampUpTime"] = 0.4
+  end
+
+  if !haskey(params,"ffRampUpFraction")
+    params["ffRampUpFraction"] = 0.8
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -128,7 +138,9 @@ function DAQParams(params)
     dfChanToModulusIdx,
     params["txLimitVolt"],
     params["controlPhase"],
-    params["acqFFSequence"]
+    params["acqFFSequence"],
+    params["ffRampUpTime"],
+    params["ffRampUpFraction"]
    )
 
   return params
@@ -170,6 +182,8 @@ function toDict(p::DAQParams)
   params["txLimitVolt"] = p.txLimitVolt
   params["controlPhase"] = p.controlPhase
   params["acqFFSequence"] = p.acqFFSequence
+  params["ffRampUpTime"] = p.ffRampUpTime
+  params["ffRampUpFraction"] = p.ffRampUpFraction
 
   return params
 end

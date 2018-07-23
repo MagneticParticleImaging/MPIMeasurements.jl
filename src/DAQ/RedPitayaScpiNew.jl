@@ -108,8 +108,9 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool,
-       numFrames=0) = enableSlowDAC(daq.rpc, enable, numFrames)
+enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0,
+              ffRampUpTime=0.4, ffRampUpFraction=0.8) =
+            enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
 
 function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
   if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )

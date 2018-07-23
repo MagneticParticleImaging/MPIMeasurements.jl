@@ -41,6 +41,8 @@ calibGridShape = [3,3,3]
 calibGridFOV = [0.10,0.10,0.10]
 calibGridCenter = [0.0,0.0,0.0]
 calibNumBGMeasurements = 2
+maxTemperature = 55.0
+
 
 [SurveillanceUnit]
 type = "Dummy"
@@ -85,7 +87,7 @@ acqNumFGFrames = 200
 rxNumChannels = 1
 controlPause = 0.2
 controlPhase = true
-decimation = 32
+decimation = 64
 acqNumFrames = 1
 dfDivider = [4864]
 dfStrength = [0.005]
@@ -105,3 +107,5 @@ refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
 calibFFCurrentToVolt = 0.08547008547008547
+ffRampUpTime = 0.4
+ffRampUpFraction = 0.8

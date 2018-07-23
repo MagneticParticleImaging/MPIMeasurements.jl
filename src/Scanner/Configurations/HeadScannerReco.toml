@@ -41,6 +41,7 @@ calibGridShape = [3,3,3]
 calibGridFOV = [0.10,0.10,0.10]
 calibGridCenter = [0.0,0.0,0.0]
 calibNumBGMeasurements = 2
+maxTemperature = 55.0
 
 [SurveillanceUnit]
 type = "Dummy"
@@ -105,3 +106,5 @@ refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
 calibFFCurrentToVolt = 0.08547008547008547
+ffRampUpTime = 0.4
+ffRampUpFraction = 0.8

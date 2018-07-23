@@ -279,20 +279,10 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
     setTxParams(measObj.daq, measObj.daq.params.currTxAmp, measObj.daq.params.currTxPhase)
   end
 
-  #if measObj.daq.params.acqNumPeriodsPerFrame > 1 && measObj.daq.params.acqNumFFChannels == 2
-  #=if measObj.daq.params.acqNumFFChannels == 2
-    curr1 = measObj.daq.params.acqFFValues[1,2]
-    curr2 = measObj.daq.params.acqFFValues[1,1]
-    println("C1=$curr1")
-    println("C2=$curr2")
-    setSlowDAC(measObj.daq, curr1, 0)
-    setSlowDAC(measObj.daq, curr2, 1)
-    sleep(0.5)
-  end=#
-
-  currFr = enableSlowDAC(measObj.daq, true, 1)
-
-  uMeas, uRef = readData(measObj.daq, 1, currFr+1)
+  currFr = enableSlowDAC(measObj.daq, true, 1,
+                    measObj.daq.params.ffRampUpTime, measObj.daq.params.ffRampUpFraction)
+                    
+  uMeas, uRef = readData(measObj.daq, 1, currFr)
 
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 

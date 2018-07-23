@@ -41,6 +41,7 @@ rxUnit = "V"
 scannerManufacturer = "IBI"
 measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
+maxTemperature = 55.0
 
 [SurveillanceUnit]
 type = "Arduino"
@@ -101,3 +102,5 @@ calibRefToField = [0.0159295]
 acqFFSequence = "Static"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8
+ffRampUpTime = 0.4
+ffRampUpFraction = 0.8

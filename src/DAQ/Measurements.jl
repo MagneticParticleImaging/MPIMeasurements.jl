@@ -16,18 +16,8 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
                      zeros(numTxChannels(daq)))
   end
 
-  #if daq.params.acqNumPeriodsPerFrame > 1 && daq.params.acqNumFFChannels == 2
-  #=if daq.params.acqNumFFChannels == 2
-    curr1 = daq.params.acqFFValues[1,2]
-    curr2 = daq.params.acqFFValues[1,1]
-    println("C1=$curr1")
-    println("C2=$curr2")
-    setSlowDAC(daq, curr1, 0)
-    setSlowDAC(daq, curr2, 1)
-    sleep(0.5)
-  end=#
-
-  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames)
+  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames,
+                         daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
 
