@@ -102,5 +102,5 @@ calibRefToField = [0.0159295]
 acqFFSequence = "Static"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8
-ffRampUpTime = 0.4
-ffRampUpFraction = 0.8
+ffRampUpTime = 0.8
+ffRampUpFraction = 0.7

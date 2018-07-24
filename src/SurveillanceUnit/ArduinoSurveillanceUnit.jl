@@ -76,7 +76,22 @@ end
 function getTemperatures(Arduino::ArduinoSurveillanceUnit)
     Temps=ArduinoCommand(Arduino, "GET:TEMP")
     TempDelim="T"
-    return parse.(Float64,split(Temps,TempDelim))
+
+    temp =  tryparse.(Float64,split(Temps,TempDelim))
+
+    tempFloat = []
+
+    for t in temp
+      if !isnull(t)
+          push!(tempFloat, get(t))
+      end
+    end
+
+    if length(tempFloat) == 0
+      return [0.0]
+    else
+      return tempFloat
+    end
 end
 
 function GetDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)

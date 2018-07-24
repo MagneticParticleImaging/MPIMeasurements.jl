@@ -14,3 +14,17 @@ function makeSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
                                   name*".csv"), B)
   return B
 end
+
+function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
+
+  t=linspace(0,2*pi,patches+1)[1:end-1]
+  A=((maxCurr-minCurr)/2).*sin.(t).+(minCurr+maxCurr)/2
+  B=-(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2
+
+  C = cat(1,A',B')
+  D=repeat(cat(2,C,flipdim(C,2)), inner=(1,periodsPerPatch))
+
+  writecsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                  name*".csv"), D)
+  return D
+end
