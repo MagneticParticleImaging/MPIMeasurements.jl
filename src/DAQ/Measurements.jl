@@ -16,15 +16,22 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
                      zeros(numTxChannels(daq)))
   end
 
-  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames,
+  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-  uMeas, uRef = readData(daq, daq.params.acqNumFrames, currFr)
+  uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
 
   stopTx(daq)
   disconnect(daq)
 
-  return uMeas
+  if daq.params.acqNumFrameAverages > 1
+    u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
+                daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
+    uMeasAv = mean(u_, 5)[:,:,:,:,1]
+    return uMeasAv
+  else
+    return uMeas
+  end
 end
 
 # high level: This stores as MDF
