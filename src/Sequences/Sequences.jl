@@ -22,7 +22,7 @@ function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPat
   B=-(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2
 
   C = cat(1,A',B')
-  D=repeat(cat(2,C,flipdim(C,2)), inner=(1,periodsPerPatch))
+  D=repeat(C, inner=(1,periodsPerPatch))
 
   writecsv(Pkg.dir("MPIMeasurements","src","Sequences",
                                   name*".csv"), D)
