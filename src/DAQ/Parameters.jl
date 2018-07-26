@@ -57,8 +57,6 @@ function DAQParams(params)
 
   rxBandwidth = params["dfBaseFrequency"] / params["decimation"] / 2
 
-  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
-
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
@@ -80,12 +78,14 @@ function DAQParams(params)
     params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
                                     params["acqFFSequence"]*".csv"))
     params["acqNumFFChannels"] = size(params["acqFFValues"],1)
-    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+    #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
   else
     params["acqFFValues"] = zeros(0,0)
     params["acqNumFFChannels"] = 1
     params["acqNumPeriodsPerFrame"] = 1
   end
+
+  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
   if !haskey(params,"calibFFCurrentToVolt")
     params["calibFFCurrentToVolt"] = 0.0

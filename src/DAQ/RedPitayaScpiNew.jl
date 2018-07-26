@@ -61,8 +61,8 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     else
       # If numPeriods is larger than the LUT we repeat the values
       setSlowDACLUT(master(daq.rpc),
-          repeat(vec(daq.params.acqFFValues).*daq.params.calibFFCurrentToVolt,
-            inner=div(daq.params.acqNumPeriodsPerFrame, length(daq.params.acqFFValues))))
+          repeat(daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt,
+            inner=(1,div(daq.params.acqNumPeriodsPerFrame, size(daq.params.acqFFValues,2)))))
     end
   else
     numSlowDACChan(master(daq.rpc), 0)
