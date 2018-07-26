@@ -1,7 +1,7 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot, isReferenced, prepareRobot, getDefaultVelocity, setVelocity, parkPos
+export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity, parkPos
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0Unitful.mm),
@@ -14,7 +14,7 @@ export Robot, isReferenced, prepareRobot, getDefaultVelocity, setVelocity, parkP
 @mustimplement prepareRobot(robot::Robot)
 @mustimplement isReferenced(robot::Robot)
 @mustimplement getDefaultVelocity(robot::Robot)
-@mustimplement setVelocity(robot::Robot,vel::Array{Int64,1})
+@mustimplement setRefVelocity(robot::Robot,vel::Array{Int64,1})
 @mustimplement parkPos(robot::Robot)
 
 """ `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
@@ -32,6 +32,17 @@ function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)})
       error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
     end
     moveAbs(robot,xyzPos[1],xyzPos[2],xyzPos[3])
+end
+
+""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})` """
+function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})
+    if length(xyzPos)!=3
+      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
+    end
+    if length(xyzVel)!=3
+      error("position vector xyzVel needs to have length = 3, but has length: ",length(xyzPos))
+    end
+    moveAbs(robot,xyzPos[1],xyzVel[1],xyzPos[2],xyzVel[2],xyzPos[3],xyzVel[3])
 end
 
 # """ `moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0Unitful.mm)})` """

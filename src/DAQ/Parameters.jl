@@ -11,6 +11,7 @@ type DAQParams
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
+  rxNumSamplingPoints::Int64
   acqNumFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
@@ -56,8 +57,6 @@ function DAQParams(params)
 
   rxBandwidth = params["dfBaseFrequency"] / params["decimation"] / 2
 
-  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
-
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
@@ -79,12 +78,14 @@ function DAQParams(params)
     params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
                                     params["acqFFSequence"]*".csv"))
     params["acqNumFFChannels"] = size(params["acqFFValues"],1)
-    params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+    #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
   else
     params["acqFFValues"] = zeros(0,0)
     params["acqNumFFChannels"] = 1
     params["acqNumPeriodsPerFrame"] = 1
   end
+
+  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
   if !haskey(params,"calibFFCurrentToVolt")
     params["calibFFCurrentToVolt"] = 0.0
@@ -118,6 +119,7 @@ function DAQParams(params)
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
+    numSampPerPeriod*params["acqNumSubperiods"],
     params["acqNumFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
@@ -126,7 +128,7 @@ function DAQParams(params)
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
-    reshape(params["acqFFValues"],:,params["acqNumFFChannels"]),
+    reshape(params["acqFFValues"],params["acqNumFFChannels"],:),
     params["acqFFLinear"],
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
@@ -165,6 +167,7 @@ function toDict(p::DAQParams)
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
+  params["rxNumSamplingPoints"] = p.rxNumSamplingPoints
   params["acqNumFrames"] = p.acqNumFrames
   params["acqNumSubperiods"] = p.acqNumSubperiods
   params["acqFramePeriod"] = p.acqFramePeriod

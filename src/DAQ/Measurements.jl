@@ -57,7 +57,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   params["dfDivider"] = reshape(divider,1,length(divider))
 
   # receiver parameters
-  params["rxNumSamplingPoints"] = daq.params.numSampPerPeriod #FIXME rename internally
+  params["rxNumSamplingPoints"] = daq.params.rxNumSamplingPoints
   params["rxNumChannels"] = numRxChannels(daq)
 
   # transferFunction

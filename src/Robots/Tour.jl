@@ -12,11 +12,9 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
     isValid = checkCoords(setup, pos)
   end
 
-  setVelocity(robot, vel)
-
   for (index,pos) in enumerate(positions)
     preMoveAction(measObj, pos, index)
-    moveAbsUnsafe(robot, pos) # comment for testing
+    moveAbsUnsafe(robot, pos, vel) # comment for testing
     sleep(postMoveWaitTime)
     if switchBrakes
       setBrake(robot,false)
@@ -26,8 +24,6 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
       setBrake(robot,true)
     end
   end
-
-  setVelocity(robot, getDefaultVelocity(robot))
 
   moveCenter(robot)
   return measObj
