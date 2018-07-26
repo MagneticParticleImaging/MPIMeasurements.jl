@@ -3,7 +3,7 @@ export DummyRobot
 mutable struct DummyRobot <: Robot
   referenced::Bool
 
-  DummyRobot() = new(false)
+  DummyRobot() = new(true)
 end
 
 function moveAbs(robot::DummyRobot, posX::typeof(1.0Unitful.mm),
