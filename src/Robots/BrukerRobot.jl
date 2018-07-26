@@ -67,7 +67,7 @@ end
 function setBrake(sd::BrukerRobot,brake::Bool)
 end
 getDefaultVelocity(robot::BrukerRobot) = zeros(3)
-function setVelocity(robot::BrukerRobot, vel::Array{Int64,1})
+function setRefVelocity(robot::BrukerRobot, vel::Array{Int64,1})
 end
 
 function createMoveCommand(x::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm))

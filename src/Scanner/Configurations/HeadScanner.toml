@@ -53,6 +53,7 @@ pauseTime = 1.0
 stepsPerTurn = 5000
 gearSlope = 5
 minMaxFreq = [20, 4000]
+defaultRefVel = [40000, 40000, 40000]
 defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 defParkPos =[0.420, 0.0, 0.0]

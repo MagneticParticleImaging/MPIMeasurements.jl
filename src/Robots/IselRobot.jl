@@ -49,6 +49,7 @@ struct IselRobot <: Robot
   stepsPerTurn::Integer
   gearSlope::Integer
   stepsPermm::Float64
+  defaultRefVel::Array{Int64,1}
   defaultVel::Array{Int64,1}
   defCenterPos::Array{typeof(1.0Unitful.mm),1}
   defSampleCenterPos::Array{typeof(1.0Unitful.mm),1}
@@ -75,10 +76,10 @@ function IselRobot(params::Dict)
     set_speed(sp, baudrate)
     iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
-        stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos)
+        stepsPermm,params["defaultRefVel"],params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos)
     invertAxesYZ(iselRobot)
     initZYX(iselRobot)
-    setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
+    setRefVelocity(iselRobot,iselRobot.defaultRefVel[1],iselRobot.defaultRefVel[2],iselRobot.defaultRefVel[3])
     # check whether robot has been referenced or needs to be referenced
     if !haskey(params,"doReferenceCheck") || params["doReferenceCheck"]
       referenced = isReferenced(iselRobot)
@@ -293,13 +294,13 @@ function getDefaultVelocity(robot::IselRobot)
     return robot.defaultVel
 end
 
-""" Sets the velocities of the axes x,y,z """
-function setVelocity(robot::IselRobot, vel::Array{Int64,1})
-    setVelocity(robot::IselRobot,vel[1],vel[2],vel[3])
+""" Sets the Reference velocities of the axes x,y,z """
+function setRefVelocity(robot::IselRobot, vel::Array{Int64,1})
+    setRefVelocity(robot::IselRobot,vel[1],vel[2],vel[3])
 end
 
-""" Sets the velocities of the axes x,y,z """
-function setVelocity(robot::IselRobot,xVel::Int64,yVel::Int64,zVel::Int64)
+""" Sets the Refernce velocities of the axes x,y,z """
+function setRefVelocity(robot::IselRobot,xVel::Int64,yVel::Int64,zVel::Int64)
   minVel = robot.minMaxVel[1]
   maxVel = robot.minMaxVel[2]
   if minVel <= xVel && xVel <= maxVel && minVel <= yVel && yVel <= maxVel &&
