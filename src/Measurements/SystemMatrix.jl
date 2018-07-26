@@ -46,10 +46,10 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
   setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
   #enableSlowDAC(daq, false)
 
-  numSampPerPeriod = daq.params.numSampPerPeriod
+  rxNumSamplingPoints = daq.params.rxNumSamplingPoints
   numPeriods = daq.params.acqNumPeriodsPerFrame
 
-  signals = zeros(Float32,numSampPerPeriod,numRxChannels(daq),numPeriods,length(positions))
+  signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,length(positions))
 
   measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime, controlPhase)
   return measObj
@@ -128,7 +128,7 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
 
   # receiver parameters
-  params["rxNumSamplingPoints"] = daq.params.numSampPerPeriod #FIXME rename internally
+  params["rxNumSamplingPoints"] = daq.params.rxNumSamplingPoints
   params["rxNumChannels"] = numRxChannels(daq)
 
   # calibration params  (needs to be called after calibration params!)

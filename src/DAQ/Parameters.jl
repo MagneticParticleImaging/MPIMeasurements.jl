@@ -11,6 +11,7 @@ type DAQParams
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
+  rxNumSamplingPoints::Int64
   acqNumFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
@@ -118,6 +119,7 @@ function DAQParams(params)
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
+    numSampPerPeriod*params["acqNumSubperiods"],
     params["acqNumFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
@@ -165,6 +167,7 @@ function toDict(p::DAQParams)
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
+  params["rxNumSamplingPoints"] = p.rxNumSamplingPoints
   params["acqNumFrames"] = p.acqNumFrames
   params["acqNumSubperiods"] = p.acqNumSubperiods
   params["acqFramePeriod"] = p.acqFramePeriod

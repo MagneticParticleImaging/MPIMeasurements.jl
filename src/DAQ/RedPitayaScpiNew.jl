@@ -46,8 +46,7 @@ end
 
 function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
-  samplesPerPeriod(daq.rpc, daq.params.numSampPerPeriod * daq.params.acqNumAverages
-                           * daq.params.acqNumSubperiods)
+  samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
 
   #masterTrigger(daq.rpc, false)
