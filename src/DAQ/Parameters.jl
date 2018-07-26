@@ -128,7 +128,7 @@ function DAQParams(params)
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
-    reshape(params["acqFFValues"],:,params["acqNumFFChannels"]),
+    reshape(params["acqFFValues"],params["acqNumFFChannels"],:),
     params["acqFFLinear"],
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
