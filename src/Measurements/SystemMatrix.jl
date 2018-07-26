@@ -132,7 +132,10 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   params["rxNumChannels"] = numRxChannels(daq)
 
   # calibration params  (needs to be called after calibration params!)
-  params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
+  #params["rxDataConversionFactor"] = calibIntToVoltRx(daq)
+  calib = zeros(2,numRxChannels(daq))
+  calib[1,:] = 1.0
+  params["rxDataConversionFactor"] = calib
 
   params["measIsFourierTransformed"] = false
   params["measIsSpectralLeakageCorrected"] = false
