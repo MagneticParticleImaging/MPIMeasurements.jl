@@ -17,6 +17,7 @@ type DAQParams
   acqNumAverages::Int64
   acqNumFrameAverages::Int64
   acqNumSubperiods::Int64
+  acqNumPeriodsPerPatch::Int64
   sinLUT::Matrix{Float64}
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
@@ -79,6 +80,8 @@ function DAQParams(params)
                                     params["acqFFSequence"]*".csv"))
     params["acqNumFFChannels"] = size(params["acqFFValues"],1)
     #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+
+    params["acqNumPeriodsPerPatch"] = div(params["acqNumPeriodsPerFrame"], size(params["acqFFValues"],2))
   else
     params["acqFFValues"] = zeros(0,0)
     params["acqNumFFChannels"] = 1
@@ -94,6 +97,10 @@ function DAQParams(params)
 
   if !haskey(params,"acqNumSubperiods")
     params["acqNumSubperiods"] = 1
+  end
+
+  if !haskey(params,"acqNumPeriodsPerPatch")
+    params["acqNumPeriodsPerPatch"] = 1
   end
 
   if !haskey(params,"ffRampUpTime")
@@ -125,6 +132,7 @@ function DAQParams(params)
     params["acqNumAverages"],
     params["acqNumFrameAverages"],
     params["acqNumSubperiods"],
+    params["acqNumPeriodsPerPatch"],
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
@@ -170,6 +178,7 @@ function toDict(p::DAQParams)
   params["rxNumSamplingPoints"] = p.rxNumSamplingPoints
   params["acqNumFrames"] = p.acqNumFrames
   params["acqNumSubperiods"] = p.acqNumSubperiods
+  params["acqNumPeriodsPerPatch"] = p.acqNumPeriodsPerPatch
   params["acqFramePeriod"] = p.acqFramePeriod
   params["acqNumAverages"] = p.acqNumAverages
   params["acqNumFrameAverages"] = p.acqNumFrameAverages

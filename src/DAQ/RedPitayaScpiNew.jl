@@ -46,8 +46,9 @@ end
 
 function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
-  samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
-  periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
+  samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages
+                            * daq.params.acqNumPeriodsPerPatch)
+  periodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
 
   #masterTrigger(daq.rpc, false)
 
@@ -55,7 +56,9 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   if length(daq.params.acqFFValues) > 0
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
     slowDACInterpolation(master(daq.rpc), daq.params.acqFFLinear)
-    if length(daq.params.acqFFValues) == daq.params.acqNumPeriodsPerFrame*daq.params.acqNumFFChannels
+    if length(daq.params.acqFFValues) ==
+          div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch) *
+          daq.params.acqNumFFChannels
       setSlowDACLUT(master(daq.rpc),
           daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
     else
@@ -146,7 +149,7 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
 
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
-  u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages)
+  u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages, daq.params.acqNumPeriodsPerPatch)
 
   c = daq.params.calibIntToVolt
   for d=1:size(u,2)
