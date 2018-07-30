@@ -45,8 +45,8 @@ maxTemperature = 55.0
 
 [SurveillanceUnit]
 type = "Arduino"
-connection = "/dev/ttyACM0"
-#connection = "/dev/ttyACM1"
+#connection = "/dev/ttyACM0"
+connection = "/dev/ttyACM1"
 
 [Robot]
 pauseTime = 1.0
