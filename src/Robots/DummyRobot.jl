@@ -12,6 +12,13 @@ function moveAbs(robot::DummyRobot, posX::typeof(1.0Unitful.mm),
   sleep(0.05)
 end
 
+""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
+function moveAbs(robot::DummyRobot,posX::typeof(1.0Unitful.mm), velX, posY::typeof(1.0Unitful.mm), velY, posZ::typeof(1.0Unitful.mm), velZ,isCheckError=true)
+    println("DummyRobot: move to pos $posX $velX  $posY $velY $posZ $velZ")
+    sleep(0.05)
+end
+
 function moveRel(robot::DummyRobot, distX::typeof(1.0Unitful.mm),
   distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
   println("DummyRobot: move distance $distX  $distY  $distZ")
@@ -36,7 +43,7 @@ function prepareRobot(robot::DummyRobot)
 end
 
 isReferenced(robot::DummyRobot) = robot.referenced
-getDefaultVelocity(robot::DummyRobot) = zeros(3)+20000
+getDefaultVelocity(robot::DummyRobot) = zeros(Int64,3)+20000
 parkPos(robot::DummyRobot) = [0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 
 function setRefVelocity(robot::DummyRobot, vel::Array{Int64,1})

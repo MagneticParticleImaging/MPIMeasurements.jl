@@ -66,7 +66,7 @@ connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"
-robotMount = "deltaSample"
+robotMount = "deltaSample3D"
 clearance = "clearance"
 setupName = "deltaSampleheadCoil"
 

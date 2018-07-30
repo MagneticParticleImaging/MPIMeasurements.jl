@@ -1,7 +1,7 @@
 using Graphics: @mustimplement
 
 export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity, parkPos
+export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity, parkPos, getMinMaxPosX
 
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0Unitful.mm),

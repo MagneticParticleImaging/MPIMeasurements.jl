@@ -61,6 +61,6 @@ pauseTime=1.0
 type="Dummy"
 [Safety]
 receiveCoil = "headCoil"
-robotMount = "deltaSample"
+robotMount = "deltaSample3D"
 clearance = "clearance"
 setupName = "deltaSampleheadCoil"
