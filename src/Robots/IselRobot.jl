@@ -398,5 +398,5 @@ function writeIOOutput(robot::IselRobot,output::Array{Bool,1})
 end
 
 function getMinMaxPosX(robot::IselRobot)
-    return [-defCenterPos[1], defParkPos[1]]
+    return [-robot.defCenterPos[1], robot.defParkPos[1]]
 end
