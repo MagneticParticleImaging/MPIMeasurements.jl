@@ -16,13 +16,14 @@ export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity, pa
 @mustimplement getDefaultVelocity(robot::Robot)
 @mustimplement setRefVelocity(robot::Robot,vel::Array{Int64,1})
 @mustimplement parkPos(robot::Robot)
+@mustimplement getMinMaxPosX(robot::Robot)
 
 """ `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
 function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})
   if length(xyzPos)!=3
     error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
   end
-  coordsTable = checkCoords(setup, xyzPos)
+  coordsTable = checkCoords(setup, xyzPos, getMinMaxPosX(robot))
   moveAbsUnsafe(robot,xyzPos)
 end
 

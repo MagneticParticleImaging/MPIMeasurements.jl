@@ -1,5 +1,7 @@
-export deltaSample, hallSensor, mouseAdapter,customPhantom, brukerCoil, mouseCoil, headCoil,ratCoil, clearance,
-dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner,
+export deltaSample, samplePhantom, hallSensor, mouseAdapter,customPhantom
+export deltaSample3D, samplePhantom3D, hallSensor3D, mouseAdapter3D,customPhantom3D
+export brukerCoil, mouseCoil, headCoil, ratCoil, clearance
+export dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner,
 mouseAdapterMouseScanner, hallSensorRegularScanner, hallSensorMouseScanner, getValidRobotSetups,
  getValidScannerGeos, getValidObjects, getValidHeadScannerGeos, getValidHeadObjects
 
@@ -10,31 +12,40 @@ samplePhantom = Rectangle(65.0Unitful.mm,40.0Unitful.mm, "Sample Phantom")
 mouseAdapter = Circle(38.0Unitful.mm, "Mouse adapter");
 customPhantom = Rectangle(70.0Unitful.mm,70.0Unitful.mm, "Custom Phantom")
 
+deltaSample3D = Cylinder(deltaSample, 495.0Unitful.mm,"Delta sample 3D");
+hallSensor3D = Cylinder(hallSensor, 450.0Unitful.mm, "Hall Sensor 3D");
+mouseAdapter3D = Cylinder(mouseAdapter, 500.0Unitful.mm, "Mouse adapter 3D")
+samplePhantom3D = Cuboid(samplePhantom, 520.0Unitful.mm, "Sample Phantom 3D");
+customPhantom3D = Cuboid(customPhantom, 520.0Unitful.mm, "Custom Phantom 3D")
+
 # create given scanner diameter
-brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Burker Coil", xMinBrukerRobot, xMaxBrukerRobot);
-mouseCoil = ScannerGeo(40.0Unitful.mm, "Mouse Coil", xMinBrukerRobot, xMaxBrukerRobot);
-ratCoil = ScannerGeo(72.0Unitful.mm, "Rat Coil", xMinBrukerRobot, xMaxBrukerRobot)
-headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", -65.0Unitful.mm, 365.0Unitful.mm);
+const brukerScannerLength = 600.0Unitful.mm
+brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Burker Coil", brukerScannerLength, deltaSample3D);
+mouseCoil = ScannerGeo(40.0Unitful.mm, "Mouse Coil", brukerScannerLength, deltaSample3D);
+ratCoil = ScannerGeo(72.0Unitful.mm, "Rat Coil", brukerScannerLength, deltaSample3D)
+#headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", -65.0Unitful.mm, 365.0Unitful.mm);
+
+headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample3D);
 
 # standard clearance
 clearance = Clearance(1.0Unitful.mm);
 
 validScannerGeos = [brukerCoil, mouseCoil, ratCoil, headCoil]
-validObjects = [deltaSample, hallSensor, mouseAdapter, samplePhantom]
+validObjects = [deltaSample3D, hallSensor3D, mouseAdapter3D, samplePhantom3D]
 
 validHeadScannerGeos = [headCoil]
-validHeadObjects = [samplePhantom, deltaSample, hallSensor, customPhantom]
+validHeadObjects = [samplePhantom3D, deltaSample3D, hallSensor3D, customPhantom3D]
 
 # Standard Combination RobotSetup
-dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample, brukerCoil, clearance);
-mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter, brukerCoil, clearance);
-dSampleMouseScanner = RobotSetup("dSampleMouseScanner", deltaSample, mouseCoil, clearance);
-mouseAdapterMouseScanner = RobotSetup("mouseAdapterMouseScanner", mouseAdapter, mouseCoil, clearance);
-dSampleRatScanner = RobotSetup("dSampleRatScanner", deltaSample, ratCoil, clearance);
-mouseAdapterRatScanner = RobotSetup("mouseAdapterRatScanner", mouseAdapter, ratCoil, clearance);
-hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor, brukerCoil, clearance)
-hallSensorMouseScanner = RobotSetup("hallSensorMouseScanner", hallSensor, mouseCoil, clearance)
-hallSensorRatScanner = RobotSetup("hallSensorMouseScanner", hallSensor, ratCoil, clearance)
+dSampleRegularScanner = RobotSetup("dSampleRegularScanner", deltaSample3D, brukerCoil, clearance);
+mouseAdapterRegularScanner = RobotSetup("mouseAdapterRegularScanner", mouseAdapter3D, brukerCoil, clearance);
+dSampleMouseScanner = RobotSetup("dSampleMouseScanner", deltaSample3D, mouseCoil, clearance);
+mouseAdapterMouseScanner = RobotSetup("mouseAdapterMouseScanner", mouseAdapter3D, mouseCoil, clearance);
+dSampleRatScanner = RobotSetup("dSampleRatScanner", deltaSample3D, ratCoil, clearance);
+mouseAdapterRatScanner = RobotSetup("mouseAdapterRatScanner", mouseAdapter3D, ratCoil, clearance);
+hallSensorRegularScanner = RobotSetup("hallSensorRegularScanner", hallSensor3D, brukerCoil, clearance)
+hallSensorMouseScanner = RobotSetup("hallSensorMouseScanner", hallSensor3D, mouseCoil, clearance)
+hallSensorRatScanner = RobotSetup("hallSensorMouseScanner", hallSensor3D, ratCoil, clearance)
 
 validRobotSetups = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner, mouseAdapterMouseScanner,
  dSampleRatScanner, mouseAdapterRatScanner, hallSensorRegularScanner, hallSensorMouseScanner, hallSensorRatScanner]

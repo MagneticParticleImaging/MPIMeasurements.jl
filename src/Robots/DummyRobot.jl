@@ -42,3 +42,7 @@ parkPos(robot::DummyRobot) = [0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 function setRefVelocity(robot::DummyRobot, vel::Array{Int64,1})
     println("Setting velcities for Dummy Robot!")
 end
+
+function getMinMaxPosX(robot::DummyRobot)
+    return [-70.0Unitful.mm, 200.0Unitful.mm]
+end

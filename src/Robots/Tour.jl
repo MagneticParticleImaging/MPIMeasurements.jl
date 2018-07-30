@@ -9,7 +9,7 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
 
   # check all coords for safety
   for pos in positions
-    isValid = checkCoords(setup, pos)
+    isValid = checkCoords(setup, pos, getMinMaxPosX(robot))
   end
 
   for (index,pos) in enumerate(positions)

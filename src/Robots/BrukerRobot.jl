@@ -25,6 +25,9 @@ const quit="quit\n"
 const exit="exit\n"
 const err="err?\n"
 
+const xMinBrukerRobot = -85.0Unitful.mm;
+const xMaxBrukerRobot = 225.0Unitful.mm;
+
 """ `BrukerCommand(command::String)` """
 @compat struct BrukerCommand
   command::String
@@ -67,7 +70,12 @@ end
 function setBrake(sd::BrukerRobot,brake::Bool)
 end
 getDefaultVelocity(robot::BrukerRobot) = zeros(3)
+parkPos(robot::BrukerRobot) = [220.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 function setRefVelocity(robot::BrukerRobot, vel::Array{Int64,1})
+end
+
+function getMinMaxPosX(robot::BrukerRobot)
+    return [xMinBrukerRobot, xMaxBrukerRobot]
 end
 
 function createMoveCommand(x::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm))

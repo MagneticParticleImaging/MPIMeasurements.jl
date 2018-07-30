@@ -1,15 +1,17 @@
 using Graphics: @mustimplement
 using Unitful
 import HDF5.name
+import Base.length
+
 # export types
-export Clearance, Circle, Rectangle, Hexagon, Triangle, ScannerGeo, WantedVolume,
-DriveFieldAmplitude, GradientScan, RobotSetup, RobotSafety, name
+export Clearance, Circle, Rectangle, Hexagon, Triangle
+export Cylinder, Cuboid
+export ScannerGeo, RobotSetup, RobotSafety, name, length, crosssection
+export WantedVolume, DriveFieldAmplitude, GradientScan
 # export functions
-export convert2Unit, checkCoords, checkDeltaSample
+export convert2Unit, checkCoords, checkCoordsX, checkCoordsYZ, checkDeltaSample
 
 # Robot Constants
-const xMinBrukerRobot = -85.0Unitful.mm;
-const xMaxBrukerRobot = 225.0Unitful.mm;
 const minClearance = 0.5Unitful.mm;
 const regularBrukerScannerdiameter = 118.0Unitful.mm;
 const maxDriveFieldAmplitude = 14.0Unitful.mT;
@@ -23,6 +25,10 @@ end
 
 abstract type Geometry end
 @mustimplement name(geometry::Geometry)
+
+abstract type TeachObj <: Geometry end
+@mustimplement length(teachObj::TeachObj)
+@mustimplement crosssection(teachObj::TeachObj)
 
 struct Circle <: Geometry
   diameter::typeof(1.0Unitful.mm)
@@ -38,6 +44,22 @@ struct Circle <: Geometry
 end
 name(geometry::Circle) = geometry.name
 
+struct Cylinder <: TeachObj
+    circle::Circle
+    length::typeof(1.0Unitful.mm)
+    name::String
+    function Cylinder(circle::Circle,length::typeof(1.0Unitful.mm),name::String)
+        if length < 1.0Unitful.mm
+            error("Cylinder length too short...")
+        else
+            new(circle,length,name)
+        end
+    end
+end
+name(geometry::Cylinder) = geometry.name
+length(teachObj::Cylinder) = teachObj.length
+crosssection(teachObj::Cylinder) = teachObj.circle
+
 struct Rectangle <: Geometry
   width::typeof(1.0Unitful.mm)
   height::typeof(1.0Unitful.mm)
@@ -52,6 +74,22 @@ struct Rectangle <: Geometry
   end
 end
 name(geometry::Rectangle) = geometry.name
+
+struct Cuboid <: TeachObj
+    rectangle::Rectangle
+    length::typeof(1.0Unitful.mm)
+    name::String
+    function Cuboid(rectangle::Rectangle, length::typeof(1.0Unitful.mm), name::String)
+      if length < 1.0Unitful.mm
+        error("Cuboid length too short...")
+      else
+        new(rectangle, length, name)
+      end
+    end
+ end
+ name(geometry::Cuboid) = geometry.name
+ length(teachObj::Cuboid) = teachObj.length
+ crosssection(teachObj::Cuboid) = teachObj.rectangle
 
 struct Hexagon <: Geometry
   width::typeof(1.0Unitful.mm)
@@ -85,13 +123,13 @@ name(geometry::Triangle) = geometry.name
 struct ScannerGeo
   diameter::typeof(1.0Unitful.mm)
   name::String
-  xMinRobot::typeof(1.0Unitful.mm)
-  xMaxRobot::typeof(1.0Unitful.mm)
-  function ScannerGeo(diameter::typeof(1.0Unitful.mm), name::String, xMinRobot::typeof(1.0Unitful.mm), xMaxRobot::typeof(1.0Unitful.mm))
-    if diameter < 1.0Unitful.mm
+  length::typeof(1.0Unitful.mm)
+  teachObj::TeachObj
+  function ScannerGeo(diameter::typeof(1.0Unitful.mm), name::String, length::typeof(1.0Unitful.mm), teachObj::TeachObj)
+    if diameter < 1.0Unitful.mm || length < 1.0Unitful.mm
       error("ScannerGeometry is not possible...")
     else
-      new(diameter, name, xMinRobot, xMaxRobot)
+      new(diameter, name, length, teachObj)
     end
   end
 end
@@ -171,12 +209,13 @@ function convert2Unit{T,U}(data::Array{T,2}, unit::Unitful.Units{U ,Unitful.Dime
          return data * unit;
 end
 
-checkCoords(robotSetup::RobotSetup, coord::Vector{typeof(1.0Unitful.mm)})=checkCoords(robotSetup, [coord[1] coord[2] coord[3]])
+checkCoords(robotSetup::RobotSetup, coord::Vector{typeof(1.0Unitful.mm)},minMaxRobotX::Vector{typeof(1.0Unitful.mm)})=checkCoords(robotSetup, [coord[1] coord[2] coord[3]], minMaxRobotX::Vector{typeof(1.0Unitful.mm)})
 @doc "checkCoords(robotSetup, coords; plotresults) is used to check if the chosen test coordinates are inside the allowed range
       of the roboter movement. If invalid points exist a list with all points will be presented
       to the user. Only the following test geometry types will be accepted: circle, rectangle, hexagon and triangle.
       The positions of the test objects will be plotted if at least one coordinate is invalid and plotresults=true."->
-function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm),2}; plotresults = false)
+function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm),2},
+     minMaxRobotX::Vector{typeof(1.0Unitful.mm)}; plotresults = false)
   geo = robotSetup.objGeo;
   scanner = robotSetup.scannerGeo;
   clearance = robotSetup.clearance;
@@ -200,97 +239,14 @@ for i=1:numPos
   y_i=coords[i, 2];
   z_i=coords[i, 3];
 
-  if x_i > scanner.xMaxRobot
-     delta_x_max = x_i - scanner.xMaxRobot;
-     errorStatus[i, 1] = :INVALID;
-     errorX[i] = ustrip(delta_x_max);
-  elseif x_i < scanner.xMinRobot
-         delta_x_min = scanner.xMinRobot - x_i;
-         errorStatus[i, 1] = :INVALID
-         errorX[i] = ustrip(delta_x_min);
-  else
-    errorStatus[i, 1] = :VALID;
-    errorX[i] = 0.0;
-  end #if check x coordinate
+  # CheckCoordsX
+  errorStatus[i, 1], errorX[i] = checkCoordsX(x_i, scanner, length(geo),
+   minMaxRobotX[1], minMaxRobotX[2])
 
-  if typeof(geo) == Circle
-     #check distances
-     delta = scannerRad-sqrt(y_i^2+z_i^2) - geo.diameter/2;
-     delta_y = (abs(y_i)+geo.diameter/2*sin(atan(abs(y_i/z_i)))) - scannerRad*sin(atan(abs(y_i/z_i)));
-     delta_z = (abs(z_i)+geo.diameter/2*cos(atan(abs(y_i/z_i)))) - scannerRad*cos(atan(abs(y_i/z_i)));
+  # CheckCoordsYZ
+  errorStatus[i, 2:3], errorY[i], errorZ[i] =
+    checkCoordsYZ(crosssection(geo), scannerRad, y_i, z_i, clearance)
 
-     if delta > clearance.distance
-        errorStatus[i, 2:3] = :VALID;
-        errorY[i] = 0.0;
-        errorZ[i] = 0.0;
-     else
-        errorStatus[i, 2:3]=:INVALID;
-        errorY[i]=ustrip(delta_y);
-        errorZ[i]=ustrip(delta_z);
-     end #if clearance
-
-  elseif typeof(geo) == Rectangle
-         #check distances
-         delta_y=(abs(y_i)+geo.width/2)-scannerRad*sin(atan((abs(y_i)+geo.width/2)/(abs(z_i)+geo.height/2)));
-         delta_z=(abs(z_i)+geo.height/2)-scannerRad*cos(atan((abs(y_i)+geo.width/2)/(abs(z_i)+geo.height/2)));
-
-         if clearance.distance > delta_y && clearance.distance > delta_z
-            errorStatus[i, 2:3]=:VALID;
-            errorY[i] = 0.0;
-            errorZ[i] = 0.0;
-         else
-            errorStatus[i, 2:3] = :INVALID;
-            errorY[i] = ustrip(delta_y);
-            errorZ[i] = ustrip(delta_z);
-         end #if clearance
-
-  elseif typeof(geo) == Hexagon
-         #approximate hexagon by circle
-         if geo.width > geo.height
-            hex_radius = geo.width/2;
-         else
-            hex_radius = geo.height/2;
-         end
-
-         #check distances
-         delta = scannerRad - sqrt(y_i^2+z_i^2)-hex_radius;
-         delta_y = (abs(y_i)+hex_radius*sin(atan(abs(y_i/z_i)))) - scannerRad*sin(atan(abs(y_i/z_i)));
-         delta_z = (abs(z_i)+hex_radius*cos(atan(abs(y_i/z_i)))) - scannerRad*cos(atan(abs(y_i/z_i)));
-
-         if delta > clearance.distance
-            errorStatus[i, 2:3]=:VALID;
-            errorY[i] = 0.0;
-            errorZ[i] = 0.0;
-         else
-            errorStatus[i, 2:3]=:INVALID;
-            errorY[i] = ustrip(delta_y);
-            errorZ[i] = ustrip(delta_z);
-         end #if clearance
-
-  elseif typeof(geo) == Triangle
-         #following code only for symmetric triangles / center of gravity = center of plug adapter
-         perimeter = sqrt(geo.width^2/4+geo.height^2)/(2*sin(atan(2*geo.height/geo.width)));
-
-         #define new z coordinate, since center of gravity is not equal to center of perimeter circle
-         z_new=z_i+((2/3)*geo.height-perimeter);
-
-         delta = scannerRad - sqrt(y_i^2+z_new^2)-perimeter;
-         delta_y = (abs(y_i)+perimeter*sin(atan(abs(y_i/z_new))))-scannerRad*sin(atan(abs(y_i/z_new)));
-         delta_z = (abs(z_new)+perimeter*cos(atan(abs(y_i/z_new))))-scannerRad*cos(atan(abs(y_i/z_new)));
-
-         if delta > clearance.distance
-            errorStatus[i, 2:3] = :VALID;
-            errorY[i] = 0.0;
-            errorZ[i] = 0.0;
-         else
-            errorStatus[i, 2:3] = :INVALID;
-            errorY[i] = ustrip(delta_y);
-            errorZ[i] = ustrip(delta_z);
-         end #if clearance
-
-  else
-     println("Chosen geometry not known.\nChoose a given geometry.")
-  end #if
 end #for numPos
   #create coordinate table with errors
   table=hcat(errorStatus, coords, errorX, errorY, errorZ);
@@ -315,6 +271,108 @@ end #for numPos
      throw(CoordsError("Some coordinates exceeded their range!",coordTable));
   end
 end #function
+
+
+
+function checkCoordsX(posX::typeof(1.0Unitful.mm), scanner::ScannerGeo,
+     objLength::typeof(1.0Unitful.mm), minRobotX::typeof(1.0Unitful.mm),
+     maxRobotX::typeof(1.0Unitful.mm))
+     scannerLength = scanner.length
+     teachObjLength = length(scanner.teachObj)
+     # assumption: (0,0,0) is teached with teachObj at the center of the scannerLength
+     # So robot can move half of scannerLength
+     # plus the difference length between teaching obj and current used object
+     # minRobotX is dependent of the current teaching position
+     minPosX = max(minRobotX, (-scannerLength/2) + objLength - teachObjLength)
+     if posX < minPosX
+         return :INVALID, ustrip(posX-minPosX)
+     elseif posX > maxRobotX
+         return :INVALID, ustrip(maxRobotX-posX)
+     else
+         return :VALID, zero(0.0)
+     end
+end
+
+function checkCoordsYZ(geo::Circle, scannerRad::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),clearance::Clearance)
+    delta = scannerRad - sqrt(posY^2+posZ^2) - geo.diameter/2;
+    delta_y = (abs(posY)+geo.diameter/2*sin(atan(abs(posY/posZ)))) - scannerRad*sin(atan(abs(posY/posZ)));
+    delta_z = (abs(posZ)+geo.diameter/2*cos(atan(abs(posY/posZ)))) - scannerRad*cos(atan(abs(posY/posZ)));
+
+    if delta > clearance.distance
+       return :VALID, zero(0.0),zero(0.0)
+    else
+       return :INVALID, ustrip(delta_y), ustrip(delta_z)
+    end #if clearance
+end
+
+function checkCoordsYZ(geo::Rectangle, scannerRad::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),clearance::Clearance)
+    delta_y=(abs(posY)+geo.width/2)-scannerRad*sin(atan((abs(posY)+geo.width/2)/(abs(posZ)+geo.height/2)));
+    delta_z=(abs(posZ)+geo.height/2)-scannerRad*cos(atan((abs(posY)+geo.width/2)/(abs(posZ)+geo.height/2)));
+
+    if clearance.distance > delta_y && clearance.distance > delta_z
+       return :VALID, zero(0.0), zero(0.0)
+    else
+       return :INVALID, ustrip(delta_y), ustrip(delta_z)
+    end #if clearance
+end
+
+function checkCoordsYZ(geo::Hexagon, scannerRad::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),clearance::Clearance)
+    #approximate hexagon by circle
+    if geo.width > geo.height
+       hex_radius = geo.width/2;
+    else
+       hex_radius = geo.height/2;
+    end
+    #check distances
+    delta = scannerRad - sqrt(posY^2+z_i^2)-hex_radius;
+    delta_y = (abs(posY)+hex_radius*sin(atan(abs(posY/posZ)))) - scannerRad*sin(atan(abs(posY/posZ)));
+    delta_z = (abs(posZ)+hex_radius*cos(atan(abs(posY/posZ)))) - scannerRad*cos(atan(abs(posY/posZ)));
+
+    if delta > clearance.distance
+       return :VALID, zero(0.0), zero(0.0)
+    else
+       return :INVALID, ustrip(delta_y), ustrip(delta_z)
+    end #if clearance
+end
+
+function checkCoordsYZ(geo::Triangle, scannerRad::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),clearance::Clearance)
+    #following code only for symmetric triangles / center of gravity = center of plug adapter
+    perimeter = sqrt(geo.width^2/4+geo.height^2)/(2*sin(atan(2*geo.height/geo.width)));
+
+    #define new z coordinate, since center of gravity is not equal to center of perimeter circle
+    z_new=posZ+((2/3)*geo.height-perimeter);
+
+    delta = scannerRad - sqrt(posY^2+z_new^2)-perimeter;
+    delta_y = (abs(posY)+perimeter*sin(atan(abs(posY/z_new))))-scannerRad*sin(atan(abs(posY/z_new)));
+    delta_z = (abs(z_new)+perimeter*cos(atan(abs(posY/z_new))))-scannerRad*cos(atan(abs(posY/z_new)));
+
+    if delta > clearance.distance
+       return :VALID, zero(0.0), zero(0.0)
+    else
+       return :INVALID,ustrip(delta_y), ustrip(delta_z)
+    end #if clearance
+end
+
+type CoordsError <: Exception
+    message::String
+    coordTable
+end
+
+function checkDeltaSample(scanDiameter::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm), clearance::typeof(1.0Unitful.mm)=1.0Unitful.mm)
+    deltaSample = Circle(10.0Unitful.mm, "Delta sample");
+    scanRad = scanDiameter/2;
+    dSRadius = deltaSample.diameter/2;
+    delta = scanRad - sqrt(y^2+z^2) - (dSRadius);
+    delta_y = -(abs(y)+dSRadius*sin(atan(abs(y/z)))) + scanRad*sin(atan(abs(y/z)));
+    delta_z = -(abs(z)+dSRadius*cos(atan(abs(y/z)))) + scanRad*cos(atan(abs(y/z)));
+    space_z= sqrt((scanRad-dSRadius-1Unitful.mm)^2-y^2)-z;
+    space_y= sqrt((scanRad-dSRadius-1Unitful.mm)^2-z^2)-y;
+    if delta > clearance
+        return :VALID, delta, space_y,space_z,delta_y, delta_z
+    else
+        return :INVALID, delta, space_y,space_z,delta_y, delta_z
+    end
+end
 
 function plotSafetyErrors(errorIndecies, coords, robotSetup, errorStatus)
   geo = robotSetup.objGeo;
@@ -438,25 +496,4 @@ function plotSafetyErrors(errorIndecies, coords, robotSetup, errorStatus)
     end #if error_string
   end #for
   end #if cases
-end
-
-type CoordsError <: Exception
-    message::String
-    coordTable
-end
-
-function checkDeltaSample(scanDiameter::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm), clearance::typeof(1.0Unitful.mm)=1.0Unitful.mm)
-    deltaSample = Circle(10.0Unitful.mm, "Delta sample");
-    scanRad = scanDiameter/2;
-    dSRadius = deltaSample.diameter/2;
-    delta = scanRad - sqrt(y^2+z^2) - (dSRadius);
-    delta_y = -(abs(y)+dSRadius*sin(atan(abs(y/z)))) + scanRad*sin(atan(abs(y/z)));
-    delta_z = -(abs(z)+dSRadius*cos(atan(abs(y/z)))) + scanRad*cos(atan(abs(y/z)));
-    space_z= sqrt((scanRad-dSRadius-1Unitful.mm)^2-y^2)-z;
-    space_y= sqrt((scanRad-dSRadius-1Unitful.mm)^2-z^2)-y;
-    if delta > clearance
-        return :VALID, delta, space_y,space_z,delta_y, delta_z
-    else
-        return :INVALID, delta, space_y,space_z,delta_y, delta_z
-    end
 end
