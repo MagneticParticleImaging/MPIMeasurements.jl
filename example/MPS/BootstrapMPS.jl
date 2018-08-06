@@ -7,9 +7,11 @@ params = toDict(daq.params)
 params["studyName"]="TestTobi"
 params["studyDescription"]="A very cool measurement"
 params["scannerOperator"]="Tobi"
-params["dfStrength"]=[1]
+params["dfStrength"]=[0.02]
 params["acqNumAverages"]=1000
-params["calibFieldToVolt"]=[0.98]
+#iterativ setting of calibFieldToVolt
+#start with dfstrength=1 and calibFieldToVolt=0.98 
+params["calibFieldToVolt"]=[12.91]
+params["calibRefToField"]=[0.012195]
 
-#
-measurementCont(daq, params, controlPhase=false)
+measurementCont(daq, params, controlPhase=true)
