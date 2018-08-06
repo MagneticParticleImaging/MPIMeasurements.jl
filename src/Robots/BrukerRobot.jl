@@ -25,6 +25,9 @@ const quit="quit\n"
 const exit="exit\n"
 const err="err?\n"
 
+const xMinBrukerRobot = -85.0Unitful.mm;
+const xMaxBrukerRobot = 225.0Unitful.mm;
+
 """ `BrukerCommand(command::String)` """
 @compat struct BrukerCommand
   command::String
@@ -50,24 +53,32 @@ function getPos(sd::BrukerRobot)
   sendCommand(sd,BrukerCommand(pos));
 end
 
-""" `moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
-  posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))` """
-function moveAbs(sd::BrukerRobot, posX::typeof(1.0u"mm"),
-  posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"))
+""" `moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm),
+  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))` """
+function moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm),
+  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))
   cmd = createMoveCommand(posX,posY,posZ)
   res = _sendCommand(sd, cmd)
 end
 
 """ Not Implemented """
-function moveRel(sd::BrukerRobot, distX::typeof(1.0u"mm"), distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
+function moveRel(sd::BrukerRobot, distX::typeof(1.0Unitful.mm), distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
   error("moveRel for ", sd, " not implemented")
 end
 
 """ Empty on Purpose"""
 function setBrake(sd::BrukerRobot,brake::Bool)
 end
+getDefaultVelocity(robot::BrukerRobot) = zeros(3)
+parkPos(robot::BrukerRobot) = [220.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
+function setRefVelocity(robot::BrukerRobot, vel::Array{Int64,1})
+end
 
-function createMoveCommand(x::typeof(1.0u"mm"),y::typeof(1.0u"mm"),z::typeof(1.0u"mm"))
+function getMinMaxPosX(robot::BrukerRobot)
+    return [xMinBrukerRobot, xMaxBrukerRobot]
+end
+
+function createMoveCommand(x::typeof(1.0Unitful.mm),y::typeof(1.0Unitful.mm),z::typeof(1.0Unitful.mm))
   cmd = BrukerCommand("goto $(ustrip(x)),$(ustrip(y)),$(ustrip(z))\n")
 end
 

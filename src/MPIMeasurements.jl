@@ -35,6 +35,7 @@ using Reexport
 #@reexport using Redpitaya
 @reexport using RedPitayaDAQServer
 @reexport using Unitful
+@reexport using Unitful.DefaultSymbols
 @reexport using TOML
 using HDF5
 using ProgressMeter
@@ -42,7 +43,7 @@ using ProgressMeter
 
 import Redpitaya: receive, query
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC
+                           setSlowDAC, getSlowADC, enableSlowDAC
 import Base.write
 #import PyPlot.disconnect
 
@@ -59,6 +60,7 @@ export Device, Robot, GaussMeter, MeasObj
 include("DAQ/DAQ.jl")
 include("TransferFunction/TransferFunction.jl")
 include("Safety/RobotSafety.jl")
+include("Safety/KnownSetups.jl")
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
 if is_unix() && VERSION >= v"0.6"
@@ -71,11 +73,14 @@ if is_unix() && VERSION >= v"0.6"
   include("SerialDevices/SerialDevices.jl")
 end
 
-include("Robots/Robots.jl")
+#include("Robots/Robots.jl")
 include("Scanner/Scanner.jl")
+include("Robots/Robots.jl")
+include("Sequences/Sequences.jl")
 
 if is_unix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")
+  include("FOTemp/FOTemp.jl")
   include("Measurements/Measurements.jl")
   include("SurveillanceUnit/SurveillanceUnit.jl")
 end

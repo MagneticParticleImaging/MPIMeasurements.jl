@@ -22,50 +22,35 @@ end
 getGeneralParams(scanner::MPIScanner) = scanner.generalParams
 
 function getDAQ(scanner::MPIScanner)
-  if !haskey(scanner.params, "DAQ")
-    error("MPI Scanner has no DAQ installed!")
-  end
-  if scanner.daq == nothing
+  if scanner.daq == nothing && haskey(scanner.params, "DAQ")
     scanner.daq = DAQ(scanner.params["DAQ"])
   end
   return scanner.daq
 end
 
 function getRobot(scanner::MPIScanner)
-  if !haskey(scanner.params, "Robot")
-    error("MPI Scanner has no Robot installed!")
-  end
-  if scanner.robot == nothing
+  if scanner.robot == nothing && haskey(scanner.params, "Robot")
     scanner.robot = Robot(scanner.params["Robot"])
   end
   return scanner.robot
 end
 
 function getGaussMeter(scanner::MPIScanner)
-  if !haskey(scanner.params, "GaussMeter")
-    error("MPI Scanner has no GaussMeter installed!")
-  end
-  if scanner.gaussmeter == nothing
+  if scanner.gaussmeter == nothing && haskey(scanner.params, "GaussMeter")
     scanner.gaussmeter = GaussMeter(scanner.params["GaussMeter"])
   end
   return scanner.gaussmeter
 end
 
 function getSafety(scanner::MPIScanner)
-  if !haskey(scanner.params, "Safety")
-    error("MPI Scanner has no Safety Module installed!")
-  end
-  if scanner.safty == nothing
+  if scanner.safty == nothing && haskey(scanner.params, "Safety")
     scanner.safty = RobotSetup(scanner.params["Safety"])
   end
   return scanner.safty
 end
 
 function getSurveillanceUnit(scanner::MPIScanner)
-  if !haskey(scanner.params, "SurveillanceUnit")
-    error("MPI Scanner has no SurveillanceUnit installed!")
-  end
-  if scanner.surveillanceUnit == nothing
+  if scanner.surveillanceUnit == nothing && haskey(scanner.params, "SurveillanceUnit")
     scanner.surveillanceUnit = SurveillanceUnit(scanner.params["SurveillanceUnit"])
   end
   return scanner.surveillanceUnit

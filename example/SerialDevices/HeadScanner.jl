@@ -11,10 +11,10 @@ initRefZYX(iR)
 movePark(iR)
 moveCenter(iR)
 getPos(iR)
-moveAbs(iR, 1.0u"mm", 0.0u"mm", 0.0u"mm")
+moveAbs(iR, 1.0Unitful.mm, 0.0Unitful.mm, 0.0Unitful.mm)
 
 # Move absolute MidLevel
-posXYZ = [1.0u"mm",0.0u"mm",0.0u"mm"]
+posXYZ = [1.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 moveAbs(iR, posXYZ)
 
 ################# Use case 2 Move and Measure #################################

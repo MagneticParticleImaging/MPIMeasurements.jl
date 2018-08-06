@@ -11,9 +11,13 @@ type DAQParams
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
+  rxNumSamplingPoints::Int64
   acqNumFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
+  acqNumFrameAverages::Int64
+  acqNumSubperiods::Int64
+  acqNumPeriodsPerPatch::Int64
   sinLUT::Matrix{Float64}
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
@@ -22,6 +26,7 @@ type DAQParams
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
+  calibFFCurrentToVolt::Float64
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -34,6 +39,9 @@ type DAQParams
   dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
   controlPhase::Bool
+  acqFFSequence::String
+  ffRampUpTime::Float64
+  ffRampUpFraction::Float64
 end
 
 
@@ -44,13 +52,11 @@ function DAQParams(params)
   dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
   if !all(isinteger, params["dfDivider"] / params["decimation"])
-    warn("$(daq["dfDivider"]) cannot be divided by $(daq["decimation"])")
+    warn("$(params["dfDivider"]) cannot be divided by $(params["decimation"])")
   end
   numSampPerPeriod = round(Int, lcm(params["dfDivider"]) / params["decimation"])
 
   rxBandwidth = params["dfBaseFrequency"] / params["decimation"] / 2
-
-  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
@@ -66,6 +72,49 @@ function DAQParams(params)
     params["controlPhase"] = true
   end
 
+  if !haskey(params,"acqFFSequence")
+    params["acqFFSequence"] = "None"
+  end
+  if params["acqFFSequence"] != "None"
+    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
+                                    params["acqFFSequence"]*".csv"))
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
+
+    params["acqNumPeriodsPerPatch"] = div(params["acqNumPeriodsPerFrame"], size(params["acqFFValues"],2))
+  else
+    params["acqFFValues"] = zeros(0,0)
+    params["acqNumFFChannels"] = 1
+    params["acqNumPeriodsPerFrame"] = 1
+  end
+
+  acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
+
+  if !haskey(params,"calibFFCurrentToVolt")
+    params["calibFFCurrentToVolt"] = 0.0
+  end
+
+
+  if !haskey(params,"acqNumSubperiods")
+    params["acqNumSubperiods"] = 1
+  end
+
+  if !haskey(params,"acqNumPeriodsPerPatch")
+    params["acqNumPeriodsPerPatch"] = 1
+  end
+
+  if !haskey(params,"ffRampUpTime")
+    params["ffRampUpTime"] = 0.4
+  end
+
+  if !haskey(params,"ffRampUpFraction")
+    params["ffRampUpFraction"] = 0.8
+  end
+
+  if !haskey(params,"acqNumFrameAverages")
+    params["acqNumFrameAverages"] = 1
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -77,17 +126,22 @@ function DAQParams(params)
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
+    numSampPerPeriod*params["acqNumSubperiods"],
     params["acqNumFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
+    params["acqNumFrameAverages"],
+    params["acqNumSubperiods"],
+    params["acqNumPeriodsPerPatch"],
     sinLUT,
     cosLUT,
     params["acqNumFFChannels"],
-    reshape(params["acqFFValues"],:,params["acqNumFFChannels"]),
+    reshape(params["acqFFValues"],params["acqNumFFChannels"],:),
     params["acqFFLinear"],
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
+    params["calibFFCurrentToVolt"],
     params["currTxAmp"],
     params["currTxPhase"],
     params["controlPause"],
@@ -99,7 +153,10 @@ function DAQParams(params)
     params["rpModulus"],
     dfChanToModulusIdx,
     params["txLimitVolt"],
-    params["controlPhase"]
+    params["controlPhase"],
+    params["acqFFSequence"],
+    params["ffRampUpTime"],
+    params["ffRampUpFraction"]
    )
 
   return params
@@ -118,14 +175,19 @@ function toDict(p::DAQParams)
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
+  params["rxNumSamplingPoints"] = p.rxNumSamplingPoints
   params["acqNumFrames"] = p.acqNumFrames
+  params["acqNumSubperiods"] = p.acqNumSubperiods
+  params["acqNumPeriodsPerPatch"] = p.acqNumPeriodsPerPatch
   params["acqFramePeriod"] = p.acqFramePeriod
   params["acqNumAverages"] = p.acqNumAverages
+  params["acqNumFrameAverages"] = p.acqNumFrameAverages
   params["acqNumFFChannels"] = p.acqNumFFChannels
   params["acqFFValues"] = p.acqFFValues
   params["acqFFLinear"] = p.acqFFLinear
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
+  params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
   params["currTxAmp"] = p.currTxAmp
   params["currTxPhase"] = p.currTxPhase
   params["controlPause"] = p.controlPause
@@ -138,6 +200,9 @@ function toDict(p::DAQParams)
   params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
   params["controlPhase"] = p.controlPhase
+  params["acqFFSequence"] = p.acqFFSequence
+  params["ffRampUpTime"] = p.ffRampUpTime
+  params["ffRampUpFraction"] = p.ffRampUpFraction
 
   return params
 end

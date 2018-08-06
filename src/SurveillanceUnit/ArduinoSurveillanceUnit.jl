@@ -10,7 +10,8 @@ end
 function ArduinoSurveillanceUnit(params::Dict)
   # Here we could put more parameters into the TOML file
   su = ArduinoSurveillanceUnit(params["connection"])
-  DisableWatchDog(su)
+ # DisableWatchDog(su)
+  #DisableSurveillance(su)
   return su
 end
 
@@ -73,9 +74,24 @@ function ArDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
 end
 
 function getTemperatures(Arduino::ArduinoSurveillanceUnit)
-    Temps=ArduinoCommand(Arduino, "GET:TEMP");
-    TempDelim="T";
-    return split(Temps,TempDelim);
+    Temps=ArduinoCommand(Arduino, "GET:TEMP")
+    TempDelim="T"
+
+    temp =  tryparse.(Float64,split(Temps,TempDelim))
+
+    tempFloat = []
+
+    for t in temp
+      if !isnull(t)
+          push!(tempFloat, get(t))
+      end
+    end
+
+    if length(tempFloat) == 0
+      return [0.0]
+    else
+      return tempFloat
+    end
 end
 
 function GetDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)
@@ -140,5 +156,20 @@ end
 
 function ResetArduino(Arduino::ArduinoSurveillanceUnit)
     ACQ=ArduinoCommand(Arduino,"RESET:ARDUINO")
+    CheckACQ(Arduino,ACQ)
+end
+
+function enableACPower(Arduino::ArduinoSurveillanceUnit)
+    ACQ=ArduinoCommand(Arduino,"ENABLE:AC");
+    CheckACQ(Arduino,ACQ)
+end
+
+function disableACPower(Arduino::ArduinoSurveillanceUnit)
+    ACQ=ArduinoCommand(Arduino,"DISABLE:AC");
+    CheckACQ(Arduino,ACQ)
+end
+
+function NOTAUS(Arduino::ArduinoSurveillanceUnit)
+    ACQ=ArduinoCommand(Arduino,"NOTAUS");
     CheckACQ(Arduino,ACQ)
 end

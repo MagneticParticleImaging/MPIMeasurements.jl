@@ -1,8 +1,8 @@
 using Unitful
 
 export IselRobot
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareIselRobot
-export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveTeachPos
+export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
+export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
@@ -49,9 +49,11 @@ struct IselRobot <: Robot
   stepsPerTurn::Integer
   gearSlope::Integer
   stepsPermm::Float64
+  defaultRefVel::Array{Int64,1}
   defaultVel::Array{Int64,1}
-  defCenterPos::Array{typeof(1.0u"mm"),1}
-  defSampleCenterPos::Array{typeof(1.0u"mm"),1}
+  defCenterPos::Array{typeof(1.0Unitful.mm),1}
+  defSampleCenterPos::Array{typeof(1.0Unitful.mm),1}
+  defParkPos::Array{typeof(1.0Unitful.mm),1}
 end
 
 function IselRobot(params::Dict)
@@ -64,49 +66,49 @@ function IselRobot(params::Dict)
   parity::SPParity = SP_PARITY_NONE
   nstopbits::Integer = 1
   stepsPermm = params["stepsPerTurn"] / params["gearSlope"]
-  defCenterPos = map(x->uconvert(u"mm",x), params["defCenterPos"]*u"m")
-  defSampleCenterPos = map(x->uconvert(u"mm",x), params["defSampleCenterPos"]*u"m")
+  defCenterPos = map(x->uconvert(Unitful.mm,x), params["defCenterPos"]*Unitful.m)
+  defSampleCenterPos = map(x->uconvert(Unitful.mm,x), params["defSampleCenterPos"]*Unitful.m)
+  defParkPos = map(x->uconvert(Unitful.mm,x),params["defParkPos"]*Unitful.m)
+  defParkPos[1] = defParkPos[1] - defCenterPos[1] # maxX 420mm minus current teaching Pos = new Park Pos
   try
     sp = SerialPort(params["connection"])
     open(sp)
     set_speed(sp, baudrate)
     iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
-        stepsPermm,params["defaultVel"],defCenterPos,defSampleCenterPos)
+        stepsPermm,params["defaultRefVel"],params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos)
     invertAxesYZ(iselRobot)
     initZYX(iselRobot)
-    setVelocity(iselRobot,iselRobot.defaultVel[1],iselRobot.defaultVel[2],iselRobot.defaultVel[3])
+    setRefVelocity(iselRobot,iselRobot.defaultRefVel[1],iselRobot.defaultRefVel[2],iselRobot.defaultRefVel[3])
     # check whether robot has been referenced or needs to be referenced
-    currPos = getPos(iselRobot)
-    moveRes = moveAbs(iselRobot,currPos[1], currPos[2], currPos[3],false)
-    if moveRes=="0"
-        display("IselRobot is referenced and ready to use!")
-        return iselRobot
-    elseif moveRes=="R"
-        display("IselRobot is NOT referenced and needs to be referenced!")
-        display("Remove all attached devices from the robot before the robot will be referenced and move around!")
-        display("Type \"REF\" in console to continue")
-        userInput=readline(STDIN)
-        if userInput=="REF"
-            display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
-            uIYes = readline(STDIN)
-            if uIYes == "yes"
-                prepareIselRobot(iselRobot)
-                display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
-                userInput=readline(STDIN)
-                return iselRobot
-            else
-                error("User failed to type \"yes\" to continue")
-            end
-        else
-            error("User failed to type \"REF\" to continue")
-        end
-    else
-        error("Not expected \"$(moveRes)\" feedback from robot")
+    if !haskey(params,"doReferenceCheck") || params["doReferenceCheck"]
+      referenced = isReferenced(iselRobot)
+      if !referenced
+        userGuidedPreparation(iselRobot)
+      end
     end
+    return iselRobot
   catch ex
     println("Connection fail: ",ex)
   end
+end
+
+parkPos(robot::IselRobot) = robot.defParkPos
+
+function isReferenced(robot::IselRobot)
+  currPos = getPos(robot)
+  # need to add 0.01Unitful.mm, otherwise moveAbs returns 0 although it is no longer referenced
+  moveRes = moveAbs(robot,currPos[1]+0.01Unitful.mm, currPos[2], currPos[3],false)
+  if moveRes=="0"
+    return true
+  elseif moveRes=="R"
+    return false
+  elseif moveRes=="2"
+    return false
+  else
+      error("Not expected \"$(moveRes)\" feedback from robot")
+  end
+  return false
 end
 
 """ queryIsel(sd::SerialDevice,cmd::String) """
@@ -130,7 +132,11 @@ end
 
 """ References all axes in order Z,Y,X """
 function refZYX(robot::IselRobot)
-  ret = queryIsel(robot.sd, "@0R7")
+  ret = queryIsel(robot.sd, "@0R1")
+  checkError(ret)
+  ret = queryIsel(robot.sd, "@0R4")
+  checkError(ret)
+  ret = queryIsel(robot.sd, "@0R2")
   checkError(ret)
 end
 
@@ -142,16 +148,17 @@ end
 
 """ Move Isel Robot to center"""
 function moveCenter(robot::IselRobot)
-  moveAbs(robot, 0.0u"mm",0.0u"mm",0.0u"mm")
+  moveAbs(robot, 0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
 end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, -robot.defCenterPos[1],0.0u"mm",0.0u"mm");
+  moveAbs(robot, robot.defParkPos[1], 0.0Unitful.mm, 0.0Unitful.mm);
 end
 
 """ Move Isel Robot to teach position """
 function moveTeachPos(robot::IselRobot)
+    moveAbs(robot, 0.0Unitful.mm ,robot.defCenterPos[2],robot.defCenterPos[3])
     moveAbs(robot,robot.defCenterPos[1],robot.defCenterPos[2],robot.defCenterPos[3])
 end
 
@@ -171,27 +178,27 @@ function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
   checkError(ret)
 end
 
-""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
-  distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"), velX,
-  distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)
+""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
+function moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)
   _moveRel(robot,mm2Steps(distX,robot.stepsPermm),velX,mm2Steps(distY,robot.stepsPermm),velY,mm2Steps(distZ,robot.stepsPermm),velZ)
 end
 
-""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"),
-  distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))` using const defaultVelocity """
-function moveRel(robot::IselRobot,distX::typeof(1.0u"mm"),
-  distY::typeof(1.0u"mm"), distZ::typeof(1.0u"mm"))
+""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm),
+  distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))` using const defaultVelocity """
+function moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm),
+  distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
   moveRel(robot, distX, robot.defaultVel[1],distY, robot.defaultVel[2], distZ, robot.defaultVel[3])
 end
 
-function mm2Steps(dist::typeof(1.0u"mm"),stepsPermm)
+function mm2Steps(dist::typeof(1.0Unitful.mm),stepsPermm)
     return round(Int64,ustrip(dist)*stepsPermm)
 end
 
 function steps2mm(steps,stepsPermm)
   dist = steps/stepsPermm
-  return dist*u"mm"
+  return dist*Unitful.mm
 end
 
 function _getPosRaw(robot::IselRobot)
@@ -214,8 +221,8 @@ function parsePos(ret::AbstractString)
   return xPos,yPos,zPos
 end
 
-""" Returns Pos in unit::Unitful.FreeUnits=u"mm" """
-function getPos(robot::IselRobot,unit::Unitful.FreeUnits=u"mm")
+""" Returns Pos in unit::Unitful.FreeUnits=Unitful.mm """
+function getPos(robot::IselRobot,unit::Unitful.FreeUnits=Unitful.mm)
   xPos,yPos,zPos = _getPos(robot)
   xyzPos = [steps2mm(xPos,robot.stepsPermm),steps2mm(yPos,robot.stepsPermm),steps2mm(zPos,robot.stepsPermm)]
   return map(x->uconvert(unit,x),xyzPos)
@@ -245,15 +252,15 @@ function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ,isCheckEr
   end
 end
 
-""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
-  distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), velX, posY::typeof(1.0u"mm"), velY, posZ::typeof(1.0u"mm"), velZ,isCheckError=true)
+""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
+function moveAbs(robot::IselRobot,posX::typeof(1.0Unitful.mm), velX, posY::typeof(1.0Unitful.mm), velY, posZ::typeof(1.0Unitful.mm), velZ,isCheckError=true)
   _moveAbs(robot,mm2Steps(posX,robot.stepsPermm),velX,mm2Steps(posY,robot.stepsPermm),velY,mm2Steps(posZ,robot.stepsPermm),velZ,isCheckError)
 end
 
-""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0u"mm"), velX,
-  distY::typeof(1.0u"mm"), velY,   distZ::typeof(1.0u"mm"), velZ)` """
-function moveAbs(robot::IselRobot,posX::typeof(1.0u"mm"), posY::typeof(1.0u"mm"), posZ::typeof(1.0u"mm"),isCheckError=true)
+""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
+function moveAbs(robot::IselRobot,posX::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),isCheckError=true)
   moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3],isCheckError)
 end
 
@@ -282,11 +289,29 @@ function setFree(robot::IselRobot, axis)
   checkError(ret)
 end
 
-""" Sets the velocities of the axes x,y,z """
-function setVelocity(robot::IselRobot,xVel,yVel,zVel)
+""" Gets the default IselRobot velocities of the axes x,y,z """
+function getDefaultVelocity(robot::IselRobot)
+    return robot.defaultVel
+end
+
+""" Sets the Reference velocities of the axes x,y,z """
+function setRefVelocity(robot::IselRobot, vel::Array{Int64,1})
+    setRefVelocity(robot::IselRobot,vel[1],vel[2],vel[3])
+end
+
+""" Sets the Refernce velocities of the axes x,y,z """
+function setRefVelocity(robot::IselRobot,xVel::Int64,yVel::Int64,zVel::Int64)
+  minVel = robot.minMaxVel[1]
+  maxVel = robot.minMaxVel[2]
+  if minVel <= xVel && xVel <= maxVel && minVel <= yVel && yVel <= maxVel &&
+      minVel <= zVel && zVel <= maxVel
   cmd = string("@0Id"," ",xVel,",",yVel,",",zVel,",",zVel)
   ret = queryIsel(robot.sd, cmd)
   checkError(ret)
+  else
+      error("Velocities set not in the range of [30,40000],
+       you are trying to set xVel: ", xVel," yVel: ", yVel," zVel: ",zVel)
+  end
 end
 
 """ Inverts the axes for y,z """
@@ -295,8 +320,8 @@ function invertAxesYZ(robot::IselRobot)
     checkError(ret)
 end
 
-""" `prepareIselRobot(robot::IselRobot)` """
-function prepareIselRobot(robot::IselRobot)
+""" `prepareRobot(robot::IselRobot)` """
+function prepareRobot(robot::IselRobot)
   # check sensor for reference
   tempTimeout = robot.sd.timeout_ms
   try
@@ -312,18 +337,19 @@ end
 
 """ Sets robots zero position at current position and saves new teach position in file .toml
  `TeachPosition(robot::IselRobot,fileName::AbstractString)` """
-function TeachPosition(robot::IselRobot,fileName::AbstractString)
-    newTeachingPosition = getPos(robot,u"m")
+function TeachPosition(scanner::MPIScanner,robot::IselRobot,fileName::AbstractString)
+    newTeachingPosition = getPos(robot,Unitful.m)
     setZeroPoint(robot)
     # and most importantly change value defCenterPos in the .toml file to the new value
     # note the defCenterPos is saved in meter not in millimeter
     saveTeachPosition(newTeachingPosition,fileName)
+    scanner.params["Robot"]["defCenterPos"] = ustrip(newTeachingPosition)
     println("Changed \"defCenterPos\" to $(newTeachingPosition) in $(fileName) file using the this Isel Robot")
 end
 
 """ Saves teach position to .toml file
-`saveTeachPosition(position::Array{typeof(1.0u"m"),1},file::AbstractString)` """
-function saveTeachPosition(position::Array{typeof(1.0u"m"),1},file::AbstractString)
+`saveTeachPosition(position::Array{typeof(1.0Unitful.m),1},file::AbstractString)` """
+function saveTeachPosition(position::Array{typeof(1.0Unitful.m),1},file::AbstractString)
     filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
     params["Robot"]["defCenterPos"] = ustrip(position)
@@ -369,4 +395,8 @@ function writeIOOutput(robot::IselRobot,output::Array{Bool,1})
     outputStrings = map(x->string(x),outputInt)
     outputBin=parse(UInt8,string("0b",string(outputStrings...)))
     _writeIOOutput(robot,dec(outputBin))
+end
+
+function getMinMaxPosX(robot::IselRobot)
+    return [-robot.defCenterPos[1], robot.defParkPos[1]]
 end

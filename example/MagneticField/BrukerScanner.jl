@@ -1,7 +1,7 @@
 using MPIMeasurements
 
 # define Positions
-positions = loadTDesign(8,36,42u"mm",[16.0,0.0,0.0]u"mm")
+positions = loadTDesign(8,36,42Unitful.mm,[16.0,0.0,0.0]Unitful.mm)
 
 # create Scanner
 scanner = MPIScanner("BrukerScanner.toml")

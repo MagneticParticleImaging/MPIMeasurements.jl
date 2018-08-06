@@ -1,5 +1,5 @@
 using MPIMeasurements
 using Base.Test
+using Unitful
 
-include("SerialDevices/RobotMidLevel.jl")
-include("SerialDevices/RobotHighLevel.jl")
+include("Safety/RobotSafetyTest.jl")

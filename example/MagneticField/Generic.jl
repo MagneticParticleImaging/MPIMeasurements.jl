@@ -6,9 +6,9 @@ using HDF5
 
 # define Grid
 shape = [5,5,1]
-fov = [200.0,200.0,1.0]u"mm"
-center = [0.0,0.0,0.0]u"mm"
-positions = MeanderingGridPositions( CartesianGridPositions(shape,fov,center) )
+fov = [200.0,200.0,1.0]Unitful.mm
+center = [0.0,0.0,0.0]Unitful.mm
+positions = MeanderingGridPositions( RegularGridPositions(shape,fov,center) )
 
 # create Scanner
 #scanner = MPIScanner("HeadScanner.toml")
@@ -18,7 +18,7 @@ safety = getSafety(scanner)
 gaussmeter = getGaussMeter(scanner)
 
 #TODO mT sollte man hier nicht angeben müssen. Das sollte im Gaussmeter gekapselt sein
-mfMeasObj = MagneticFieldMeas(gaussmeter, u"mT", positions)
+mfMeasObj = MagneticFieldMeas(gaussmeter, Unitful.mT, positions)
 
 @time res = performTour!(robot, safety, positions, mfMeasObj)
 

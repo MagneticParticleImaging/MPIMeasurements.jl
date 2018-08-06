@@ -12,20 +12,22 @@ robot = getRobot(scanner)
 
 # Reference robot und move to old teaching position
 initRefZYX(robot)
-moveTeachPos(robot)
+moveAbs(robot,0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
 
 # check if you at the right position
-currentPos = getPos(robot,u"mm")
+currentPos = getPos(robot,Unitful.mm)
 println(currentPos)
 println(robot.defCenterPos)
 
 # use moveAbs command to navigate to desired new teaching position
-moveAbs(robot,robot.defCenterPos[1]+ 1.0u"mm",robot.defCenterPos[2],robot.defCenterPos[3])
+moveAbs(robot,robot.defCenterPos[1]+ 1.0Unitful.mm,robot.defCenterPos[2],robot.defCenterPos[3])
 # or use moveRel
-# moveRel(robot,1.0u"mm,0.0u"mm",0.0u"mm")
+# moveRel(robot,1.0u"mm,0.0Unitful.mm,0.0Unitful.mm)
 #
 #
 #...a few times moving manually with moveAbs or moveRel...
 #
 # if you have moved to your final new teaching position
-TeachPosition(robot, configFile)
+TeachPosition(scanner, robot, configFile)
+
+# change and test bacground position !!!

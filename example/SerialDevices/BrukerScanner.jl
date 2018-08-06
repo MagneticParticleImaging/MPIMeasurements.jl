@@ -10,10 +10,10 @@ bR = BrukerRobot("RobotServer")
 movePark(bR)
 moveCenter(bR)
 getPos(bR)
-moveAbs(bR, 1.0u"mm", 0.0u"mm", 0.0u"mm")
+moveAbs(bR, 1.0Unitful.mm, 0.0Unitful.mm, 0.0Unitful.mm)
 
 # Move absolute MidLevel
-posXYZ = [1.0u"mm",0.0u"mm",0.0u"mm"]
+posXYZ = [1.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 moveAbs(bS, posXYZ)
 
 ################# Use case 2 Move and Measure #################################

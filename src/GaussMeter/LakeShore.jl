@@ -25,7 +25,7 @@ Returns x,y, and z values and apply a coordinate transformation
 function getXYZValues(gauss::LakeShoreGaussMeter)
 	field = parse.(Float32,split(getAllFields(gauss),","))[1:3]
 	multipliers = getAllMultipliers(gauss)
-    gauss.coordinateTransformation*(field.*multipliers)*u"T"
+    gauss.coordinateTransformation*(field.*multipliers)*Unitful.T
 end
 
 """
@@ -74,13 +74,13 @@ end
 
 function getFieldError(range::Int)
     if range == 0
-        return 150u"μT"
+        return 150Unitful.μT
     elseif range == 1
-        return 15u"μT"
+        return 15Unitful.μT
     elseif range == 2
-        return 1.5u"μT"
+        return 1.5Unitful.μT
     elseif range == 3
-        return 0.15u"μT"
+        return 0.15Unitful.μT
     end
 end
 

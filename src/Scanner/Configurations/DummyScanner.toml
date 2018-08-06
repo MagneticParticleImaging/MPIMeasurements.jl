@@ -1,3 +1,5 @@
+[General]
+
 [DAQ]
 #ip = ["192.168.1.100"]
 ip = ["192.168.1.20"]
@@ -58,7 +60,7 @@ pauseTime=1.0
 [GaussMeter]
 type="Dummy"
 [Safety]
-setupName = "hallSensornoCoil"
-receiveCoil = "noCoil"
-robotMount = "hallSensor"
+receiveCoil = "headCoil"
+robotMount = "deltaSample3D"
 clearance = "clearance"
+setupName = "deltaSampleheadCoil"
