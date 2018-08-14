@@ -44,11 +44,15 @@ type DAQParams
   ffRampUpFraction::Float64
 end
 
+function calcDFFreq(baseFreq::Float64, divider::Vector{Int64})
+  return baseFreq ./ divider
+end
 
-function DAQParams(params)
+function DAQParams(@nospecialize params)
 
   D = length(params["dfDivider"])
-  dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
+  #dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
+  dfFreq = calcDFFreq(params["dfBaseFrequency"],params["dfDivider"])
   dfCycle = lcm(params["dfDivider"]) / params["dfBaseFrequency"]
 
   if !all(isinteger, params["dfDivider"] / params["decimation"])
@@ -63,7 +67,7 @@ function DAQParams(params)
   dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
 
   if !haskey(params, "currTxAmp")
-    params["currTxAmp"] = params["txLimitVolt"] ./ 10
+    params["currTxAmp"] = params["txLimitVolt"] / 10
   end
   if !haskey(params, "currTxPhase")
     params["currTxPhase"] = zeros(D)
