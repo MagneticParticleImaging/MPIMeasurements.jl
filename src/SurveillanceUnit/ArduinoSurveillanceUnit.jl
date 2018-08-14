@@ -87,8 +87,8 @@ function getTemperatures(Arduino::ArduinoSurveillanceUnit)
       end
     end
 
-    if length(tempFloat) == 0
-      return [0.0]
+    if length(tempFloat) <= 1
+      return [0.0, 0.0]
     else
       return tempFloat
     end
