@@ -126,18 +126,22 @@ end
 
 """ Initializes all axes in order Z,Y,X """
 function initZYX(robot::IselRobot)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd, "@07")
   checkError(ret)
+  setEnabled(robot, false)
 end
 
 """ References all axes in order Z,Y,X """
 function refZYX(robot::IselRobot)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd, "@0R1")
   checkError(ret)
   ret = queryIsel(robot.sd, "@0R4")
   checkError(ret)
   ret = queryIsel(robot.sd, "@0R2")
   checkError(ret)
+  setEnabled(robot, false)
 end
 
 """ Initializes and references all axes in order Z,Y,X """
@@ -174,8 +178,10 @@ function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
     ",",stepsY,",",velY,
     ",",stepsZ,",",velZ,
     ",",0,",",30)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd, cmd)
   checkError(ret)
+  setEnabled(robot, false)
 end
 
 """ Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
@@ -230,8 +236,10 @@ end
 
 """ Simulates Reference Z,Y,X """
 function simRefZYX(robot::IselRobot)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd, "@0N7")
   checkError(ret)
+  setEnabled(robot, false)
 end
 
 """ Sets the zero position for absolute moving at current axes position Z,Y,X """
@@ -244,7 +252,9 @@ function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ,isCheckEr
   # for z-axis two steps and velocities are needed compare documentation
   # set second z steps to zero
   cmd=string("@0M"," ",stepsX,",",velX,",",stepsY,",",velY,",",stepsZ,",",velZ,",",0,",",30)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd, cmd)
+  setEnabled(robot, false)
   if isCheckError
    return checkError(ret)
   else
@@ -286,15 +296,17 @@ end
 """ Sets the Isel device power free """
 function setEnabled(robot::IselRobot, enabled::Bool)
   if enabled
-    writeIOOutput(robot, zeros(Bool, 8))
-  else
     writeIOOutput(robot, ones(Bool, 8))
+  else
+    writeIOOutput(robot, zeros(Bool, 8))
   end
 end
 
 """ Sets free, Freifahren axis, wenn Achse über den Referenzpunkt gefahren ist"""
 function setFree(robot::IselRobot, axis)
+  setEnabled(robot, true)
   ret = queryIsel(robot.sd,  string("@0F",axis))
+  setEnabled(robot, false)
   checkError(ret)
 end
 
