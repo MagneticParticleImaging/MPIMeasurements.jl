@@ -283,6 +283,15 @@ function setBrake(robot::IselRobot, brake::Bool)
   checkError(ret)
 end
 
+""" Sets the Isel device power free """
+function setEnabled(robot::IselRobot, enabled::Bool)
+  if enabled
+    writeIOOutput(robot, zeros(Bool, 8))
+  else
+    writeIOOutput(robot, ones(Bool, 8))
+  end
+end
+
 """ Sets free, Freifahren axis, wenn Achse über den Referenzpunkt gefahren ist"""
 function setFree(robot::IselRobot, axis)
   ret = queryIsel(robot.sd,  string("@0F",axis))

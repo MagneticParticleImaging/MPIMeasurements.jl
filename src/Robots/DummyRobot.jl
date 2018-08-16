@@ -37,6 +37,10 @@ function setBrake(robot::DummyRobot, brake::Bool)
     println("Setting brake to $(brake) !")
 end
 
+function setEnabled(robot::DummyRobot, enabled::Bool)
+    println("Setting enabled $(enabled) !")
+end
+
 function prepareRobot(robot::DummyRobot)
   println("Doing Dummy Reference Drive!")
   robot.referenced = true
