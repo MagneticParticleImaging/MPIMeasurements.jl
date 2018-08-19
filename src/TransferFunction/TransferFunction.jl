@@ -48,8 +48,8 @@ end
 
 function combine(tf1,tf2)
   freq = tf1.freq
-  data = cat(2,tf1.data,tf2.data)
-  inductionFactor = cat(1,tf1.inductionFactor, tf2.inductionFactor)
+  data = cat(tf1.data,tf2.data, dims=2)
+  inductionFactor = cat(tf1.inductionFactor, tf2.inductionFactor, dims=1)
   return TransferFunction(freq, data, inductionFactor)
 end
 

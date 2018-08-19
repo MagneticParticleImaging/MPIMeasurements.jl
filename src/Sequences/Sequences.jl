@@ -9,8 +9,8 @@ sequenceDir() = @__DIR__
 function makeSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
   A=collect(linspace(minCurr,maxCurr,patches))
 
-  C = cat(1,A',flipdim(A',2))
-  B=repeat(cat(2,C,flipdim(C,2)), inner=(1,periodsPerPatch))
+  C = cat(A',reverse(A',dims=2), dims=1)
+  B=repeat(cat(C,reverse(C,dims=2), dims=2), inner=(1,periodsPerPatch))
   B = circshift(B,(0,div(size(B,2),4)))
   writedlm(joinpath(@__DIR__, name*".csv"), B, ',')
   return B
@@ -22,7 +22,7 @@ function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPat
   A=((maxCurr-minCurr)/2).*sin.(t).+(minCurr+maxCurr)/2
   B=-(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2
 
-  C = cat(1,A',B')
+  C = cat(A',B', dims=1)
   D=repeat(C, inner=(1,periodsPerPatch))
 
   writedlm(joinpath(@__DIR__, name*".csv"), D, ',')
