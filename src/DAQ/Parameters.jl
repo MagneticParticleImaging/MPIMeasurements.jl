@@ -64,7 +64,7 @@ function DAQParams(@nospecialize params)
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-  dfChanToModulusIdx = [findfirst(params["rpModulus"], c) for c in params["dfDivider"]]
+  dfChanToModulusIdx = [findfirst_(params["rpModulus"], c) for c in params["dfDivider"]]
 
   if !haskey(params, "currTxAmp")
     params["currTxAmp"] = params["txLimitVolt"] / 10
@@ -80,8 +80,8 @@ function DAQParams(@nospecialize params)
     params["acqFFSequence"] = "None"
   end
   if params["acqFFSequence"] != "None"
-    params["acqFFValues"] = readcsv(Pkg.dir("MPIMeasurements","src","Sequences",
-                                    params["acqFFSequence"]*".csv"))
+    params["acqFFValues"] = readdlm(joinpath(@__DIR__,"..","Sequences",
+                                    params["acqFFSequence"]*".csv"),',')
     params["acqNumFFChannels"] = size(params["acqFFValues"],1)
     #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
 

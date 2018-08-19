@@ -30,6 +30,7 @@ using Reexport
 using HDF5
 using ProgressMeter
 using Sockets
+using DelimitedFiles
 #using MPISimulations
 
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,

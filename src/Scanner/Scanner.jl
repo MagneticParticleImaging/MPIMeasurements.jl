@@ -12,7 +12,7 @@ mutable struct MPIScanner
   recoMethod::Function
 
   function MPIScanner(file::String)
-    filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
+    filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
     return new(params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())

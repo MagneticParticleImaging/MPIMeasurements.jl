@@ -62,8 +62,8 @@ function save_tf(tf::TransferFunction, filename::String)
 end
 
 function load_tf_fromMatthias(filenameAmp::String, filenamePh::String)
-  data = readcsv(filenameAmp)
-  ph = readcsv(filenamePh)
+  data = readdlm(filenameAmp, ',')
+  ph = readdlm(filenamePh, ',')
   freq = data[4:end,1]
   amp = 10 .^ (data[4:end,2] ./ 20)
   phase = [ deg2rad(p) for p in ph[4:end,2] ]
@@ -153,7 +153,7 @@ function load_tf_fromVNA(filename::String)
 end
 
 function _convertTFFuncs()
-  prefix = Pkg.dir("MPIMeasurements","src","TransferFunction")
+  prefix = @__DIR__
 
   a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_X_20151006.S2P")
   b = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Y_20151006.S2P")
@@ -185,7 +185,7 @@ end
 
 function tf_receive_chain(id::String)
 
-  path = Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata",id*".h5")
+  path = joinpath(@__DIR__,"tfdata",id*".h5")
 
   tf = load_tf(path)
   return tf
@@ -207,7 +207,7 @@ end
 
 
 function list_tf()
-  list = readdir(Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata"))
+  list = readdir(joinpath(@__DIR__, "tfdata"))
   stripped_list = [ splitext(a)[1] for a in list ]
   return stripped_list
 end
