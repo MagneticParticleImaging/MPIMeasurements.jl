@@ -204,7 +204,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   y = repeat([-11.2],inner=10)
   yy = cat(1,y-10.0,y,y+10.0)
   S = zeros(length(uMeas),length(xx))
-  readline(STDIN)
+  readline(stdin)
 
   try
       for k=1:length(xx)
@@ -238,7 +238,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   S2 = zeros(length(uMeas),length(yy))
 
   println("switch the phantoms")
-  readline(STDIN)
+  readline(stdin)
 
   try
       for k=1:length(yy)
@@ -321,7 +321,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
 
   # measurement
   bgdata = measurement(daq; kargs...)
-  readline(STDIN)
+  readline(stdin)
 
   # measurement
   uFG = zeros(Int16, daq["numSampPerPeriod"],numRxChannels(daq),

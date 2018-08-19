@@ -69,14 +69,14 @@ function userGuidedPreparation(robot::Robot)
   display("IselRobot is NOT referenced and needs to be referenced!")
   display("Remove all attached devices from the robot before the robot will be referenced and move around!")
   display("Type \"REF\" in console to continue")
-  userInput=readline(STDIN)
+  userInput=readline(stdin)
   if userInput=="REF"
       display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
-      uIYes = readline(STDIN)
+      uIYes = readline(stdin)
       if uIYes == "yes"
           prepareRobot(robot)
           display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
-          userInput=readline(STDIN)
+          userInput=readline(stdin)
           return
       else
           error("User failed to type \"yes\" to continue")
