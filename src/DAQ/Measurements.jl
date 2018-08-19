@@ -64,7 +64,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   if haskey(params, "transferFunction") && params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
-    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
     tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
       tf[:,d] = tf_[freq,d]
@@ -310,7 +310,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
   if params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
-    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
     tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
       tf[:,d] = tf_[freq,d]

@@ -5,3 +5,11 @@ IniFile
 PyPlot
 Unitful
 Interpolations
+MPIFiles
+RedPitayaDAQServer
+TOML
+ProgressMeter
+HDF5
+GR
+Graphics
+LibSerialPort

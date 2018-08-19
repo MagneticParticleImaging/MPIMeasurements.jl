@@ -86,7 +86,7 @@ function userGuidedPreparation(robot::Robot)
   end
 end
 
-if is_unix() && VERSION >= v"0.6"
+if Sys.isunix() && VERSION >= v"0.6"
   include("IselRobot.jl")
 end
 

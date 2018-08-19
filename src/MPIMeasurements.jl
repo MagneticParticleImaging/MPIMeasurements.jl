@@ -1,27 +1,17 @@
-__precompile__()
 module MPIMeasurements
 
-if !isdir(Pkg.dir("Redpitaya"))
-  println("Installing Redpitaya...")
-  Pkg.clone("https://github.com/tknopp/Redpitaya.jl.git")
-end
+using Pkg
 
-if !isdir(Pkg.dir("RedPitayaDAQServer"))
+if !haskey(Pkg.installed(),"RedPitayaDAQServer")
   println("Installing RedPitayaDAQServer...")
   Pkg.clone("https://github.com/tknopp/RedPitayaDAQServer.jl.git")
 end
 
-if !isdir(Pkg.dir("MPIFiles"))
+if !haskey(Pkg.installed(),"MPIFiles")
   println("Installing MPIFiles...")
   Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
 end
-#=
-if !isdir(Pkg.dir("MPISimulations"))
-  println("Installing MPISimulations...")
-  Pkg.clone("https://github.com/tknopp/MPISimulations.jl.git")
-end
-=#
-if !isdir(Pkg.dir("TOML"))
+if !haskey(Pkg.installed(),"TOML")
   println("Installing TOML...")
   Pkg.clone("https://github.com/wildart/TOML.jl.git")
 end
@@ -39,9 +29,9 @@ using Reexport
 @reexport using TOML
 using HDF5
 using ProgressMeter
+using Sockets
 #using MPISimulations
 
-import Redpitaya: receive, query
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
                            setSlowDAC, getSlowADC, enableSlowDAC
 import Base.write
@@ -63,10 +53,10 @@ include("Safety/RobotSafety.jl")
 include("Safety/KnownSetups.jl")
 
 # LibSerialPort currently only supports linux and julia versions above 0.6
-if is_unix() && VERSION >= v"0.6"
-  if !isdir(Pkg.dir("LibSerialPort"))
+if Sys.isunix() && VERSION >= v"0.6"
+  if !haskey(Pkg.installed(),"LibSerialPort")
     println("Installing LibSerialPort....")
-    Pkg.clone("https://github.com/hofmannmartin/LibSerialPort.jl.git")
+    Pkg.clone("https://github.com/andrewadare/LibSerialPort.jl.git")
     Pkg.build("LibSerialPort")
   end
   using LibSerialPort
@@ -78,7 +68,7 @@ include("Scanner/Scanner.jl")
 include("Robots/Robots.jl")
 include("Sequences/Sequences.jl")
 
-if is_unix() && VERSION >= v"0.6"
+if Sys.isunix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")
   include("FOTemp/FOTemp.jl")
   include("Measurements/Measurements.jl")

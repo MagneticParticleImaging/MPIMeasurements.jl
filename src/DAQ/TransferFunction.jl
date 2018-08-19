@@ -1,4 +1,4 @@
-import Redpitaya: measureTransferFunction
+#import Redpitaya: measureTransferFunction
 
 
 #=
@@ -11,8 +11,8 @@ function measureTransferFunction(daq::DAQRedPitayaScpiNew)
   modulus = 4800 # TODO adapt me
   numFreq = div(modulus,daq.params.decimation*2)-1
 
-  tf = zeros(Complex128, numFreq, numTxChannels(daq), 3)
-  uall = zeros(Complex128, numFreq, numFreq+2, numTxChannels(daq), 2)
+  tf = zeros(ComplexF64, numFreq, numTxChannels(daq), 3)
+  uall = zeros(ComplexF64, numFreq, numFreq+2, numTxChannels(daq), 2)
   ualltime = zeros(Float64, numFreq, (numFreq+1)*2, numTxChannels(daq), 2)
   freqs = [ daq.params.dfBaseFrequency/modulus*k for k=1:numFreq ]
 

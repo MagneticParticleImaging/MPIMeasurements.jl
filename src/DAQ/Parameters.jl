@@ -1,6 +1,6 @@
 export toDict
 
-type DAQParams
+struct DAQParams
   decimation::Int64
   dfBaseFrequency::Float64
   dfDivider::Vector{Int64}

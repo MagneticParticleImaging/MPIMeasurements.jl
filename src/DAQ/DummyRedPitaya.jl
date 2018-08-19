@@ -1,6 +1,6 @@
 
 
-type DummyDAQRedPitaya <: AbstractDAQ
+mutable struct DummyDAQRedPitaya <: AbstractDAQ
     params::DAQParams
 
     function DummyDAQRedPitaya(params)

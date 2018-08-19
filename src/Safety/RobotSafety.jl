@@ -169,7 +169,7 @@ struct GradientScan
   error("Buy a new scanner which has more than 2.5T/m...:)") : new(strength)
 end
 
-type RobotSetup
+mutable struct RobotSetup
   name::String
   objGeo::Geometry
   scannerGeo::ScannerGeo
@@ -189,9 +189,9 @@ function RobotSetup(params::Dict)
     return RobotSetup(params["setupName"],robotMount,receiveCoil,clearance)
 end
 
-@doc "convert2unit(data,unit) converts the data array (tuples) without units to
-      an array with length units."->
-function convert2Unit{U}(data, unit::Unitful.Units{U ,Unitful.Dimensions{(Unitful.Dimension{:Length}(1//1),)}})
+"convert2unit(data,unit) converts the data array (tuples) without units to
+      an array with length units."
+function convert2Unit(data, unit::Unitful.Units{U ,Unitful.Dimensions{(Unitful.Dimension{:Length}(1//1),)}}) where U
          #create single coordinate vectors from data array and add the desired unit
          x_coord=[x[1] for x in data]*unit;
          y_coord=[x[2] for x in data]*unit;
@@ -200,9 +200,9 @@ function convert2Unit{U}(data, unit::Unitful.Units{U ,Unitful.Dimensions{(Unitfu
          coord_array=hcat(x_coord,y_coord,z_coord);
 end
 
-@doc "convert2unit(data,unit) converts the data array without units to
-      an array with length units."->
-function convert2Unit{T,U}(data::Array{T,2}, unit::Unitful.Units{U ,Unitful.Dimensions{(Unitful.Dimension{:Length}(1//1),)}})
+"convert2unit(data,unit) converts the data array without units to
+      an array with length units."
+function convert2Unit(data::Array{T,2}, unit::Unitful.Units{U ,Unitful.Dimensions{(Unitful.Dimension{:Length}(1//1),)}}) where {T,U}
          if size(data, 2) != 3
            error("Wrong dimension...try array X x 3")
          end
@@ -210,10 +210,10 @@ function convert2Unit{T,U}(data::Array{T,2}, unit::Unitful.Units{U ,Unitful.Dime
 end
 
 checkCoords(robotSetup::RobotSetup, coord::Vector{typeof(1.0Unitful.mm)},minMaxRobotX::Vector{typeof(1.0Unitful.mm)})=checkCoords(robotSetup, [coord[1] coord[2] coord[3]], minMaxRobotX::Vector{typeof(1.0Unitful.mm)})
-@doc "checkCoords(robotSetup, coords; plotresults) is used to check if the chosen test coordinates are inside the allowed range
+"checkCoords(robotSetup, coords; plotresults) is used to check if the chosen test coordinates are inside the allowed range
       of the roboter movement. If invalid points exist a list with all points will be presented
       to the user. Only the following test geometry types will be accepted: circle, rectangle, hexagon and triangle.
-      The positions of the test objects will be plotted if at least one coordinate is invalid and plotresults=true."->
+      The positions of the test objects will be plotted if at least one coordinate is invalid and plotresults=true."
 function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm),2},
      minMaxRobotX::Vector{typeof(1.0Unitful.mm)}; plotresults = false)
   geo = robotSetup.objGeo;
@@ -353,7 +353,7 @@ function checkCoordsYZ(geo::Triangle, scannerRad::typeof(1.0Unitful.mm), posY::t
     end #if clearance
 end
 
-type CoordsError <: Exception
+struct CoordsError <: Exception
     message::String
     coordTable
 end

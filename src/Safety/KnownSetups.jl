@@ -50,27 +50,27 @@ hallSensorRatScanner = RobotSetup("hallSensorMouseScanner", hallSensor3D, ratCoi
 validRobotSetups = [dSampleRegularScanner, mouseAdapterRegularScanner, dSampleMouseScanner, mouseAdapterMouseScanner,
  dSampleRatScanner, mouseAdapterRatScanner, hallSensorRegularScanner, hallSensorMouseScanner, hallSensorRatScanner]
 
- @doc "Returns all validated Scanner Coils!"->
+"Returns all validated Scanner Coils!"
 function getValidScannerGeos()
     return validScannerGeos
 end
 
-@doc "Returns all validated Objects!"->
+"Returns all validated Objects!"
 function getValidObjects()
    return validObjects
 end
 
- @doc "Returns all validated Robot Setups!"->
+"Returns all validated Robot Setups!"
 function getValidRobotSetups()
     return validRobotSetups
 end
 
- @doc "Returns all validated Head Scanner!"->
+"Returns all validated Head Scanner!"
 function getValidHeadScannerGeos()
     return validHeadScannerGeos
 end
 
-@doc "Returns all validated Head Objects!"->
+"Returns all validated Head Objects!"
 function getValidHeadObjects()
    return validHeadObjects
 end

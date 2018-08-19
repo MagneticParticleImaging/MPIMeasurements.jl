@@ -24,7 +24,7 @@ function startTx(daq::DAQSimulation)
 end
 
 function stopTx(daq::DAQSimulation)
-  Redpitaya.disableAnalogOutput(daq.rp,1)
+  #Redpitaya.disableAnalogOutput(daq.rp,1)
 end
 
 function setTxParams(daq::DAQSimulation, amplitude, phase)
