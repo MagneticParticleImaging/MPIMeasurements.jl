@@ -40,7 +40,7 @@ end
 
 function load_tf(filename::String)
   tf = h5read(filename,"/transferFunction")
-  tf = reinterpret(Complex{eltype(tf)}, tf, (size(tf,2),size(tf,3)))
+  tf = copy(reshape(reinterpret(Complex{eltype(tf)}, tf), (size(tf,2),size(tf,3))))
   freq = h5read(filename,"/frequencies")
   inductionFactor = h5read(filename,"/inductionFactor")
   return TransferFunction(freq,tf,inductionFactor)

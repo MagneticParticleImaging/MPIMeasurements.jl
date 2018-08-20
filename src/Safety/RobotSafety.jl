@@ -225,10 +225,10 @@ function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm)
     error("Only 3-dimensinonal coordinates accepted!")
   end
   #initialize error vectors
-  errorStatus = Array{Symbol}((numPos, 3));
-  errorX = Array{Any}((numPos,1));
-  errorY = Array{Any}((numPos,1));
-  errorZ = Array{Any}((numPos,1));
+  errorStatus = Array{Symbol}(undef, numPos, 3)
+  errorX = Array{Any}(undef,numPos,1)
+  errorY = Array{Any}(undef,numPos,1)
+  errorZ = Array{Any}(undef,numPos,1)
 
   #initialize scanner radius
   scannerRad = scanner.diameter / 2;
@@ -244,7 +244,7 @@ for i=1:numPos
    minMaxRobotX[1], minMaxRobotX[2])
 
   # CheckCoordsYZ
-  errorStatus[i, 2:3], errorY[i], errorZ[i] =
+  errorStatus[i, 2:3], errorY[i], errorZ[i] .=
     checkCoordsYZ(crosssection(geo), scannerRad, y_i, z_i, clearance)
 
 end #for numPos
@@ -254,7 +254,7 @@ end #for numPos
   headline=["Status x" "Status y" "Status z" "x" "y" "z" "delta_x" "delta_y" "delta_z"];
   #create final table
   coordTable = vcat(headline, table);
-  errBool = find(x-> x == :INVALID, errorStatus);
+  errBool = (LinearIndices(errorStatus))[findall(x-> x == :INVALID, errorStatus)]
   if isempty(errBool)
      display("All coordinates are safe!");
      return coordTable;
@@ -380,7 +380,7 @@ function plotSafetyErrors(errorIndecies, coords, robotSetup, errorStatus)
   for i = 1:length(errorIndecies)
     y_i=coords[i, 2];
     z_i=coords[i, 3];
-    t=linspace(0,2,200);
+    t=range(0,stop=2,length=200);
 
     x_scanner = ustrip(scannerRad)*cos(t*pi);
     y_scanner = ustrip(scannerRad)*sin(t*pi);

@@ -31,6 +31,9 @@ using HDF5
 using ProgressMeter
 using Sockets
 using DelimitedFiles
+using LinearAlgebra
+using Statistics
+using Dates
 #using MPISimulations
 
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
