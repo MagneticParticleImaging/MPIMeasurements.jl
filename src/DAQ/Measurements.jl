@@ -64,7 +64,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
   if haskey(params, "transferFunction") && params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
-    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
     tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
       tf[:,d] = tf_[freq,d]
@@ -75,7 +75,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
 
   # calibration params  (needs to be called after calibration params!)
   calib = zeros(2,numRxChannels(daq))
-  calib[1,:] = 1.0
+  calib[1,:] .= 1.0
   params["rxDataConversionFactor"] = calib # calibIntToVoltRx(daq)
 
   params["measIsFourierTransformed"] = false
@@ -92,8 +92,8 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
     #params["acqNumFrames"] = params["acqNumFGFrames"]
   else
     numBGFrames = size(bgdata,4)
-    params["measData"] = cat(4,bgdata,uFG)
-    params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]))
+    params["measData"] = cat(bgdata,uFG,dims=4)
+    params["measIsBGFrame"] = cat(ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]), dims=1)
     params["acqNumFrames"] = params["acqNumFrames"] + numBGFrames
   end
 
@@ -162,7 +162,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
 
-        u = cat(2, uMeas, uRef)
+        u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
         #showAllDAQData(uRef,2)
         showAllDAQData(u, showFT=showFT)
@@ -200,11 +200,11 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   uMeas, uRef = readData(daq, 1, currentFrame(daq))
 
   x  = [0.0;collect(156 + linspace(-40,40,9))]
-  xx = cat(1,x,x,x)
+  xx = cat(x,x,x,dims=1)
   y = repeat([-11.2],inner=10)
-  yy = cat(1,y-10.0,y,y+10.0)
+  yy = cat(y-10.0,y,y+10.0,dims=1)
   S = zeros(length(uMeas),length(xx))
-  readline(STDIN)
+  readline(stdin)
 
   try
       for k=1:length(xx)
@@ -216,7 +216,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
 
-        u = cat(2, uMeas, uRef)
+        u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
         #showAllDAQData(uRef,2)
         showAllDAQData(u, showFT=showFT)
@@ -238,7 +238,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   S2 = zeros(length(uMeas),length(yy))
 
   println("switch the phantoms")
-  readline(STDIN)
+  readline(stdin)
 
   try
       for k=1:length(yy)
@@ -250,7 +250,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         amplitude, phase = calcFieldFromRef(daq,uRef)
         println("reference amplitude=$amplitude phase=$phase")
 
-        u = cat(2, uMeas, uRef)
+        u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
         #showAllDAQData(uRef,2)
         showAllDAQData(u, showFT=showFT)
@@ -310,7 +310,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
   if params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
-    tf = zeros(Complex128, numFreq, numRxChannels(daq) )
+    tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
     tf_ = tf_receive_chain(params["transferFunction"])
     for d=1:numRxChannels(daq)
       tf[:,d] = tf_[freq,d]
@@ -321,7 +321,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
 
   # measurement
   bgdata = measurement(daq; kargs...)
-  readline(STDIN)
+  readline(stdin)
 
   # measurement
   uFG = zeros(Int16, daq["numSampPerPeriod"],numRxChannels(daq),
@@ -339,9 +339,9 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
   params["rxDataConversionFactor"] = dataConversionFactor(daq)
 
   numBGFrames = size(bgdata,4)
-  params["measData"] = cat(4,bgdata,uFG)
-  params["measIsBGFrame"] = cat(1, ones(Bool,numBGFrames),
-                                zeros(Bool,daq["acqNumFGFrames"]*numRepetitions))
+  params["measData"] = cat(bgdata,uFG, dims=4)
+  params["measIsBGFrame"] = cat(ones(Bool,numBGFrames),
+                                zeros(Bool,daq["acqNumFGFrames"]*numRepetitions), dims=1)
   params["acqNumFrames"] = daq["acqNumFGFrames"]*numRepetitions + numBGFrames
 
   MPIFiles.saveasMDF( filename, params )

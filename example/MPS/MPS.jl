@@ -12,11 +12,11 @@ params["acqNumAverages"]=100
 
 
 println("MOVE THE SAMPLE OUT!")
-readline(STDIN)
+readline(stdin)
 uBG = measurement(daq, params, controlPhase=true)
 
 println("PUT THE SAMPLE IN!")
-readline(STDIN)
+readline(stdin)
 # This version does not store the data
 u = measurement(daq, params, controlPhase=true)
 

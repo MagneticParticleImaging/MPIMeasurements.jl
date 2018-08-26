@@ -46,7 +46,7 @@ function calcFieldFromRef(daq::AbstractDAQ, uRef)
     #println(" $(sqrt(a*a+b*b)) ")
 
     amplitude[d] = sqrt(a*a+b*b)*c2
-    phase[d] = atan2(a,b) / pi * 180
+    phase[d] = atan(a,b) / pi * 180
   end
   return amplitude, phase
 end

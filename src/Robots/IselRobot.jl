@@ -360,7 +360,7 @@ end
 """ Saves teach position to .toml file
 `saveTeachPosition(position::Array{typeof(1.0Unitful.m),1},file::AbstractString)` """
 function saveTeachPosition(position::Array{typeof(1.0Unitful.m),1},file::AbstractString)
-    filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
+    filename = joinpath(@__DIR__,"..","Scanner","Configurations",file)
     params = TOML.parsefile(filename)
     params["Robot"]["defCenterPos"] = ustrip(position)
     open(filename,"w") do f

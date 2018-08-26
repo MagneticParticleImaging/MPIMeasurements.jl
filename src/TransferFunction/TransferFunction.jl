@@ -4,13 +4,13 @@ using Interpolations, HDF5
 
 export list_tf, tf_receive_chain, plot_tf
 
-type TransferFunction
+mutable struct TransferFunction
   freq::Vector{Float64}
-  data::Matrix{Complex128}
+  data::Matrix{ComplexF64}
   interp::Vector{Any}
   inductionFactor::Vector{Float64}
 
-  function TransferFunction{T<:Complex}(freq_, datain::Array{T}, inductionFactor=ones(size(datain,2)))
+  function TransferFunction(freq_, datain::Array{T}, inductionFactor=ones(size(datain,2))) where {T<:Complex}
     freq = freq_[1]:(freq_[2]-freq_[1]):freq_[end]
     data=reshape(deepcopy(datain),size(datain,1), size(datain,2))
     interp = Any[]
@@ -34,13 +34,13 @@ function getindex(tmf::TransferFunction, x::Real, chan::Integer=1)
 end
 
 
-function getindex(tmf::TransferFunction, X::Union{Vector,Range},chan::Integer=1)
+function getindex(tmf::TransferFunction, X::Union{Vector,AbstractRange},chan::Integer=1)
   return [tmf[x] for x in X]
 end
 
 function load_tf(filename::String)
   tf = h5read(filename,"/transferFunction")
-  tf = reinterpret(Complex{eltype(tf)}, tf, (size(tf,2),size(tf,3)))
+  tf = copy(reshape(reinterpret(Complex{eltype(tf)}, tf), (size(tf,2),size(tf,3))))
   freq = h5read(filename,"/frequencies")
   inductionFactor = h5read(filename,"/inductionFactor")
   return TransferFunction(freq,tf,inductionFactor)
@@ -48,8 +48,8 @@ end
 
 function combine(tf1,tf2)
   freq = tf1.freq
-  data = cat(2,tf1.data,tf2.data)
-  inductionFactor = cat(1,tf1.inductionFactor, tf2.inductionFactor)
+  data = cat(tf1.data,tf2.data, dims=2)
+  inductionFactor = cat(tf1.inductionFactor, tf2.inductionFactor, dims=1)
   return TransferFunction(freq, data, inductionFactor)
 end
 
@@ -62,13 +62,13 @@ function save_tf(tf::TransferFunction, filename::String)
 end
 
 function load_tf_fromMatthias(filenameAmp::String, filenamePh::String)
-  data = readcsv(filenameAmp)
-  ph = readcsv(filenamePh)
+  data = readdlm(filenameAmp, ',')
+  ph = readdlm(filenamePh, ',')
   freq = data[4:end,1]
-  amp = 10.^(data[4:end,2]./20)
+  amp = 10 .^ (data[4:end,2] ./ 20)
   phase = [ deg2rad(p) for p in ph[4:end,2] ]
   tf = TransferFunction(freq,amp,phase)
-  tf.data[:] .*= (freq.*2*pi*im)
+  tf.data[:] .*= (freq .* 2*pi*im)
   tf.data[1] = 1
   return TransferFunction(freq, tf.data)
 end
@@ -153,7 +153,7 @@ function load_tf_fromVNA(filename::String)
 end
 
 function _convertTFFuncs()
-  prefix = Pkg.dir("MPIMeasurements","src","TransferFunction")
+  prefix = @__DIR__
 
   a = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_X_20151006.S2P")
   b = load_tf_fromUlrich(prefix*"/measurements/HH_RXCHAIN_Y_20151006.S2P")
@@ -185,7 +185,7 @@ end
 
 function tf_receive_chain(id::String)
 
-  path = Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata",id*".h5")
+  path = joinpath(@__DIR__,"tfdata",id*".h5")
 
   tf = load_tf(path)
   return tf
@@ -197,7 +197,7 @@ function tf_receive_chain(b::BrukerFile,id="PreinstalledUH")
 
   tf = tf_receive_chain(id)
   freq = frequencies(b)
-  rxchain = Complex128[]
+  rxchain = ComplexF64[]
   append!(rxchain, tf[freq,1])
   append!(rxchain, tf[freq,2])
   append!(rxchain, tf[freq,3])
@@ -207,7 +207,7 @@ end
 
 
 function list_tf()
-  list = readdir(Pkg.dir("MPIMeasurements","src","TransferFunction","tfdata"))
+  list = readdir(joinpath(@__DIR__, "tfdata"))
   stripped_list = [ splitext(a)[1] for a in list ]
   return stripped_list
 end
@@ -233,5 +233,3 @@ function plot_tf(tf::TransferFunction; fignum=312, filename=nothing)
     savefig(filename)
   end
 end
-
-

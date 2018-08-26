@@ -47,7 +47,7 @@ function prepareRobot(robot::DummyRobot)
 end
 
 isReferenced(robot::DummyRobot) = robot.referenced
-getDefaultVelocity(robot::DummyRobot) = zeros(Int64,3)+20000
+getDefaultVelocity(robot::DummyRobot) = zeros(Int64,3) .+ 20000
 parkPos(robot::DummyRobot) = [0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 
 function setRefVelocity(robot::DummyRobot, vel::Array{Int64,1})

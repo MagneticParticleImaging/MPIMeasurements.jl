@@ -1,18 +1,18 @@
 export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
       getSurveillanceUnit
 
-type MPIScanner
+mutable struct MPIScanner
   params::Dict
   generalParams::Dict
-  daq::Union{AbstractDAQ,Void}
-  robot::Union{Robot,Void}
-  gaussmeter::Union{GaussMeter,Void}
-  safty::Union{RobotSetup,Void}
-  surveillanceUnit::Union{SurveillanceUnit,Void}
+  daq::Union{AbstractDAQ,Nothing}
+  robot::Union{Robot,Nothing}
+  gaussmeter::Union{GaussMeter,Nothing}
+  safty::Union{RobotSetup,Nothing}
+  surveillanceUnit::Union{SurveillanceUnit,Nothing}
   recoMethod::Function
 
   function MPIScanner(file::String)
-    filename = Pkg.dir("MPIMeasurements","src","Scanner","Configurations",file)
+    filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
     return new(params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())

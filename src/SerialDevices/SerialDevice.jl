@@ -1,8 +1,8 @@
-import Base: send
+import Sockets: send
 
 export getSerialDevices
 
-type SerialDevice
+mutable struct SerialDevice
 	sp::SerialPort
 	pause_ms::Int
 	timeout_ms::Int

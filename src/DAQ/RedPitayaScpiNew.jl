@@ -1,7 +1,7 @@
 export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
        setTxParamsAll, disconnect
 
-type DAQRedPitayaScpiNew <: AbstractDAQ
+mutable struct DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
   rpc::RedPitayaCluster
 end
