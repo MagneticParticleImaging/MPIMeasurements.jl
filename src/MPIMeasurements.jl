@@ -2,22 +2,6 @@ module MPIMeasurements
 
 using Pkg
 
-if !haskey(Pkg.installed(),"RedPitayaDAQServer")
-  println("Installing RedPitayaDAQServer...")
-  Pkg.clone("https://github.com/tknopp/RedPitayaDAQServer.jl.git")
-end
-
-if !haskey(Pkg.installed(),"MPIFiles")
-  println("Installing MPIFiles...")
-  Pkg.clone("https://github.com/MagneticParticleImaging/MPIFiles.jl.git")
-end
-if !haskey(Pkg.installed(),"TOML")
-  println("Installing TOML...")
-  Pkg.clone("https://github.com/wildart/TOML.jl.git")
-end
-
-
-
 using Compat
 using Reexport
 #using IniFile
