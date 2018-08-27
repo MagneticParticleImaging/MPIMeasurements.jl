@@ -404,7 +404,7 @@ function writeIOOutput(robot::IselRobot,output::Array{Bool,1})
     outputInt=convert(Array{Int64,1},output)
     outputStrings = map(x->string(x),outputInt)
     outputBin=parse(UInt8,string("0b",string(outputStrings...)))
-    _writeIOOutput(robot,dec(outputBin))
+    _writeIOOutput(robot,string(outputBin))
 end
 
 function getMinMaxPosX(robot::IselRobot)
