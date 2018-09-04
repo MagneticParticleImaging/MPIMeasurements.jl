@@ -226,9 +226,9 @@ function checkCoords(robotSetup::RobotSetup, coords::Array{typeof(1.0Unitful.mm)
   end
   #initialize error vectors
   errorStatus = Array{Symbol}(undef, numPos, 3)
-  errorX = Array{Any}(undef,numPos,1)
-  errorY = Array{Any}(undef,numPos,1)
-  errorZ = Array{Any}(undef,numPos,1)
+  errorX = Array{Any}(undef,numPos)
+  errorY = Array{Any}(undef,numPos)
+  errorZ = Array{Any}(undef,numPos)
 
   #initialize scanner radius
   scannerRad = scanner.diameter / 2;
@@ -244,8 +244,11 @@ for i=1:numPos
    minMaxRobotX[1], minMaxRobotX[2])
 
   # CheckCoordsYZ
-  errorStatus[i, 2:3], errorY[i], errorZ[i] .=
-    checkCoordsYZ(crosssection(geo), scannerRad, y_i, z_i, clearance)
+  a,b,c = checkCoordsYZ(crosssection(geo), scannerRad, y_i, z_i, clearance)
+
+  errorStatus[i, 2:3] .= a
+  errorY[i] = b
+  errorZ[i] = c
 
 end #for numPos
   #create coordinate table with errors
