@@ -82,8 +82,8 @@ function getTemperatures(Arduino::ArduinoSurveillanceUnit)
     tempFloat = []
 
     for t in temp
-      if !isnull(t)
-          push!(tempFloat, get(t))
+      if t != nothing
+          push!(tempFloat, t)
       end
     end
 
