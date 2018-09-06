@@ -10,6 +10,10 @@ mutable struct DummyDAQRedPitaya <: AbstractDAQ
 end
 
 
+function updateParams!(daq::DummyDAQRedPitaya, params_::Dict)
+  daq.params = DAQParams(params_)
+  #setACQParams(daq)
+end
 
 
 
@@ -23,6 +27,10 @@ function setTxParams(daq::DummyDAQRedPitaya, amplitude, phase)
 end
 
 function currentFrame(daq::DummyDAQRedPitaya)
+    return 1;
+end
+
+function currentPeriod(daq::DummyDAQRedPitaya)
     return 1;
 end
 
