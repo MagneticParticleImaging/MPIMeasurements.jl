@@ -2,7 +2,9 @@ using MPIMeasurements
 
 startLeft = [-1.0 1.0 0.0]
 startRight = [1.0 1.0 0.0]
-scaleXYZ = [30.0, 35.0, 1.0]
+scaleXYZ = [30.0, 34.0, 1.0]
+center=[13.0, 0.0, -5.0]
+
 #scaleXYZ = [1.0, 1.0, 1.0]
 shiftX = [scaleXYZ[1]/4, 0.0,0.0]
 
@@ -16,7 +18,7 @@ end
 posTs = (transpose([startLeft;
           1.0 1.0 0.0;
           0.0 1.0 0.0;
-          0.0 -1.0 0.0]).*scaleXYZ)
+          0.0 -1.0 0.0]).*scaleXYZ.+center)
 posTsRotIn=rotateInvert(posTs)
 aGT = ArbitraryPositions((posTsRotIn)Unitful.mm)
 
@@ -26,7 +28,7 @@ posHs = (transpose([startLeft;
                   -1.0 0.0 0.0;
                   1.0 0.0 0.0
                   1.0 1.0 0.0
-                  1.0 -1.0 0.0]).*scaleXYZ)
+                  1.0 -1.0 0.0]).*scaleXYZ.+center)
 posHsRotIn=rotateInvert(posHs)
 aGH = ArbitraryPositions((posHsRotIn)Unitful.mm)
 
@@ -37,7 +39,7 @@ posEs = (transpose([startRight;
                   1.0 0.0 0.0
                   -1.0 0.0 0.0;
                   -1.0 -1.0 0.0
-                  1.0 -1.0 0.0]).*scaleXYZ)
+                  1.0 -1.0 0.0]).*scaleXYZ.+center)
 posEsRotIn=rotateInvert(posEs)
 aGE = ArbitraryPositions((posEsRotIn)Unitful.mm)
 
@@ -45,7 +47,7 @@ aGE = ArbitraryPositions((posEsRotIn)Unitful.mm)
 posUeasy = (transpose([startLeft;
                   -1.0 -1.0 0.0;
                   1.0 -1.0 0.0;
-                  1.0 1.0 0.0]).*scaleXYZ)
+                  1.0 1.0 0.0]).*scaleXYZ.+center)
 posUeasyRotIn=rotateInvert(posUeasy)
 aGEesay = ArbitraryPositions((posUeasy)Unitful.mm)
 
@@ -53,9 +55,9 @@ aGEesay = ArbitraryPositions((posUeasy)Unitful.mm)
 posKs = ((transpose([startLeft;
                   -1.0 -1.0 0.0;
                   -1.0 0.0 0.0;
-                  0.0 1.0 0.0;
+                  1.0 1.0 0.0;
                   -1.0 0.0 0.0;
-                  0.0 -1.0 0.0]).*scaleXYZ).+shiftX)
+                  1.0 -1.0 0.0]).*scaleXYZ).+shiftX.+center)
 posKsRotIn=rotateInvert(posKs)
 aGK = ArbitraryPositions((posKsRotIn)Unitful.mm)
 
@@ -73,7 +75,7 @@ posUs = ((transpose([startLeft;
                   -r*cos(pi*6/8) -r*sin(pi*6/8)-Udown 0.0;
                   -r*cos(pi*7/8) -r*sin(pi*7/8)-Udown 0.0;
                   1.0 Udown 0.0;
-                  startRight]).*scaleXYZ))
+                  startRight]).*scaleXYZ.+center))
 posUsRotIn=rotateInvert(posUs)
 aGU = ArbitraryPositions((posUsRotIn)Unitful.mm)
 
@@ -94,15 +96,23 @@ bGA = ArbitraryPositions((posBG)Unitful.mm)
 lettersUKE = [aGU,bGA,aGK,bGA,aGE,bGA]
 lettersTUHH = [aGT,bGA,aGU,bGA,aGH,bGA,aGH,bGA]
 
-letters=lettersTUHH
+letters=lettersUKE
+
 for letter in letters
 for pos in letter
   isValid = checkCoords(setup, pos, getMinMaxPosX(robot))
 end
 end
+Dates.Time(Dates.now())
+PosLog=Any[]
+TimeLog=Any[]
 
+setEnabled(robot, true)
+#sleep(5)
 for letter in letters
-for (index,pos) in enumerate(letter)
-    moveAbsUnsafe(robot, pos, defaultVel)
-end
+  for (index,pos) in enumerate(letter)
+   TimeLog=push!(TimeLog,Dates.Time(Dates.now()))
+   PosLog=cat(1,PosLog,pos')
+   moveAbsUnsafe(robot, pos, defaultVel)
+  end
 end
