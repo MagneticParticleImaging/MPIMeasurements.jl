@@ -20,7 +20,7 @@ function measureTransferFunction(daq::DAQRedPitayaScpiNew)
 
   for (k,freq) in enumerate(freqs)
 
-    println("Frequency = $(freq) Hz")
+    @info "Frequency [Hz]" freq
 
     # start sending
     for d=1:numTxChannels(daq)

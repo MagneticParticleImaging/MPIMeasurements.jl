@@ -1,11 +1,11 @@
 @testset "Testing Robot Safety" begin
 # Robot Constants
 
-println(@test_throws ErrorException Circle(-0.5Unitful.mm,"test"))
-println(@test_throws MethodError ScannerGeo(0.5Unitful.mm,"test3"))
-println(@test_throws MethodError ScannerGeo(118.5Unitful.mm,"test3"))
-println(@test_throws ErrorException DriveFieldAmplitude(15.0Unitful.mT, 14.0Unitful.mT, 14.0Unitful.mT))
-println(@test_throws ErrorException GradientScan(2.6Unitful.T/Unitful.m))
+@test_throws ErrorException Circle(-0.5Unitful.mm,"test")
+@test_throws MethodError ScannerGeo(0.5Unitful.mm,"test3")
+@test_throws MethodError ScannerGeo(118.5Unitful.mm,"test3")
+@test_throws ErrorException DriveFieldAmplitude(15.0Unitful.mT, 14.0Unitful.mT, 14.0Unitful.mT)
+@test_throws ErrorException GradientScan(2.6Unitful.T/Unitful.m)
 
 posX=-90.0Unitful.mm
 minRobotX = -100.0Unitful.mm

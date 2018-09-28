@@ -73,12 +73,11 @@ function measurementSystemMatrix(su, daq, robot, safety, positions::GridPosition
 end
 
 function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("moving to next position...")
+  @info "moving to position" pos
 end
 
 function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Unitful.mm),1}, index)
-  println("post action: ", pos)
-  println("################## Index: ", index, " / ", length(measObj.positions))
+  @info "post action" index length(measObj.positions)
 
   if measObj.controlPhase
     controlLoop(measObj.daq)

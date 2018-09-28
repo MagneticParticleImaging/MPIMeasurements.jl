@@ -38,13 +38,13 @@ function FOTemp(portAdress::AbstractString)
 	answer = readuntil(sp, '\n', timeout_ms)
 	flush(sp)
 	if (answer=="#40 46 54 20 43 4F 4D 50 32\r\n")
-		println("Connected to fibre optical termometer.")
+		@info "Connection to fibre optical termometer established."
 		return FoTemp( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
 	elseif (answer=="*FF\r\n")
-		println("Failed to establish connection. Try again.")
+		@warn "Failed to establish connection. Try again."
 		return nothing
 	else
-		println("Connected to the wrong Device!")
+		@warn "Connected to the wrong Device!"
 		return nothing
 	end
 end

@@ -88,16 +88,14 @@ function getSerialDevices()
     devices=Array{String,1}()
     portArray=unsafe_wrap(Array, ports, nports_guess, false)
     for k=1:length(portArray)
-      #println(portArray[k])
         if portArray[k] == C_NULL
           return devices
         else
           try
             device=sp_get_port_name(portArray[k])
             push!(devices,device)
-            #println(device)
           catch e
-            println(e)
+            @warn "Exception" e
           end
         end
     end

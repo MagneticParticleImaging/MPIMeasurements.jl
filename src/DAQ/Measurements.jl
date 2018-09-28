@@ -139,7 +139,7 @@ end
 
 function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
                         controlPhase=true, showFT=true)
-  println("Starting Measurement...")
+  @info "Starting Measurement..."
 
   if !isempty(params)
     updateParams!(daq, params)
@@ -160,7 +160,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -170,7 +170,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else
@@ -214,7 +214,9 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
+
+
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -222,11 +224,11 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         showAllDAQData(u, showFT=showFT)
 
         S[:,k] = vec(uMeas)
-        println("New Pos")
+        @debug "New Pos"
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else
@@ -237,7 +239,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   yy = collect(-11.2 + linspace(-40,40,9))
   S2 = zeros(length(uMeas),length(yy))
 
-  println("switch the phantoms")
+  @info "switch the phantoms"
   readline(stdin)
 
   try
@@ -248,7 +250,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -256,11 +258,11 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         showAllDAQData(u, showFT=showFT)
 
         S2[:,k] = vec(uMeas)
-        println("New Pos")
+        @debug "New Pos"
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else
