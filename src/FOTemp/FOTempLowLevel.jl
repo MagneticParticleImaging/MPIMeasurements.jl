@@ -1,3 +1,5 @@
+export getAveragedTemperature, getTemperature
+
 struct FOTemp <: Device
   sd::SerialDevice
 end
@@ -33,13 +35,13 @@ function FOTemp(portAdress::AbstractString)
 	set_frame(sp,ndatabits=ndatabits,parity=parity,nstopbits=nstopbits)
 	set_flow_control(sp,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
 
-	write(sp, "?40 $delim_write")
+	write(sp, "?40$delim_write")
 	sleep(pause_ms/1000)
 	answer = readuntil(sp, '\n', timeout_ms)
 	flush(sp)
 	if (answer=="#40 46 54 20 43 4F 4D 50 32\r\n")
 		@info "Connection to fibre optical termometer established."
-		return FoTemp( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
+		return FOTemp( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
 	elseif (answer=="*FF\r\n")
 		@warn "Failed to establish connection. Try again."
 		return nothing
@@ -53,28 +55,36 @@ end
 Returns the averaged temperature of a channel.
 """
 function getAveragedTemperature(ft::FOTemp,channel::Char)
-	return query(ft.sd, "?01 $channel")
+	temp = query(ft.sd, "?01 $channel")
+	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+        return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """
 Returns the averaged temperature of all channel.
 """
 function getAveragedTemperature(ft::FOTemp)
-	return query(ft.sd, "?02")
+	temp = query(ft.sd, "?02")
+	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+        return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """
 Returns the current temperature of a channel.
 """
 function getTemperature(ft::FOTemp,channel::Char)
-	return query(ft.sd, "?03 $channel")
+	temp = query(ft.sd, "?03 $channel")
+	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+        return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """
 Returns the current temperature of all channel.
 """
 function getTemperature(ft::FOTemp)
-	return query(ft.sd, "?04")
+	temp = query(ft.sd, "?04")
+	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+        return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """

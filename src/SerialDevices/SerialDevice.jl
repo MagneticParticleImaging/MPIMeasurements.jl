@@ -65,7 +65,7 @@ Send querry to serial device and receive device answer. Returns a String
 function query(sd::SerialDevice,cmd::String)
 	flush(sd.sp)
 	send(sd,string(cmd,sd.delim_write))
-	out = readuntil(sd.sp, sd.delim_read, sd.timeout_ms)
+	out = readuntil(sd.sp, Vector{Char}(sd.delim_read), sd.timeout_ms)
 	flush(sd.sp)
 	return rstrip(out,Vector{Char}(sd.delim_read))
 end
