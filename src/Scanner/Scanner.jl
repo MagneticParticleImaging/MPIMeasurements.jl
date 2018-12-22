@@ -2,6 +2,7 @@ export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
       getSurveillanceUnit
 
 mutable struct MPIScanner
+  file::String
   params::Dict
   generalParams::Dict
   daq::Union{AbstractDAQ,Nothing}
@@ -15,7 +16,7 @@ mutable struct MPIScanner
     filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
-    return new(params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())
+    return new(file,params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())
   end
 end
 

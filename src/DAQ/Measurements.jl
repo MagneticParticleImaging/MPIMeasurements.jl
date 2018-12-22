@@ -21,6 +21,8 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
 
+  uSlowADC = readDataSlow(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+
   stopTx(daq)
   disconnect(daq)
 
@@ -28,9 +30,9 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
                 daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
     uMeasAv = mean(u_, 5)[:,:,:,:,1]
-    return uMeasAv
+    return uMeasAv, uSlowADC
   else
-    return uMeas
+    return uMeas, uSlowADC
   end
 end
 
@@ -43,7 +45,7 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
 
   # measurement
   #params["acqNumFrames"] = params["acqNumFGFrames"]
-  uFG = measurement(daq, params; kargs...)
+  uFG, uSlowADC = measurement(daq, params; kargs...)
 
   # acquisition parameters
   params["acqStartTime"] = Dates.unix2datetime(time())
@@ -96,6 +98,8 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
     params["measIsBGFrame"] = cat(ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]), dims=1)
     params["acqNumFrames"] = params["acqNumFrames"] + numBGFrames
   end
+
+  params["auxiliaryData"] = uSlowADC
 
   MPIFiles.saveasMDF( filename, params )
   return filename
