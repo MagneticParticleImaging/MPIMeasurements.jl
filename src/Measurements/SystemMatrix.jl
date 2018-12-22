@@ -12,6 +12,9 @@ struct SystemMatrixRobotMeas <: MeasObj
   signals::Array{Float32,4}
   waitTime::Float64
   controlPhase::Bool
+  measIsBGPos::Vector{Bool}
+  posToIdx::Vector{Int64}
+  measIsBGFrame::Vector{Bool}
 end
 
 function SystemMatrixRobotMeas(scanner, positions::GridPositions,params_::Dict; kargs...)
@@ -49,9 +52,24 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
   rxNumSamplingPoints = daq.params.rxNumSamplingPoints
   numPeriods = daq.params.acqNumPeriodsPerFrame
 
-  signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,length(positions))
+  measIsBGPos = isa(positions,BreakpointGridPositions) ?
+                             MPIFiles.getmask(positions) :
+                             zeros(Bool,length(positions))
 
-  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime, controlPhase)
+  numBGPos = sum(measIsBGPos)
+  numFGPos = length(measIsBGPos) - numBGPos
+
+  numTotalFrames = numFGPos + daq.params.acqNumBGFrames*numBGPos
+
+  signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numTotalFrames)
+
+  # The following looks like a secrete line but it makes sense
+  posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (daq.params.acqNumBGFrames - 1) .+ 1)
+
+  measIsBGFrame = zeros(Bool, numTotalFrames)
+
+  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals,
+                                  waitTime, controlPhase, measIsBGPos, posToIdx, measIsBGFrame)
   return measObj
 end
 
@@ -85,17 +103,30 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
     setTxParams(measObj.daq, measObj.daq.params.currTxAmp, measObj.daq.params.currTxPhase)
   end
 
-  currFr = enableSlowDAC(measObj.daq, true, measObj.daq.params.acqNumFrameAverages,
+  numFrames = measObj.measIsBGPos[index] ? measObj.daq.params.acqNumBGFrames : 1
+
+  currFr = enableSlowDAC(measObj.daq, true, measObj.daq.params.acqNumFrameAverages*numFrames,
                     measObj.daq.params.ffRampUpTime, measObj.daq.params.ffRampUpFraction)
 
-  uMeas, uRef = readData(measObj.daq, measObj.daq.params.acqNumFrameAverages, currFr)
+  uMeas, uRef = readData(measObj.daq, measObj.daq.params.acqNumFrameAverages*numFrames, currFr)
 
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 
-  measObj.signals[:,:,:,index] = mean(uMeas,dims=4)
+  startIdx = measObj.posToIdx[index]
+  stopIdx = measObj.posToIdx[index] + numFrames - 1
+
+  if measObj.measIsBGPos[index]
+    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
+                            measObj.daq.params.acqNumFrameAverages, numFrames)
+    measObj.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
+  else
+    measObj.signals[:,:,:,index] = mean(uMeas,dims=4)
+  end
+
+  measObj.measIsBGFrame[ startIdx:stopIdx ] .= measObj.measIsBGPos[index]
 
   #sleep(measObj.waitTime)
-  return uMeas, uRef
+  return uMeas[:,:,:,1:1]
 end
 
 
@@ -144,12 +175,10 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   params["measIsTransposed"] = false
   params["measIsFramePermutation"] = false
 
-  params["acqNumFrames"] = length(positions)
+  params["acqNumFrames"] = length(measObj.measIsBGFrame)
 
-  # TODO FIXME -> determine bg frames from positions
-  params["measIsBGFrame"] = isa(positions,BreakpointGridPositions) ?
-                             MPIFiles.getmask(positions) :
-                             zeros(Bool,params["acqNumFrames"])
+  params["measIsBGFrame"] = measObj.measIsBGFrame
+
   params["measData"] = measObj.signals
 
   subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
