@@ -1,8 +1,5 @@
 export measurementSystemMatrix, SystemMatrixRobotMeas
-
-import MPIFiles.saveasMDF
-
-
+export CalibState, cancel, performCalibration
 
 struct SystemMatrixRobotMeas <: MeasObj
   su::SurveillanceUnit
@@ -73,22 +70,6 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
   return measObj
 end
 
-function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                     params_::Dict; kargs...)
-
-  measObj = SystemMatrixRobotMeas(su, daq, robot, safety, positions, params; kargs...)
-
-  res = performTour!(robot, safety, positions, measObj)
-
-  # move back to park position after measurement has finished
-  movePark(robot)
-
-  stopTx(daq)
-  disableACPower(su)
-  disconnect(daq)
-
-  return measObj
-end
 
 function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
   @info "moving to position" pos
@@ -129,18 +110,33 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
   return uMeas[:,:,:,1:1]
 end
 
+function MPIFiles.saveasMDF(store::DatasetStore, calibObj::SystemMatrixRobotMeas, params::Dict)
+  if params["storeAsSystemMatrix"]
+    calibNum = getNewCalibNum(store)
+    saveasMDF("/tmp/tmp.mdf",
+          calibObj, params)
+    saveasMDF(joinpath(calibdir(store),string(calibNum)*".mdf"),
+          MPIFile("/tmp/tmp.mdf"), applyCalibPostprocessing=true)
 
+  else
+    name = params["studyName"]
+    path = joinpath( studydir(store), name)
+    subject = ""
+    date = ""
 
-# high level: This stores as MDF
-function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                      filename::String, params_::Dict;
-                       kargs...)
+    newStudy = Study(path,name,subject,date)
 
-  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
-  saveasMDF(filename, measObj, params_)
+    addStudy(store, newStudy)
+    expNum = getNewExperimentNum(store, newStudy)
+    params["experimentNumber"] = expNum
+
+    filename = joinpath(studydir(store),newStudy.name,string(expNum)*".mdf")
+
+    saveasMDF(filename, calibObj, params)
+  end
 end
 
-function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
+function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
 
   params = copy(params_)
 
@@ -200,12 +196,116 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   return filename
 end
 
+###########################
+
+mutable struct CalibState
+  task::Union{Task,Nothing}
+  calibrationActive::Bool
+  calibObj::Union{SystemMatrixRobotMeas,Nothing}
+  numPos::Int
+  currPos::Int
+  cancelled::Bool
+  currentMeas::Array{Float32,4}
+  consumed::Bool
+end
+
+function cancel(calibState::CalibState)
+  calibState.cancelled = true
+  calibState.currPos = calibState.numPos+1
+  calibState.calibrationActive = true
+  calibState.consumed = true
+end
+
+function performCalibration(scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
+                            store::DatasetStore, params::Dict)
+  calibState = CalibState(nothing, false, nothing, 0, 0, false,
+                          Array{Float32,4}(undef,0,0,0,0), false)
+  calibState.task = Task(()->performCalibrationInner(calibState,scanner,calibObj,store,params))
+  schedule(calibState.task)
+  return calibState
+end
 
 
-function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
-                          mdf::MDFDatasetStore, params=Dict{String,Any};
-                          kargs...)
-  merge!(daq.params, params)
+function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
+                                 store::DatasetStore, params::Dict)
+  # TODO: We might want to use performTour here.
 
- #TODO
+  su = getSurveillanceUnit(scanner)
+  daq = getDAQ(scanner)
+
+  positions = calibObj.positions
+
+  calibState.calibrationActive = true
+  calibState.currPos = 1
+  calibState.numPos = length(positions)
+  calibState.cancelled = false
+  while true
+    @debug "Timer active $currPos / $numPos"
+    if calibState.calibrationActive
+      if calibState.currPos <= calibState.numPos
+        moveAbsUnsafe(getRobot(scanner), positions[calibState.currPos]) # comment for testing
+        setEnabled(getRobot(scanner), false)
+        sleep(0.5)
+        calibState.currentMeas = postMoveAction(calibObj,
+                      positions[calibState.currPos], calibState.currPos)
+        calibState.consumed = false
+
+        setEnabled(getRobot(scanner), true)
+        calibState.currPos +=1
+      end
+      sleep(calibObj.waitTime)
+      yield()
+      if calibState.currPos > calibState.numPos
+        @info "Store SF"
+        stopTx(daq)
+        disableACPower(getSurveillanceUnit(scanner))
+        MPIMeasurements.disconnect(daq)
+
+        movePark(getRobot(scanner))
+        calibState.currPos = 0
+
+        if !calibState.cancelled
+          calibState.cancelled = false
+          saveasMDF(store, calibObj, params)
+        end
+        break
+      end
+    else
+      sleep(0.4)
+      yield()
+    end
+  end
+end
+
+#####
+
+
+
+
+# The following functions are kind of obsolete since performCalibration is what
+# MPILab is actually used
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                     params_::Dict; kargs...)
+
+  measObj = SystemMatrixRobotMeas(su, daq, robot, safety, positions, params; kargs...)
+
+  res = performTour!(robot, safety, positions, measObj)
+
+  # move back to park position after measurement has finished
+  movePark(robot)
+
+  stopTx(daq)
+  disableACPower(su)
+  disconnect(daq)
+
+  return measObj
+end
+
+# high level: This stores as MDF
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                      filename::String, params_::Dict;
+                       kargs...)
+
+  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
+  saveasMDF(filename, measObj, params_)
 end
