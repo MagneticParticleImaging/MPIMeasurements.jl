@@ -180,5 +180,5 @@ function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
 end
 
 function readDataSlow(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
-  u = readDataSlow(daq.rpc, startFrame, numFrames, daq.params.acqNumPeriodsPerPatch)
+  u = readDataSlow(daq.rpc, startFrame, numFrames)
 end
