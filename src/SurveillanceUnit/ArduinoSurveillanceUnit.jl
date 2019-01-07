@@ -36,7 +36,7 @@ function ArduinoSurveillanceUnit(portAdress::AbstractString)
     sleep(2)
     flush(sp)
     write(sp, "!ConnectionEstablished*#")
-    response=readuntil(sp, delim_read, timeout_ms);
+    response=readuntil(sp, Vector{Char}(delim_read), timeout_ms);
     if(response == "ArduinoSurveillanceV1")
             @info "Connection to ArduinoSurveillanceUnit established"
             return ArduinoSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart,CommandEnd,delim)
