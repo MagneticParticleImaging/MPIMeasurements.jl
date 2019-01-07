@@ -1,5 +1,5 @@
 using MPIMeasurements
-using Base.Test
+using Test
 using Unitful
 
 include("Safety/RobotSafetyTest.jl")

@@ -38,11 +38,10 @@ function ArduinoSurveillanceUnit(portAdress::AbstractString)
     write(sp, "!ConnectionEstablished*#")
     response=readuntil(sp, delim_read, timeout_ms);
     if(response == "ArduinoSurveillanceV1")
-            println("Connected to ArduinoSurveillanceUnit")
+            @info "Connection to ArduinoSurveillanceUnit established"
             return ArduinoSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart,CommandEnd,delim)
     else
-            println("Connected to WrongDevice")
-            println("$response")
+            @warn "Connected to wrong Device" response
             return sp;
     end
 end
@@ -50,10 +49,10 @@ end
 
 function CheckACQ(Arduino,ACQ)
     if ACQ=="ACQ"
-        println("Command Received");
+        @info "Command Received"
         return ACQ;
     else
-            println("Error, Unknown response $ACQ")
+        @warn "Error, Unknown response" ACQ
     end
 end
 

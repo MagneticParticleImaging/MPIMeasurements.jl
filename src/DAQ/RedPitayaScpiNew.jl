@@ -70,6 +70,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   else
     numSlowDACChan(master(daq.rpc), 0)
   end
+  numSlowADCChan(daq.rpc, 4)
 
   return nothing
 end
@@ -176,4 +177,8 @@ function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
   uRef = u[:,daq.params.refChanIdx,:]
 
   return uMeas, uRef
+end
+
+function readDataSlow(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
+  u = readDataSlow(daq.rpc, startFrame, numFrames, daq.params.acqNumPeriodsPerPatch)
 end

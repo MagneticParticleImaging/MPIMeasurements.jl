@@ -138,9 +138,7 @@ function load_tf_fromVNA(filename::String)
           aphi=angle(tf_complex)
           f=f*1000
       else
-        println(lines[3])
-        println(typeof(lines[3]))
-        error("Wrong data Format! Please export in kHz domain S21 parameter with either Magnitude/Phase, DB/Phase or Real/Imaginary!")
+	      error("Wrong data Format! Please export in kHz domain S21 parameter with either Magnitude/Phase, DB/Phase or Real/Imaginary!")
       end
       push!(apdata, ap)
       push!(aϕdata, aphi)

@@ -43,8 +43,6 @@ function calcFieldFromRef(daq::AbstractDAQ, uRef)
     a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
     b = 2*sum(uVolt.*daq.params.sinLUT[:,d])
 
-    #println(" $(sqrt(a*a+b*b)) ")
-
     amplitude[d] = sqrt(a*a+b*b)*c2
     phase[d] = atan(a,b) / pi * 180
   end
@@ -55,7 +53,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
 
   amplitude, phase = calcFieldFromRef(daq,uRef)
 
-  println("reference amplitude=$amplitude phase=$phase")
+  @debug "reference" amplitude phase
 
   if norm(daq.params.dfStrength - amplitude) / norm(daq.params.dfStrength) <
               daq.params.controlLoopAmplitudeAccuracy &&
@@ -67,13 +65,12 @@ function doControlStep(daq::AbstractDAQ, uRef)
 
     newTxAmp = daq.params.currTxAmp .* daq.params.dfStrength ./ amplitude
 
-    println("new tx amplitude=$(newTxAmp)) phase=$(newTxPhase)")
+    @info "" newTxAmp newTxPhase
 
     deviation = abs.( daq.params.currTxAmp ./ amplitude .-
                      daq.params.calibFieldToVolt ) ./ daq.params.calibFieldToVolt
 
-    println("We expected $(daq.params.calibFieldToVolt) and
-            got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation")
+    @info "We expected $(daq.params.calibFieldToVolt) and got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation"
 
     if all( newTxAmp .< daq.params.txLimitVolt ) &&
        maximum( deviation ) < 0.2
@@ -89,7 +86,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
       #showall(w)
       #
 
-      println("Could not control")
+      @warn "Could not control"
 
       #stopTx(daq)
       #disconnect(daq)

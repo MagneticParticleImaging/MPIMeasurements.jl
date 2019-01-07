@@ -16,8 +16,7 @@ moveAbs(robot,0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
 
 # check if you at the right position
 currentPos = getPos(robot,Unitful.mm)
-println(currentPos)
-println(robot.defCenterPos)
+@info "" currentPos robot.defCenterPos
 
 # use moveAbs command to navigate to desired new teaching position
 moveAbs(robot,robot.defCenterPos[1]+ 1.0Unitful.mm,robot.defCenterPos[2],robot.defCenterPos[3])

@@ -26,18 +26,17 @@ end
 # define preMoveAction
 function preMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
                        pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("moving to next position...")
+  @info "moving to position" pos
 end
 
 # define postMoveAction
 function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
                         pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("post action: ", pos)
-  println("################## Index: ", index, " / ", length(measObj.positions))
+  @info "post action" pos index length(measObj.positions)
   #sleep(0.05)
   measObj.pos[:,index] = pos
 
-  #println( "Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) " )
+  @debug "Set DC source $newvoltage   $(value(measObj.rp,"AIN2"))"
 
   for l=1:size(measObj.currents,2)
     # set current at DC sources
@@ -46,7 +45,7 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
     setSlowDAC(measObj.daq, measObj.currents[1,l]*measObj.voltToCurrent, 0)
     setSlowDAC(measObj.daq, measObj.currents[2,l]*measObj.voltToCurrent, 1)
 
-    println( "Set DC source $(measObj.currents[1,l]*Unitful.A)  $(measObj.currents[2,l]*Unitful.A)" )
+    @debug "Set DC source $(measObj.currents[1,l]*Unitful.A)  $(measObj.currents[2,l]*Unitful.A)"
     # set measurement range of gauss meter
     range = measObj.gaussRanges[l]
     setAllRange(measObj.gauss, Char("$range"[1]))
@@ -61,7 +60,7 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
     magneticFieldError[:,2] = getFieldError(range)
     measObj.magneticFieldError[:,index,l] = maximum(magneticFieldError,2)
 
-    println(uconvert.(Unitful.mT,measObj.magneticField[:,index,l]))
+    @info "Field $(uconvert.(Unitful.mT,measObj.magneticField[:,index,l]))"
   end
   setSlowDAC(measObj.daq, 0.0, 0)
   setSlowDAC(measObj.daq, 0.0, 1)

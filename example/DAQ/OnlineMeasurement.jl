@@ -18,5 +18,5 @@ params["acqNumAverages"]=100
 #params["acqNumPeriodsPerFrame"]= div(length(params["acqFFValues"]),params["acqNumFFChannels"])
 
 enableSlowDAC(daq,true)
-println("Starting Measurement...")
+@info "Starting Measurement..."
 measurementCont(daq, params, controlPhase=false, showFT=true)

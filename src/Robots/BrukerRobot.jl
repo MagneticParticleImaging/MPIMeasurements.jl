@@ -88,16 +88,16 @@ function sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
   if result=="0\n"
       return true;
   elseif length(split(result,","))==3
-      println("$(brukercmd.command) returned position: $(result)")
+      @info "$(brukercmd.command) returned position: $(result)"
       return true;
   elseif  result=="?\n"
-      println("$(brukercmd.command) is unknown! Try again...")
+      @warn "$(brukercmd.command) is unknown! Try again..."
       return false;
   elseif result=="!\n"
-      println("Error during command $(brukercmd.command) execution. ")
+      @error "Error during command $(brukercmd.command) execution."
       return false;
   else
-      println("$(brukercmd.command) has unexpected result $(result)")
+      @error "$(brukercmd.command) has unexpected result $(result)"
       return false;
   end
 end
@@ -114,8 +114,7 @@ function _sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
   if readtask.state==:done
     return (ascii(String(readtask.result)), startmovetime, endmovetime);
   else
-    println("end $(readTask.state)")
-    println("end $(readTask.exception)")
-    return readtask.exception;
+    @error "end" readTask.state readTask.exception
+    return readtask.exception
   end
 end

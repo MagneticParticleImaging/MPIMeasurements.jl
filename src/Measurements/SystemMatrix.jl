@@ -1,8 +1,5 @@
 export measurementSystemMatrix, SystemMatrixRobotMeas
-
-import MPIFiles.saveasMDF
-
-
+export CalibState, cancel, performCalibration
 
 struct SystemMatrixRobotMeas <: MeasObj
   su::SurveillanceUnit
@@ -12,6 +9,9 @@ struct SystemMatrixRobotMeas <: MeasObj
   signals::Array{Float32,4}
   waitTime::Float64
   controlPhase::Bool
+  measIsBGPos::Vector{Bool}
+  posToIdx::Vector{Int64}
+  measIsBGFrame::Vector{Bool}
 end
 
 function SystemMatrixRobotMeas(scanner, positions::GridPositions,params_::Dict; kargs...)
@@ -49,36 +49,34 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
   rxNumSamplingPoints = daq.params.rxNumSamplingPoints
   numPeriods = daq.params.acqNumPeriodsPerFrame
 
-  signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,length(positions))
+  measIsBGPos = isa(positions,BreakpointGridPositions) ?
+                             MPIFiles.getmask(positions) :
+                             zeros(Bool,length(positions))
 
-  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals, waitTime, controlPhase)
+  numBGPos = sum(measIsBGPos)
+  numFGPos = length(measIsBGPos) - numBGPos
+
+  numTotalFrames = numFGPos + daq.params.acqNumBGFrames*numBGPos
+
+  signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numTotalFrames)
+
+  # The following looks like a secrete line but it makes sense
+  posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (daq.params.acqNumBGFrames - 1) .+ 1)
+
+  measIsBGFrame = zeros(Bool, numTotalFrames)
+
+  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals,
+                                  waitTime, controlPhase, measIsBGPos, posToIdx, measIsBGFrame)
   return measObj
 end
 
-function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                     params_::Dict; kargs...)
-
-  measObj = SystemMatrixRobotMeas(su, daq, robot, safety, positions, params; kargs...)
-
-  res = performTour!(robot, safety, positions, measObj)
-
-  # move back to park position after measurement has finished
-  movePark(robot)
-
-  stopTx(daq)
-  disableACPower(su)
-  disconnect(daq)
-
-  return measObj
-end
 
 function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("moving to next position...")
+  @info "moving to position" pos
 end
 
 function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Unitful.mm),1}, index)
-  println("post action: ", pos)
-  println("################## Index: ", index, " / ", length(measObj.positions))
+  @info "post action" index length(measObj.positions)
 
   if measObj.controlPhase
     controlLoop(measObj.daq)
@@ -86,31 +84,59 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
     setTxParams(measObj.daq, measObj.daq.params.currTxAmp, measObj.daq.params.currTxPhase)
   end
 
-  currFr = enableSlowDAC(measObj.daq, true, measObj.daq.params.acqNumFrameAverages,
+  numFrames = measObj.measIsBGPos[index] ? measObj.daq.params.acqNumBGFrames : 1
+
+  currFr = enableSlowDAC(measObj.daq, true, measObj.daq.params.acqNumFrameAverages*numFrames,
                     measObj.daq.params.ffRampUpTime, measObj.daq.params.ffRampUpFraction)
 
-  uMeas, uRef = readData(measObj.daq, measObj.daq.params.acqNumFrameAverages, currFr)
+  uMeas, uRef = readData(measObj.daq, measObj.daq.params.acqNumFrameAverages*numFrames, currFr)
 
   setTxParams(measObj.daq, measObj.daq.params.currTxAmp*0.0, measObj.daq.params.currTxPhase*0.0)
 
-  measObj.signals[:,:,:,index] = mean(uMeas,dims=4)
+  startIdx = measObj.posToIdx[index]
+  stopIdx = measObj.posToIdx[index] + numFrames - 1
+
+  if measObj.measIsBGPos[index]
+    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
+                            measObj.daq.params.acqNumFrameAverages, numFrames)
+    measObj.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
+  else
+    measObj.signals[:,:,:,index] = mean(uMeas,dims=4)
+  end
+
+  measObj.measIsBGFrame[ startIdx:stopIdx ] .= measObj.measIsBGPos[index]
 
   #sleep(measObj.waitTime)
-  return uMeas, uRef
+  return uMeas[:,:,:,1:1]
 end
 
+function MPIFiles.saveasMDF(store::DatasetStore, calibObj::SystemMatrixRobotMeas, params::Dict)
+  if params["storeAsSystemMatrix"]
+    calibNum = getNewCalibNum(store)
+    saveasMDF("/tmp/tmp.mdf",
+          calibObj, params)
+    saveasMDF(joinpath(calibdir(store),string(calibNum)*".mdf"),
+          MPIFile("/tmp/tmp.mdf"), applyCalibPostprocessing=true)
 
+  else
+    name = params["studyName"]
+    path = joinpath( studydir(store), name)
+    subject = ""
+    date = ""
 
-# high level: This stores as MDF
-function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
-                      filename::String, params_::Dict;
-                       kargs...)
+    newStudy = Study(path,name,subject,date)
 
-  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
-  saveasMDF(filename, measObj, params_)
+    addStudy(store, newStudy)
+    expNum = getNewExperimentNum(store, newStudy)
+    params["experimentNumber"] = expNum
+
+    filename = joinpath(studydir(store),newStudy.name,string(expNum)*".mdf")
+
+    saveasMDF(filename, calibObj, params)
+  end
 end
 
-function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
+function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
 
   params = copy(params_)
 
@@ -145,12 +171,10 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   params["measIsTransposed"] = false
   params["measIsFramePermutation"] = false
 
-  params["acqNumFrames"] = length(positions)
+  params["acqNumFrames"] = length(measObj.measIsBGFrame)
 
-  # TODO FIXME -> determine bg frames from positions
-  params["measIsBGFrame"] = isa(positions,BreakpointGridPositions) ?
-                             MPIFiles.getmask(positions) :
-                             zeros(Bool,params["acqNumFrames"])
+  params["measIsBGFrame"] = measObj.measIsBGFrame
+
   params["measData"] = measObj.signals
 
   subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
@@ -172,12 +196,116 @@ function saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Di
   return filename
 end
 
+###########################
+
+mutable struct CalibState
+  task::Union{Task,Nothing}
+  calibrationActive::Bool
+  calibObj::Union{SystemMatrixRobotMeas,Nothing}
+  numPos::Int
+  currPos::Int
+  cancelled::Bool
+  currentMeas::Array{Float32,4}
+  consumed::Bool
+end
+
+function cancel(calibState::CalibState)
+  calibState.cancelled = true
+  calibState.currPos = calibState.numPos+1
+  calibState.calibrationActive = true
+  calibState.consumed = true
+end
+
+function performCalibration(scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
+                            store::DatasetStore, params::Dict)
+  calibState = CalibState(nothing, false, nothing, 0, 0, false,
+                          Array{Float32,4}(undef,0,0,0,0), false)
+  calibState.task = Task(()->performCalibrationInner(calibState,scanner,calibObj,store,params))
+  schedule(calibState.task)
+  return calibState
+end
 
 
-function measurementSystemMatrix(scanner::MPIScanner, positions::Positions,
-                          mdf::MDFDatasetStore, params=Dict{String,Any};
-                          kargs...)
-  merge!(daq.params, params)
+function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
+                                 store::DatasetStore, params::Dict)
+  # TODO: We might want to use performTour here.
 
- #TODO
+  su = getSurveillanceUnit(scanner)
+  daq = getDAQ(scanner)
+
+  positions = calibObj.positions
+
+  calibState.calibrationActive = true
+  calibState.currPos = 1
+  calibState.numPos = length(positions)
+  calibState.cancelled = false
+  while true
+    @debug "Timer active $currPos / $numPos"
+    if calibState.calibrationActive
+      if calibState.currPos <= calibState.numPos
+        moveAbsUnsafe(getRobot(scanner), positions[calibState.currPos]) # comment for testing
+        setEnabled(getRobot(scanner), false)
+        sleep(0.5)
+        calibState.currentMeas = postMoveAction(calibObj,
+                      positions[calibState.currPos], calibState.currPos)
+        calibState.consumed = false
+
+        setEnabled(getRobot(scanner), true)
+        calibState.currPos +=1
+      end
+      sleep(calibObj.waitTime)
+      yield()
+      if calibState.currPos > calibState.numPos
+        @info "Store SF"
+        stopTx(daq)
+        disableACPower(getSurveillanceUnit(scanner))
+        MPIMeasurements.disconnect(daq)
+
+        movePark(getRobot(scanner))
+        calibState.currPos = 0
+
+        if !calibState.cancelled
+          calibState.cancelled = false
+          saveasMDF(store, calibObj, params)
+        end
+        break
+      end
+    else
+      sleep(0.4)
+      yield()
+    end
+  end
+end
+
+#####
+
+
+
+
+# The following functions are kind of obsolete since performCalibration is what
+# MPILab is actually used
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                     params_::Dict; kargs...)
+
+  measObj = SystemMatrixRobotMeas(su, daq, robot, safety, positions, params; kargs...)
+
+  res = performTour!(robot, safety, positions, measObj)
+
+  # move back to park position after measurement has finished
+  movePark(robot)
+
+  stopTx(daq)
+  disableACPower(su)
+  disconnect(daq)
+
+  return measObj
+end
+
+# high level: This stores as MDF
+function measurementSystemMatrix(su, daq, robot, safety, positions::GridPositions,
+                      filename::String, params_::Dict;
+                       kargs...)
+
+  measObj = measurementSystemMatrix(su, daq, robot, safety, positions, params_; kargs...)
+  saveasMDF(filename, measObj, params_)
 end

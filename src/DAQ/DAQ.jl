@@ -23,7 +23,6 @@ include("Parameters.jl")
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
-include("Measurements.jl")
 include("RedPitayaScpiNew.jl")
 include("DummyRedPitaya.jl")
 

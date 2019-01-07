@@ -1,4 +1,4 @@
-export measurement, measurementCont, measurementRepeatability
+export measurement, asyncMeasurement, measurementCont, measurementRepeatability
 
 function measurement(daq::AbstractDAQ, params_::Dict;
                      kargs... )
@@ -21,6 +21,8 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
 
+  uSlowADC = readDataSlow(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+
   stopTx(daq)
   disconnect(daq)
 
@@ -28,22 +30,14 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
     u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
                 daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
     uMeasAv = mean(u_, 5)[:,:,:,:,1]
-    return uMeasAv
+    return uMeasAv, uSlowADC
   else
-    return uMeas
+    return uMeas, uSlowADC
   end
 end
 
-# high level: This stores as MDF
-function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
-                     bgdata=nothing, kargs...)
-
-  params = copy(params_)
-  #merge!(params, toDict(daq.params))
-
-  # measurement
-  #params["acqNumFrames"] = params["acqNumFGFrames"]
-  uFG = measurement(daq, params; kargs...)
+function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Float32,4},
+                             params::Dict; bgdata=nothing, auxData=nothing )
 
   # acquisition parameters
   params["acqStartTime"] = Dates.unix2datetime(time())
@@ -88,42 +82,157 @@ function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
 
   if bgdata == nothing
     params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
-    params["measData"] = uFG
+    params["measData"] = data
     #params["acqNumFrames"] = params["acqNumFGFrames"]
   else
     numBGFrames = size(bgdata,4)
-    params["measData"] = cat(bgdata,uFG,dims=4)
+    params["measData"] = cat(bgdata,data,dims=4)
     params["measIsBGFrame"] = cat(ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]), dims=1)
     params["acqNumFrames"] = params["acqNumFrames"] + numBGFrames
+  end
+
+  if auxData != nothing
+    params["auxiliaryData"] = auxData
   end
 
   MPIFiles.saveasMDF( filename, params )
   return filename
 end
 
-
-function measurement(daq::AbstractDAQ, params::Dict, mdf::MDFDatasetStore;
-                     kargs...)
-  #merge!(daq.params, params)
+function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{Float32,4},
+                             params::Dict; kargs...)
 
   name = params["studyName"]
-  path = joinpath( studydir(mdf), name)
+  path = joinpath( studydir(store), name)
   subject = ""
   date = ""
 
   newStudy = Study(path,name,subject,date)
 
-  addStudy(mdf, newStudy)
-  expNum = getNewExperimentNum(mdf, newStudy)
+  addStudy(store, newStudy)
+  expNum = getNewExperimentNum(store, newStudy)
 
   #daq["studyName"] = params["studyName"]
   params["experimentNumber"] = expNum
 
-  filename = joinpath(studydir(mdf),newStudy.name,string(expNum)*".mdf")
-  measurement(daq, params, filename; kargs...)
+  filename = joinpath(studydir(store),newStudy.name,string(expNum)*".mdf")
+
+  saveasMDF(filename, daq, data, params; kargs... )
+
   return filename
 end
 
+### high level: This stores as MDF
+function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
+                     bgdata=nothing, auxData=nothing, kargs...)
+
+  params = copy(params_)
+  data, auxData = measurement(daq, params; kargs...)
+  saveasMDF(filename, daq, data, params; bgdata=bgdata, auxData=auxData)
+  return nothing
+end
+
+function measurement(daq::AbstractDAQ, params::Dict, store::DatasetStore;
+                     bgdata=nothing, auxData=nothing, kargs...)
+
+   params = copy(params_)
+   data, auxData = measurement(daq, params; kargs...)
+   saveasMDF(store, daq, data, params; bgdata=bgdata, auxData=auxData)
+   return nothing
+end
+
+####  Async version  ####
+
+mutable struct MeasState
+  task::Union{Task,Nothing}
+  numFrames::Int
+  currFrame::Int
+  cancelled::Bool
+  buffer::Array{Float32,4}
+  consumed::Bool
+  filename::String
+end
+
+function cancel(calibState::MeasState)
+  measState.cancelled = true
+  measState.consumed = true
+end
+
+function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dict, bgdata=nothing)
+  daq = getDAQ(scanner)
+  params = copy(params_)
+  updateParams!(daq, params_)
+
+  numFrames = daq.params.acqNumFrames
+  rxNumSamplingPoints = daq.params.rxNumSamplingPoints
+  numPeriods = daq.params.acqNumPeriodsPerFrame
+  buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
+
+  measState = MeasState(nothing, numFrames, 0, false, buffer, false, "")
+  measState.task = Task(()->asyncMeasurementInner(measState,scanner,store,params,bgdata))
+  schedule(measState.task)
+  return measState
+end
+
+function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
+                                 store::DatasetStore, params::Dict, bgdata=nothing)
+  #try
+    su = getSurveillanceUnit(scanner)
+    daq = getDAQ(scanner)
+
+    setEnabled(getRobot(scanner), false)
+    enableACPower(su)
+
+    startTx(daq)
+    if daq.params.controlPhase
+      controlLoop(daq)
+    else
+      setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
+                       zeros(numTxChannels(daq)))
+    end
+
+    currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
+                           daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+
+    for fr=1:daq.params.acqNumFrames
+      uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages,
+                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
+
+      measState.buffer[:,:,:,fr] = mean(uMeas,dims=4)
+      measState.currFrame = fr
+      measState.consumed = false
+      sleep(0.01)
+      yield()
+      if measState.cancelled
+        break
+      end
+    end
+    stopTx(daq)
+    disconnect(daq)
+    disableACPower(su)
+    setEnabled(getRobot(scanner), true)
+
+    measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
+  #catch ex
+  #  @warn "Exception" ex stacktrace(catch_backtrace())
+  #end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### The following are kind of obsolete
 
 export loadBGCorrData
 function loadBGCorrData(filename)
@@ -139,7 +248,7 @@ end
 
 function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
                         controlPhase=true, showFT=true)
-  println("Starting Measurement...")
+  @info "Starting Measurement..."
 
   if !isempty(params)
     updateParams!(daq, params)
@@ -160,7 +269,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -170,7 +279,7 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else
@@ -214,7 +323,9 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
+
+
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -222,11 +333,11 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         showAllDAQData(u, showFT=showFT)
 
         S[:,k] = vec(uMeas)
-        println("New Pos")
+        @debug "New Pos"
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else
@@ -237,7 +348,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
   yy = collect(-11.2 + linspace(-40,40,9))
   S2 = zeros(length(uMeas),length(yy))
 
-  println("switch the phantoms")
+  @info "switch the phantoms"
   readline(stdin)
 
   try
@@ -248,7 +359,7 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         uMeas, uRef = readData(daq, 1, currentFrame(daq))
         #showDAQData(daq,vec(uMeas))
         amplitude, phase = calcFieldFromRef(daq,uRef)
-        println("reference amplitude=$amplitude phase=$phase")
+        @debug "reference" amplitude phase
 
         u = cat(uMeas, uRef, dims=2)
         #showAllDAQData(uMeas,1)
@@ -256,11 +367,11 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
         showAllDAQData(u, showFT=showFT)
 
         S2[:,k] = vec(uMeas)
-        println("New Pos")
+        @debug "New Pos"
       end
   catch x
       if isa(x, InterruptException)
-          println("Stop Tx")
+          @warn "Stop Tx"
           stopTx(daq)
           disconnect(daq)
       else

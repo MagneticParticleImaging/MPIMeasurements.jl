@@ -13,6 +13,7 @@ mutable struct DAQParams
   numSampPerPeriod::Int64
   rxNumSamplingPoints::Int64
   acqNumFrames::Int64
+  acqNumBGFrames::Int64
   acqFramePeriod::Float64
   acqNumAverages::Int64
   acqNumFrameAverages::Int64
@@ -119,6 +120,10 @@ function DAQParams(@nospecialize params)
     params["acqNumFrameAverages"] = 1
   end
 
+  if !haskey(params,"acqNumBGFrames")
+    params["acqNumBGFrames"] = 1
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -132,6 +137,7 @@ function DAQParams(@nospecialize params)
     numSampPerPeriod,
     numSampPerPeriod*params["acqNumSubperiods"],
     params["acqNumFrames"],
+    params["acqNumBGFrames"],
     acqFramePeriod,
     params["acqNumAverages"],
     params["acqNumFrameAverages"],
@@ -181,6 +187,7 @@ function toDict(p::DAQParams)
   params["numSampPerPeriod"] = p.numSampPerPeriod
   params["rxNumSamplingPoints"] = p.rxNumSamplingPoints
   params["acqNumFrames"] = p.acqNumFrames
+  params["acqNumBGFrames"] = p.acqNumBGFrames
   params["acqNumSubperiods"] = p.acqNumSubperiods
   params["acqNumPeriodsPerPatch"] = p.acqNumPeriodsPerPatch
   params["acqFramePeriod"] = p.acqFramePeriod

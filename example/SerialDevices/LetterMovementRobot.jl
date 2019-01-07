@@ -79,7 +79,7 @@ posUs = ((transpose([startLeft;
 posUsRotIn=rotateInvert(posUs)
 aGU = ArbitraryPositions((posUsRotIn)Unitful.mm)
 
-println("Press Enter to continue")
+@info "Press Enter to continue"
 res=readline()
 
 

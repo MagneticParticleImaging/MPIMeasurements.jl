@@ -37,19 +37,17 @@ function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformatio
 	sleep(pause_ms/1000)
 	if(readuntil(sp, delim_read, timeout_ms) == "LSCI,MODEL460,0,032406$delim_read")
 
-		println("Connected to LSCI,MODEL460,0,032406.")
+		@info "Opening port to LSCI,MODEL460,0,032406..."
 		flush(sp)
 		write(sp, "*TST?$delim_write")
 		sleep(pause_ms/1000)
 		if(readuntil(sp, delim_read, timeout_ms) == "0$delim_read")
-
-			println("No Errors found.")
 			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write), reshape(coordinateTransformation,3,3) )
 		else
-			println("Errors found in the Device!")
+			@warn "Errors found in the Device!"
 		end
 	else
-		println("Connected to the wrong Device!")
+		@warn "Connected to the wrong Device!"
 	end
 end
 

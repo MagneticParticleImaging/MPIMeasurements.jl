@@ -23,12 +23,12 @@ end
 
 # define preMoveAction
 function preMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("moving to next position...")
+  @info "moving to position" pos
 end
 
 # define postMoveAction
 function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitful.mm)}, index)
-  println("post action: ", pos)
+  @info "post action"
   sleep(0.05)
   measObj.pos[:,index] = pos
   # set measurement range of gauss meter
@@ -46,7 +46,7 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitfu
     magneticFieldError[:,2] = getFieldError(range)
     measObj.magneticFieldError[:,l,index] = sum(magneticFieldError,2)
 
-    println(measObj.magneticField[:,l,index])
+    @info "Field $(measObj.magneticField[:,l,index])"
     sleep(measObj.pause)
   end
 end

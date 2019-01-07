@@ -145,7 +145,6 @@ function setStandardSettings(gauss::LakeShoreGaussMeter)
 	setAllAutoRanging(gauss, '1')
 	setUnitToTesla(gauss)
 	setCompleteProbe(gauss, '0')
-	println("Standard Settings set.")
-	println("Unit = Tesla, Range = lowest, Mode = DC, AutoRanging = off, Probe = on")
+	@info "Standard Settings: Unit = Tesla, Range = lowest, Mode = DC, AutoRanging = off, Probe = on"
 	return nothing
 end

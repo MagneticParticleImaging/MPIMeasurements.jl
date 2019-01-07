@@ -29,7 +29,7 @@ end
 
 function setTxParams(daq::DAQSimulation, amplitude, phase)
   if amplitude[1] < 0.5
-    println("SOUR1:VOLT $(amplitude[1])")
+    @info "SOUR1:VOLT $(amplitude[1])"
     send(daq.rp,"SOUR1:VOLT $(amplitude[1])") # Set amplitude of output signal
   else
     error("errorororo")

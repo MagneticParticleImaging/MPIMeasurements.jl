@@ -90,7 +90,7 @@ function IselRobot(params::Dict)
     end
     return iselRobot
   catch ex
-    println("Connection fail: ",ex)
+    @warn "Exception" ex
   end
 end
 
@@ -218,7 +218,6 @@ function parsePos(ret::AbstractString)
   xPos=reinterpret(Int32, parse(UInt32,string("0x",ret[1:6])) << 8) >> 8
   yPos=reinterpret(Int32, parse(UInt32,string("0x",ret[7:12])) << 8) >> 8
   zPos=reinterpret(Int32, parse(UInt32,string("0x",ret[13:18])) << 8) >> 8
-  #println(xPos,":",yPos,":",zPos)
   return xPos,yPos,zPos
 end
 
@@ -354,7 +353,7 @@ function TeachPosition(scanner::MPIScanner,robot::IselRobot,fileName::AbstractSt
     # note the defCenterPos is saved in meter not in millimeter
     saveTeachPosition(newTeachingPosition,fileName)
     scanner.params["Robot"]["defCenterPos"] = ustrip(newTeachingPosition)
-    println("Changed \"defCenterPos\" to $(newTeachingPosition) in $(fileName) file using the this Isel Robot")
+    @info "Changed \"defCenterPos\" to $(newTeachingPosition) in $(fileName) file using the this Isel Robot"
 end
 
 """ Saves teach position to .toml file
