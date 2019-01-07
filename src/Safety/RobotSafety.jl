@@ -265,8 +265,9 @@ end #for numPos
      display("Used geometry: $(geo.name)")
      display("Used scanner diameter: $(scanner.name)")
      display("Following coordinates are dangerous and NOT valid!");
-     errorIndecies,  = ind2sub(errorStatus, errBool)
-     errorIndecies = vec(union(errorIndecies))
+     errorIndecies = CartesianIndices(errorStatus)[errBool]
+     errorIndecies = union(Tuple(errorIndecies[1]))
+     @info errorIndices
      errorTable = coordTable[errorIndecies.+1, :];
      display(errorTable)
 

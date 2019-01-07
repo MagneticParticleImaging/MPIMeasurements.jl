@@ -29,7 +29,7 @@ function TransferFunction(freq_, ampdata, phasedata, args...)
 end
 
 function getindex(tmf::TransferFunction, x::Real, chan::Integer=1)
-  a = tmf.interp[chan][x]
+  a = tmf.interp[chan](x)
   return a
 end
 

@@ -3,7 +3,7 @@ using MPIMeasurements
 startLeft = [-1.0 1.0 0.0]
 startRight = [1.0 1.0 0.0]
 scaleXYZ = [30.0, 34.0, 1.0]
-center=[13.0, 0.0, -5.0]
+center=[0.0,-6.0, -5.0]
 
 #scaleXYZ = [1.0, 1.0, 1.0]
 shiftX = [scaleXYZ[1]/4, 0.0,0.0]
