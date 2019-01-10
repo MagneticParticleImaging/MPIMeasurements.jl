@@ -7,7 +7,6 @@ type = "LakeShore"
 connection = "/dev/ttyUSB1"
 
 [General]
-#transferFunction = "PreinstalledUH"
 measIsTransposed = false
 measIsFramePermutation = false
 tracerVendor = ["n.a."]
@@ -32,7 +31,8 @@ tracerBatch = ["n.a."]
 scannerTopology = "MPS"
 measIsBGCorrected = false
 studyName = "default"
-datasetStore = "/opt/data/HeadScanner"#"/home/labuser/Dokumente/data/HeadScanner"
+datasetStore = "/opt/data/HeadScanner"
+maxTemperature = 55.0
 rpGainSetting = [0, 1]
 calibGridFOV = [0.09, 0.05, 0.01]
 calibGridCenter = [0.0, 0.0, 0.0]
@@ -41,30 +41,24 @@ rxUnit = "V"
 scannerManufacturer = "IBI"
 measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
-maxTemperature = 55.0
 
 [SurveillanceUnit]
 type = "Arduino"
-#connection = "/dev/ttyACM0"
 connection = "/dev/ttyACM2"
-#
-# [Robot]
-# type="Dummy"
-# pauseTime=1.0
 
 [Robot]
 pauseTime = 1.0
+defaultRefVel = [40000, 40000, 40000]
 stepsPerTurn = 5000
 gearSlope = 5
 minMaxFreq = [20, 4000]
-defaultRefVel = [40000, 40000, 40000]
 defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
-defParkPos =[0.420, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.0605, 0.1282, 0.1605]
+defCenterPos = [0.0735, 0.1282, 0.1555]
 doReferenceCheck = true
+defParkPos = [0.42, 0.0, 0.0]
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
@@ -76,21 +70,16 @@ setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"
-#controlLoopPhaseAccuracy = 0.06
 controlLoopPhaseAccuracy = 0.2
 acqFFLinear = false
 acqFFValues = [1.0, 1.0]
 ip = ["192.168.1.100", "192.168.1.101"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = true
-#calibFieldToVolt = [104.62607244523313]
-#calibFieldToVolt = [134.62607244523313]
-#calibFieldToVolt = [118.89386664500614]
-calibFieldToVolt = [118.96551724137932]#calibFieldToVolt = [103.50010191344954]
-
+calibFieldToVolt = [118.96551724137932]
 calibFFCurrentToVolt = 0.08547008547008547
 acqNumBGFrames = 200
-rxChanIdx = [1,3,4]
+rxChanIdx = [1, 3, 4]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
 rpModulus = [4800, 4864, 4800, 4800]
@@ -102,17 +91,13 @@ dfDivider = [4864]
 acqNumPeriodsPerFrame = 1
 dfStrength = [0.006]
 refChanIdx = [2]
-#controlLoopAmplitudeAccuracy = 0.001
 controlLoopAmplitudeAccuracy = 0.01
 acqNumAverages = 100
 dfPhase = [0.0]
 dfChanIdx = [2]
-#calibRefToField = [0.0159295]
-#calibRefToField = [0.01742032960787951]
-#calibRefToField = [0.015954609443609456]
-calibRefToField=[0.015170670037926675]
+calibRefToField = [0.015170670037926675]
+ffRampUpFraction = 0.5
 acqFFSequence = "Static"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8
 ffRampUpTime = 1.5
-ffRampUpFraction = 0.5

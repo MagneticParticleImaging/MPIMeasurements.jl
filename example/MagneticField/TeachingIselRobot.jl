@@ -1,10 +1,9 @@
 using MPIMeasurements
-using Base.Test
-using Unitful
-using Compat
-using HDF5
+#using Unitful
+#using Compat
+#using HDF5
 
-# Do NOT call this as a script, use commands manual in console each at a time
+error("Do NOT call this as a script, use commands manual in console each at a time")
 # Init robot
 configFile="HeadScanner.toml"
 scanner = MPIScanner(configFile)
@@ -12,7 +11,7 @@ robot = getRobot(scanner)
 
 # Reference robot und move to old teaching position
 initRefZYX(robot)
-moveAbs(robot,0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
+#moveAbs(robot,0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm)
 
 # check if you at the right position
 currentPos = getPos(robot,Unitful.mm)
