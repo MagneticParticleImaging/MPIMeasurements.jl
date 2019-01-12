@@ -101,7 +101,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
                             measObj.daq.params.acqNumFrameAverages, numFrames)
     measObj.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
   else
-    measObj.signals[:,:,:,index] = mean(uMeas,dims=4)
+    measObj.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
   end
 
   measObj.measIsBGFrame[ startIdx:stopIdx ] .= measObj.measIsBGPos[index]
