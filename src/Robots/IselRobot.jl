@@ -2,7 +2,7 @@ using Unitful
 
 export IselRobot
 export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
-export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos
+export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveAssemble
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
@@ -54,6 +54,7 @@ struct IselRobot <: Robot
   defCenterPos::Array{typeof(1.0Unitful.mm),1}
   defSampleCenterPos::Array{typeof(1.0Unitful.mm),1}
   defParkPos::Array{typeof(1.0Unitful.mm),1}
+  defAssemblePos::Array{typeof(1.0Unitful.mm),1}
 end
 
 function IselRobot(params::Dict)
@@ -69,14 +70,16 @@ function IselRobot(params::Dict)
   defCenterPos = map(x->uconvert(Unitful.mm,x), params["defCenterPos"]*Unitful.m)
   defSampleCenterPos = map(x->uconvert(Unitful.mm,x), params["defSampleCenterPos"]*Unitful.m)
   defParkPos = map(x->uconvert(Unitful.mm,x),params["defParkPos"]*Unitful.m)
-  defParkPos[1] = defParkPos[1] - defCenterPos[1] # maxX 420mm minus current teaching Pos = new Park Pos
+  defParkPos[:] = defParkPos - defCenterPos
+  defAssemblePos = map(x->uconvert(Unitful.mm,x),params["defAssemblePos"]*Unitful.m)
+  defAssemblePos[:] = defAssemblePos - defCenterPos
   try
     sp = SerialPort(params["connection"])
     open(sp)
     set_speed(sp, baudrate)
     iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
-        stepsPermm,params["defaultRefVel"],params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos)
+        stepsPermm,params["defaultRefVel"],params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos, defAssemblePos)
     invertAxesYZ(iselRobot)
     initZYX(iselRobot)
     setRefVelocity(iselRobot,iselRobot.defaultRefVel[1],iselRobot.defaultRefVel[2],iselRobot.defaultRefVel[3])
@@ -154,7 +157,14 @@ end
 
 """ Move Isel Robot to park"""
 function movePark(robot::IselRobot)
-  moveAbs(robot, robot.defParkPos[1], 0.0Unitful.mm, 0.0Unitful.mm);
+  moveAbs(robot, robot.defParkPos[1], robot.defParkPos[2], robot.defParkPos[3]);
+end
+
+
+""" Move Isel Robot to assemble pos"""
+function moveAssemble(robot::IselRobot)
+  moveAbs(robot, robot.defAssemblePos[1], 0.0Unitful.mm, 0.0Unitful.mm);
+  moveAbs(robot, robot.defAssemblePos[1], robot.defAssemblePos[2], robot.defAssemblePos[3]);
 end
 
 """ Move Isel Robot to teach position """

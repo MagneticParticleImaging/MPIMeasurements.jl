@@ -74,6 +74,7 @@ end
 
 function getTemperatures(Arduino::ArduinoSurveillanceUnit)
     Temps=ArduinoCommand(Arduino, "GET:TEMP")
+    #@info Temps
     TempDelim="T"
 
     temp =  tryparse.(Float64,split(Temps,TempDelim))
@@ -82,7 +83,7 @@ function getTemperatures(Arduino::ArduinoSurveillanceUnit)
 
     for t in temp
       if t != nothing
-          push!(tempFloat, t)
+          push!(tempFloat, t) ###
       end
     end
 

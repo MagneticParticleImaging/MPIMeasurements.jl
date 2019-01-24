@@ -44,7 +44,7 @@ dfWaveform = "sine"
 
 [SurveillanceUnit]
 type = "Arduino"
-connection = "/dev/ttyACM2"
+connection = "/dev/ttyACM0"
 
 [Robot]
 pauseTime = 1.0
@@ -56,9 +56,10 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.0735, 0.1282, 0.1555]
+defCenterPos = [0.0745, 0.1282, 0.0755]
 doReferenceCheck = true
-defParkPos = [0.42, 0.0, 0.0]
+defParkPos = [0.42, 0.1282, 0.0755]
+defAssemblePos = [0.42, 0.0, 0.25]
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
@@ -76,7 +77,7 @@ acqFFValues = [1.0, 1.0]
 ip = ["192.168.1.100", "192.168.1.101"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = true
-calibFieldToVolt = [118.96551724137932]
+calibFieldToVolt = [135]
 calibFFCurrentToVolt = 0.08547008547008547
 acqNumBGFrames = 200
 rxChanIdx = [1, 3, 4]
