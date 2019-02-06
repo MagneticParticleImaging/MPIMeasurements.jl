@@ -265,10 +265,10 @@ end #for numPos
      display("Used geometry: $(geo.name)")
      display("Used scanner diameter: $(scanner.name)")
      display("Following coordinates are dangerous and NOT valid!");
-     errorIndecies = CartesianIndices(errorStatus)[errBool]
-     errorIndecies = union(Tuple(errorIndecies[1]))
+     errorIndices = CartesianIndices(errorStatus)[errBool]
+     errorIndices = union(Tuple(errorIndices[1]))
      @info errorIndices
-     errorTable = coordTable[errorIndecies.+1, :];
+     errorTable = coordTable[errorIndices.+1, :];
      display(errorTable)
 
      plotresults ? plotSafetyErrors(errorIndecies, coords, robotSetup, errorStatus) : "Plotting not chosen...";

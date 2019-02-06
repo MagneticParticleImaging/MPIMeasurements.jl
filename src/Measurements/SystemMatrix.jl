@@ -262,7 +262,6 @@ function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, ca
         MPIMeasurements.disconnect(daq)
 
         movePark(getRobot(scanner))
-        moveAssemble(getRobot(scanner))
         calibState.currPos = 0
 
         if !calibState.cancelled
