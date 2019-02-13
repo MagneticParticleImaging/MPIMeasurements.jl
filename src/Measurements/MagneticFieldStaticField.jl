@@ -32,7 +32,7 @@ function postMoveAction(measObj::MagneticFieldStaticField,
   #sleep(0.05)
   measObj.pos[:,index] = pos
 
-  @debug "Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) "
+  @debug "Test"#"Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) "
 
 
     # set current at DC sources
@@ -53,8 +53,8 @@ function postMoveAction(measObj::MagneticFieldStaticField,
     # perform error estimation based on gauss meter specification
     magneticFieldError = zeros(typeof(1.0Unitful.T),3,2)
     magneticFieldError[:,1] = abs.(magneticField)*1e-3
-    magneticFieldError[:,2] = getFieldError(range)
-    measObj.magneticFieldError[:,index] = maximum(magneticFieldError,2)
+    magneticFieldError[:,2] = getFieldError(range).*ones(3)
+    measObj.magneticFieldError[:,index] = maximum(magneticFieldError,dims=2)
 
     @debug "Field $(uconvert.(Unitful.mT,measObj.magneticField[:,index]))"
 

@@ -20,11 +20,12 @@ customPhantom3D = Cuboid(customPhantom, 520.0Unitful.mm, "Custom Phantom 3D")
 
 # create given scanner diameter
 const brukerScannerLength = 600.0Unitful.mm
-brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Burker Coil", brukerScannerLength, deltaSample3D);
+brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Bruker Coil", brukerScannerLength, deltaSample3D);
 mouseCoil = ScannerGeo(40.0Unitful.mm, "Mouse Coil", brukerScannerLength, deltaSample3D);
 ratCoil = ScannerGeo(72.0Unitful.mm, "Rat Coil", brukerScannerLength, deltaSample3D)
 #headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", -65.0Unitful.mm, 365.0Unitful.mm);
 
+# headCoil = ScannerGeo(230.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample3D); -> t-design 70mm um [17,2,30]mm passt
 headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample3D);
 
 # standard clearance

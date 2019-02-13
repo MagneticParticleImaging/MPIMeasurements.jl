@@ -5,7 +5,7 @@ export performTour!, postMoveAction, preMoveAction
 Derive your own MeasObj from MeasObj for your purposes, and define your own pre/postMoveAction Function!
 """
 function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
-          measObj::T, postMoveWaitTime=0.01, switchBrakes=false, vel=getDefaultVelocity(robot)) where {T<:MeasObj}
+          measObj::T, postMoveWaitTime=0.01, switchBrakes=false, vel=getDefaultVelocity(robot); coolingDown::Bool=true) where {T<:MeasObj}
 
   # check all coords for safety
   for pos in positions
@@ -13,6 +13,14 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
   end
 
   for (index,pos) in enumerate(positions)
+    # Abkuehlpause
+    if index == round(Int,length(positions)/2) && coolingDown
+      println("Cooled down? Enter \"yes\"")
+      while readline() != "yes"
+        println("Cooled down? Enter \"yes\"")
+      end
+    end
+
     preMoveAction(measObj, pos, index)
     moveAbsUnsafe(robot, pos, vel) # comment for testing
     sleep(postMoveWaitTime)
@@ -25,6 +33,6 @@ function performTour!(robot::Robot, setup::RobotSetup, positions::Positions,
     end
   end
 
-  moveCenter(robot)
+  movePark(robot)
   return measObj
 end

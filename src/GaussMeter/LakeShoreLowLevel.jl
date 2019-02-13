@@ -35,13 +35,13 @@ function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformatio
 	flush(sp)
 	write(sp, "*IDN?$delim_write")
 	sleep(pause_ms/1000)
-	if(readuntil(sp, delim_read, timeout_ms) == "LSCI,MODEL460,0,032406$delim_read")
+	if(readuntil(sp, Vector{Char}(delim_read), timeout_ms) == "LSCI,MODEL460,0,032406$delim_read")
 
 		@info "Opening port to LSCI,MODEL460,0,032406..."
 		flush(sp)
 		write(sp, "*TST?$delim_write")
 		sleep(pause_ms/1000)
-		if(readuntil(sp, delim_read, timeout_ms) == "0$delim_read")
+		if(readuntil(sp, Vector{Char}(delim_read), timeout_ms) == "0$delim_read")
 			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write), reshape(coordinateTransformation,3,3) )
 		else
 			@warn "Errors found in the Device!"
@@ -79,11 +79,11 @@ end
 
 function getMultiplier(gauss::LakeShoreGaussMeter)
 	res = query(gauss.sd, "FIELDM?")
-	if contains(res,"u")
+	if occursin("u",res)
 		return 1e-6
-	elseif contains(res,"m")
+	elseif occursin("m",res)
 		return 1e-3
-	elseif contains(res,"k")
+	elseif occursin("k",res)
 		return 1e3
 	else
 		return 1.0
@@ -313,9 +313,9 @@ Returns the field value of the active channel
 """
 function getField(gauss::LakeShoreGaussMeter)
 	field = "OL"
-    while contains(field, "OL")
+    while occursin("OL",field)
 	  field = query(gauss.sd, "FIELD?")
-	  if contains(field, "OL")
+	  if occursin("OL",field)
         sleep(3.0)
 	  end
     end
@@ -328,9 +328,9 @@ meaningless data.
 """
 function getAllFields(gauss::LakeShoreGaussMeter)
 	field = "OL,OL,OL,OL"
-    while contains(field, "OL")
+    while occursin("OL",field)
 	  field = query(gauss.sd, "ALLF?")
-	  if contains(field, "OL")
+	  if occursin("OL",field)
         sleep(3.0)
 	  end
     end
