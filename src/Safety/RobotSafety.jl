@@ -266,16 +266,13 @@ end #for numPos
      display("Used scanner diameter: $(scanner.name)")
      display("Following coordinates are dangerous and NOT valid!");
      errorIndices = LinearIndices(errorStatus)[errBool]
-    # Warum Cartesian?
-    #  errorIndices = CartesianIndices(errorStatus)[errBool]
-    #  errorIndices = union(Tuple(errorIndices[1]))
      @info errorIndices
      # ERROR: BoundsError
     #  errorTable = coordTable[errorIndices.+1, :];
     #  display(errorTable)
 
      plotresults ? plotSafetyErrors(errorIndecies, coords, robotSetup, errorStatus) : "Plotting not chosen...";
-    #  throw(CoordsError("Some coordinates exceeded their range!",coordTable));
+     throw(CoordsError("Some coordinates exceeded their range!",coordTable));
   end
 end #function
 
