@@ -43,11 +43,6 @@ include("Safety/KnownSetups.jl")
 # LibSerialPort currently only supports linux and julia versions above 0.6
 # TODO work this part out under julia-1.0.0
 if Sys.isunix() && VERSION >= v"0.6"
-  if !haskey(Pkg.installed(),"LibSerialPort")
-    println("Installing LibSeriaddlPort....")
-    Pkg.clone("https://github.com/andrewadare/LibSerialPort.jl.git")
-    Pkg.build("LibSerialPort")
-  end
   using LibSerialPort
   include("SerialDevices/SerialDevices.jl")
 end
