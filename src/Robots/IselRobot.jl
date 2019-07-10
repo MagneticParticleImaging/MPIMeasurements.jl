@@ -204,7 +204,8 @@ function moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm),
 end
 
 function mm2Steps(dist::typeof(1.0Unitful.mm),stepsPermm)
-    return round(Int64,ustrip(dist)*stepsPermm)
+    temp = round(ustrip(dist), digits=1) # round to 100um due to step error after setting powerless
+    return round(Int64,temp*stepsPermm)
 end
 
 function steps2mm(steps,stepsPermm)
