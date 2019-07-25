@@ -150,7 +150,7 @@ function load_tf_fromVNA(filename::String)
   end
   close(file)
   #apdata .*= (freq.*2*pi)
-  apdata[1] = 1
+  #apdata[1] = 1
   return TransferFunction(freq, apdata, aϕdata)
 end
 
