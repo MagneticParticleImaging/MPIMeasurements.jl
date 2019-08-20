@@ -103,9 +103,9 @@ function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{F
                              params::Dict; kargs...)
 
   name = params["studyName"]
-  path = joinpath( studydir(store), name)
+  date = params["studyDate"]
+  path = joinpath( studydir(store), getMDFStudyFolderName(name,date))
   subject = ""
-  date = ""
 
   newStudy = Study(path,name,subject,date)
 
@@ -115,7 +115,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{F
   #daq["studyName"] = params["studyName"]
   params["experimentNumber"] = expNum
 
-  filename = joinpath(studydir(store),newStudy.name,string(expNum)*".mdf")
+  filename = joinpath(studydir(store), getMDFStudyFolderName(newStudy), string(expNum)*".mdf")
 
   saveasMDF(filename, daq, data, params; kargs... )
 
