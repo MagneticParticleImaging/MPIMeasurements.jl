@@ -422,7 +422,7 @@ function measurementRepeatability(daq::AbstractDAQ, filename::String, numRepetit
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq["rxBandwidth"]
     tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
-    tf_ = tf_receive_chain(params["transferFunction"])
+    tf_ = TransferFunction(params["transferFunction"])
     for d=1:numRxChannels(daq)
       tf[:,d] = tf_[freq,d]
     end
