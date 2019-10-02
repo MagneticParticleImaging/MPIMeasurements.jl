@@ -77,7 +77,7 @@ function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Floa
   params["measIsTFCorrected"] = false
   params["measIsFrequencySelection"] = false
   params["measIsBGCorrected"] = false
-  params["measIsTransposed"] = false
+  params["measIsFastFrameAxis"] = false
   params["measIsFramePermutation"] = false
 
   if bgdata == nothing
