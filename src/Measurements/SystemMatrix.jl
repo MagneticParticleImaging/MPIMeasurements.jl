@@ -113,9 +113,9 @@ end
 function MPIFiles.saveasMDF(store::DatasetStore, calibObj::SystemMatrixRobotMeas, params::Dict)
   if params["storeAsSystemMatrix"]
     calibNum = getNewCalibNum(store)
-    filenameA = joinpath(calibdir(store),string(calibNum)*"td.mdf") # just for debugging
+    filenameA = joinpath(calibdir(store),string(calibNum)*".mdf") # just for debugging
     #filenameA = "/tmp/tmp.mdf"
-    filenameB = joinpath(calibdir(store),string(calibNum)*".mdf")
+    filenameB = joinpath(calibdir(store),string(calibNum+1)*".mdf")
     saveasMDF(filenameA, calibObj, params)
     saveasMDF(filenameB, MPIFile(filenameA), applyCalibPostprocessing=true)
   else
@@ -168,7 +168,7 @@ function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, pa
   params["measIsTFCorrected"] = false
   params["measIsFrequencySelection"] = false
   params["measIsBGCorrected"] = false
-  params["measIsTransposed"] = false
+  params["measIsFastFrameAxis"] = false
   params["measIsFramePermutation"] = false
 
   params["acqNumFrames"] = length(measObj.measIsBGFrame)
