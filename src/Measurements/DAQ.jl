@@ -58,11 +58,13 @@ function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Floa
   if haskey(params, "transferFunction") && params["transferFunction"] != ""
     numFreq = div(params["rxNumSamplingPoints"],2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
-    tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
-    tf_ = tf_receive_chain(params["transferFunction"])
-    for d=1:numRxChannels(daq)
-      tf[:,d] = tf_[freq,d]
-    end
+    #tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
+    #tf_ = tf_receive_chain()
+    tf_ =  TransferFunction(params["transferFunction"])
+    #for d=1:numRxChannels(daq)
+    #  tf[:,d] = tf_[freq,d]
+    #end
+    tf = tf_[freq,1:numRxChannels(daq)]
     params["rxTransferFunction"] = tf
     params["rxInductionFactor"] = tf_.inductionFactor
   end
