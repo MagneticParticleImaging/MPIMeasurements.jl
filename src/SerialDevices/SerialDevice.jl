@@ -1,6 +1,16 @@
 import Sockets: send
 
-export getSerialDevices
+export getSerialDevices, resolvedSymlink
+
+
+function resolvedSymlink(port::String)
+  if islink(port)
+    resolvedPort = joinpath("/dev", readlink(port))
+  else
+    resolvedPort = port
+  end
+  return resolvedPort
+end
 
 mutable struct SerialDevice
 	sp::SerialPort
