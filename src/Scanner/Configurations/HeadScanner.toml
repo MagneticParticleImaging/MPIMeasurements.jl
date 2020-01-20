@@ -56,10 +56,10 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.0745, 0.1282, 0.0755]
+defCenterPos = [0.1155, 0.1255, 0.1055]
 doReferenceCheck = true
-defParkPos = [0.42, 0.1282, 0.0755]
-defAssemblePos = [0.42, 0.0, 0.25]
+defParkPos = [0.42, 0.1255, 0.1055]
+defAssemblePos = [0.42, 0.24, 0.25]
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
