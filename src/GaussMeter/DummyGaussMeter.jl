@@ -3,7 +3,7 @@ export DummyGaussMeter
 struct DummyGaussMeter <: GaussMeter
   coordinateTransformation::Matrix{Float64}
 
-  DummyGaussMeter() = new(eye(3))
+  DummyGaussMeter() = new(Matrix{Float64}(I,(3,3)))
 end
 
 getXValue(gauss::DummyGaussMeter) = 1.0

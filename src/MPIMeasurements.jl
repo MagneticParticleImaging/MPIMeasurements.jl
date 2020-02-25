@@ -37,7 +37,7 @@ import Base.write
 export Device, Robot, GaussMeter, MeasObj
 
 include("DAQ/DAQ.jl")
-include("TransferFunction/TransferFunction.jl")
+#include("TransferFunction/TransferFunction.jl") #Moved to MPIFiles
 include("Safety/RobotSafety.jl")
 include("Safety/KnownSetups.jl")
 
