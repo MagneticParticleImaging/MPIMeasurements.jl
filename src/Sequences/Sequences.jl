@@ -18,7 +18,9 @@ end
 
 function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
 
-  t=linspace(0,2*pi,patches+1)[1:end-1]
+  #t=linspace(0,2*pi,patches+1)[1:end-1]
+  t=range(0,2*pi,length=patches+1)[1:end-1]
+
   A=((maxCurr-minCurr)/2).*sin.(t).+(minCurr+maxCurr)/2
   B=-(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2
 
@@ -28,10 +30,24 @@ function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPat
   writedlm(joinpath(@__DIR__, name*".csv"), D, ',')
   return D
 end
+function makeSineSequence(name::String, minCurrCh1, maxCurrCh1,minCurrCh2, maxCurrCh2, patches, periodsPerPatch)
 
+  #t=linspace(0,2*pi,patches+1)[1:end-1]
+  t=range(0,2*pi,length=patches+1)[1:end-1]
+
+  A=((maxCurrCh1-minCurrCh1)/2).*sin.(t).+(minCurrCh1+maxCurrCh1)/2
+  B=-(((maxCurrCh2-minCurrCh2)/2).*sin.(t)).+(minCurrCh2+maxCurrCh2)/2
+
+  C = cat(A',B', dims=1)
+  D=repeat(C, inner=(1,periodsPerPatch))
+
+  writedlm(joinpath(@__DIR__, name*".csv"), D, ',')
+  return D
+end
 function makeSineSequenceTest(name::String, minCurr, maxCurr, patches, periodsPerPatch)
 
-  t=linspace_(0,2*pi,patches+1)[1:end-1]
+  #t=linspace_(0,2*pi,patches+1)[1:end-1]
+  t=range(0,2*pi,length=patches+1)[1:end-1]
   A=circshift(((maxCurr-minCurr)/2).*sin.(t).+(minCurr+maxCurr)/2,-6)
   B=circshift(-(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2,-6)
 
@@ -41,4 +57,3 @@ function makeSineSequenceTest(name::String, minCurr, maxCurr, patches, periodsPe
   writedlm(joinpath(@__DIR__, name*".csv"), D, ',')
   return D
 end
-

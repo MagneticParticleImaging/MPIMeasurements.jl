@@ -80,7 +80,8 @@ function IselRobot(params::Dict)
     iselRobot = IselRobot( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write)
         ,params["minMaxVel"],params["minMaxAcc"],params["minMaxFreq"],params["stepsPerTurn"],params["gearSlope"],
         stepsPermm,params["defaultRefVel"],params["defaultVel"],defCenterPos,defSampleCenterPos, defParkPos, defAssemblePos)
-    invertAxesYZ(iselRobot)
+    #invertAxesYZ(iselRobot)
+    invertAxesZ(iselRobot)
     initZYX(iselRobot)
     setRefVelocity(iselRobot,iselRobot.defaultRefVel[1],iselRobot.defaultRefVel[2],iselRobot.defaultRefVel[3])
     setEnabled(iselRobot, true)
@@ -337,6 +338,12 @@ end
 """ Inverts the axes for y,z """
 function invertAxesYZ(robot::IselRobot)
     ret = queryIsel(robot.sd, "@0ID6")
+    checkError(ret)
+end
+
+""" Inverts the axes for z """
+function invertAxesZ(robot::IselRobot)
+    ret = queryIsel(robot.sd, "@0ID4")
     checkError(ret)
 end
 
