@@ -1,5 +1,5 @@
 export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
-      getSurveillanceUnit
+getSurveillanceUnit, getTemperatureSensor
 
 mutable struct MPIScanner
   file::String
@@ -10,13 +10,14 @@ mutable struct MPIScanner
   gaussmeter::Union{GaussMeter,Nothing}
   safty::Union{RobotSetup,Nothing}
   surveillanceUnit::Union{SurveillanceUnit,Nothing}
+  temperatureSensor::Union{TemperatureSensor,Nothing}
   recoMethod::Function
 
   function MPIScanner(file::String)
     filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
-    return new(file,params,generalParams,nothing,nothing,nothing,nothing,nothing,()->())
+    return new(file,params,generalParams,nothing,nothing,nothing,nothing,nothing,nothing,()->())
   end
 end
 
@@ -55,4 +56,12 @@ function getSurveillanceUnit(scanner::MPIScanner)
     scanner.surveillanceUnit = SurveillanceUnit(scanner.params["SurveillanceUnit"])
   end
   return scanner.surveillanceUnit
+end
+
+
+function getTemperatureSensor(scanner::MPIScanner)
+  if scanner.temperatureSensor == nothing && haskey(scanner.params, "TemperatureSensor")
+    scanner.temperatureSensor = TemperatureSensor(scanner.params["TemperatureSensor"])
+  end
+  return scanner.temperatureSensor
 end

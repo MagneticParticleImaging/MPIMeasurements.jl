@@ -30,6 +30,7 @@ import Base.write
 @compat abstract type Robot end
 @compat abstract type GaussMeter end
 @compat abstract type SurveillanceUnit end
+@compat abstract type TemperatureSensor end
 
 # abstract supertype for all measObj etc.
 @compat abstract type MeasObj end
@@ -54,7 +55,7 @@ include("Sequences/Sequences.jl")
 
 if Sys.isunix() && VERSION >= v"0.6"
   include("GaussMeter/GaussMeter.jl")
-  include("FOTemp/FOTemp.jl")
+  include("TemperatureSensor/TemperatureSensor.jl")
   include("Measurements/Measurements.jl")
   include("SurveillanceUnit/SurveillanceUnit.jl")
 end

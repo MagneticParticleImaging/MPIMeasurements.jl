@@ -4,7 +4,7 @@ range = 1
 fast = true
 autoRanging = false
 type = "LakeShore"
-connection = "/dev/ttyUSB1"
+connection = "/dev/ttyUSB2"
 
 [General]
 measIsTransposed = false
@@ -46,7 +46,13 @@ dfWaveform = "sine"
 type = "Arduino"
 connection = "/dev/ttyACM0"
 
+
+[TemperatureSensor]
+type = "FOTemp"
+connection = "/dev/ttyUSB1"
+
 [Robot]
+defAssemblePos = [0.42, 0.24, 0.25]
 pauseTime = 1.0
 defaultRefVel = [40000, 40000, 40000]
 stepsPerTurn = 5000
@@ -56,10 +62,10 @@ defaultVel = [40000, 40000, 40000]
 defSampleCenterPos = [0.01, 0.0, 0.0]
 minMaxVel = [30, 40000]
 minMaxAcc = [1, 4000]
-defCenterPos = [0.0745, 0.1282, 0.0755]
+defCenterPos = [0.1155, 0.1255, 0.1055]
 doReferenceCheck = true
-defParkPos = [0.42, 0.1282, 0.0755]
-defAssemblePos = [0.42, 0.0, 0.25]
+#defParkPos = [0.42, 0.1282, 0.0755]
+defParkPos = [0.42, 0.1255, 0.1055]
 type = "Isel"
 connection = "/dev/ttyUSB0"
 
@@ -77,10 +83,10 @@ acqFFValues = [1.0, 1.0]
 ip = ["192.168.1.100", "192.168.1.101"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = true
-calibFieldToVolt = [135]
-calibFFCurrentToVolt = 0.08547008547008547
+calibFieldToVolt = [63.310344827586206]
+calibFFCurrentToVolt = [0.08004786511759439, 0.08004786511759439]
 acqNumBGFrames = 200
-rxChanIdx = [1, 3, 4]
+rxChanIdx = [4, 3]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
 rpModulus = [4800, 4864, 4800, 4800]
@@ -97,8 +103,8 @@ acqNumAverages = 100
 dfPhase = [0.0]
 dfChanIdx = [2]
 calibRefToField = [0.015170670037926675]
-ffRampUpFraction = 0.5
+ffRampUpFraction = 0.6
 acqFFSequence = "Static"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8
-ffRampUpTime = 1.5
+ffRampUpTime = 0.2

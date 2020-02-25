@@ -1,8 +1,15 @@
 export getAveragedTemperature, getTemperature
 
-struct FOTemp <: Device
+struct FOTemp <: TemperatureSensor
   sd::SerialDevice
 end
+
+function FOTemp(params::Dict)
+  # Here we could put more parameters into the TOML file
+  foTemp = FOTemp(params["connection"])
+  return foTemp
+end
+
 
 """
 `fotemp(portAdress::AbstractString)`
@@ -15,8 +22,8 @@ a whitespace, e.g. "#40 " leading the actual answer, which would be the model
 name of the device in this case.
 """
 function FOTemp(portAdress::AbstractString)
-	pause_ms::Int=200
-	timeout_ms::Int=500
+	pause_ms::Int=100
+	timeout_ms::Int=100
 	delim_read::String="\r\n"
 	delim_write::String="\r"
 	baudrate::Integer = 57600
@@ -43,10 +50,10 @@ function FOTemp(portAdress::AbstractString)
 		@info "Connection to fibre optical termometer established."
 		return FOTemp( SerialDevice(sp,pause_ms,timeout_ms,delim_read,delim_write) )
 	elseif (answer=="*FF\r\n")
-		@warn "Failed to establish connection. Try again."
+		@error "Failed to establish connection. Try again."
 		return nothing
 	else
-		@warn "Connected to the wrong Device!"
+		@error "Connected to the wrong Device!"
 		return nothing
 	end
 end
@@ -72,10 +79,10 @@ end
 """
 Returns the current temperature of a channel.
 """
-function getTemperature(ft::FOTemp,channel::Char)
+function getTemperature(ft::FOTemp, channel::Int)
 	temp = query(ft.sd, "?03 $channel")
-	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
-        return parse(Float64,split(temp," ")[2]) / 10
+	#acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+    return parse(Float64, split(temp," ")[3]) / 10
 end
 
 """
@@ -83,15 +90,24 @@ Returns the current temperature of all channel.
 """
 function getTemperature(ft::FOTemp)
 	temp = query(ft.sd, "?04")
-	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
-        return parse(Float64,split(temp," ")[2]) / 10
+	#acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+    A = split(temp," ")[2:end]
+
+	T = Float64[]
+	for t in A
+	 t_ = tryparse(Float64, t)
+	 if t_ != nothing
+    	 push!(T, t_)
+	 end
+	end
+    return T ./ 10
 end
 
 """
 Returns the number of channels the device has.
 """
 function numChannels(ft::FOTemp)
-	return query(ft.sd, "?0F")
+	return parse(Int, split(query(ft.sd, "?0F"), " ")[2])
 end
 
 """
