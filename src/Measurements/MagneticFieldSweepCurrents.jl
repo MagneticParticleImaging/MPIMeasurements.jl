@@ -36,8 +36,6 @@ function postMoveAction(measObj::MagneticFieldSweepCurrentsMeas,
   #sleep(0.05)
   measObj.pos[:,index] = pos
 
-  @debug "Test"#"Set DC source $newvoltage   $(value(measObj.daq,"AIN2"))"
-
   for l=1:size(measObj.currents,2)
     # set current at DC sources
     #value(measObj.rp,"AOUT0",measObj.currents[1,l]*measObj.voltToCurrent)

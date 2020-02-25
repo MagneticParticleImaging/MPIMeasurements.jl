@@ -32,7 +32,6 @@ function postMoveAction(measObj::MagneticFieldStaticField,
   #sleep(0.05)
   measObj.pos[:,index] = pos
 
-  @debug "Test"#"Set DC source $newvoltage   $(value(measObj.rp,"AIN2")) "
 
 
     # set current at DC sources
