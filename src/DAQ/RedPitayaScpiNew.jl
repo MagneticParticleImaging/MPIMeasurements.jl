@@ -102,7 +102,7 @@ end
 
 function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel)
 
-  setSlowDAC(daq.rpc, channel, value.*daq.params.calibFFCurrentToVolt)
+  setSlowDAC(daq.rpc, channel, value.*daq.params.calibFFCurrentToVolt[channel])
 
   return nothing
 end

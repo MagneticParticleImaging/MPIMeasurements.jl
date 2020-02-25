@@ -151,6 +151,7 @@ mutable struct MeasState
   buffer::Array{Float32,4}
   consumed::Bool
   filename::String
+  temperatures::Matrix{Float64}
 end
 
 function cancel(calibState::MeasState)
@@ -168,7 +169,7 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   numPeriods = daq.params.acqNumPeriodsPerFrame
   buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
 
-  measState = MeasState(nothing, numFrames, 0, false, buffer, false, "")
+  measState = MeasState(nothing, numFrames, 0, false, buffer, false, "", zeros(Float64,0,0))
   measState.task = Task(()->asyncMeasurementInner(measState,scanner,store,params,bgdata))
   schedule(measState.task)
   return measState
@@ -179,6 +180,11 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
   #try
     su = getSurveillanceUnit(scanner)
     daq = getDAQ(scanner)
+    tempSensor = getTemperatureSensor(scanner)
+
+    if tempSensor != nothing
+      measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
+    end
 
     setEnabled(getRobot(scanner), false)
     enableACPower(su)
@@ -195,6 +201,12 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
                            daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
     for fr=1:daq.params.acqNumFrames
+      if tempSensor != nothing
+        for c = 1:numChannels(tempSensor)
+            measState.temperatures[c,fr] = getTemperature(tempSensor, c)
+        end
+      end
+      #println("FRAME NEU $fr")
       uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages,
                                   currFr + (fr-1)*daq.params.acqNumFrameAverages)
 
@@ -207,10 +219,15 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
         break
       end
     end
+    sleep(daq.params.ffRampUpTime)
     stopTx(daq)
     disconnect(daq)
     disableACPower(su)
     setEnabled(getRobot(scanner), true)
+
+    if length(measState.temperatures) > 0
+      params["calibTemperatures"] = measState.temperatures
+    end
 
     measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
   #catch ex

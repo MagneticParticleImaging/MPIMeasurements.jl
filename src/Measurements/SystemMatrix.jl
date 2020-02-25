@@ -5,6 +5,7 @@ struct SystemMatrixRobotMeas <: MeasObj
   su::SurveillanceUnit
   daq::AbstractDAQ
   robot::Robot
+  tempSensor::Union{TemperatureSensor, Nothing}
   positions::GridPositions
   signals::Array{Float32,4}
   waitTime::Float64
@@ -12,23 +13,28 @@ struct SystemMatrixRobotMeas <: MeasObj
   measIsBGPos::Vector{Bool}
   posToIdx::Vector{Int64}
   measIsBGFrame::Vector{Bool}
+  temperatures::Matrix{Float64}
 end
 
 function SystemMatrixRobotMeas(scanner, positions::GridPositions,params_::Dict; kargs...)
   return SystemMatrixRobotMeas(getSurveillanceUnit(scanner),
                                getDAQ(scanner),
                                getRobot(scanner),
-                               getSafety(scanner), positions, params_; kargs...)
+                               getSafety(scanner),
+                               getTemperatureSensor(scanner),
+                               positions, params_; kargs...)
 end
 
 function SystemMatrixRobotMeas(scanner, safety, positions::GridPositions,params_::Dict; kargs...)
   return SystemMatrixRobotMeas(getSurveillanceUnit(scanner),
                                getDAQ(scanner),
                                getRobot(scanner),
-                               safety, positions, params_; kargs...)
+                               safety,
+                               getTemperatureSensor(scanner),
+                               positions, params_; kargs...)
 end
 
-function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
+function SystemMatrixRobotMeas(su, daq, robot, safety, tempSensor, positions::GridPositions,
                      params_::Dict; controlPhase=true, waitTime = 4.0)
 
   updateParams!(daq, params_)
@@ -59,14 +65,21 @@ function SystemMatrixRobotMeas(su, daq, robot, safety, positions::GridPositions,
   numTotalFrames = numFGPos + daq.params.acqNumBGFrames*numBGPos
 
   signals = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numTotalFrames)
+  if tempSensor != nothing
+    temperatures = zeros(Float32,numChannels(tempSensor),numTotalFrames)
+  else
+    temperatures = zeros(0,0)
+  end
+
 
   # The following looks like a secrete line but it makes sense
   posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (daq.params.acqNumBGFrames - 1) .+ 1)
 
   measIsBGFrame = zeros(Bool, numTotalFrames)
 
-  measObj = SystemMatrixRobotMeas(su, daq, robot, positions, signals,
-                                  waitTime, controlPhase, measIsBGPos, posToIdx, measIsBGFrame)
+  measObj = SystemMatrixRobotMeas(su, daq, robot, tempSensor, positions, signals,
+                                  waitTime, controlPhase, measIsBGPos, posToIdx,
+                                  measIsBGFrame, temperatures)
   return measObj
 end
 
@@ -106,6 +119,14 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
 
   measObj.measIsBGFrame[ startIdx:stopIdx ] .= measObj.measIsBGPos[index]
 
+  if measObj.tempSensor != nothing
+    for l in startIdx:stopIdx
+      for c = 1:numChannels(measObj.tempSensor)
+        measObj.temperatures[c,l] = getTemperature(measObj.tempSensor, c)
+      end
+    end
+  end
+
   #sleep(measObj.waitTime)
   return uMeas[:,:,:,1:1]
 end
@@ -119,25 +140,26 @@ function MPIFiles.saveasMDF(store::DatasetStore, calibObj::SystemMatrixRobotMeas
     saveasMDF(filenameA, calibObj, params)
     saveasMDF(filenameB, MPIFile(filenameA), applyCalibPostprocessing=true)
   else
+
     name = params["studyName"]
-    path = joinpath( studydir(store), name)
+    date = params["studyDate"]
+    path = joinpath( studydir(store), getMDFStudyFolderName(name,date))
     subject = ""
-    date = ""
 
     newStudy = Study(path,name,subject,date)
 
     addStudy(store, newStudy)
     expNum = getNewExperimentNum(store, newStudy)
+
     params["experimentNumber"] = expNum
 
-    filename = joinpath(studydir(store),newStudy.name,string(expNum)*".mdf")
+    filename = joinpath(studydir(store),getMDFStudyFolderName(newStudy),string(expNum)*".mdf")
 
     saveasMDF(filename, calibObj, params)
   end
 end
 
 function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, params_::Dict)
-
   params = copy(params_)
 
   daq = measObj.daq
@@ -191,6 +213,10 @@ function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, pa
        Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"])))
   end
   params["calibMethod"] = "robot"
+
+  if measObj.tempSensor != nothing
+    params["calibTemperatures"] = measObj.temperatures
+  end
 
   MPIFiles.saveasMDF( filename, params )
   return filename

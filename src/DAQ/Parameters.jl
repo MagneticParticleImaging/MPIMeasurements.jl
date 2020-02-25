@@ -27,7 +27,7 @@ mutable struct DAQParams
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
-  calibFFCurrentToVolt::Float64
+  calibFFCurrentToVolt::Vector{Float64}
   currTxAmp::Vector{Float64}
   currTxPhase::Vector{Float64}
   controlPause::Float64
@@ -96,7 +96,7 @@ function DAQParams(@nospecialize params)
   acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
 
   if !haskey(params,"calibFFCurrentToVolt")
-    params["calibFFCurrentToVolt"] = 0.0
+    params["calibFFCurrentToVolt"] = [0.0]
   end
 
 
