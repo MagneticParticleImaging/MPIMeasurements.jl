@@ -51,6 +51,8 @@ connection = "/dev/ttyACM0"
 type = "FOTemp"
 connection = "/dev/ttyUSB1"
 
+
+
 [Robot]
 pauseTime = 1.0
 defaultRefVel = [40000, 40000, 40000]

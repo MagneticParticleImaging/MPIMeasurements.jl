@@ -59,7 +59,7 @@ end
 
 function IselRobot(params::Dict)
   pause_ms::Int = 400
-  timeout_ms::Int = 40000
+  timeout_ms::Int = 4000
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Integer = 19200
