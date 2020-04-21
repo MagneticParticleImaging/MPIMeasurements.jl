@@ -11,17 +11,20 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
-  if !masterTrigger(daq.rpc)
+  #if !masterTrigger(daq.rpc)
+  masterTrigger(daq.rpc, false)
+    triggerMode(daq.rpc, params["triggerMode"])
     ramWriterMode(daq.rpc, "TRIGGERED")
-    modeDAC(daq.rpc, "RASTERIZED")
+    modeDAC(daq.rpc, "STANDARD")
 
-    for d=1:numChan(daq.rpc)
-      for e=1:length(daq.params.rpModulus)
-        modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
-      end
-    end
+
+    #for d=1:numChan(daq.rpc)
+    #  for e=1:length(daq.params.rpModulus)
+    #    modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
+    #  end
+    #end
     masterTrigger(daq.rpc, true)
-  end
+  #end
   #disconnect(daq)
   return daq
 end
@@ -78,8 +81,9 @@ end
 function startTx(daq::DAQRedPitayaScpiNew)
   connect(daq.rpc)
   #connectADC(daq.rpc)
+  masterTrigger(daq.rpc, false)
   startADC(daq.rpc)
-  #masterTrigger(daq.rpc, true)
+  masterTrigger(daq.rpc, true)
   daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
 
   while currentPeriod(daq.rpc) < 1
@@ -123,10 +127,11 @@ function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
   for d=1:numTxChannels(daq)
     amp = round(Int, 8192 * amplitude[d])
     ph = phase[d] / 180 * pi #+ pi/2
-    e = daq.params.dfChanToModulusIdx[d]
-    amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
-    phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
-    modulusFactorDAC(daq.rpc, daq.params.dfChanIdx[d], e, 1)
+    #e = daq.params.dfChanToModulusIdx[d]
+    frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])
+    amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
+    phaseDAC(daq.rpc, daq.params.dfChanIdx[d], 1, ph )
+    #modulusFactorDAC(daq.rpc, daq.params.dfChanIdx[d], e, 1)
   end
   return nothing
 end

@@ -43,6 +43,7 @@ mutable struct DAQParams
   acqFFSequence::String
   ffRampUpTime::Float64
   ffRampUpFraction::Float64
+  triggerMode::String
 end
 
 function calcDFFreq(baseFreq::Float64, divider::Vector{Int64})
@@ -124,6 +125,10 @@ function DAQParams(@nospecialize params)
     params["acqNumBGFrames"] = 1
   end
 
+  if !haskey(params,"triggerMode")
+    params["triggerMode"] = "EXTERNAL"
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -166,7 +171,8 @@ function DAQParams(@nospecialize params)
     params["controlPhase"],
     params["acqFFSequence"],
     params["ffRampUpTime"],
-    params["ffRampUpFraction"]
+    params["ffRampUpFraction"],
+    params["triggerMode"]
    )
 
   return params
@@ -214,6 +220,7 @@ function toDict(p::DAQParams)
   params["acqFFSequence"] = p.acqFFSequence
   params["ffRampUpTime"] = p.ffRampUpTime
   params["ffRampUpFraction"] = p.ffRampUpFraction
+  params["triggerMode"] = p.triggerMode
 
   return params
 end
