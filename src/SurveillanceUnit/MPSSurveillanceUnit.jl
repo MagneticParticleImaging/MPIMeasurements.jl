@@ -40,13 +40,14 @@ function MPSSurveillanceUnit(portAdress::AbstractString)
     sleep(2)
     flush(sp)
     write(sp, "!ConnectionEstablished*#")
-    response=readuntil(sp, Vector{Char}(delim_read), timeout_ms);
+    response = readuntil(sp, Vector{Char}(delim_read), timeout_ms);
+    @show response
     if(response == "MPSSurveillanceV1")
             @info "Connection to MPSSurveillanceUnit established"
             return MPSSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart,CommandEnd,delim)
     else
             @warn "Connected to wrong Device" response
-            return sp;
+            return nothing;
     end
 end
 
