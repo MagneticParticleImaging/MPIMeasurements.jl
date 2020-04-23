@@ -112,5 +112,5 @@ refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
 calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
-ffRampUpTime = 0.4
+ffRampUpTime = 0.1
 ffRampUpFraction = 0.8

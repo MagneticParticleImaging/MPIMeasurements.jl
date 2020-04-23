@@ -52,13 +52,12 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages
                             * daq.params.acqNumPeriodsPerPatch)
   periodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
-
+  slowDACPeriodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
   #masterTrigger(daq.rpc, false)
 
   # upload multi-patch LUT TODO!!!
   if length(daq.params.acqFFValues) > 0
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
-    slowDACInterpolation(master(daq.rpc), daq.params.acqFFLinear)
     if length(daq.params.acqFFValues) ==
           div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch) *
           daq.params.acqNumFFChannels
