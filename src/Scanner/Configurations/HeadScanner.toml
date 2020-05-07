@@ -49,7 +49,7 @@ connection = "/dev/ttyACM0"
 
 [TemperatureSensor]
 type = "FOTemp"
-connection = "/dev/ttyUSB1"
+connection = "/dev/ttyUSB0"
 
 
 
@@ -69,7 +69,7 @@ doReferenceCheck = true
 defParkPos = [0.42, 0.1255, 0.1055]
 defAssemblePos = [0.42, 0.24, 0.25]
 type = "Isel"
-connection = "/dev/ttyUSB0"
+connection = "/dev/ttyUSB1"
 
 [Safety]
 receiveCoil = "headCoil"
@@ -79,16 +79,19 @@ setupName = "deltaSampleheadCoil"
 
 [DAQ]
 daq = "RedPitayaScpiNew"
+triggerMode = "EXTERNAL"
 controlLoopPhaseAccuracy = 0.2
 acqFFLinear = false
 acqFFValues = [1.0, 1.0]
-ip = ["192.168.1.100", "192.168.1.101"]
+#ip = ["192.168.1.100", "192.168.1.101"]
+# master ist f049d5 slave is f052d8
+ip = ["192.168.1.102", "192.168.1.101"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = true
 calibFieldToVolt = [63.310344827586206]
 calibFFCurrentToVolt = [0.08004786511759439, 0.08004786511759439]
 acqNumBGFrames = 200
-rxChanIdx = [4, 3]
+rxChanIdx = [3,4]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
 rpModulus = [4800, 4864, 4800, 4800]

@@ -57,6 +57,7 @@ end
 Send command string to serial device.
 """
 function send(sd::SerialDevice,cmd::String)
+	@debug cmd
 	write(sd.sp,string(cmd,sd.delim_write))
 	sleep(sd.pause_ms/1000)
 	return nothing

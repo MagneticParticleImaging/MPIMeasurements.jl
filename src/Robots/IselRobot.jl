@@ -58,8 +58,8 @@ struct IselRobot <: Robot
 end
 
 function IselRobot(params::Dict)
-  pause_ms::Int = 400
-  timeout_ms::Int = 4000
+  pause_ms::Int = 200
+  timeout_ms::Int = 40000
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Integer = 19200
@@ -117,7 +117,8 @@ function isReferenced(robot::IselRobot)
 end
 
 """ queryIsel(sd::SerialDevice,cmd::String) """
-function queryIsel(sd::SerialDevice,cmd::String, byteLength=1)
+function queryIsel(sd::SerialDevice, cmd::String, byteLength=1)
+  @debug "queryIsel: " cmd
   flush(sd.sp)
   send(sd,string(cmd,sd.delim_write))
   i,c = LibSerialPort.sp_blocking_read(sd.sp.ref, byteLength, sd.timeout_ms)
@@ -284,7 +285,7 @@ end
 
 """ Sets StartStopFrequency"""
 function setStartStopFreq(robot::IselRobot,frequency)
-  ret = querry(robot.sd,string("@0j",frequency))
+  ret = queryIsel(robot.sd,string("@0j",frequency))
   checkError(ret)
 end
 
