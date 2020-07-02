@@ -61,9 +61,9 @@ if Sys.isunix() && VERSION >= v"0.6"
 end
 
 
-function __init__()
-    Unitful.register(MPIMeasurements)
-end
+#function __init__()
+#    Unitful.register(MPIMeasurements)
+#end
 
 
 end # module
