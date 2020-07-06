@@ -1,5 +1,5 @@
 export measurementSystemMatrix, SystemMatrixRobotMeas
-export CalibState, cancel, performCalibration
+export CalibState, cancel, startCalibration, pause, isStarted
 
 struct SystemMatrixRobotMeas <: MeasObj
   su::SurveillanceUnit
@@ -233,6 +233,20 @@ mutable struct CalibState
   cancelled::Bool
   currentMeas::Array{Float32,4}
   consumed::Bool
+  store::Union{DatasetStore,Nothing}
+end
+
+function CalibState()
+  return CalibState(nothing, false, nothing, 0, 0, false,
+                    Array{Float32,4}(undef,0,0,0,0), false, nothing)
+end
+
+function isStarted(calibState::CalibState)
+  if calibState.task == nothing
+    return false
+  else
+    return !istaskdone(calibState.task)
+  end
 end
 
 function cancel(calibState::CalibState)
@@ -242,22 +256,25 @@ function cancel(calibState::CalibState)
   calibState.consumed = true
 end
 
-function performCalibration(scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
+function pause(calibState::CalibState, yesno::Bool)
+  calibState.calibrationActive = !yesno
+end
+
+function startCalibration(calibState::CalibState, calibObj::SystemMatrixRobotMeas,
                             store::DatasetStore, params::Dict)
-  calibState = CalibState(nothing, false, nothing, 0, 0, false,
-                          Array{Float32,4}(undef,0,0,0,0), false)
-  calibState.task = Task(()->performCalibrationInner(calibState,scanner,calibObj,store,params))
-  schedule(calibState.task)
-  return calibState
+  calibState.store = store
+  calibState.calibObj = calibObj
+  calibState.task = @tspawnat 2 performCalibrationInner(calibState, params)
+  return
 end
 
 
-function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, calibObj::SystemMatrixRobotMeas,
-                                 store::DatasetStore, params::Dict)
-  # TODO: We might want to use performTour here.
-
-  su = getSurveillanceUnit(scanner)
-  daq = getDAQ(scanner)
+function performCalibrationInner(calibState::CalibState, params::Dict)
+  calibObj = calibState.calibObj
+  su = calibObj.su
+  daq = calibObj.daq
+  robot = calibObj.robot
+  store = calibState.store
 
   positions = calibObj.positions
 
@@ -282,21 +299,22 @@ function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, ca
 
         setEnabled(getRobot(scanner), false)
         sleep(0.1)
+
         calibState.currentMeas = postMoveAction(calibObj,
                       positions[calibState.currPos], calibState.currPos)
         calibState.consumed = false
 
-        setEnabled(getRobot(scanner), true)
+        setEnabled(robot, true)
         calibState.currPos +=1
       end
 
       if calibState.currPos > calibState.numPos
         @info "Store SF"
         stopTx(daq)
-        disableACPower(getSurveillanceUnit(scanner))
+        disableACPower(su)
         MPIMeasurements.disconnect(daq)
 
-        movePark(getRobot(scanner))
+        movePark(robot)
         calibState.currPos = 0
 
         if !calibState.cancelled
@@ -307,7 +325,10 @@ function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, ca
       end
     else
       sleep(0.4)
-      yield()
+    end
+    if calibState.cancelled
+      calibState.calibrationActive = false
+      break
     end
   end
 end

@@ -10,7 +10,8 @@ using Reexport
 @reexport using RedPitayaDAQServer
 @reexport using Unitful
 @reexport using Unitful.DefaultSymbols
-@reexport using TOML
+@reexport using Pkg.TOML
+@reexport using ThreadPools
 using HDF5
 using ProgressMeter
 using Sockets
@@ -28,14 +29,14 @@ import Base.write
 #import PyPlot.disconnect
 
 # abstract supertype for all possible serial devices
-@compat abstract type Device end
-@compat abstract type Robot end
-@compat abstract type GaussMeter end
-@compat abstract type SurveillanceUnit end
-@compat abstract type TemperatureSensor end
+abstract type Device end
+abstract type Robot end
+abstract type GaussMeter end
+abstract type SurveillanceUnit end
+abstract type TemperatureSensor end
 
 # abstract supertype for all measObj etc.
-@compat abstract type MeasObj end
+abstract type MeasObj end
 export Device, Robot, GaussMeter, MeasObj
 
 include("DAQ/DAQ.jl")
@@ -63,9 +64,9 @@ if Sys.isunix() && VERSION >= v"0.6"
 end
 
 
-function __init__()
-    Unitful.register(MPIMeasurements)
-end
+#function __init__()
+#    Unitful.register(MPIMeasurements)
+#end
 
 
 end # module

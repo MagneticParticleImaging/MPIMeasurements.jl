@@ -1,4 +1,5 @@
-export measurement, asyncMeasurement, measurementCont, measurementRepeatability
+export measurement, asyncMeasurement, measurementCont, measurementRepeatability,
+       MeasState
 
 function measurement(daq::AbstractDAQ, params_::Dict;
                      kargs... )
@@ -156,6 +157,8 @@ mutable struct MeasState
   temperatures::Matrix{Float64}
 end
 
+MeasState() = MeasState(nothing, 0, 0, false, zeros(Float64,0,0,0,0), false, "", zeros(Float64,0,0))
+
 function cancel(calibState::MeasState)
   measState.cancelled = true
   measState.consumed = true
@@ -172,8 +175,9 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
 
   measState = MeasState(nothing, numFrames, 0, false, buffer, false, "", zeros(Float64,0,0))
-  measState.task = Task(()->asyncMeasurementInner(measState,scanner,store,params,bgdata))
-  schedule(measState.task)
+  measState.task = @tspawnat 2 asyncMeasurementInner(measState,scanner,store,params,bgdata)
+  #measState.task = Threads.@spawn asyncMeasurementInner(measState,scanner,store,params,bgdata)
+
   return measState
 end
 
@@ -215,8 +219,8 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
       measState.buffer[:,:,:,fr] = mean(uMeas, dims=4)
       measState.currFrame = fr
       measState.consumed = false
-      sleep(0.01)
-      yield()
+      #sleep(0.01)
+      #yield()
       if measState.cancelled
         break
       end
