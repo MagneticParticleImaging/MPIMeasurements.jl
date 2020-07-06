@@ -18,6 +18,8 @@ using DelimitedFiles
 using LinearAlgebra
 using Statistics
 using Dates
+using Winston, Gtk, Gtk.ShortNames
+
 #using MPISimulations
 
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,

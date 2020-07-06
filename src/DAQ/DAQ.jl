@@ -9,7 +9,7 @@ export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
 @compat abstract type AbstractDAQ end
 
 include("Control.jl")
-include("Plotting.jl")
+#include("Plotting.jl")
 include("Parameters.jl")
 
 @mustimplement startTx(daq::AbstractDAQ)

@@ -265,13 +265,23 @@ function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, ca
   calibState.currPos = 1
   calibState.numPos = length(positions)
   calibState.cancelled = false
+
+  timeRobotMoved = 0.0
+
   while true
     @debug "Timer active $currPos / $numPos"
     if calibState.calibrationActive
       if calibState.currPos <= calibState.numPos
-        moveAbsUnsafe(getRobot(scanner), positions[calibState.currPos]) # comment for testing
+        timeRobotMoved = @elapsed moveAbsUnsafe(getRobot(scanner), positions[calibState.currPos]) # comment for testing
+
+        diffTime = calibObj.waitTime - timeRobotMoved
+        if diffTime > 0.0
+          sleep(diffTime)
+        end
+        yield()
+
         setEnabled(getRobot(scanner), false)
-        sleep(0.5)
+        sleep(0.1)
         calibState.currentMeas = postMoveAction(calibObj,
                       positions[calibState.currPos], calibState.currPos)
         calibState.consumed = false
@@ -279,8 +289,7 @@ function performCalibrationInner(calibState::CalibState, scanner::MPIScanner, ca
         setEnabled(getRobot(scanner), true)
         calibState.currPos +=1
       end
-      sleep(calibObj.waitTime)
-      yield()
+
       if calibState.currPos > calibState.numPos
         @info "Store SF"
         stopTx(daq)

@@ -1,4 +1,5 @@
-
+const plotWindow = Ref{GtkWindow}()
+const plotCanvas = Ref{GtkCanvas}()
 
 function controlLoop(daq::AbstractDAQ)
   N = daq.params.numSampPerPeriod
@@ -58,6 +59,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
   if norm(daq.params.dfStrength - amplitude) / norm(daq.params.dfStrength) <
               daq.params.controlLoopAmplitudeAccuracy &&
      norm(phase) < daq.params.controlLoopPhaseAccuracy
+    @warn "Could control"
     return true
   else
     newTxPhase = daq.params.currTxPhase .- phase
@@ -77,14 +79,22 @@ function doControlStep(daq::AbstractDAQ, uRef)
       daq.params.currTxAmp[:] = newTxAmp
       daq.params.currTxPhase[:] = newTxPhase
     else
-      plot(vec(uRef))
-      # c= Gtk.Canvas()
-      #
-      #w = Gtk.Window(c,"Test")
-      #p = Winston.plot(1:100);
-      #display(c,p)
-      #showall(w)
-      #
+      #plot(vec(uRef))
+      #=
+      global plotWindow
+      global plotCanvas
+
+      if !isassigned(plotWindow)
+        plotCanvas[] = Gtk.Canvas()
+        plotWindow[] = Gtk.Window(plotCanvas[], "Control Window")
+      end
+
+      @idle_add begin
+        p = Winston.plot(vec(uRef));
+        display(plotCanvas[], p)
+        showall(plotWindow[])
+      end
+      =#
 
       @warn "Could not control"
 
@@ -94,6 +104,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
     end
     setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
 
+    @warn "Could not control 2"
     return false
   end
 end

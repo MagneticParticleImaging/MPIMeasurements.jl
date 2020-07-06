@@ -29,7 +29,7 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
   if daq.params.acqNumFrameAverages > 1
     u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
                 daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
-    uMeasAv = mean(u_, 5)[:,:,:,:,1]
+    uMeasAv = mean(u_, dims=5)[:,:,:,:,1]
     return uMeasAv, uSlowADC
   else
     return uMeas, uSlowADC
@@ -212,7 +212,7 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
       uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages,
                                   currFr + (fr-1)*daq.params.acqNumFrameAverages)
 
-      measState.buffer[:,:,:,fr] = mean(uMeas,dims=4)
+      measState.buffer[:,:,:,fr] = mean(uMeas, dims=4)
       measState.currFrame = fr
       measState.consumed = false
       sleep(0.01)
@@ -259,7 +259,7 @@ function loadBGCorrData(filename)
   u = MPIFiles.measData(f)[:,1,1,measFGFrameIdx(f)]
   if acqNumBGFrames(f) > 0
     uBG = MPIFiles.measData(f)[:,1,1,measBGFrameIdx(f)]
-    uBGMean = mean(uBG[:,:],2)
+    uBGMean = mean(uBG[:,:],dims=2)
     u[:] .-= uBGMean
   end
   return u
