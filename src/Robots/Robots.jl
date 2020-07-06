@@ -4,6 +4,8 @@ export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
 export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity,
        parkPos, getMinMaxPosX, setEnabled
 
+Base.close(::Robot) = nothing
+
 # The following methods need to be implemented by a robot
 @mustimplement moveAbs(robot::Robot, posX::typeof(1.0Unitful.mm),
   posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))

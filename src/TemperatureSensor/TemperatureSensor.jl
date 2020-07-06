@@ -2,6 +2,8 @@ export TemperatureSensor
 
 include("FOTemp.jl")
 
+Base.close(t::TemperatureSensor) = nothing
+
 function TemperatureSensor(params::Dict)
 	if params["type"] == "FOTemp"
     return FOTemp(params)

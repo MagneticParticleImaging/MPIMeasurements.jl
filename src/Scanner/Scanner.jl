@@ -21,6 +21,22 @@ mutable struct MPIScanner
   end
 end
 
+function Base.close(scanner::MPIScanner)
+  if scanner.robot != nothing
+    close(scanner.robot)
+  end
+  if scanner.gaussmeter != nothing
+    close(scanner.gaussmeter)
+  end
+  if scanner.surveillanceUnit != nothing
+    close(scanner.surveillanceUnit)
+  end
+  if scanner.temperatureSensor != nothing
+    close(scanner.temperatureSensor)
+  end
+
+end
+
 getGeneralParams(scanner::MPIScanner) = scanner.generalParams
 
 function getDAQ(scanner::MPIScanner)

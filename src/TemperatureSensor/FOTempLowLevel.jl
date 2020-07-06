@@ -4,6 +4,8 @@ struct FOTemp <: TemperatureSensor
   sd::SerialDevice
 end
 
+Base.close(t::FOTemp) = close(t.sd.sp)
+
 function FOTemp(params::Dict)
   # Here we could put more parameters into the TOML file
   foTemp = FOTemp(params["connection"])

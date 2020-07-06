@@ -6,6 +6,8 @@ include("DummySurveillanceUnit.jl")
 include("ArduinoSurveillanceUnit.jl")
 include("MPSSurveillanceUnit.jl")
 
+Base.close(su::SurveillanceUnit) = nothing
+
 function SurveillanceUnit(params::Dict)
 	if params["type"] == "Dummy"
     return DummySurveillanceUnit()

@@ -7,6 +7,8 @@ struct MPSSurveillanceUnit <: SurveillanceUnit
   delim::String
 end
 
+Base.close(su::MPSSurveillanceUnit) = close(su.sd.sp)
+
 function MPSSurveillanceUnit(params::Dict)
   # Here we could put more parameters into the TOML file
   su = MPSSurveillanceUnit(params["connection"])

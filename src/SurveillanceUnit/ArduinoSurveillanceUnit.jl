@@ -7,6 +7,8 @@ struct ArduinoSurveillanceUnit <: SurveillanceUnit
   delim::String
 end
 
+Base.close(su::ArduinoSurveillanceUnit) = close(su.sd.sp)
+
 function ArduinoSurveillanceUnit(params::Dict)
   # Here we could put more parameters into the TOML file
   su = ArduinoSurveillanceUnit(params["connection"])

@@ -57,6 +57,8 @@ struct IselRobot <: Robot
   defAssemblePos::Array{typeof(1.0Unitful.mm),1}
 end
 
+Base.close(rob::IselRobot) = close(rob.sd.sp)
+
 function IselRobot(params::Dict)
   pause_ms::Int = 200
   timeout_ms::Int = 40000

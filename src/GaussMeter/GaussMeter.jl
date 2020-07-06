@@ -5,6 +5,8 @@ export getXYZValues
 include("DummyGaussMeter.jl")
 include("LakeShore.jl")
 
+Base.close(gauss::GaussMeter) = nothing
+
 function GaussMeter(params::Dict)
 	if params["type"] == "Dummy"
     return DummyGaussMeter()

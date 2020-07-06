@@ -5,6 +5,8 @@ struct LakeShoreGaussMeter <: GaussMeter
   coordinateTransformation::Matrix{Float64}
 end
 
+Base.close(gauss::LakeShoreGaussMeter) = close(gauss.sd.sp)
+
 """
 `LakeShoreGaussMeter(portAdress::AbstractString)`
 

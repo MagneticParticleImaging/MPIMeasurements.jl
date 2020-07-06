@@ -270,6 +270,9 @@ end
 
 
 function performCalibrationInner(calibState::CalibState, params::Dict)
+  @info  "performCalibrationInner Start"
+
+  try
   calibObj = calibState.calibObj
   su = calibObj.su
   daq = calibObj.daq
@@ -286,10 +289,10 @@ function performCalibrationInner(calibState::CalibState, params::Dict)
   timeRobotMoved = 0.0
 
   while true
-    @debug "Timer active $currPos / $numPos"
+    @info "Curr Pos in performCalibrationInner $(calibState.currPos)"
     if calibState.calibrationActive
       if calibState.currPos <= calibState.numPos
-        timeRobotMoved = @elapsed moveAbsUnsafe(getRobot(scanner), positions[calibState.currPos]) # comment for testing
+        timeRobotMoved = @elapsed moveAbsUnsafe(robot, positions[calibState.currPos]) # comment for testing
 
         diffTime = calibObj.waitTime - timeRobotMoved
         if diffTime > 0.0
@@ -297,7 +300,7 @@ function performCalibrationInner(calibState::CalibState, params::Dict)
         end
         yield()
 
-        setEnabled(getRobot(scanner), false)
+        setEnabled(robot, false)
         sleep(0.1)
 
         calibState.currentMeas = postMoveAction(calibObj,
@@ -327,9 +330,13 @@ function performCalibrationInner(calibState::CalibState, params::Dict)
       sleep(0.4)
     end
     if calibState.cancelled
+      @info  "performCalibrationInner Canceled"
       calibState.calibrationActive = false
       break
     end
+  end
+  catch ex
+    @warn "Exception" ex stacktrace(catch_backtrace())
   end
 end
 
