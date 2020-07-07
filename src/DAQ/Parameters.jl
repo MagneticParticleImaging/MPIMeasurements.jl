@@ -1,5 +1,3 @@
-export toDict
-
 mutable struct DAQParams
   decimation::Int64
   dfBaseFrequency::Float64
@@ -178,7 +176,7 @@ function DAQParams(@nospecialize params)
   return params
 end
 
-function toDict(p::DAQParams)
+function MPIFiles.toDict(p::DAQParams)
   params= Dict{String,Any}()
 
   params["decimation"] = p.decimation

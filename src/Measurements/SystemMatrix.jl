@@ -32,17 +32,17 @@ function SystemMatrixRobotMeas(scanner, store)
 end
 
 function cleanup(sysObj::SystemMatrixRobotMeas)
-  filename = "/tmp/sysObj.h5"
+  filename = "/tmp/sysObj.toml"
   filenameSignals = "/tmp/sysObj.bin"
   rm(filename, force=true)
   rm(filenameSignals, force=true)
 end
 
 function store(sysObj::SystemMatrixRobotMeas)
-  filename = "/tmp/sysObj.h5"
+  filename = "/tmp/sysObj.toml"
   rm(filename, force=true)
 
-  h5write(filename, "/currPos", sysObj.currPos)
+  #=h5write(filename, "/currPos", sysObj.currPos)
   h5write(filename, "/stopped", sysObj.stopped)
   h5write(filename, "/currentSignal", sysObj.currentSignal)
   h5write(filename, "/waitTime", sysObj.waitTime)
@@ -53,6 +53,20 @@ function store(sysObj::SystemMatrixRobotMeas)
 
   h5open(filename, "r+") do file
     write(file, sysObj.positions)
+  end=#
+
+  params = MPIFiles.toDict(sysObj.positions)
+  params["currPos"] = sysObj.currPos
+  params["stopped"] = sysObj.stopped
+  #params["currentSignal"] = sysObj.currentSignal
+  params["waitTime"] = sysObj.waitTime
+  params["measIsBGPos"] = sysObj.measIsBGPos
+  params["posToIdx"] = sysObj.posToIdx
+  params["measIsBGFrame"] = sysObj.measIsBGFrame
+  params["temperatures"] = sysObj.temperatures
+
+  open(filename,"w") do f
+    TOML.print(f, params)
   end
 
   Mmap.sync!(sysObj.signals)
@@ -60,10 +74,11 @@ function store(sysObj::SystemMatrixRobotMeas)
 end
 
 function restore(sysObj::SystemMatrixRobotMeas)
-  filename = "/tmp/sysObj.h5"
+  filename = "/tmp/sysObj.toml"
   filenameSignals = "/tmp/sysObj.bin"
 
   if isfile(filename)
+      #=
     sysObj.currPos = h5read(filename, "/currPos")
     sysObj.stopped = h5read(filename, "/stopped")
     sysObj.currentSignal = h5read(filename, "/currentSignal")
@@ -79,6 +94,21 @@ function restore(sysObj::SystemMatrixRobotMeas)
     h5open(filename, "r") do file
       sysObj.positions = Positions(file)
     end
+    =#
+    params = TOML.parsefile(filename)
+    sysObj.currPos = params["currPos"]
+    sysObj.stopped = params["stopped"]
+    #sysObj.currentSignal = params["currentSignal"]
+    sysObj.waitTime = params["waitTime"]
+    sysObj.measIsBGPos = params["measIsBGPos"]
+    sysObj.posToIdx = params["posToIdx"]
+    sysObj.measIsBGFrame = params["measIsBGFrame"]
+    temp = params["temperatures"]
+    if !isempty(temp) && ndims(temp) == 2
+      sysObj.temperatures = temp
+    end
+
+    sysObj.positions = Positions(params)
 
     daq = getDAQ(sysObj.scanner)
     numBGPos = sum(sysObj.measIsBGPos)
