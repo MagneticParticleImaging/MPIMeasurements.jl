@@ -3,7 +3,7 @@ export init, stop, isStarted
 
 mutable struct SystemMatrixRobotMeas <: MeasObj
   task::Union{Task,Nothing}
-  scanner::MPIScanner
+  scanner::Union{MPIScanner,Nothing}
   store::DatasetStore
   params::Dict
   positions::GridPositions
