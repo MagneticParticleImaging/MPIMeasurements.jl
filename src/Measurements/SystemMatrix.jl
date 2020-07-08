@@ -104,8 +104,8 @@ function restore(sysObj::SystemMatrixRobotMeas)
     sysObj.posToIdx = params["posToIdx"]
     sysObj.measIsBGFrame = params["measIsBGFrame"]
     temp = params["temperatures"]
-    if !isempty(temp) && ndims(temp) == 2
-      sysObj.temperatures = temp
+    if !isempty(temp) && (length(sysObj.temperatures) == length(temp))
+      sysObj.temperatures[:] .= temp
     end
 
     sysObj.positions = Positions(params)
