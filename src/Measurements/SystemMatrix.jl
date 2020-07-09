@@ -42,19 +42,6 @@ function store(sysObj::SystemMatrixRobotMeas)
   filename = "/tmp/sysObj.toml"
   rm(filename, force=true)
 
-  #=h5write(filename, "/currPos", sysObj.currPos)
-  h5write(filename, "/stopped", sysObj.stopped)
-  h5write(filename, "/currentSignal", sysObj.currentSignal)
-  h5write(filename, "/waitTime", sysObj.waitTime)
-  h5write(filename, "/measIsBGPos", sysObj.measIsBGPos)
-  h5write(filename, "/posToIdx", sysObj.posToIdx)
-  h5write(filename, "/measIsBGFrame", sysObj.measIsBGFrame)
-  h5write(filename, "/temperatures", sysObj.temperatures)
-
-  h5open(filename, "r+") do file
-    write(file, sysObj.positions)
-  end=#
-
   params = MPIFiles.toDict(sysObj.positions)
   params["currPos"] = sysObj.currPos
   params["stopped"] = sysObj.stopped
@@ -78,23 +65,6 @@ function restore(sysObj::SystemMatrixRobotMeas)
   filenameSignals = "/tmp/sysObj.bin"
 
   if isfile(filename)
-      #=
-    sysObj.currPos = h5read(filename, "/currPos")
-    sysObj.stopped = h5read(filename, "/stopped")
-    sysObj.currentSignal = h5read(filename, "/currentSignal")
-    sysObj.waitTime = h5read(filename, "/waitTime")
-    sysObj.measIsBGPos = h5read(filename, "/measIsBGPos")
-    sysObj.posToIdx = h5read(filename, "/posToIdx")
-    sysObj.measIsBGFrame = h5read(filename, "/measIsBGFrame")
-    temp = h5read(filename, "/temperatures")
-    if !isempty(temp) && ndims(temp) ==2
-      sysObj.temperatures = temp
-    end
-
-    h5open(filename, "r") do file
-      sysObj.positions = Positions(file)
-    end
-    =#
     params = TOML.parsefile(filename)
     sysObj.currPos = params["currPos"]
     sysObj.stopped = params["stopped"]
@@ -190,37 +160,46 @@ function preMoveAction(measObj::SystemMatrixRobotMeas, pos::Vector{typeof(1.0Uni
   @info "moving to position" pos
 end
 
-function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Unitful.mm),1}, index)
+function postMoveAction(measObj::SystemMatrixRobotMeas,
+                        pos::Array{typeof(1.0Unitful.mm),1}, index)
   @info "post action" index length(measObj.positions)
 
-  safety = getSafety(measObj.scanner)
-  su = getSurveillanceUnit(measObj.scanner)
-  daq = getDAQ(measObj.scanner)
-  robot = getRobot(measObj.scanner)
-  tempSensor = getTemperatureSensor(measObj.scanner)
+  @info "getThings"
+  timeGetThings = @elapsed begin
+   safety = getSafety(measObj.scanner)
+   su = getSurveillanceUnit(measObj.scanner)
+   daq = getDAQ(measObj.scanner)
+   robot = getRobot(measObj.scanner)
+   tempSensor = getTemperatureSensor(measObj.scanner)
+  end
 
-  startTx(daq)
-
-  if daq.params.controlPhase
-    controlLoop(daq)
-  else
-    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+  @info "control Phase"
+  timeControlPhase = @elapsed begin
+    if daq.params.controlPhase && mod1(index, 30) == 1 # only controll sometimes
+      controlLoop(daq)
+    else
+      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+    end
   end
 
   numFrames = measObj.measIsBGPos[index] ? daq.params.acqNumBGFrames : 1
 
   @info "enableSlowDAC"
-  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrameAverages*numFrames,
+  timeEnableSlowDAC = @elapsed begin
+    currFr = enableSlowDAC(daq, true, daq.params.acqNumFrameAverages*numFrames,
                     daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+  end
 
   @info "readData"
   @show daq.params.acqNumFrameAverages numFrames currFr daq.params.ffRampUpTime daq.params.ffRampUpFraction
-  uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*numFrames, currFr)
-@info "readData Done"
+  timeReadData = @elapsed begin
+    uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*numFrames, currFr)
+  end
+  @info "readData Done"
 
   setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
 
-  stopTx(daq)
+  timeOtherThings = @elapsed begin
 
   startIdx = measObj.posToIdx[index]
   stopIdx = measObj.posToIdx[index] + numFrames - 1
@@ -243,10 +222,18 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
     end
   end
 
+
+
   measObj.currentSignal = uMeas[:,:,:,1:1]
+
+  end
+
   @info "store"
-  @time store(measObj)
+  timeStore = @elapsed store(measObj)
   @info "done"
+
+  allTimes = timeControlPhase+timeEnableSlowDAC+timeReadData+timeStore+timeGetThings+timeOtherThings
+  @show timeGetThings timeControlPhase timeEnableSlowDAC timeReadData timeStore timeOtherThings allTimes
 
   return
 end
@@ -292,7 +279,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
   enableACPower(su)
   stopTx(daq)
-  #startTx(daq)
+  startTx(daq)
 
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -314,19 +301,18 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         setEnabled(robot, false)
         sleep(0.1)
 
-        postMoveAction(calib, pos, calib.currPos)
+        timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
-  #if calib.currPos ==3
-  #    error("I am ERROR")
-  #end
+        @info "############### robot move time: $(timeRobotMoved) meas time: $(timePostMove)"
 
         setEnabled(robot, true)
         calib.currPos +=1
-      end
 
-      if calib.currPos > numPos
+    end
+
+    if calib.currPos > numPos
         @info "Store SF"
-        #stopTx(daq)
+        stopTx(daq)
         disableACPower(su)
         MPIMeasurements.disconnect(daq)
 
@@ -337,8 +323,14 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         saveasMDF(calib)
         #end
         break
-      end
-    sleep(0.1)
+    end
+
+    if mod(calib.currPos,100) == 0
+      # This is a hack. The RP gets issues when measuring to long (about 30 minutes)
+      # it seems to help to restart
+      stopTx(daq)
+      startTx(daq)
+    end
   end
   catch ex
     @warn "Exception" ex stacktrace(catch_backtrace())

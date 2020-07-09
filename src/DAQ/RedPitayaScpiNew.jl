@@ -13,9 +13,9 @@ function DAQRedPitayaScpiNew(params)
   setACQParams(daq)
   #if !masterTrigger(daq.rpc)
   masterTrigger(daq.rpc, false)
-    triggerMode(daq.rpc, params["triggerMode"])
-    ramWriterMode(daq.rpc, "TRIGGERED")
-    modeDAC(daq.rpc, "STANDARD")
+  triggerMode(daq.rpc, params["triggerMode"])
+  ramWriterMode(daq.rpc, "TRIGGERED")
+  modeDAC(daq.rpc, "STANDARD")
 
 
     #for d=1:numChan(daq.rpc)
@@ -23,7 +23,10 @@ function DAQRedPitayaScpiNew(params)
     #    modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
     #  end
     #end
-    masterTrigger(daq.rpc, true)
+  masterTrigger(daq.rpc, true)
+
+  daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
+
   #end
   #disconnect(daq)
   return daq
@@ -78,15 +81,15 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 end
 
 function startTx(daq::DAQRedPitayaScpiNew)
-  connect(daq.rpc)
+  @time connect(daq.rpc)
   #connectADC(daq.rpc)
-  masterTrigger(daq.rpc, false)
-  startADC(daq.rpc)
-  masterTrigger(daq.rpc, true)
-  daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
+  @time masterTrigger(daq.rpc, false)
+  @time startADC(daq.rpc)
+  @time masterTrigger(daq.rpc, true)
+  #daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
 
-  while currentPeriod(daq.rpc) < 1
-    sleep(0.1)
+  @time while currentPeriod(daq.rpc) < 1
+    sleep(0.001)
   end
   return nothing
 end

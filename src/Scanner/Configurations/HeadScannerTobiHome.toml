@@ -51,7 +51,7 @@ type = "Dummy"
 
 [Robot]
 type="Dummy"
-pauseTime=1.0
+pauseTime=0.0
 
 #[Robot]
 #pauseTime = 1.0
