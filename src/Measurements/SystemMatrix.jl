@@ -199,6 +199,8 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
   robot = getRobot(measObj.scanner)
   tempSensor = getTemperatureSensor(measObj.scanner)
 
+  startTx(daq)
+
   if daq.params.controlPhase
     controlLoop(daq)
   else
@@ -217,6 +219,8 @@ function postMoveAction(measObj::SystemMatrixRobotMeas, pos::Array{typeof(1.0Uni
 @info "readData Done"
 
   setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
+
+  stopTx(daq)
 
   startIdx = measObj.posToIdx[index]
   stopIdx = measObj.posToIdx[index] + numFrames - 1
@@ -288,7 +292,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
   enableACPower(su)
   stopTx(daq)
-  startTx(daq)
+  #startTx(daq)
 
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -322,7 +326,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
       if calib.currPos > numPos
         @info "Store SF"
-        stopTx(daq)
+        #stopTx(daq)
         disableACPower(su)
         MPIMeasurements.disconnect(daq)
 
