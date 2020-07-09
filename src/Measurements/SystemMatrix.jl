@@ -296,10 +296,10 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         if diffTime > 0.0
           sleep(diffTime)
         end
-        yield()
+        #yield()
 
         setEnabled(robot, false)
-        sleep(0.1)
+        #sleep(0.1)
 
         timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
