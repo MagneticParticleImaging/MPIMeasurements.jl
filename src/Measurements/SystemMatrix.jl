@@ -346,11 +346,12 @@ function MPIFiles.saveasMDF(calibObj::SystemMatrixRobotMeas)
 
   if params["storeAsSystemMatrix"]
     calibNum = getNewCalibNum(store)
+    params["experimentNumber"] = calibNum
     filenameA = joinpath(calibdir(store),string(calibNum)*".mdf") # just for debugging
     #filenameA = "/tmp/tmp.mdf"
     filenameB = joinpath(calibdir(store),string(calibNum+1)*".mdf")
     saveasMDF(filenameA, calibObj, params)
-    saveasMDF(filenameB, MPIFile(filenameA), applyCalibPostprocessing=true)
+    #saveasMDF(filenameB, MPIFile(filenameA), applyCalibPostprocessing=true)
   else
 
     name = params["studyName"]
