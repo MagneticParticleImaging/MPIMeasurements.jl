@@ -69,7 +69,7 @@ doReferenceCheck = true
 defParkPos = [0.42, 0.1255, 0.1055]
 defAssemblePos = [0.42, 0.24, 0.25]
 type = "Isel"
-connection = "/dev/ttyUSB4"
+connection = "/dev/ttyUSB1"
 
 [Safety]
 receiveCoil = "headCoil"

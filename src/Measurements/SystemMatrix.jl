@@ -175,7 +175,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
 
   @info "control Phase"
   timeControlPhase = @elapsed begin
-    if daq.params.controlPhase && mod1(index, 30) == 1 # only controll sometimes
+    if daq.params.controlPhase && mod1(index, 11) == 1 # only controll sometimes
       controlLoop(daq)
     else
       setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
