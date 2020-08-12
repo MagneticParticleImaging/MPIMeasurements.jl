@@ -20,7 +20,7 @@ gaussmeter = getGaussMeter(scanner)
 #TODO mT sollte man hier nicht angeben müssen. Das sollte im Gaussmeter gekapselt sein
 mfMeasObj = MagneticFieldMeas(gaussmeter, Unitful.mT, positions)
 
-@time res = performTour!(robot, safety, positions, mfMeasObj)
+res = performTour!(robot, safety, positions, mfMeasObj)
 
 filenameField = joinpath(homedir(),"TestBackground.h5")
 saveMagneticFieldAsHDF5(mfMeasObj, filenameField)

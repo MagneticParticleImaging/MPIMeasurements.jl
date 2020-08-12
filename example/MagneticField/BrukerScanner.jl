@@ -14,7 +14,7 @@ gausMeterRange = 1
 mfMeasObj = MagneticFieldMeas(gauss, positions, gausMeterRange)
 
 # perform measurement
-@time res = performTour!(robot, safety, positions, mfMeasObj)
+res = performTour!(robot, safety, positions, mfMeasObj)
 
 movePark(robot)
 

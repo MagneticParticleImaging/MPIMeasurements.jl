@@ -28,7 +28,7 @@ voltToCurrent = 0.08547008547008547
 mfMeasObj = MagneticFieldSweepCurrentsMeas(rp, gauss, Unitful.mT, positions,
                                            currents, waitTime, voltToCurrent)
 
-@time res = performTour!(robot, safety, positions, mfMeasObj)
+res = performTour!(robot, safety, positions, mfMeasObj)
 
 filenameField = joinpath(homedir(),"MagneticField$(string(now())).h5")
 saveMagneticFieldAsHDF5(mfMeasObj, filenameField)

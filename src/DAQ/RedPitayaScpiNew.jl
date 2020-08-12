@@ -81,14 +81,14 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 end
 
 function startTx(daq::DAQRedPitayaScpiNew)
-  @time connect(daq.rpc)
+  connect(daq.rpc)
   #connectADC(daq.rpc)
-  @time masterTrigger(daq.rpc, false)
-  @time startADC(daq.rpc)
-  @time masterTrigger(daq.rpc, true)
+  masterTrigger(daq.rpc, false)
+  startADC(daq.rpc)
+  masterTrigger(daq.rpc, true)
   #daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
 
-  @time while currentPeriod(daq.rpc) < 1
+  while currentPeriod(daq.rpc) < 1
     sleep(0.001)
   end
   return nothing
@@ -167,6 +167,11 @@ function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
 
   uMeas = u[:,daq.params.rxChanIdx,:,:]
   uRef = u[:,daq.params.refChanIdx,:,:]
+
+  lostSteps = numLostStepsSlowADC(master(daq.rpc))
+  if lostSteps > 0
+    @error("WE LOST $lostSteps SLOW DAC STEPS!")
+  end  
 
   return uMeas, uRef
 end
