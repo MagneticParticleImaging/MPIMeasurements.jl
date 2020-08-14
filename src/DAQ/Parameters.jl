@@ -79,7 +79,7 @@ function DAQParams(@nospecialize params)
   if !haskey(params,"acqFFSequence")
     params["acqFFSequence"] = "None"
   end
-  if params["acqFFSequence"] != "None"
+  if params["acqFFSequence"] != ""
 
     s = Sequence(params["acqFFSequence"])
 
