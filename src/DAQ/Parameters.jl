@@ -80,12 +80,13 @@ function DAQParams(@nospecialize params)
     params["acqFFSequence"] = "None"
   end
   if params["acqFFSequence"] != "None"
-    params["acqFFValues"] = readdlm(joinpath(@__DIR__,"..","Sequences",
-                                    params["acqFFSequence"]*".csv"),',')
-    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
-    #params["acqNumPeriodsPerFrame"] = size(params["acqFFValues"],2)
 
-    params["acqNumPeriodsPerPatch"] = div(params["acqNumPeriodsPerFrame"], size(params["acqFFValues"],2))
+    s = Sequence(params["acqFFSequence"])
+
+    params["acqFFValues"] = s.values 
+    params["acqNumFFChannels"] = size(params["acqFFValues"],1)
+    params["acqNumPeriodsPerFrame"] = acqNumPeriodsPerFrame(s)
+    params["acqNumPeriodsPerPatch"] = acqNumPeriodsPerPatch(s)
   else
     params["acqFFValues"] = zeros(0,0)
     params["acqNumFFChannels"] = 1
