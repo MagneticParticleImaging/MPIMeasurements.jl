@@ -18,7 +18,7 @@ export saveMagneticFieldAsHDF5, MagneticFieldMeas
                    zeros(typeof(1.0Unitful.m),3,length(positions)),
                    zeros(typeof(1.0Unitful.T),3,numMeasPerPos,length(positions)),
                    zeros(typeof(1.0Unitful.T),3,numMeasPerPos,length(positions)),
-                   Array{String,2}(numMeasPerPos,length(positions)), pause)
+                   Array{String,2}(undef,numMeasPerPos,length(positions)), pause)
 end
 
 # define preMoveAction
@@ -43,8 +43,8 @@ function postMoveAction(measObj::MagneticFieldMeas, pos::Vector{typeof(1.0Unitfu
     # perform error estimation based on gauss meter specification
     magneticFieldError = zeros(typeof(1.0Unitful.T),3,2)
     magneticFieldError[:,1] = abs.(magneticField)*1e-3
-    magneticFieldError[:,2] = getFieldError(range)
-    measObj.magneticFieldError[:,l,index] = sum(magneticFieldError,2)
+    magneticFieldError[:,2] .= getFieldError(range)
+    measObj.magneticFieldError[:,l,index] = sum(magneticFieldError, dims=2)
 
     @info "Field $(measObj.magneticField[:,l,index])"
     sleep(measObj.pause)

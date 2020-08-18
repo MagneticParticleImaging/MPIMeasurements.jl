@@ -1,7 +1,7 @@
 using Unitful
 
 export BrukerRobot
-export movePark, moveCenter, mobeAbs, moveRel
+export movePark, moveCenter
 export getPos
 
 
@@ -61,6 +61,12 @@ function moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm),
   res = _sendCommand(sd, cmd)
 end
 
+""" Moves absolute in mm `moveAbs(sd::BrukerRobot,distX::typeof(1.0Unitful.mm), velX,
+  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
+function moveAbs(sd::BrukerRobot, posX::typeof(1.0Unitful.mm), velX, posY::typeof(1.0Unitful.mm), velY, posZ::typeof(1.0Unitful.mm), velZ, isCheckError=true)
+  moveAbs(sd::BrukerRobot, posX, posY, posZ)
+end
+
 """ Not Implemented """
 function moveRel(sd::BrukerRobot, distX::typeof(1.0Unitful.mm), distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
   error("moveRel for ", sd, " not implemented")
@@ -69,7 +75,7 @@ end
 """ Empty on Purpose"""
 function setBrake(sd::BrukerRobot,brake::Bool)
 end
-getDefaultVelocity(robot::BrukerRobot) = zeros(3)
+getDefaultVelocity(robot::BrukerRobot) = zeros(Int,3)
 parkPos(robot::BrukerRobot) = [220.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
 function setRefVelocity(robot::BrukerRobot, vel::Array{Int64,1})
 end
@@ -103,14 +109,14 @@ function sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
 end
 
 function _sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
-  (fromStream, inStream, p)=readandwrite(`$(sd.connectionName)`);
-  #(fromStream, inStream, p)=readandwrite(`cat`);
-  startmovetime=now(Dates.UTC);
-  writetask=write(inStream,brukercmd.command)
-  writetaskexit=write(inStream,exit)
-  readtask=@async readavailable(fromStream)
+  p = open(`$(sd.connectionName)`,"r+");
+  #p = open(`cat`,"r+");
+  startmovetime = now(Dates.UTC);
+  writetask = write(p.in,brukercmd.command)
+  writetaskexit = write(p.in,exit)
+  readtask = @async readavailable(p.out)
   wait(readtask)
-  endmovetime=now(Dates.UTC);
+  endmovetime = now(Dates.UTC);
   if readtask.state==:done
     return (ascii(String(readtask.result)), startmovetime, endmovetime);
   else

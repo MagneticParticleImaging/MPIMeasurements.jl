@@ -2,7 +2,7 @@ using Unitful
 
 export IselRobot
 export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
-export moveRel, moveAbs, movePark, moveCenter, moveSampleCenterPos, moveAssemble
+export movePark, moveCenter, moveSampleCenterPos, moveAssemble
 export getPos, mm2Steps, steps2mm
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
@@ -193,14 +193,14 @@ function _moveRel(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ)
   checkError(ret)
 end
 
-""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+""" Moves relative in mm `moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm), velX,
   distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
 function moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm), velX,
   distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)
   _moveRel(robot,mm2Steps(distX,robot.stepsPermm),velX,mm2Steps(distY,robot.stepsPermm),velY,mm2Steps(distZ,robot.stepsPermm),velZ)
 end
 
-""" Moves relative in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm),
+""" Moves relative in mm `moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm),
   distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))` using const defaultVelocity """
 function moveRel(robot::IselRobot,distX::typeof(1.0Unitful.mm),
   distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
@@ -267,13 +267,13 @@ function _moveAbs(robot::IselRobot,stepsX,velX,stepsY,velY,stepsZ,velZ,isCheckEr
   end
 end
 
-""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+""" Moves absolute in mm `moveAbs(robot::IselRobot,distX::typeof(1.0Unitful.mm), velX,
   distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
 function moveAbs(robot::IselRobot,posX::typeof(1.0Unitful.mm), velX, posY::typeof(1.0Unitful.mm), velY, posZ::typeof(1.0Unitful.mm), velZ,isCheckError=true)
   _moveAbs(robot,mm2Steps(posX,robot.stepsPermm),velX,mm2Steps(posY,robot.stepsPermm),velY,mm2Steps(posZ,robot.stepsPermm),velZ,isCheckError)
 end
 
-""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
+""" Moves absolute in mm `moveAbs(robot::IselRobot,distX::typeof(1.0Unitful.mm), velX,
   distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
 function moveAbs(robot::IselRobot,posX::typeof(1.0Unitful.mm), posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm),isCheckError=true)
   moveAbs(robot,posX,robot.defaultVel[1],posY,robot.defaultVel[2],posZ,robot.defaultVel[3],isCheckError)

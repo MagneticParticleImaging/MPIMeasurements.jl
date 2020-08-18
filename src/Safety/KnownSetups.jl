@@ -6,7 +6,7 @@ mouseAdapterMouseScanner, hallSensorRegularScanner, hallSensorMouseScanner, getV
  getValidScannerGeos, getValidObjects, getValidHeadScannerGeos, getValidHeadObjects
 
 # create given geometries
-hallSensor = Circle(36.0Unitful.mm, "Hall Sensor");
+hallSensor = Circle(22.0Unitful.mm, "Hall Sensor");
 deltaSample = Circle(10.0Unitful.mm, "Delta sample");
 samplePhantom = Rectangle(65.0Unitful.mm,40.0Unitful.mm, "Sample Phantom")
 mouseAdapter = Circle(38.0Unitful.mm, "Mouse adapter");

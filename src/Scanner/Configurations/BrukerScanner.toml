@@ -4,7 +4,7 @@ range = 1
 fast = true
 autoRanging = false
 type = "LakeShore"
-connection = "/dev/ttyUSB1"
+connection = "/dev/ttyUSB0"
 
 [Robot]
 type="Bruker"
@@ -12,8 +12,8 @@ connection="RobotServer"
 pauseTime=1.0
 
 [Safety]
-receiveCoil = "mouseCoil"
-robotMount = "mouseAdapter"
+receiveCoil = "brukerCoil"
+robotMount = "hallSensor3D"
 clearance = "clearance"
 setupName = "hallSensornoCoil"
 
