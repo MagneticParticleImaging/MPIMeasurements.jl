@@ -75,25 +75,21 @@ function ArDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
 end
 
 function getTemperatures(Arduino::ArduinoSurveillanceUnit)
-    Temps=ArduinoCommand(Arduino, "GET:TEMP")
-    #@info Temps
-    TempDelim="T"
+    Temps = ArduinoCommand(Arduino, "GET:TEMP")
+    TempDelim = "T"
 
     temp =  tryparse.(Float64,split(Temps,TempDelim))
 
-    tempFloat = []
+    # We hardcode this to four here
+    tempFloat = zeros(4)
 
-    for t in temp
-      if t != nothing
-          push!(tempFloat, t) ###
+    for i=1:min(length(tempFloat),length(temp)) 
+      if temp[i] != nothing
+          tempFloat[i] = temp[i]
       end
     end
 
-    if length(tempFloat) <= 1
-      return [0.0, 0.0]
-    else
-      return tempFloat
-    end
+    return tempFloat
 end
 
 function GetDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)

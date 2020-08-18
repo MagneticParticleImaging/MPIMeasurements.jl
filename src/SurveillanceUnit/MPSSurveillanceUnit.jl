@@ -54,25 +54,21 @@ function MPSSurveillanceUnit(portAdress::AbstractString)
 end
 
 function getTemperatures(Arduino::MPSSurveillanceUnit)
-    Temps=ArduinoCommand(Arduino, "GET:TEMP")
-    #@info Temps
-    TempDelim="T"
+    Temps = ArduinoCommand(Arduino, "GET:TEMP")
+    TempDelim = "T"
 
     temp =  tryparse.(Float64,split(Temps,TempDelim))
 
-    tempFloat = []
+    # We hardcode this to four here
+    tempFloat = zeros(2)
 
-    for t in temp
-      if t != nothing
-          push!(tempFloat, t) ###
+    for i=1:min(length(tempFloat),length(temp)) 
+      if temp[i] != nothing
+          tempFloat[i] = temp[i]
       end
     end
 
-    if length(tempFloat) <= 0
-      return [0.0, 0.0]
-    else
-      return tempFloat
-    end
+    return tempFloat    
 end
 
 function enableACPower(su::MPSSurveillanceUnit)
