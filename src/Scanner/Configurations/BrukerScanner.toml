@@ -15,7 +15,7 @@ pauseTime=1.0
 receiveCoil = "brukerCoil"
 robotMount = "hallSensor3D"
 clearance = "clearance"
-setupName = "hallSensornoCoil"
+setupName = "hallSensorRegularScanner"
 
 [General]
 studyName = "default"
