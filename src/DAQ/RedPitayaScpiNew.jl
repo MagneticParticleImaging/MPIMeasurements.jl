@@ -117,10 +117,11 @@ function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase; postpone=false)
   end
 
   for d=1:numTxChannels(daq)
-    amp = round(Int, amplitude[d])
+    amp = amplitude[d]
     ph = phase[d] / 180 * pi 
     frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])
     phaseDAC(daq.rpc, daq.params.dfChanIdx[d], 1, ph )
+    
     if postpone    
       amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
     else
