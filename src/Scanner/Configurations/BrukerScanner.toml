@@ -1,5 +1,5 @@
 [GaussMeter]
-coordinateTransformation = [0.0, -0.11, -1.0, 0.0, 1.0, 0.01, 1.0, 0.01, 0.0]
+coordinateTransformation = [0.04, 0.02, -1.0, 0.01, 1.0, 0.01, 1.0, 0.0, 0.03]
 range = 1
 fast = true
 autoRanging = false
@@ -15,7 +15,7 @@ pauseTime=1.0
 receiveCoil = "brukerCoil"
 robotMount = "hallSensor3D"
 clearance = "clearance"
-setupName = "hallSensornoCoil"
+setupName = "hallSensorRegularScanner"
 
 [General]
 studyName = "default"

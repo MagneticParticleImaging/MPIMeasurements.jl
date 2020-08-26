@@ -12,18 +12,17 @@ samplePhantom = Rectangle(65.0Unitful.mm,40.0Unitful.mm, "Sample Phantom")
 mouseAdapter = Circle(38.0Unitful.mm, "Mouse adapter");
 customPhantom = Rectangle(70.0Unitful.mm,70.0Unitful.mm, "Custom Phantom")
 
-deltaSample3D = Cylinder(deltaSample, 495.0Unitful.mm,"Delta sample 3D");
-hallSensor3D = Cylinder(hallSensor, 450.0Unitful.mm, "Hall Sensor 3D");
-mouseAdapter3D = Cylinder(mouseAdapter, 500.0Unitful.mm, "Mouse adapter 3D")
-samplePhantom3D = Cuboid(samplePhantom, 520.0Unitful.mm, "Sample Phantom 3D");
+deltaSample3D = Cylinder(deltaSample, 495.0Unitful.mm,"deltaSample3D");
+hallSensor3D = Cylinder(hallSensor, 450.0Unitful.mm, "hallSensor3D");
+mouseAdapter3D = Cylinder(mouseAdapter, 500.0Unitful.mm, "mouseAdapter3D")
+samplePhantom3D = Cuboid(samplePhantom, 520.0Unitful.mm, "samplePhantom3D");
 customPhantom3D = Cuboid(customPhantom, 520.0Unitful.mm, "Custom Phantom 3D")
 
 # create given scanner diameter
 const brukerScannerLength = 600.0Unitful.mm
-brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "Bruker Coil", brukerScannerLength, deltaSample3D);
-mouseCoil = ScannerGeo(40.0Unitful.mm, "Mouse Coil", brukerScannerLength, deltaSample3D);
-ratCoil = ScannerGeo(72.0Unitful.mm, "Rat Coil", brukerScannerLength, deltaSample3D)
-#headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", -65.0Unitful.mm, 365.0Unitful.mm);
+brukerCoil = ScannerGeo(regularBrukerScannerdiameter, "brukerCoil", brukerScannerLength, deltaSample3D);
+mouseCoil = ScannerGeo(40.0Unitful.mm, "mouseCoil", brukerScannerLength, deltaSample3D);
+ratCoil = ScannerGeo(72.0Unitful.mm, "ratCoil", brukerScannerLength, deltaSample3D)
 
 # headCoil = ScannerGeo(230.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample3D); -> t-design 70mm um [17,2,30]mm passt
 headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample3D);
@@ -31,7 +30,7 @@ headCoil = ScannerGeo(170.0Unitful.mm, "Head Coil", 180.0Unitful.mm, deltaSample
 # standard clearance
 clearance = Clearance(1.0Unitful.mm);
 
-validScannerGeos = [brukerCoil, mouseCoil, ratCoil, headCoil]
+validScannerGeos = [brukerCoil, mouseCoil, ratCoil]
 validObjects = [deltaSample3D, hallSensor3D, mouseAdapter3D, samplePhantom3D]
 
 validHeadScannerGeos = [headCoil]
