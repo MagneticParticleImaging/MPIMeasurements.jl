@@ -177,8 +177,9 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   timeControlPhase = @elapsed begin
     if daq.params.controlPhase && mod1(index, 11) == 1 # only controll sometimes
       controlLoop(daq)
+      setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
     else
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=true)
     end
   end
 
@@ -197,7 +198,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   end
   @info "readData Done"
 
-  setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
+  
 
   timeOtherThings = @elapsed begin
 

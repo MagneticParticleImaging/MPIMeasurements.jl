@@ -111,19 +111,21 @@ enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) =
             enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
 
-function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase)
+function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase; postpone=false)
   if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
   end
 
   for d=1:numTxChannels(daq)
-    amp = round(Int, 8192 * amplitude[d])
-    ph = phase[d] / 180 * pi #+ pi/2
-    #e = daq.params.dfChanToModulusIdx[d]
+    amp = round(Int, amplitude[d])
+    ph = phase[d] / 180 * pi 
     frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])
-    amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
     phaseDAC(daq.rpc, daq.params.dfChanIdx[d], 1, ph )
-    #modulusFactorDAC(daq.rpc, daq.params.dfChanIdx[d], e, 1)
+    if postpone    
+      amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
+    else
+      amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
+    end
   end
   return nothing
 end

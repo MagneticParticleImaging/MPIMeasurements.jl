@@ -23,7 +23,7 @@ end
 function stopTx(daq::DummyDAQRedPitaya)
 end
 
-function setTxParams(daq::DummyDAQRedPitaya, amplitude, phase)
+function setTxParams(daq::DummyDAQRedPitaya, amplitude, phase; postpone=false)
 end
 
 function currentFrame(daq::DummyDAQRedPitaya)

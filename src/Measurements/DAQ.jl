@@ -12,9 +12,10 @@ function measurement_(daq::AbstractDAQ; controlPhase=daq.params.controlPhase )
   startTx(daq)
   if controlPhase
     controlLoop(daq)
+    setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
   else
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
-                     zeros(numTxChannels(daq)))
+                     zeros(numTxChannels(daq)), postpone=true)
   end
 
   currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
@@ -198,9 +199,10 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     startTx(daq)
     if daq.params.controlPhase
       controlLoop(daq)
+      setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
     else
       setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
-                       zeros(numTxChannels(daq)))
+                       zeros(numTxChannels(daq)), postpone=true)
     end
 
     currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
@@ -281,9 +283,10 @@ function measurementCont(daq::AbstractDAQ, params::Dict=Dict{String,Any}();
 
   if controlPhase
     controlLoop(daq)
+    setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
   else
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
-                     zeros(numTxChannels(daq)))
+                     zeros(numTxChannels(daq)), postpone=true)
     sleep(daq.params.controlPause)
   end
 
@@ -323,9 +326,10 @@ function measurementContReadAndSave(daq::AbstractDAQ, robot, params::Dict=Dict{S
 
   if controlPhase
     controlLoop(daq)
+    setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
   else
     setTxParams(daq, daq.params.calibFieldToVolt.*daq.params.dfStrength,
-                     zeros(numTxChannels(daq)))
+                     zeros(numTxChannels(daq)), postpone=true)
     sleep(daq.params.controlPause)
   end
 

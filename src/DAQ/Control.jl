@@ -5,7 +5,7 @@ function controlLoop(daq::AbstractDAQ)
   N = daq.params.numSampPerPeriod
   numChannels = numTxChannels(daq)
 
-  setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+  setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=false)
   sleep(daq.params.controlPause)
 
   controlPhaseDone = false
@@ -102,7 +102,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
       #disconnect(daq)
       #startTx(daq)
     end
-    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase)
+    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=false)
 
     @warn "Could not control 2"
     return false
