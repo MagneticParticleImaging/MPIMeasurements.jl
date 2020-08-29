@@ -6,6 +6,7 @@ mutable struct DAQParams
   dfStrength::Vector{Float64}
   dfPhase::Vector{Float64}
   dfCycle::Float64
+  dfWaveform::String
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
@@ -21,7 +22,6 @@ mutable struct DAQParams
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
   acqFFValues::Matrix{Float64}
-  acqFFLinear::Bool
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
@@ -34,8 +34,6 @@ mutable struct DAQParams
   rxChanIdx::Vector{Int64}
   refChanIdx::Vector{Int64}
   dfChanIdx::Vector{Int64}
-  rpModulus::Vector{Int64}
-  dfChanToModulusIdx::Vector{Int64} #RP specific
   txLimitVolt::Vector{Float64}
   controlPhase::Bool
   acqFFSequence::String
@@ -64,8 +62,6 @@ function DAQParams(@nospecialize params)
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-  dfChanToModulusIdx = [findfirst_(params["rpModulus"], c) for c in params["dfDivider"]]
-
   if !haskey(params, "currTxAmp")
     params["currTxAmp"] = params["txLimitVolt"] / 10
   end
@@ -75,6 +71,10 @@ function DAQParams(@nospecialize params)
   if !haskey(params, "controlPhase")
     params["controlPhase"] = true
   end
+
+  if !haskey(params, "dfWaveform")
+    params["dfWaveform"] = "SINE"
+  end  
 
   if !haskey(params,"acqFFSequence")
     params["acqFFSequence"] = "None"
@@ -136,6 +136,7 @@ function DAQParams(@nospecialize params)
     params["dfStrength"],
     params["dfPhase"],
     dfCycle,
+    params["dfWaveform"],
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
@@ -151,7 +152,6 @@ function DAQParams(@nospecialize params)
     cosLUT,
     params["acqNumFFChannels"],
     reshape(params["acqFFValues"],params["acqNumFFChannels"],:),
-    params["acqFFLinear"],
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
@@ -164,8 +164,6 @@ function DAQParams(@nospecialize params)
     params["rxChanIdx"],
     params["refChanIdx"],
     params["dfChanIdx"],
-    params["rpModulus"],
-    dfChanToModulusIdx,
     params["txLimitVolt"],
     params["controlPhase"],
     params["acqFFSequence"],
@@ -187,6 +185,7 @@ function MPIFiles.toDict(p::DAQParams)
   params["dfStrength"] = p.dfStrength
   params["dfPhase"] = p.dfPhase
   params["dfCycle"] = p.dfCycle
+  params["dfWaveform"] = p.dfWaveform
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
@@ -200,7 +199,6 @@ function MPIFiles.toDict(p::DAQParams)
   params["acqNumFrameAverages"] = p.acqNumFrameAverages
   params["acqNumFFChannels"] = p.acqNumFFChannels
   params["acqFFValues"] = p.acqFFValues
-  params["acqFFLinear"] = p.acqFFLinear
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
   params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
@@ -213,7 +211,6 @@ function MPIFiles.toDict(p::DAQParams)
   params["rxChanIdx"] = p.rxChanIdx
   params["refChanIdx"] = p.refChanIdx
   params["dfChanIdx"] = p.dfChanIdx
-  params["rpModulus"] = p.rpModulus
   params["txLimitVolt"] = p.txLimitVolt
   params["controlPhase"] = p.controlPhase
   params["acqFFSequence"] = p.acqFFSequence

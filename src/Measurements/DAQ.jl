@@ -169,6 +169,7 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   daq = getDAQ(scanner)
   params = copy(params_)
   updateParams!(daq, params_)
+  params["dfCycle"] = daq.params.dfCycle # pretty bad hack
 
   numFrames = daq.params.acqNumFrames
   rxNumSamplingPoints = daq.params.rxNumSamplingPoints

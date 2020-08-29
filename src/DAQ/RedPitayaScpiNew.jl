@@ -11,30 +11,21 @@ function DAQRedPitayaScpiNew(params)
   rpc = RedPitayaCluster(params["ip"])
   daq = DAQRedPitayaScpiNew(p, rpc)
   setACQParams(daq)
-  #if !masterTrigger(daq.rpc)
   masterTrigger(daq.rpc, false)
   triggerMode(daq.rpc, params["triggerMode"])
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
-
-
-    #for d=1:numChan(daq.rpc)
-    #  for e=1:length(daq.params.rpModulus)
-    #    modulusDAC(daq.rpc, d, e, daq.params.rpModulus[e])
-    #  end
-    #end
   masterTrigger(daq.rpc, true)
 
   daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
-
-  #end
-  #disconnect(daq)
   return daq
 end
 
 function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
   connect(daq.rpc)
+
   daq.params = DAQParams(params_)
+
   setACQParams(daq)
 end
 
@@ -52,11 +43,17 @@ end
 
 function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
+
+  for d=1:numTxChannels(daq)
+    frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])    
+    signalTypeDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.dfWaveform)  
+  end  
+
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
 
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
   slowDACPeriodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
-  
+
   #masterTrigger(daq.rpc, false)
 
   if length(daq.params.acqFFValues) > 0
@@ -118,10 +115,9 @@ function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase; postpone=false)
 
   for d=1:numTxChannels(daq)
     amp = amplitude[d]
-    ph = phase[d] / 180 * pi 
-    frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])
+    ph = phase[d] / 180 * pi
     phaseDAC(daq.rpc, daq.params.dfChanIdx[d], 1, ph )
-    
+
     if postpone    
       amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
     else
@@ -130,20 +126,6 @@ function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase; postpone=false)
   end
   return nothing
 end
-
-#=
-function setTxParamsAll(daq::DAQRedPitayaScpiNew,d::Integer,
-                        amplitude::Vector{Float32},
-                        phase::Vector{Float32},
-                        modulusFac::Vector{UInt32} = ones(Int,4))
-
-  for e=1:4
-    amplitudeDAC(rp, d, 1, e, 8192 * amplitude[e])
-    phaseDAC(rp, d, 1, e, phase[e] + pi/2 )
-    modulusFactorDAC(rp, d, 1, e, modulusFac[e] )
-  end
-end
-=#
 
 #TODO: calibRefToField should be multidimensional
 refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
