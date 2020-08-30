@@ -46,8 +46,10 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 
   for d=1:numTxChannels(daq)
     frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])    
-    signalTypeDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.dfWaveform)  
-  end  
+    signalTypeDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.dfWaveform)
+    jumpSharpnessDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.jumpSharpness)
+  end
+  passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)
 
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
 

@@ -1,4 +1,5 @@
-export makeSequence, sequenceDir, sequenceList, Sequence
+export sequenceDir, sequenceList, Sequence, triangle, 
+       makeTriangleSequence, makeSineSequence
 
 #6.312341575312002
 #13.705627903244254
@@ -45,7 +46,30 @@ function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPat
   B = -(((maxCurr-minCurr)/2).*sin.(t)).+(minCurr+maxCurr)/2
 
   C = cat(A',B', dims=1)
-  #D = repeat(C, inner=(1,periodsPerPatch))
+
+  saveSeq(name, Sequence(C, periodsPerPatch))
+  return C
+end
+
+function triangle(t)
+  t_ = mod(t, 2*pi)
+  if 0 <= t_ < pi/2
+    return t_/(pi/2)
+  elseif pi/2 <= t_ < 3*pi/2
+    return 2.0-t_/(pi/2)
+  elseif 3*pi/2 <= t_ < 2*pi
+    return t_/(pi/2) - 4.0 
+  end
+end
+
+function makeTriangleSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
+
+  t = range(0,2*pi,length=patches+1)[1:end-1]
+
+  A = ((maxCurr-minCurr)/2).*triangle.(t).+(minCurr+maxCurr)/2
+  B = -(((maxCurr-minCurr)/2).*triangle.(t)).+(minCurr+maxCurr)/2
+
+  C = cat(A',B', dims=1)
 
   saveSeq(name, Sequence(C, periodsPerPatch))
   return C

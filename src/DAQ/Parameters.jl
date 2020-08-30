@@ -7,6 +7,7 @@ mutable struct DAQParams
   dfPhase::Vector{Float64}
   dfCycle::Float64
   dfWaveform::String
+  jumpSharpness::Float64
   rxBandwidth::Float64
   acqNumPeriodsPerFrame::Int64
   numSampPerPeriod::Int64
@@ -40,6 +41,7 @@ mutable struct DAQParams
   ffRampUpTime::Float64
   ffRampUpFraction::Float64
   triggerMode::String
+  passPDMToFastDAC::Vector{Bool}
 end
 
 function calcDFFreq(baseFreq::Float64, divider::Vector{Int64})
@@ -128,6 +130,14 @@ function DAQParams(@nospecialize params)
     params["triggerMode"] = "EXTERNAL"
   end
 
+  if !haskey(params,"jumpSharpness")
+    params["jumpSharpness"] = 0.0
+  end
+
+  if !haskey(params,"passPDMToFastDAC")
+    params["passPDMToFastDAC"] = zeros(Bool,10) # how many RP have we???
+  end
+
   params = DAQParams(
     params["decimation"],
     params["dfBaseFrequency"],
@@ -137,6 +147,7 @@ function DAQParams(@nospecialize params)
     params["dfPhase"],
     dfCycle,
     params["dfWaveform"],
+    params["jumpSharpness"],
     rxBandwidth,
     params["acqNumPeriodsPerFrame"],
     numSampPerPeriod,
@@ -169,7 +180,8 @@ function DAQParams(@nospecialize params)
     params["acqFFSequence"],
     params["ffRampUpTime"],
     params["ffRampUpFraction"],
-    params["triggerMode"]
+    params["triggerMode"],
+    params["passPDMToFastDAC"]
    )
 
   return params
@@ -186,6 +198,7 @@ function MPIFiles.toDict(p::DAQParams)
   params["dfPhase"] = p.dfPhase
   params["dfCycle"] = p.dfCycle
   params["dfWaveform"] = p.dfWaveform
+  params["jumpSharpness"] = p.jumpSharpness
   params["rxBandwidth"] = p.rxBandwidth
   params["acqNumPeriodsPerFrame"] = p.acqNumPeriodsPerFrame
   params["numSampPerPeriod"] = p.numSampPerPeriod
@@ -217,6 +230,7 @@ function MPIFiles.toDict(p::DAQParams)
   params["ffRampUpTime"] = p.ffRampUpTime
   params["ffRampUpFraction"] = p.ffRampUpFraction
   params["triggerMode"] = p.triggerMode
+  params["passPDMToFastDAC"] = p.passPDMToFastDAC
 
   return params
 end
