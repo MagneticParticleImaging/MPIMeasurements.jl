@@ -278,7 +278,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
   timeRobotMoved = 0.0
 
-  enableACPower(su)
+  enableACPower(su, calib.scanner)
   stopTx(daq)
   startTx(daq)
 
@@ -314,7 +314,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
     if calib.currPos > numPos
         @info "Store SF"
         stopTx(daq)
-        disableACPower(su)
+        disableACPower(su, calib.scanner)
         MPIMeasurements.disconnect(daq)
 
         movePark(robot)

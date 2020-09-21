@@ -157,12 +157,12 @@ function ResetArduino(Arduino::ArduinoSurveillanceUnit)
     CheckACQ(Arduino,ACQ)
 end
 
-function enableACPower(Arduino::ArduinoSurveillanceUnit)
+function enableACPower(Arduino::ArduinoSurveillanceUnit, scanner::MPIScanner)
     ACQ=ArduinoCommand(Arduino,"ENABLE:AC");
     CheckACQ(Arduino,ACQ)
 end
 
-function disableACPower(Arduino::ArduinoSurveillanceUnit)
+function disableACPower(Arduino::ArduinoSurveillanceUnit, scanner::MPIScanner)
     ACQ=ArduinoCommand(Arduino,"DISABLE:AC");
     CheckACQ(Arduino,ACQ)
 end

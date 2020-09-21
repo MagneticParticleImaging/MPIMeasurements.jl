@@ -1,5 +1,5 @@
 export sequenceDir, sequenceList, Sequence, triangle, 
-       makeTriangleSequence, makeSineSequence
+       makeTriangleSequence, makeSineSequence, makeTriSweepSequence, makeTriSweepDeadSequence
 
 #6.312341575312002
 #13.705627903244254
@@ -62,6 +62,32 @@ function triangle(t)
   end
 end
 
+function triangleNegSlope(t)
+  t_ = mod(t, pi)
+  if 0 <= t_ < pi
+    return 1.0-t_/(pi/2)
+  end
+end
+function trianglePosSlope(t)
+  t_ = mod(t, pi)
+  if 0 <= t_ < pi
+    return t_/(pi/2)-1
+  end
+end
+function triangleRampUp(t)
+  t_ = mod(t, pi/2)
+  if 0 <= t_ < pi/2
+    return t_/(pi/2)
+  end
+end
+function triangleRampDown(t)
+  t_ = mod(t, pi/2)
+  if 0 <= t_ < pi/2
+    return 1.0-t_/(pi/2)
+  end
+end
+
+
 function makeTriangleSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
 
   t = range(0,2*pi,length=patches+1)[1:end-1]
@@ -74,6 +100,141 @@ function makeTriangleSequence(name::String, minCurr, maxCurr, patches, periodsPe
   saveSeq(name, Sequence(C, periodsPerPatch))
   return C
 end
+
+
+#e.g makeTriSweepSequence("test",-5.0:1.0:5.0,4,0:1.0:4.0,1) 
+function makeTriSweepSequence(name::String, XOffsetRange::StepRangeLen, periodsPerXOffset::Number, YOffsetRange::StepRangeLen, calibOffset::Bool)
+
+  NumXOffsets = length(XOffsetRange)
+  NumYOffsets = length(YOffsetRange)
+  XminCurr = XOffsetRange[1]    #*calib factor
+  XmaxCurr = XOffsetRange[end]  #*calib factor
+  YminCurr = YOffsetRange[1]    #*calib factor
+  YstepCurr = convert(Float64, YOffsetRange.step)    #*calib factor
+
+
+  #toDo: conversion from current to mT for Y-channel?
+
+  if calibOffset == true
+    calibXoffsetCurr = 0.0
+    calibYoffsetCurr = -0.31 #[A] offset, OPamp etc... ??
+  else
+    calibXoffsetCurr = 0.0
+    calibYoffsetCurr = 0.0
+  end
+
+
+  #######################
+  #crearte triangle with 2 datapoints in peak
+  #which requires: slope%4 = 3
+  #then every XOffset has both extrema as a datapoint
+  if isodd(NumXOffsets)              
+    triangleSlope = 2*NumXOffsets+1
+  elseif iseven(NumXOffsets)
+    triangleSlope = 2*(NumXOffsets+1)+1
+  end
+
+  if mod(triangleSlope,4) != 3
+    @error "Sequence is required to have odd amount of steps. Mod(len,4) should equal 3 to obtain triangle-plateau." triangleSlope%4
+  end
+
+  flagYZero = 0
+  if iseven(NumYOffsets)
+    NumYOffsets +=1
+    flagYZero = 1
+  end
+  
+  #########################
+  t = range(0,2*pi,length=triangleSlope)[1:end-1] 
+  tri = ( ((XmaxCurr-XminCurr)/2).*triangle.(t).+(XminCurr+XmaxCurr)/2 )/maximum(triangle.(t))  #TODO: CAL offset due to plateau
+   
+  A = repeat(tri, ceil(Int,NumYOffsets/2) )
+  B = YstepCurr .* zeros( ceil(Int,NumXOffsets/2)) .+YminCurr
+
+  for i in 0:floor(Int,NumYOffsets)-1
+    if flagYZero == 0
+      B = vcat(B, YstepCurr*i .* ones(NumXOffsets) .+YminCurr)
+    elseif flagYZero == 1 && i == floor(Int,NumYOffsets)-1
+      B = vcat(B,zeros(NumXOffsets))   #back to zero in case of even No of Yoffsets
+    else
+      B = vcat(B, YstepCurr*i .* ones(NumXOffsets) .+YminCurr)
+    end
+  end
+
+  B = vcat(B, zeros( floor(Int,NumXOffsets/2) )) .+ calibYoffsetCurr
+
+  Seq = cat(A',B', dims=1)
+  saveSeq(name, Sequence(Seq, periodsPerXOffset))
+  return Seq
+end
+
+
+
+
+function makeTriSweepDeadSequence(name::String, XOffsetRange::StepRangeLen, periodsPerXOffset::Number, YOffsetRange::StepRangeLen, deadPatches::Number, calibOffset::Bool)
+
+  NumXOffsets = length(XOffsetRange)
+  NumYOffsets = length(YOffsetRange)
+  XminCurr = XOffsetRange[1]    #*calib factor
+  XmaxCurr = XOffsetRange[end]  #*calib factor
+  YminCurr = YOffsetRange[1]    #*calib factor
+  YstepCurr = convert(Float64, YOffsetRange.step)    #*calib factor
+
+
+  #toDo: conversion from current to mT for Y-channel?
+
+  if calibOffset == true
+    calibXoffsetCurr = 0.0
+    calibYoffsetCurr = -0.31 #[A] offset, OPamp etc... ??
+  else
+    calibXoffsetCurr = 0.0
+    calibYoffsetCurr = 0.0
+  end
+
+  #######################
+  #crearte triangle with 2 datapoints in peak
+  #which requires: slope%4 = 3
+  #then every XOffset has both extrema as a datapoint
+  if isodd(NumXOffsets)              
+    triangleSlope = 2*NumXOffsets+1
+  elseif iseven(NumXOffsets)
+    triangleSlope = 2*(NumXOffsets+1)+1
+  end
+
+  if mod(triangleSlope,4) != 3
+    @error "Sequence is required to have odd amount of steps. Mod(len,4) should equal 3 to obtain triangle-plateau." triangleSlope%4
+  end
+  #########################
+
+  t_half = range(0,pi,length=NumXOffsets)[1:end-1] 
+  t_quart = range(0,pi/2,length=ceil(Int,NumXOffsets/2))[1:end-1] 
+
+  A = triangleRampUp.(t_quart)
+  B = YstepCurr .* zeros(length(A)+1) .+YminCurr 
+  for i in 0:2:NumYOffsets  #if even, one offset more than necessary is created. throw away in data analysis.
+    t1 = ones(deadPatches)
+    t2 = triangleNegSlope.(t_half)
+    B = vcat(B, YstepCurr*i .* ones(length(t1)+length(t2)) .+YminCurr)
+
+    t3 = -ones(deadPatches)
+    t4 = trianglePosSlope.(t_half)
+    B = vcat(B, YstepCurr*(i+1) .* ones(length(t3)+length(t4)) .+YminCurr)
+
+    A = vcat(A,t1,t2,t3,t4)
+  end
+  t5 = vcat(ones(1),triangleRampDown.(t_quart))
+
+  A = ((XmaxCurr-XminCurr)/2).* vcat(A,t5) .+(XminCurr+XmaxCurr)/2 
+  B = vcat(B, zeros(length(t5)-1)) .+ calibYoffsetCurr
+
+  Seq = cat(A',B', dims=1)
+  saveSeq(name, Sequence(Seq, periodsPerXOffset))
+  return Seq
+end
+
+
+
+
 
 
 #=

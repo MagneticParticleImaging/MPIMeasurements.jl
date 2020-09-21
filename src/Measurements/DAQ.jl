@@ -195,7 +195,7 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     end
 
     setEnabled(getRobot(scanner), false)
-    enableACPower(su)
+    enableACPower(su, scanner)
 
     startTx(daq)
     if daq.params.controlPhase
@@ -230,8 +230,8 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     end
     sleep(daq.params.ffRampUpTime)
     stopTx(daq)
+    disableACPower(su, scanner)
     disconnect(daq)
-    disableACPower(su)
     setEnabled(getRobot(scanner), true)
 
     if length(measState.temperatures) > 0

@@ -21,5 +21,5 @@ elseif params["type"] == "MPS"
 end
 
 @mustimplement getTemperatures(su::SurveillanceUnit)
-@mustimplement enableACPower(su::SurveillanceUnit)
-@mustimplement disableACPower(su::SurveillanceUnit)
+@mustimplement enableACPower(su::SurveillanceUnit, scanner::MPIScanner)
+@mustimplement disableACPower(su::SurveillanceUnit, scanner::MPIScanner)

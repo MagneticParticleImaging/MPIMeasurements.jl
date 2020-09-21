@@ -71,10 +71,45 @@ function getTemperatures(Arduino::MPSSurveillanceUnit)
     return tempFloat    
 end
 
-function enableACPower(su::MPSSurveillanceUnit)
-  @info "Enable AC Power"
+
+function enablePMPS(scanner::MPIScanner, rp::RedPitaya)
+  DIO(rp,scanner.params["DAQ"]["pinRSDSM1850"],true) #activate SM18-50
+  DIO(rp,scanner.params["DAQ"]["pinInterlockHubert"],true) #activate Hubert
 end
 
-function disableACPower(su::MPSSurveillanceUnit)
+function disablePMPS(scanner::MPIScanner, rp::RedPitaya)
+  DIO(rp,scanner.params["DAQ"]["pinRSDSM1850"],false) #remoteshutdown SM18-50
+  DIO(rp,scanner.params["DAQ"]["pinInterlockHubert"],false) #interlock Hubert
+end
+
+function enableACPower(su::MPSSurveillanceUnit, scanner::MPIScanner)
+  @info "Enable AC Power"
+  daq = getDAQ(scanner)
+  rp = master(daq.rpc)
+
+  temps = getTemperatures(su)
+  tempMax = scanner.params["SurveillanceUnit"]["maxTemperatures"]
+  
+  #code for pMPS
+  if scanner.params["General"]["scannerName"] == "pMPS"
+    if iszero(temps .> tempMax) != false
+      @info "pMPS: Hubert interlock and RSD off. Ready to measure."
+      enablePMPS(scanner, rp)
+    else
+      @warn "pMPS: maxTemp exceeded. Hubert interlock and RSD stay on." temps tempMax
+      disablePMPS(scanner, rp)
+    end  
+  end
+end
+
+function disableACPower(su::MPSSurveillanceUnit, scanner::MPIScanner)
   @info "Disable AC Power"
+  daq = getDAQ(scanner)
+  rp = master(daq.rpc)
+
+  #code for pMPS
+  if scanner.params["General"]["scannerName"] == "pMPS"
+      @info "pMPS: Hubert interlock and RSD on."
+      disablePMPS(scanner, rp)
+  end 
 end
