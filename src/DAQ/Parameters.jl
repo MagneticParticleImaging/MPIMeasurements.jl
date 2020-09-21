@@ -23,6 +23,7 @@ mutable struct DAQParams
   cosLUT::Matrix{Float64}
   acqNumFFChannels::Int64
   acqFFValues::Matrix{Float64}
+  acqEnableSequence::Matrix{Bool}
   calibIntToVolt::Matrix{Float64}
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
@@ -89,10 +90,12 @@ function DAQParams(@nospecialize params)
     params["acqNumFFChannels"] = size(params["acqFFValues"],1)
     params["acqNumPeriodsPerFrame"] = acqNumPeriodsPerFrame(s)
     params["acqNumPeriodsPerPatch"] = acqNumPeriodsPerPatch(s)
+    params["acqEnableSequence"] = s.enable
   else
     params["acqFFValues"] = zeros(0,0)
     params["acqNumFFChannels"] = 1
     params["acqNumPeriodsPerFrame"] = 1
+    params["acqEnableSequence"] = zeros(Bool,0,0)
   end
 
   acqFramePeriod = dfCycle * params["acqNumPeriodsPerFrame"]
@@ -163,6 +166,7 @@ function DAQParams(@nospecialize params)
     cosLUT,
     params["acqNumFFChannels"],
     reshape(params["acqFFValues"],params["acqNumFFChannels"],:),
+    reshape(params["acqEnableSequence"],params["acqNumFFChannels"],:),
     reshape(params["calibIntToVolt"],2,:),
     params["calibRefToField"],
     params["calibFieldToVolt"],
@@ -212,6 +216,7 @@ function MPIFiles.toDict(p::DAQParams)
   params["acqNumFrameAverages"] = p.acqNumFrameAverages
   params["acqNumFFChannels"] = p.acqNumFFChannels
   params["acqFFValues"] = p.acqFFValues
+  params["acqEnableSequence"] = p.acqEnableSequence
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
   params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt

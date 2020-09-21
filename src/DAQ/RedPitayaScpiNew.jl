@@ -58,12 +58,19 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 
   #masterTrigger(daq.rpc, false)
 
-  if length(daq.params.acqFFValues) > 0
+  if !isempty(daq.params.acqFFValues) 
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
     setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
+    if !isempty(daq.params.acqEnableSequence)
+      enableDACLUT(master(daq.rpc), daq.params.acqEnableSequence)
+    else # We might want to solve this differently
+      enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
+    end
   else
     numSlowDACChan(master(daq.rpc), 0)
   end
+
+
   numSlowADCChan(daq.rpc, 4)
 
   return nothing

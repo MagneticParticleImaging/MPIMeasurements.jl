@@ -1,4 +1,5 @@
-export sequenceDir, sequenceList, Sequence, triangle, 
+export sequenceDir, sequenceList, Sequence, triangle, hasEnableSequence,
+       enableSequence,
        makeTriangleSequence, makeSineSequence, makeTriSweepSequence, makeTriSweepDeadSequence
 
 #6.312341575312002
@@ -6,23 +7,29 @@ export sequenceDir, sequenceList, Sequence, triangle,
 
 sequenceDir() = @__DIR__
 
-
 sequenceList() = String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(sequenceDir()))] 
 
 mutable struct Sequence
   values::Matrix{Float64}
   numPeriodsPerPatch::Int64
+  enable::Matrix{Bool}
 end
+
+Sequence(values, numPeriodsPerPatch) = Sequence(values, numPeriodsPerPatch, zeros(Bool,0,0))
 
 MPIFiles.acqNumPeriodsPerFrame(s::Sequence) = size(s.values,2)*s.numPeriodsPerPatch
 MPIFiles.acqNumPatches(s::Sequence) = size(s.values,2)
 MPIFiles.acqNumPeriodsPerPatch(s::Sequence) = s.numPeriodsPerPatch
 
+hasEnableSequence(seq::Sequence) = !isempty(seq.enable)
+enableSequence(seq::Sequence) = seq.enable
+
 function Sequence(name::String)
   filename = joinpath(sequenceDir(),name*".toml")
   p = TOML.parsefile(filename)
   values = reshape(p["values"], :, p["numPatches"])
-  return Sequence(values, p["numPeriodsPerPatch"])
+  enable = haskey(p, "enable") ? reshape(p["enable"], :, p["numPatches"]) : zeros(Bool,0,0)
+  return Sequence(values, p["numPeriodsPerPatch"], enable)
 end
 
 function saveSeq(name::String, seq::Sequence)
@@ -30,13 +37,15 @@ function saveSeq(name::String, seq::Sequence)
   p["numPeriodsPerPatch"] = seq.numPeriodsPerPatch
   p["values"] = seq.values
   p["numPatches"] = size(seq.values, 2)
+  if hasEnableSequence(seq)
+    p["enable"] = seq.enable
+  end
 
   filename = joinpath(sequenceDir(),name*".toml")
   open(filename, "w") do f
     TOML.print(f, p)
   end
 end
-
 
 function makeSineSequence(name::String, minCurr, maxCurr, patches, periodsPerPatch)
 
@@ -97,7 +106,13 @@ function makeTriangleSequence(name::String, minCurr, maxCurr, patches, periodsPe
 
   C = cat(A',B', dims=1)
 
-  saveSeq(name, Sequence(C, periodsPerPatch))
+  D = ones(Bool, patches)
+  D[1:2:end] .= false
+  E = ones(Bool, patches)
+
+  F = cat(D',E', dims=1)
+
+  saveSeq(name, Sequence(C, periodsPerPatch, F))
   return C
 end
 
