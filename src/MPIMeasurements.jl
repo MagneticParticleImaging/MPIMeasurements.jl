@@ -19,7 +19,7 @@ using DelimitedFiles
 using LinearAlgebra
 using Statistics
 using Dates
-using Winston, Gtk, Gtk.ShortNames
+#using Winston, Gtk, Gtk.ShortNames
 
 #using MPISimulations
 

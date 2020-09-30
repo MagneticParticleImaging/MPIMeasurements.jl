@@ -1,5 +1,5 @@
-const plotWindow = Ref{GtkWindow}()
-const plotCanvas = Ref{GtkCanvas}()
+#const plotWindow = Ref{GtkWindow}()
+#const plotCanvas = Ref{GtkCanvas}()
 
 function controlLoop(daq::AbstractDAQ)
   N = daq.params.numSampPerPeriod
