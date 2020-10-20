@@ -49,8 +49,7 @@ function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Floa
   # drivefield parameters
   params["dfStrength"] = reshape(daq.params.dfStrength,1,length(daq.params.dfStrength),1)
   params["dfPhase"] = reshape(daq.params.dfPhase,1,length(daq.params.dfPhase),1)
-  divider = div.(daq.params.dfDivider,daq.params.decimation)
-  params["dfDivider"] = reshape(divider,1,length(divider))
+  params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
 
   # receiver parameters
   params["rxNumSamplingPoints"] = daq.params.rxNumSamplingPoints
