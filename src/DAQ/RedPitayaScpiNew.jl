@@ -54,7 +54,8 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
 
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
-  slowDACPeriodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
+  #slowDACPeriodsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
+  slowDACStepsPerRotation(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
 
   #masterTrigger(daq.rpc, false)
 
