@@ -1,17 +1,15 @@
 using Documenter, MPIMeasurements
 
 makedocs(
-    format = :html,
+    format = Documenter.HTML(prettyurls = false),
     modules = [MPIMeasurements],
     sitename = "MPI Measurements",
-    authors = "IBI...",
+    authors = "Tobias Knopp et al.",
     pages = [
         "Home" => "index.md"
-          ],
+    ]
 )
 
-deploydocs(repo   = "github.com/tknopp/MPIMeasurements.jl.git",
-           julia  = "release",
-           target = "build",
-           deps   = nothing,
-           make   = nothing)
+deploydocs(repo   = "github.com/MagneticParticleImaging/MPIMeasurements.jl.git"",
+          target = "build")
+           
