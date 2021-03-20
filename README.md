@@ -1,6 +1,5 @@
 # MPIMeasurements
 
-[![Build Status](https://travis-ci.org/tknopp/MPIMeasurements.jl.svg?branch=master)](https://travis-ci.org/tknopp/MPIMeasurements.jl)
 [![Build status](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/workflows/CI/badge.svg)](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/actions)
 
 [![Coverage Status](https://coveralls.io/repos/MagneticParticleImaging/MPIMeasurements.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/MagneticParticleImaging/MPIMeasurements.jl?branch=master)
