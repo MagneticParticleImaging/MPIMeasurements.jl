@@ -28,6 +28,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 Winston = "bd07be1c-e76f-5ff0-9c0b-f51ef45303c6"
 
 [compat]
+Compat = "3.25"
 Gtk = ">= 0.18"
 Interpolations = "0.13"
 IniFile = "0.5"
