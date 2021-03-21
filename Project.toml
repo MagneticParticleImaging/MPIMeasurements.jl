@@ -30,5 +30,7 @@ Winston = "bd07be1c-e76f-5ff0-9c0b-f51ef45303c6"
 [compat]
 Compat = "3.25"
 Gtk = ">= 0.18"
+Interpolations = "0.13"
+IniFile = "0.5"
 MPIFiles = "0.9.3, 0.10.0"
 RedPitayaDAQServer = "0.1, 0.2, 0.3"
