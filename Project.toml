@@ -1,7 +1,7 @@
 name = "MPIMeasurements"
 uuid = "a874a27a-e9a7-503d-98b6-bf61df4bb725"
 authors = ["Tobias Knopp <tobias@knoppweb.de>"]
-version = "0.0.0"
+version = "0.1.0"
 
 [deps]
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
