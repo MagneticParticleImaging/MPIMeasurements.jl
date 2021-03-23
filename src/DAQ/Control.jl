@@ -17,6 +17,7 @@ function controlLoop(daq::AbstractDAQ)
 
     sleep(daq.params.controlPause)
   end
+  setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=true)
 
 end
 
