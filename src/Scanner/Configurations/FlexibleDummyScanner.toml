@@ -1,7 +1,7 @@
 [General]
 
 [DAQ]
-daq = "DummyDAQRedPitaya"
+daq = "FlexibleDummyDAQ"
 triggerMode = "EXTERNAL"
 controlLoopPhaseAccuracy = 0.25 #0.2
 acqFFLinear = false

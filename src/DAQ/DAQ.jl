@@ -1,8 +1,9 @@
 using Graphics: @mustimplement
+using InteractiveUtils
 
 import Base: setindex!, getindex
 
-export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
+export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
       readDataPeriod, currentPeriod
 
@@ -27,13 +28,27 @@ include("RedPitayaScpiNew.jl")
 include("DummyRedPitaya.jl")
 
 function DAQ(params::Dict)
-  if params["daq"] == "RedPitayaScpiNew"
-    return DAQRedPitayaScpiNew(params)
-  elseif params["daq"] == "DummyDAQRedPitaya"
-    return DummyDAQRedPitaya(params)
-  else
-    error("$(params["daq"]) not yet implemented!")
+  knownDAQImplementations = subtypes(AbstractDAQ)
+  DAQInstance = nothing
+  for DAQImplementation in knownDAQImplementations
+    if string(DAQImplementation) == params["daq"]
+      DAQInstance = DAQImplementation(params)
+      break
+    end
   end
+
+  if !isnothing(DAQInstance)
+    return DAQInstance
+  else
+    error("Could not find implementation for DAQ of type $(params["daq"])")
+  end
+  # if params["daq"] == "RedPitayaScpiNew"
+  #   return DAQRedPitayaScpiNew(params)
+  # elseif params["daq"] == "DummyDAQRedPitaya"
+  #   return DummyDAQRedPitaya(params)
+  # else
+  #   error("$(params["daq"]) not yet implemented!")
+  # end
 end
 
 function initLUT(N,D, dfCycle, dfFreq)

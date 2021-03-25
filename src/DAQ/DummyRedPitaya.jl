@@ -1,4 +1,4 @@
-
+export DummyDAQRedPitaya
 
 mutable struct DummyDAQRedPitaya <: AbstractDAQ
     params::DAQParams
