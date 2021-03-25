@@ -9,39 +9,46 @@ decimation = 16
 triggerMode = "INTERNAL"
 #calibFieldToVolt = [20.509]
 #calibRefToField = [0.0133]
-calibFieldToVolt = [20.79]#[30.4]
-calibRefToField = [0.017460815791201338]#[0.015460123076923077]#[0.01639344262295082]
+calibFieldToVolt = [20.79]
+#[30.4]
+calibRefToField = [0.017460815791201338]
+#[0.015460123076923077]#[0.01639344262295082]
 calibIntToVolt = [1.2957305E-4, 0.015548877, 0.002591461, 0.31097754]
 dfStrength = [20e-3]
-dfPhase = [0.0]#[]-1.5707963267948966]
+dfPhase = [0.0]
+#[]-1.5707963267948966]
 dfBaseFrequency = 125e6
 dfDivider = [4800]
 rxNumChannels = 1
 controlPause = 0.8
 acqNumFFChannels = 1
 acqFFValues = [1.0]
-acqFFSequence = "NoneFile"
+acqFFSequence = "None"
 acqNumPeriodsPerFrame = 1
 acqFFLinear = false
-controlLoopPhaseAccuracy = 0.1 #0.05    #0.1
-controlLoopAmplitudeAccuracy = 0.01 #0.001# 0.01
+controlLoopPhaseAccuracy = 0.1 
+#0.05    #0.1
+controlLoopAmplitudeAccuracy = 0.01 
+#0.001# 0.01
 txLimitVolt = [0.7]
-rxChanIdx = [1]#,2]#,3,4]
+rxChanIdx = [1]
+#,2]#,3,4]
 refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
 ffRampUpTime = 0.0
 ffRampUpFraction = 1.0
 controlPhase = true
+jumpSharpness = 0.1
 
 [Robot]
 type="Dummy"
 pauseTime=1.0
 
 [SurveillanceUnit]
-#type = "Dummy"
-type = "MPS"
-connection = "/dev/arduino"
+type = "Dummy"
+#type = "MPS"
+#connection = "/dev/arduino"
 
 
 [General]

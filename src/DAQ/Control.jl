@@ -21,6 +21,7 @@ function controlLoop(daq::AbstractDAQ)
     sleep(daq.params.controlPause)
     i += 1
   end
+  setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=true)
 
   setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
   setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
