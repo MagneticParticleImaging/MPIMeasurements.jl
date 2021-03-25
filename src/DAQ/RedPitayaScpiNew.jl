@@ -91,13 +91,7 @@ end
 
 function startTxAndControl(daq::DAQRedPitayaScpiNew)
   startTx(daq)
-  if daq.params.controlPhase
-    controlLoop(daq)
-  else
-    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
-    setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)), postpone=true)
-  end
-  return
+  controlLoop(daq)
 end
 
 function stopTx(daq::DAQRedPitayaScpiNew)
