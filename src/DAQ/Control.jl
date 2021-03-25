@@ -1,110 +1,123 @@
-#const plotWindow = Ref{GtkWindow}()
-#const plotCanvas = Ref{GtkCanvas}()
 
 function controlLoop(daq::AbstractDAQ)
   N = daq.params.numSampPerPeriod
   numChannels = numTxChannels(daq)
+  @info "Init control with Tx= " daq.params.currTx
+  @info daq.params.correctCrossCoupling
 
-  setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=false)
+  setTxParams(daq, daq.params.currTx, postpone=false)
   sleep(daq.params.controlPause)
 
   controlPhaseDone = false
-  while !controlPhaseDone
+  i = 1
+  maxControlSteps = 2
+  while !controlPhaseDone && i <= maxControlSteps
+    @info "### CONTROL STEP $i ###"
     period = currentPeriod(daq)
     uMeas, uRef = readDataPeriods(daq, 1, period+1)
 
     controlPhaseDone = doControlStep(daq, uRef)
 
     sleep(daq.params.controlPause)
+    i += 1
   end
 
-end
+  setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
+  setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
 
-function wrapPhase!(phases)
-  for d=1:length(phases)
-    if phases[d] < -180
-      phases[d] += 360
-    elseif phases[d] > 180
-      phases[d] -= 360
-    end
-  end
-  return phases
 end
 
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
-  amplitude = zeros(numTxChannels(daq))
-  phase = zeros(numTxChannels(daq))
-  #c1 = calibIntToVoltRef(daq)
+  Γ = zeros(ComplexF64, numTxChannels(daq), numTxChannels(daq))
   for d=1:numTxChannels(daq)
-    c2 = refToField(daq, d)
+    for e=1:numTxChannels(daq)
+      c = refToField(daq, d)
 
-    #uVolt = c1[1,d].*float(uRef[:,d,1]) .+ c1[2,d]
-    uVolt = float(uRef[1:daq.params.numSampPerPeriod,d,1])
+      uVolt = float(uRef[1:daq.params.numSampPerPeriod,d,1])
 
-    a = 2*sum(uVolt.*daq.params.cosLUT[:,d])
-    b = 2*sum(uVolt.*daq.params.sinLUT[:,d])
+      a = 2*sum(uVolt.*daq.params.cosLUT[:,e])
+      b = 2*sum(uVolt.*daq.params.sinLUT[:,e])
 
-    amplitude[d] = sqrt(a*a+b*b)*c2
-    phase[d] = atan(a,b) / pi * 180
+      Γ[d,e] = c*(b+im*a)
+    end
   end
-  return amplitude, phase
+  return Γ
+end
+
+function controlStepSuccessful(Γ::Matrix, Ω::Matrix, daq)
+
+  if daq.params.correctCrossCoupling
+    diff = Ω - Γ
+  else 
+    diff = diagm(diag(Ω)) - diagm(diag(Γ))
+  end
+  deviation = maximum(abs.(diff)) / maximum(abs.(Ω)) 
+  #=@info "Ω = " Ω
+  @info "Γ = " Γ
+  @info "Ω - Γ = " diff=#
+  @info "deviation = $(deviation)   allowed= $(daq.params.controlLoopAmplitudeAccuracy)"
+
+  return deviation < daq.params.controlLoopAmplitudeAccuracy
+
+end
+
+function newDFValues(Γ::Matrix, Ω::Matrix, daq)
+
+  κ = daq.params.currTx
+  if daq.params.correctCrossCoupling
+    β = Γ*inv(κ)
+  else 
+    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+  end
+  newTx = inv(β)*Ω
+
+  #= @warn "here are the values"
+  @show κ
+  @show Γ
+  @show Ω
+  =#
+
+  return newTx
+end
+
+function checkDFValues(newTx, oldTx, Γ, daq)
+
+  calibFieldToVoltEstimate = daq.params.calibFieldToVolt
+  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ)) 
+
+  deviation = abs.( 1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate )
+
+  @info "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
+
+  return all( abs.(newTx) .< daq.params.txLimitVolt ) && maximum( deviation ) < 0.2
 end
 
 function doControlStep(daq::AbstractDAQ, uRef)
 
-  amplitude, phase = calcFieldFromRef(daq,uRef)
+  Γ = calcFieldFromRef(daq,uRef)
+  Ω = convert(Matrix{ComplexF64}, diagm(daq.params.dfStrength.*exp.(im*daq.params.dfPhase)))
 
-  @debug "reference" amplitude phase
+  amplitude = abs.(diag(Γ))  
 
-  if norm(daq.params.dfStrength - amplitude) / norm(daq.params.dfStrength) <
-              daq.params.controlLoopAmplitudeAccuracy &&
-     norm(phase) < daq.params.controlLoopPhaseAccuracy
-    @warn "Could control"
+  @info "reference Γ=" Γ
+
+  if controlStepSuccessful(Γ, Ω, daq)
+    @info "Could control"
     return true
   else
-    newTxPhase = daq.params.currTxPhase .- phase
-    wrapPhase!(newTxPhase)
+    newTx = newDFValues(Γ, Ω, daq)
+    oldTx = daq.params.currTx
+    @info "oldTx=" oldTx 
+    @info "newTx=" newTx
 
-    newTxAmp = daq.params.currTxAmp .* daq.params.dfStrength ./ amplitude
-
-    @info "" newTxAmp newTxPhase
-
-    deviation = abs.( daq.params.currTxAmp ./ amplitude .-
-                     daq.params.calibFieldToVolt ) ./ daq.params.calibFieldToVolt
-
-    @info "We expected $(daq.params.calibFieldToVolt) and got $(daq.params.currTxAmp ./ amplitude), deviation: $deviation"
-
-    if all( newTxAmp .< daq.params.txLimitVolt ) &&
-       maximum( deviation ) < 0.2
-      daq.params.currTxAmp[:] = newTxAmp
-      daq.params.currTxPhase[:] = newTxPhase
+    if checkDFValues(newTx, oldTx, Γ, daq)
+      daq.params.currTx[:] = newTx
+      setTxParams(daq, daq.params.currTx, postpone=false)
     else
-      #plot(vec(uRef))
-      #=
-      global plotWindow
-      global plotCanvas
-
-      if !isassigned(plotWindow)
-        plotCanvas[] = Gtk.Canvas()
-        plotWindow[] = Gtk.Window(plotCanvas[], "Control Window")
-      end
-
-      @idle_add begin
-        p = Winston.plot(vec(uRef));
-        display(plotCanvas[], p)
-        showall(plotWindow[])
-      end
-      =#
-
-      @warn "Could not control"
-
-      #stopTx(daq)
-      #disconnect(daq)
-      #startTx(daq)
+      @warn "New values are above voltage limits or are different than expected!"
     end
-    setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=false)
 
-    @warn "Could not control 2"
+    @info "Could not control !"
     return false
   end
 end

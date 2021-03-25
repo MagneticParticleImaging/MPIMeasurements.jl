@@ -105,10 +105,10 @@ function init(sysObj::SystemMatrixRobotMeas, positions::GridPositions,
   updateParams!(daq, params)
 
   if !daq.params.controlPhase
-    daq.params.currTxAmp = daq.params.calibFieldToVolt.*daq.params.dfStrength
-    daq.params.currTxPhase = zeros(numTxChannels(daq))
+    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+    daq.params.currTx = convert(Matrix{ComplexF64}, diagm(tx))
   end
-  #setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
+  #setTxParams(daq, daq.params.currTx*0.0)
   #enableSlowDAC(daq, false)
 
   rxNumSamplingPoints = daq.params.rxNumSamplingPoints
@@ -177,9 +177,8 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   timeControlPhase = @elapsed begin
     if daq.params.controlPhase && mod1(index, 11) == 1 # only controll sometimes
       controlLoop(daq)
-      setTxParams(daq, daq.params.currTxAmp*0.0, daq.params.currTxPhase*0.0)
     else
-      setTxParams(daq, daq.params.currTxAmp, daq.params.currTxPhase, postpone=true)
+      setTxParams(daq, daq.params.currTx, postpone=true)
     end
   end
 

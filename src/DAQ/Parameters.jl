@@ -28,11 +28,11 @@ mutable struct DAQParams
   calibRefToField::Vector{Float64}
   calibFieldToVolt::Vector{Float64}
   calibFFCurrentToVolt::Vector{Float64}
-  currTxAmp::Vector{Float64}
-  currTxPhase::Vector{Float64}
+  currTx::Matrix{ComplexF64}
   controlPause::Float64
   controlLoopAmplitudeAccuracy::Float64
   controlLoopPhaseAccuracy::Float64
+  correctCrossCoupling::Bool
   rxChanIdx::Vector{Int64}
   refChanIdx::Vector{Int64}
   dfChanIdx::Vector{Int64}
@@ -49,7 +49,9 @@ function calcDFFreq(baseFreq::Float64, divider::Vector{Int64})
   return baseFreq ./ divider
 end
 
-function DAQParams(@nospecialize params)
+function DAQParams(@nospecialize params_)
+
+  params = deepcopy(params_) # We do not want to change the user parameter!
 
   D = length(params["dfDivider"])
   #dfFreq = params["dfBaseFrequency"] ./ params["dfDivider"]
@@ -65,14 +67,16 @@ function DAQParams(@nospecialize params)
 
   sinLUT, cosLUT = initLUT(numSampPerPeriod, D, dfCycle, dfFreq)
 
-  if !haskey(params, "currTxAmp")
-    params["currTxAmp"] = params["txLimitVolt"] / 10
+  if !haskey(params, "currTx")
+    params["currTx"] = convert(Matrix{ComplexF64}, diagm(params["txLimitVolt"] / 10))
   end
-  if !haskey(params, "currTxPhase")
-    params["currTxPhase"] = zeros(D)
-  end
+
   if !haskey(params, "controlPhase")
     params["controlPhase"] = true
+  end
+
+  if !haskey(params, "correctCrossCoupling")
+    params["correctCrossCoupling"] = false
   end
 
   if !haskey(params, "dfWaveform")
@@ -171,11 +175,11 @@ function DAQParams(@nospecialize params)
     params["calibRefToField"],
     params["calibFieldToVolt"],
     params["calibFFCurrentToVolt"],
-    params["currTxAmp"],
-    params["currTxPhase"],
+    params["currTx"],
     params["controlPause"],
     params["controlLoopAmplitudeAccuracy"],
     params["controlLoopPhaseAccuracy"],
+    params["correctCrossCoupling"],
     params["rxChanIdx"],
     params["refChanIdx"],
     params["dfChanIdx"],
@@ -220,11 +224,11 @@ function MPIFiles.toDict(p::DAQParams)
   params["calibIntToVolt"] = vec(p.calibIntToVolt)
   params["calibRefToField"] = p.calibRefToField
   params["calibFFCurrentToVolt"] = p.calibFFCurrentToVolt
-  params["currTxAmp"] = p.currTxAmp
-  params["currTxPhase"] = p.currTxPhase
+  params["currTx"] = p.currTx
   params["controlPause"] = p.controlPause
   params["controlLoopAmplitudeAccuracy"] = p.controlLoopAmplitudeAccuracy
   params["controlLoopPhaseAccuracy"] = p.controlLoopPhaseAccuracy
+  params["correctCrossCoupling"] = p.correctCrossCoupling
   params["calibFieldToVolt"] = p.calibFieldToVolt
   params["rxChanIdx"] = p.rxChanIdx
   params["refChanIdx"] = p.refChanIdx

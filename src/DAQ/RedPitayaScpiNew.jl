@@ -17,15 +17,15 @@ function DAQRedPitayaScpiNew(params)
   modeDAC(daq.rpc, "STANDARD")
   masterTrigger(daq.rpc, true)
 
-  daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
+  daq.params.currTx = convert(Matrix{ComplexF64}, diagm(daq.params.txLimitVolt ./ 10))
   return daq
 end
 
 function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
   connect(daq.rpc)
-
+  
   daq.params = DAQParams(params_)
-
+  
   setACQParams(daq)
 end
 
@@ -45,7 +45,9 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
 
   for d=1:numTxChannels(daq)
-    frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], 1, daq.params.dfFreq[d])    
+    for e=1:numTxChannels(daq)
+      frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e, daq.params.dfFreq[e]) 
+    end   
     signalTypeDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.dfWaveform)
     jumpSharpnessDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.jumpSharpness)
   end
@@ -80,7 +82,6 @@ function startTx(daq::DAQRedPitayaScpiNew)
   masterTrigger(daq.rpc, false)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
-  #daq.params.currTxAmp = daq.params.txLimitVolt ./ 10
 
   while currentPeriod(daq.rpc) < 1
     sleep(0.001)
@@ -88,10 +89,19 @@ function startTx(daq::DAQRedPitayaScpiNew)
   return nothing
 end
 
+function startTxAndControl(daq::DAQRedPitayaScpiNew)
+  startTx(daq)
+  if daq.params.controlPhase
+    controlLoop(daq)
+  else
+    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+    setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)), postpone=true)
+  end
+  return
+end
 
 function stopTx(daq::DAQRedPitayaScpiNew)
-  setTxParams(daq, zeros(numTxChannels(daq)),
-                   zeros(numTxChannels(daq)))
+  setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
@@ -115,20 +125,25 @@ enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) =
             enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
 
-function setTxParams(daq::DAQRedPitayaScpiNew, amplitude, phase; postpone=false)
-  if any( daq.params.currTxAmp .>= daq.params.txLimitVolt )
+function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
+  if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
   end
 
   for d=1:numTxChannels(daq)
-    amp = amplitude[d]
-    ph = phase[d] / 180 * pi
-    phaseDAC(daq.rpc, daq.params.dfChanIdx[d], 1, ph )
+    for e=1:numTxChannels(daq)
 
-    if postpone    
-      amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
-    else
-      amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], 1, amp)
+      amp = abs(Γ[d,e])
+      ph = angle(Γ[d,e])
+      phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
+
+      #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
+
+      if postpone    
+        amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
+      else
+        amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
+      end
     end
   end
   return nothing

@@ -16,7 +16,7 @@ params["dfWaveform"] = "SINE"
 params["acqNumFrames"] = 10
 params["acqNumAverages"] = 10
 
-u, uSlowADC = measurement(daq, params, controlPhase=false)
+u, uSlowADC = measurement(daq, params, controlPhase=true)
 #filename = measurement(daq, params, MDFStore, controlPhase=true)
 
 figure(1)
