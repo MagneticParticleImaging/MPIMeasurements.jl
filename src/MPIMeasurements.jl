@@ -39,6 +39,24 @@ abstract type TemperatureSensor end
 abstract type MeasObj end
 export Device, Robot, GaussMeter, MeasObj
 
+# Allows for a flexible composition of scanners with devices from other packages
+function searchDeviceByType(superType, searchedType, params)
+  knownImplementations = subtypes(superType)
+  instance = nothing
+  for Implementation in knownImplementations
+    if string(Implementation) == searchedType
+      instance = Implementation(params)
+      break
+    end
+  end
+
+  if !isnothing(instance)
+    return instance
+  else
+    error("Could not find implementation for searched type $searchedType")
+  end
+end
+
 include("DAQ/DAQ.jl")
 #include("TransferFunction/TransferFunction.jl") #Moved to MPIFiles
 include("Safety/RobotSafety.jl")
