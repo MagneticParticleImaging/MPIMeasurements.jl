@@ -196,9 +196,9 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
     uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*numFrames, currFr)
   end
   @info "readData Done"
-
+ 
+  setTxParams(daq, daq.params.currTx * 0.0 )
   
-
   timeOtherThings = @elapsed begin
 
   startIdx = measObj.posToIdx[index]

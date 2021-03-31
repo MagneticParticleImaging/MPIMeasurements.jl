@@ -4,6 +4,7 @@ export enableACPower, disableACPower, getTemperatures
 
 include("DummySurveillanceUnit.jl")
 include("ArduinoSurveillanceUnit.jl")
+include("ArduinoWithExternalTempUnit.jl")
 include("MPSSurveillanceUnit.jl")
 
 Base.close(su::SurveillanceUnit) = nothing
@@ -13,7 +14,9 @@ function SurveillanceUnit(params::Dict)
     return DummySurveillanceUnit()
   elseif params["type"] == "Arduino"
     return ArduinoSurveillanceUnit(params)
-elseif params["type"] == "MPS"
+  elseif params["type"] == "ArduinoWithExternalTempUnit"
+    return ArduinoWithExternalTempUnit(params)
+  elseif params["type"] == "MPS"
   	return MPSSurveillanceUnit(params)
   else
     error("Cannot create SurveillanceUnit!")

@@ -43,9 +43,19 @@ measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
 
 [SurveillanceUnit]
-#type = "Dummy"
-type = "Arduino"
-connection = "/dev/ttyACM0"
+type = "ArduinoWithExternalTempUnit"
+connection = ["/dev/ttyACM0", "/dev/ttyACM2"]
+numSensors = 13
+maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53]  #13 sensors
+selectSensors = [7,10] 
+
+
+#[TemperatureUnit]
+#type = "TempBox"
+#connection = "/dev/ttyACM1"
+#numSensors = 13
+#maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53]  #13 sensors
+
 
 
 #[TemperatureSensor]
@@ -71,8 +81,8 @@ defParkPos = [0.42, 0.1255, 0.1055]
 defAssemblePos = [0.42, 0.24, 0.25]
 type = "Isel"
 #type="Dummy"
-#connection = "/dev/ttyUSB1"
-connection = "/dev/ttyUSB0"
+connection = "/dev/ttyUSB1"
+#connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"

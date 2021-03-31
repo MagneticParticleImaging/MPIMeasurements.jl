@@ -39,17 +39,18 @@ function ArduinoSurveillanceUnit(portAdress::AbstractString)
     flush(sp)
     write(sp, "!ConnectionEstablished*#")
     response=readuntil(sp, Vector{Char}(delim_read), timeout_ms);
-    if(response == "ArduinoSurveillanceV1")
-            @info "Connection to ArduinoSurveillanceUnit established"
-            return ArduinoSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart,CommandEnd,delim)
-    else
-            @warn "Connected to wrong Device" response
-            return sp;
+    @info response
+    if(response == "ArduinoSurveillanceV1" || response == "ArduinoSurveillanceV2"  )
+        @info "Connection to ArduinoSurveillanceUnit established"
+        return ArduinoSurveillanceUnit(SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write),CommandStart,CommandEnd,delim)
+    else    
+        @warn "Connected to wrong Device" response
+        return sp;
     end
 end
 
-
-function CheckACQ(Arduino,ACQ)
+# WTF?
+function CheckACQ(Arduino::ArduinoSurveillanceUnit,ACQ)
     if ACQ=="ACQ"
         @info "Command Received"
         return ACQ;
@@ -59,7 +60,7 @@ function CheckACQ(Arduino,ACQ)
 end
 
 
- function ArduinoCommand(Arduino::ArduinoSurveillanceUnit, cmd::String)
+function ArduinoCommand(Arduino::ArduinoSurveillanceUnit, cmd::String)
      cmd=Arduino.CommandStart*cmd*Arduino.CommandEnd*Arduino.delim;
     return query(Arduino.sd,cmd);
 end
@@ -74,7 +75,7 @@ function ArDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
     CheckACQ(Arduino,ACQ)
 end
 
-function getTemperatures(Arduino::ArduinoSurveillanceUnit)
+function getTemperatures(Arduino::ArduinoSurveillanceUnit) #toDo: deprecated
     Temps = ArduinoCommand(Arduino, "GET:TEMP")
     TempDelim = "T"
 
