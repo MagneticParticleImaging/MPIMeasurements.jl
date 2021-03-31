@@ -27,29 +27,7 @@ numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 include("RedPitayaScpiNew.jl")
 include("DummyRedPitaya.jl")
 
-function DAQ(params::Dict)
-  knownDAQImplementations = subtypes(AbstractDAQ)
-  DAQInstance = nothing
-  for DAQImplementation in knownDAQImplementations
-    if string(DAQImplementation) == params["daq"]
-      DAQInstance = DAQImplementation(params)
-      break
-    end
-  end
-
-  if !isnothing(DAQInstance)
-    return DAQInstance
-  else
-    error("Could not find implementation for DAQ of type $(params["daq"])")
-  end
-  # if params["daq"] == "RedPitayaScpiNew"
-  #   return DAQRedPitayaScpiNew(params)
-  # elseif params["daq"] == "DummyDAQRedPitaya"
-  #   return DummyDAQRedPitaya(params)
-  # else
-  #   error("$(params["daq"]) not yet implemented!")
-  # end
-end
+DAQ(params::Dict) = searchDeviceByType(AbstractDAQ, params["daq"], params)
 
 function initLUT(N,D, dfCycle, dfFreq)
   sinLUT = zeros(N,D)
