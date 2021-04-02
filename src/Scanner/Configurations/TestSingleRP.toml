@@ -1,10 +1,5 @@
 [GaussMeter]
-coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
-range = 1
-fast = true
-autoRanging = false
-type = "LakeShore"
-connection = "/dev/ttyUSB1"
+type = "Dummy"
 
 [General]
 allowDFWaveformChanges = true
