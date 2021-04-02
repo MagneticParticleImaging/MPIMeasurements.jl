@@ -35,10 +35,10 @@ end
 function saveSeq(name::String, seq::Sequence)
   p = Dict{String,Any}()
   p["numPeriodsPerPatch"] = seq.numPeriodsPerPatch
-  p["values"] = seq.values
+  p["values"] = vec(seq.values)
   p["numPatches"] = size(seq.values, 2)
   if hasEnableSequence(seq)
-    p["enable"] = seq.enable
+    p["enable"] = vec(seq.enable)
   end
 
   filename = joinpath(sequenceDir(),name*".toml")
