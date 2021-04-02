@@ -10,7 +10,11 @@ struct ArduinoWithExternalTempUnit <: SurveillanceUnit
   selectSensors::Array
 end
 
-Base.close(su::ArduinoWithExternalTempUnit) = close(su.sd.sp)
+function Base.close(su::ArduinoWithExternalTempUnit)
+  for s in su.sd
+    close(s.sp)
+  end
+end
 
 #init from SurveillanceUnit.jl
 function ArduinoWithExternalTempUnit(params::Dict) 
@@ -176,11 +180,23 @@ function ArEnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
      ErrorcodeBool=[parsebool(x) for x in Errorcode]
      return ErrorcodeBool
  end
+
+export GetStatus
+function GetStatus(Arduino::ArduinoWithExternalTempUnit)
+    status = ArduinoCommand(Arduino,"GET:STATS", 1)
+    return status
+end
+
+export resetDAQ
+function resetDAQ(Arduino::ArduinoWithExternalTempUnit)
+    ACQ = ArduinoCommand(Arduino,"RESET:RP", 1)
+    CheckACQ(Arduino,ACQ)
+end
  
- function ResetWatchDog(Arduino::ArduinoWithExternalTempUnit)
+function ResetWatchDog(Arduino::ArduinoWithExternalTempUnit)
      ACQ=ArduinoCommand(Arduino,"RESET:WD", 1)
      CheckACQ(Arduino,ACQ)
- end
+end
  
  function EnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
      ACQ=ArduinoCommand(Arduino,"ENABLE:WD", 1)
