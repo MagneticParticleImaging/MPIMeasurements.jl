@@ -1,6 +1,15 @@
 export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
 getSurveillanceUnit, getTemperatureSensor
 
+
+function loadDeviceIfAvailable(params::Dict, deviceType, deviceName::String)
+  device = nothing
+  if haskey(params, deviceName)
+    device = deviceType(params[deviceName])
+  end
+  return device
+end
+
 mutable struct MPIScanner
   file::String
   params::Dict
@@ -8,16 +17,41 @@ mutable struct MPIScanner
   daq::Union{AbstractDAQ,Nothing}
   robot::Union{Robot,Nothing}
   gaussmeter::Union{GaussMeter,Nothing}
-  safty::Union{RobotSetup,Nothing}
+  safety::Union{RobotSetup,Nothing}
   surveillanceUnit::Union{SurveillanceUnit,Nothing}
   temperatureSensor::Union{TemperatureSensor,Nothing}
-  recoMethod::Function
 
   function MPIScanner(file::String)
     filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
-    return new(file,params,generalParams,nothing,nothing,nothing,nothing,nothing,nothing,()->())
+
+    @info "Init SurveillanceUnit"
+    surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
+
+    @info "Init DAQ"   # Restart the DAQ if necessary
+    waittime = 45
+    daq = nothing
+    try
+      daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+    catch e
+      @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
+      resetDAQ(surveillanceUnit)
+      sleep(waittime)
+      daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+    end
+
+    @info "Init Robot"
+    robot = loadDeviceIfAvailable(params, Robot, "Robot")
+    @info "Init GaussMeter"
+    gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")  
+    @info "Init Safety"
+    safety = loadDeviceIfAvailable(params, RobotSetup, "Safety") 
+    @info "Init TemperatureSensor"
+    temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")   
+    @info "All components initialized!"
+
+    return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)
   end
 end
 
@@ -38,46 +72,9 @@ function Base.close(scanner::MPIScanner)
 end
 
 getGeneralParams(scanner::MPIScanner) = scanner.generalParams
-
-function getDAQ(scanner::MPIScanner)
-  if scanner.daq == nothing && haskey(scanner.params, "DAQ")
-    scanner.daq = DAQ(scanner.params["DAQ"])
-  end
-  return scanner.daq
-end
-
-function getRobot(scanner::MPIScanner)
-  if scanner.robot == nothing && haskey(scanner.params, "Robot")
-    scanner.robot = Robot(scanner.params["Robot"])
-  end
-  return scanner.robot
-end
-
-function getGaussMeter(scanner::MPIScanner)
-  if scanner.gaussmeter == nothing && haskey(scanner.params, "GaussMeter")
-    scanner.gaussmeter = GaussMeter(scanner.params["GaussMeter"])
-  end
-  return scanner.gaussmeter
-end
-
-function getSafety(scanner::MPIScanner)
-  if scanner.safty == nothing && haskey(scanner.params, "Safety")
-    scanner.safty = RobotSetup(scanner.params["Safety"])
-  end
-  return scanner.safty
-end
-
-function getSurveillanceUnit(scanner::MPIScanner)
-  if scanner.surveillanceUnit == nothing && haskey(scanner.params, "SurveillanceUnit")
-    scanner.surveillanceUnit = SurveillanceUnit(scanner.params["SurveillanceUnit"])
-  end
-  return scanner.surveillanceUnit
-end
-
-
-function getTemperatureSensor(scanner::MPIScanner)
-  if scanner.temperatureSensor == nothing && haskey(scanner.params, "TemperatureSensor")
-    scanner.temperatureSensor = TemperatureSensor(scanner.params["TemperatureSensor"])
-  end
-  return scanner.temperatureSensor
-end
+getDAQ(scanner::MPIScanner) = scanner.daq
+getRobot(scanner::MPIScanner) = scanner.robot
+getGaussMeter(scanner::MPIScanner) = scanner.gaussmeter
+getSafety(scanner::MPIScanner) = scanner.saftey
+getSurveillanceUnit(scanner::MPIScanner) = scanner.surveillanceUnit
+getTemperatureSensor(scanner::MPIScanner) = scanner.temperatureSensor
