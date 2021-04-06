@@ -133,7 +133,11 @@ function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
 
       #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
 
-      if postpone    
+      #if postpone
+      # The following is a very worse and dangerous hack. Right now postponing the activation of 
+      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
+      # directly
+      if postpone && daq.params.dfChanIdx[d] <= 2   
         amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
       else
         amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
