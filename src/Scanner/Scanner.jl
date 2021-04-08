@@ -21,7 +21,7 @@ mutable struct MPIScanner
   surveillanceUnit::Union{SurveillanceUnit,Nothing}
   temperatureSensor::Union{TemperatureSensor,Nothing}
 
-  function MPIScanner(file::String)
+  function MPIScanner(file::String; guimode=false)
     filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
     generalParams = params["General"]
@@ -42,6 +42,9 @@ mutable struct MPIScanner
     end
 
     @info "Init Robot"
+    if guimode
+      params["Robot"]["doReferenceCheck"] = false
+    end
     robot = loadDeviceIfAvailable(params, Robot, "Robot")
     @info "Init GaussMeter"
     gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")  
