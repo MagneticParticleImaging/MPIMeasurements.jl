@@ -1,3 +1,5 @@
+export DAQParams
+
 mutable struct DAQParams
   decimation::Int64
   dfBaseFrequency::Float64

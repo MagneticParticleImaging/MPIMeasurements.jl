@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 
 import Base: setindex!, getindex
 
-export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
+export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
       readDataPeriod, currentPeriod
 
@@ -24,17 +24,9 @@ numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
 include("RedPitayaScpiNew.jl")
-include("DummyRedPitaya.jl")
+include("DummyDAQ.jl")
 
-function DAQ(params::Dict)
-  if params["daq"] == "RedPitayaScpiNew"
-    return DAQRedPitayaScpiNew(params)
-  elseif params["daq"] == "DummyDAQRedPitaya"
-    return DummyDAQRedPitaya(params)
-  else
-    error("$(params["daq"]) not yet implemented!")
-  end
-end
+DAQ(params::Dict) = searchDeviceByType(AbstractDAQ, params)
 
 function initLUT(N,D, dfCycle, dfFreq)
   sinLUT = zeros(N,D)

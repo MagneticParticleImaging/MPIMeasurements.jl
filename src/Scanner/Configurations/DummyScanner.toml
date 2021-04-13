@@ -3,7 +3,7 @@
 [DAQ]
 #ip = ["192.168.1.100"]
 ip = ["192.168.1.20"]
-daq = "RedPitaya"
+type = "DummyDAQ"
 acqNumFGFrames = 200
 acqNumBGFrames = 200
 acqNumAverages = 1
@@ -30,6 +30,7 @@ dfStrength = [20e-3]
 dfPhase = [0.0]
 dfBaseFrequency = 125e6
 dfDivider = [4800]
+txLimitVolt = [0.7]
 rxNumChannels = 1
 controlPause = 0.8
 acqNumFFChannels = 1

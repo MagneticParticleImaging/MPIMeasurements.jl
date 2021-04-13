@@ -1,11 +1,24 @@
 export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
 getSurveillanceUnit, getTemperatureSensor
 
-
 function loadDeviceIfAvailable(params::Dict, deviceType, deviceName::String)
   device = nothing
   if haskey(params, deviceName)
-    device = deviceType(params[deviceName])
+    knownImplementations = subtypes(deviceType)
+    searchedType = params[deviceName]["type"]
+
+    for Implementation in knownImplementations
+      if string(Implementation) == searchedType
+        device = Implementation(params[deviceName])
+        break
+      end
+    end
+
+    if !isnothing(device)
+      return device
+    else
+      error("Could not find implementation for searched type $searchedType")
+    end
   end
   return device
 end
@@ -32,13 +45,16 @@ mutable struct MPIScanner
     @info "Init DAQ"   # Restart the DAQ if necessary
     waittime = 45
     daq = nothing
+    daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
     try
-      daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+      daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
     catch e
       @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
-      resetDAQ(surveillanceUnit)
-      sleep(waittime)
-      daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+      if !isnothing(surveillanceUnit) && typeof(surveillanceUnit) != DummySurveillanceUnit
+        resetDAQ(surveillanceUnit)
+        sleep(waittime)
+      end
+      daq = loadDeviceIfAvailable(params, DAbstractDAQAQ, "DAQ")
     end
 
     @info "Init Robot"
@@ -47,7 +63,7 @@ mutable struct MPIScanner
     end
     robot = loadDeviceIfAvailable(params, Robot, "Robot")
     @info "Init GaussMeter"
-    gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")  
+    gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
     @info "Init Safety"
     safety = loadDeviceIfAvailable(params, RobotSetup, "Safety") 
     @info "Init TemperatureSensor"
