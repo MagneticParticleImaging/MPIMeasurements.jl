@@ -2,7 +2,7 @@ using ReusePatterns
 
 @testset "Dummy scanner" begin
   scannerName_ = "TestDummyScanner"
-  scanner = MPIScanner("TestDummyScanner")
+  scanner = MPIScanner(scannerName_)
 
   @testset "Meta" begin
     @test getName(scanner) == scannerName_
@@ -16,18 +16,20 @@ using ReusePatterns
     @test generalParams.boreSize == 1337u"mm"
     @test generalParams.facility == "My awesome institute"
     @test generalParams.manufacturer == "Me, Myself and I"
-    @test generalParams.name == "TestDummyScanner"
+    @test generalParams.name == scannerName_
     @test generalParams.topology == "FFL"
     @test generalParams.gradient == 42u"T/m"
     @test scannerBoreSize(scanner) == 1337u"mm"
     @test scannerFacility(scanner) == "My awesome institute"
     @test scannerManufacturer(scanner) == "Me, Myself and I"
-    @test scannerName(scanner) == "TestDummyScanner"
+    @test scannerName(scanner) == scannerName_
     @test scannerTopology(scanner) == "FFL"
     @test scannerGradient(scanner) == 42u"T/m"
   end
 
   @testset "Devices" begin
+
+    # TODO: add getDevices tests
 
     @testset "DAQ" begin
       daq = getDevice(scanner, "my_daq_id")

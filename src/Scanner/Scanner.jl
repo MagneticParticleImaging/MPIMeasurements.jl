@@ -33,13 +33,22 @@ function deepsubtypes(type::DataType)
 end
 
 """
-Retrieve the type corresponding to a given string
-
-Note: This is using eval() in order to achieve its goal.
-      Do not load configurations from untrusted sources!
+Retrieve the concrete type of a given supertype corresponding to a given string
 """
-function getConcreteType(type::String)
-  return eval(Meta.parse(type))
+function getConcreteType(supertype_::DataType, type::String)
+  knownTypes = deepsubtypes(supertype_)
+  foundImplementation = nothing
+  for Implementation in knownTypes
+    if string(Implementation) == type
+      foundImplementation = Implementation
+    end
+  end
+
+  if !isnothing(foundImplementation)
+    return foundImplementation
+  else
+    error("The type implied by the string `$type` could not be retrieved since its device struct was not found.")
+  end
 end
 
 """
@@ -57,8 +66,8 @@ function initiateDevices(devicesParams::Dict{String, Any})
       params = devicesParams[deviceID]
       deviceType = pop!(params, "deviceType")
 
-      DeviceImpl = getConcreteType(deviceType)
-      DeviceParamsImpl = getConcreteType(deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+      DeviceImpl = getConcreteType(Device, deviceType)
+      DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
       paramsInst = from_dict(DeviceParamsImpl, params)
       devices[deviceID] = DeviceImpl(deviceID, paramsInst)
     else

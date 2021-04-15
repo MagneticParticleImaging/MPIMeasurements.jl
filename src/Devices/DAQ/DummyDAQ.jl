@@ -1,4 +1,4 @@
-export DummyDAQ
+export DummyDAQ, DummyDAQParams
 
 @option struct DummyDAQParams <: DeviceParams
     samplesPerPeriod::Int

@@ -3,3 +3,4 @@ testConfigDir = normpath(string(@__DIR__), "TestConfigs")
 addConfigurationPath(testConfigDir)
 
 include("DummyScannerTest.jl")
+include("FlexibleScannerTest.jl")

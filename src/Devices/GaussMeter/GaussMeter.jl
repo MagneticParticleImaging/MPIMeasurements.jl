@@ -1,6 +1,6 @@
 using Graphics: @mustimplement
 
-export getXYZValues
+export Gaussmeter, getXYZValues
 
 @quasiabstract struct GaussMeter <: Device end
 
@@ -17,7 +17,7 @@ Base.close(gauss::GaussMeter) = nothing
 Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::GaussMeter)
-    gauss.coordinateTransformation*[getXValue(gauss),
-		 getYValue(gauss),
-		 getZValue(gauss)]
+  gauss.coordinateTransformation*[getXValue(gauss),
+  getYValue(gauss),
+  getZValue(gauss)]
 end

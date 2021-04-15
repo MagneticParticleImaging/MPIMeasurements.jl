@@ -1,70 +1,54 @@
 using MPIMeasurements
+using ReusePatterns
+using Configurations
 
 
 ### This section can be in a different package, which is not coupled to MPIMeasurements.jl as a dependency
-mutable struct FlexibleDummyDAQ <: AbstractDAQ
-  params::DAQParams
+@option struct FlexibleDAQParams <: MPIMeasurements.DeviceParams
+  samplesPerPeriod::Int
+  sendFrequency::typeof(1u"kHz")
+end
 
-  function FlexibleDummyDAQ(params)
-    p = DAQParams(params)
-    return new(p)
+@quasiabstract struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
+  handle::Union{String, Nothing}
+
+  function FlexibleDAQ(deviceID::String, params::FlexibleDAQParams)
+    return new(deviceID, params, nothing)
   end
 end
 
-
-function updateParams!(daq::FlexibleDummyDAQ, params_::Dict)
-  daq.params = DAQParams(params_)
-  #setACQParams(daq)
+function startTx(daq::FlexibleDAQ)
 end
 
-
-
-function startTx(daq::FlexibleDummyDAQ)
+function stopTx(daq::FlexibleDAQ)
 end
 
-function stopTx(daq::FlexibleDummyDAQ)
+function setTxParams(daq::FlexibleDAQ, amplitude, phase; postpone=false)
 end
 
-function setTxParams(daq::FlexibleDummyDAQ, amplitude, phase; postpone=false)
-end
-
-function currentFrame(daq::FlexibleDummyDAQ)
+function currentFrame(daq::FlexibleDAQ)
     return 1;
 end
 
-function currentPeriod(daq::FlexibleDummyDAQ)
+function currentPeriod(daq::FlexibleDAQ)
     return 1;
 end
 
-function readData(daq::FlexibleDummyDAQ, startFrame, numFrames)
+function readData(daq::FlexibleDAQ, startFrame, numFrames)
   uMeas=zeros(2,2,2,2)
   uRef=zeros(2,2,2,2)
   return uMeas, uRef
 end
 
-function readDataPeriods(daq::FlexibleDummyDAQ, startPeriod, numPeriods)
+function readDataPeriods(daq::FlexibleDAQ, startPeriod, numPeriods)
   uMeas=zeros(2,2,2,2)
   uRef=zeros(2,2,2,2)
   return uMeas, uRef
 end
-refToField(daq::FlexibleDummyDAQ, d::Int64) = 0.0
+refToField(daq::FlexibleDAQ, d::Int64) = 0.0
 
 ### / External section
 
-
-scanner = MPIScanner("FlexibleDummyScanner.toml")
-daq = getDAQ(scanner)
-
-@info "The type of DAQ is $(typeof(daq)), which awesome, because we did not define it within MPIMeasurements.jl"
-
-params = toDict(daq.params)
-
-params["studyName"]="TestDummy"
-params["studyDescription"]="A very cool measurement"
-params["scannerOperator"]="Dummy"
-params["dfStrength"]=[1e-3]
-params["acqNumFrames"]=100
-params["acqNumAverages"]=10
-
-# Can't have a measurement under Windows yet due to not including Measurements.jl in main file
-#filename = measurement(daq, params, MDFStore, controlPhase=true)
+testConfigDir = normpath(string(@__DIR__), "../../test/Scanner/TestConfigs")
+addConfigurationPath(testConfigDir)
+scanner = MPIScanner("TestFlexibleScanner")

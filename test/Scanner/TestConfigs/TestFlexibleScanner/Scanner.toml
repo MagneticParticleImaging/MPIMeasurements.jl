@@ -1,8 +1,8 @@
 [General]
-boreSize = "7m"
+boreSize = "1337mm"
 facility = "My awesome institute"
 manufacturer = "Me, Myself and I"
-name = "MostAwesomeScanner"
+name = "TestFlexibleScanner"
 topology = "FFL"
 gradient = "42T/m"
 
@@ -13,7 +13,7 @@ initializationOrder = [
 ]
 
 [Devices.my_daq_id]
-deviceType = "DummyDAQ"
+deviceType = "FlexibleDAQ" # This is not defined within MPIMeasurements!
 samplesPerPeriod = 1000
 sendFrequency = "25kHz"
 

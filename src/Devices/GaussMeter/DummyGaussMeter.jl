@@ -1,4 +1,4 @@
-export DummyGaussMeter
+export DummyGaussMeter, DummyGaussMeterParams
 
 @option struct DummyGaussMeterParams <: DeviceParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
@@ -9,7 +9,7 @@ end
 
   function DummyGaussMeter(deviceID::String, params::DummyGaussMeterParams)
     return new(deviceID, params, nothing)
-end
+  end
 end
 
 getXValue(gauss::DummyGaussMeter) = 1.0
