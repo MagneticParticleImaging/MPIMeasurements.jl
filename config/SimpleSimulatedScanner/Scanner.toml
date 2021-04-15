@@ -1,0 +1,21 @@
+[General]
+boreSize = "70mm" # Note: This is later parsed with Unitful
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "MostAwesomeScanner"
+topology = "FFL" # Of course ;)
+gradient = "42T/m" # Note: This is later parsed with Unitful
+
+[Devices]
+initializationOrder = [
+    "my_daq_id",
+    "my_gauss_id"
+]
+
+[Devices.my_daq_id]
+deviceType = "SimpleSimulatedDAQ"
+samplesPerPeriod = 1000
+sendFrequency = "25kHz" # Note: This is later parsed with Unitful
+
+[Devices.my_gauss_id]
+deviceType = "DummyGaussMeter"
