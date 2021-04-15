@@ -2,4 +2,4 @@
 *.jl.*.cov
 *.jl.mem
 docs/build/
-test/DAQ/images
+test/images

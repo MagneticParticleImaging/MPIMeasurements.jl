@@ -16,8 +16,6 @@ function measurement_(daq::AbstractDAQ)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
 
-  uSlowADC = readDataSlow(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-
   stopTx(daq)
   disconnect(daq)
 
@@ -25,9 +23,9 @@ function measurement_(daq::AbstractDAQ)
     u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
                 daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
     uMeasAv = mean(u_, dims=5)[:,:,:,:,1]
-    return uMeasAv, uSlowADC
+    return uMeasAv
   else
-    return uMeas, uSlowADC
+    return uMeas
   end
 end
 
