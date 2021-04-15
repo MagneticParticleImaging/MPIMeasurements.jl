@@ -38,11 +38,11 @@ RedPitayaDAQServer = "0.1, 0.2, 0.3"
 Reexport = "0.2, 1.0"
 ThreadPools = "1.2"
 Unitful = "1.6"
-PyPlot = "2.9"
+Plots = "1.11"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
 [targets]
-test = ["Test", "PyPlot"]
+test = ["Test", "Plots"]

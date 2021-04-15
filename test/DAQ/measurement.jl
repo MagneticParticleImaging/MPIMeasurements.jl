@@ -1,5 +1,5 @@
 using MPIMeasurements
-using PyPlot
+using Plots
 
 #include("config.jl")
 
@@ -23,17 +23,14 @@ u = measurement(daq, params)
 
 @info size(u)
 
-figure(1)
-clf()
-plot(vec(u[:,1,1,1]))
-savefig(joinpath(imgdir, "im1.png"))
+p = plot(vec(u[:,1,1,1]))
+savefig(p, joinpath(imgdir, "im1.png"))
 
 scanner = MPIScanner(conf) #what???
 daq = getDAQ(scanner)
 params["dfWaveform"] = "TRIANGLE"
 params["controlPhase"] = false
 u = measurement(daq, params)
-figure(1)
-clf()
-plot(vec(u[:,1,1,1]))
-savefig(joinpath(imgdir, "im2.png"))
+
+p = plot(vec(u[:,1,1,1]))
+savefig(p, joinpath(imgdir, "im2.png"))
