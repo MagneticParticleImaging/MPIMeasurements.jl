@@ -1,8 +1,16 @@
 export DummyDAQ
 
-@option struct DummyDAQ <: AbstractDAQ
+@option struct DummyDAQParams <: DeviceParams
     samplesPerPeriod::Int
     sendFrequency::typeof(1u"kHz")
+end
+
+@quasiabstract struct DummyDAQ <: AbstractDAQ
+    handle::Union{String, Nothing}
+
+    function DummyDAQ(deviceID::String, params::DummyDAQParams)
+        return new(deviceID, params, nothing)
+    end
 end
 
 

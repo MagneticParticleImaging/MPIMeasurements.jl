@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 
 export getXYZValues
 
-abstract type GaussMeter <: Device end
+@quasiabstract struct GaussMeter <: Device end
 
 include("DummyGaussMeter.jl")
 include("LakeShore.jl")

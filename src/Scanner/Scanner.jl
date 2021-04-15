@@ -6,17 +6,6 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
        getName, getConfigDir, getGeneralParams, getDevice, getDevices, getGUIMode
 
-"""Recursively find all concrete types"""
-function deepsubtypes(type::DataType)
-  subtypes_ = subtypes(type)
-  allSubtypes = subtypes_
-  for subtype in subtypes_
-    subsubtypes_ = deepsubtypes(subtype)
-    allSubtypes = vcat(allSubtypes, subsubtypes_)
-  end
-  return allSubtypes
-end
-
 """
 Automatic conversion from string to Unitful quantities.
 
@@ -32,8 +21,29 @@ function Base.convert(type::Type{T}, value::String) where T<:Quantity
   end
 end
 
+"""Recursively find all concrete types"""
+function deepsubtypes(type::DataType)
+  subtypes_ = subtypes(type)
+  allSubtypes = subtypes_
+  for subtype in subtypes_
+    subsubtypes_ = deepsubtypes(subtype)
+    allSubtypes = vcat(allSubtypes, subsubtypes_)
+  end
+  return allSubtypes
+end
+
 """
-Initiate devices from the given configuration Dict
+Retrieve the type corresponding to a given string
+
+Note: This is using eval() in order to achieve its goal.
+      Do not load configurations from untrusted sources!
+"""
+function getConcreteType(type::String)
+  return eval(Meta.parse(type))
+end
+
+"""
+Initiate devices from the given configuration dictionary
 
 The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
@@ -41,23 +51,16 @@ device configuration struct.
 """
 function initiateDevices(devicesParams::Dict{String, Any})
   devices = Dict{String, Device}()
-  knownDeviceTypes = deepsubtypes(Device) # Retrieves all Device subtypes including the ones not defined within MPIMeasurements
 
   for deviceID in devicesParams["initializationOrder"]
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
       deviceType = pop!(params, "deviceType")
 
-      for DeviceImplementation in knownDeviceTypes
-        if string(DeviceImplementation) == deviceType
-          devices[deviceID] = from_dict(DeviceImplementation, params)
-          break
-        end
-      end
-
-      if !haskey(devices, deviceID)
-        @error "The device ID `$deviceID` could not be initialized since its device struct was not found."
-      end
+      DeviceImpl = getConcreteType(deviceType)
+      DeviceParamsImpl = getConcreteType(deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+      paramsInst = from_dict(DeviceParamsImpl, params)
+      devices[deviceID] = DeviceImpl(deviceID, paramsInst)
     else
       @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
     end
@@ -66,6 +69,11 @@ function initiateDevices(devicesParams::Dict{String, Any})
   return devices
 end
 
+"""
+General description of the scanner
+
+Note: The fields correspond to the root section of an MDF file.
+"""
 @option struct MPIScannerGeneral
   boreSize::typeof(1u"mm")
   facility::String

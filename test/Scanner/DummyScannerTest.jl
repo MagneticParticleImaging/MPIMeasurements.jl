@@ -1,3 +1,5 @@
+using ReusePatterns
+
 @testset "Dummy scanner" begin
   scannerName_ = "TestDummyScanner"
   scanner = MPIScanner("TestDummyScanner")
@@ -29,14 +31,14 @@
 
     @testset "DAQ" begin
       daq = getDevice(scanner, "my_daq_id")
-      @test typeof(daq) == DummyDAQ
-      @test daq.samplesPerPeriod == 1000
-      @test daq.sendFrequency == 25u"kHz"
+      @test typeof(daq) == concretetype(DummyDAQ) # This implies implementation details...
+      @test daq.params.samplesPerPeriod == 1000
+      @test daq.params.sendFrequency == 25u"kHz"
     end
 
     @testset "GaussMeter" begin
       gauss = getDevice(scanner, "my_gauss_id")
-      @test typeof(gauss) == DummyGaussMeter
+      @test typeof(gauss) == concretetype(DummyGaussMeter) # This implies implementation details...
     end
   end
 end

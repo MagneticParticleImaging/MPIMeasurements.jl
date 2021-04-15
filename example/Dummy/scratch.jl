@@ -1,22 +1,62 @@
 using Configurations
 using ReusePatterns
 
-"Option A"
-@option struct Device
-    deviceID::String
-    deviceType::String
+# "Option A"
+# @option struct Device
+#     deviceID::String
+#     deviceType::String
+# end
+
+# abstract type TestAbstract end
+
+# @option struct ConcreteDevice <: TestAbstract
+#     float::Float64
+# end
+
+# d = Dict{String, Any}(
+#     #"name" => "Test"
+#     #"int" => 1
+#     "float" => 0.33
+# );
+
+# option = from_dict(ConcreteDevice, d)
+
+abstract type DeviceParams end
+
+@option struct TestDeviceParams <: DeviceParams
+  testParam::String
 end
 
-abstract type TestAbstract end
-
-@option struct ConcreteDevice <: TestAbstract
-    float::Float64
+@quasiabstract struct Device
+  deviceID::String
+  params::DeviceParams
 end
 
-d = Dict{String, Any}(
-    #"name" => "Test"
-    #"int" => 1
-    "float" => 0.33
-);
+@quasiabstract struct TestDevice <: Device
+  testDeviceParam::String
 
-option = from_dict(ConcreteDevice, d)
+  function TestDevice(deviceID::String, params::TestDeviceParams)
+    return new(deviceID, params, "bla")
+  end
+end
+
+test = TestDevice("id", TestDeviceParams("testparam"))
+
+
+function testDispatch(device::TestDevice)
+  @info device typeof(device) == TestDevice
+end
+
+# testDispatch(test)
+
+# function deepsubtypes(type::DataType)
+#   subtypes_ = subtypes(type)
+#   allSubtypes = subtypes_
+#   for subtype in subtypes_
+#     subsubtypes_ = deepsubtypes(subtype)
+#     allSubtypes = vcat(allSubtypes, subsubtypes_)
+#   end
+#   return allSubtypes
+# end
+
+# knownDeviceTypes = deepsubtypes(Device)

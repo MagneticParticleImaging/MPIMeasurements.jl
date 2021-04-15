@@ -6,7 +6,7 @@ export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame
       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
       readDataPeriod, currentPeriod
 
-abstract type AbstractDAQ <: Device end
+@quasiabstract struct AbstractDAQ <: Device end
 
 include("Control.jl")
 #include("Plotting.jl")
@@ -53,4 +53,4 @@ function readDataControlled(daq::AbstractDAQ, numFrames)
   readData(daq, numFrames, currentFrame(daq))
 end
 
-include("TransferFunction.jl")
+#include("TransferFunction.jl")
