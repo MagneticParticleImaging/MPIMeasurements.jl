@@ -1,99 +1,175 @@
-export MPIScanner, getDAQ, getGaussMeter, getRobot, getSafety, getGeneralParams,
-getSurveillanceUnit, getTemperatureSensor
+using Pkg.TOML
 
-function loadDeviceIfAvailable(params::Dict, deviceType, deviceName::String)
-  device = nothing
-  if haskey(params, deviceName)
-    knownImplementations = subtypes(deviceType)
-    searchedType = params[deviceName]["type"]
+import Base: convert
 
-    for Implementation in knownImplementations
-      if string(Implementation) == searchedType
-        device = Implementation(params[deviceName])
+export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
+       scannerManufacturer, scannerName, scannerTopology, scannerGradient,
+       getName, getConfigDir, getGeneralParams, getDevice, getDevices, getGUIMode
+
+"""Recursively find all concrete types"""
+function deepsubtypes(type::DataType)
+  subtypes_ = subtypes(type)
+  allSubtypes = subtypes_
+  for subtype in subtypes_
+    subsubtypes_ = deepsubtypes(subtype)
+    allSubtypes = vcat(allSubtypes, subsubtypes_)
+  end
+  return allSubtypes
+end
+
+"""
+Automatic conversion from string to Unitful quantities.
+
+Note: This is implicitly used in initiateDevices.
+"""
+function Base.convert(type::Type{T}, value::String) where T<:Quantity
+  parsedValue = uparse(value)
+  parsedType = typeof(parsedValue)
+  if parsedType == type
+    return parsedValue
+  else
+    error("The required type of $type does not match the type $parsedType implied by the value `$value`.")
+  end
+end
+
+"""
+Initiate devices from the given configuration Dict
+
+The device types are referenced by strings matching their device struct name.
+All device structs are supplied with the device ID and the corresponding
+device configuration struct.
+"""
+function initiateDevices(devicesParams::Dict{String, Any})
+  devices = Dict{String, Device}()
+  knownDeviceTypes = deepsubtypes(Device) # Retrieves all Device subtypes including the ones not defined within MPIMeasurements
+
+  for deviceID in devicesParams["initializationOrder"]
+    if haskey(devicesParams, deviceID)
+      params = devicesParams[deviceID]
+      deviceType = pop!(params, "deviceType")
+
+      for DeviceImplementation in knownDeviceTypes
+        if string(DeviceImplementation) == deviceType
+          devices[deviceID] = from_dict(DeviceImplementation, params)
+          break
+        end
+      end
+
+      if !haskey(devices, deviceID)
+        @error "The device ID `$deviceID` could not be initialized since its device struct was not found."
+      end
+    else
+      @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
+    end
+  end
+
+  return devices
+end
+
+@option struct MPIScannerGeneral
+  boreSize::typeof(1u"mm")
+  facility::String
+  manufacturer::String
+  name::String
+  topology::String
+  gradient::typeof(1u"T/m")
+end
+
+mutable struct MPIScanner
+  name::String
+  configDir::String
+  generalParams::MPIScannerGeneral
+  devices::Dict{String, Device}
+  guiMode::Bool
+
+  function MPIScanner(name::String; guimode=false)
+    # Search for scanner configurations of the given name in all known configuration directories
+    # If you want to add a configuration directory, please use addConfigurationPath(path::String)
+    filename = nothing
+    configDir = nothing
+    for path in scannerConfigurationPath
+      configDir = joinpath(path, name)
+      if isdir(configDir)
+        filename = joinpath(configDir, "Scanner.toml")
         break
       end
     end
 
-    if !isnothing(device)
-      return device
-    else
-      error("Could not find implementation for searched type $searchedType")
+    if isnothing(filename)
+      error("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath.")
     end
-  end
-  return device
-end
 
-mutable struct MPIScanner
-  file::String
-  params::Dict
-  generalParams::Dict
-  daq::Union{AbstractDAQ,Nothing}
-  robot::Union{Robot,Nothing}
-  gaussmeter::Union{GaussMeter,Nothing}
-  safety::Union{RobotSetup,Nothing}
-  surveillanceUnit::Union{SurveillanceUnit,Nothing}
-  temperatureSensor::Union{TemperatureSensor,Nothing}
-
-  function MPIScanner(file::String; guimode=false)
-    filename = joinpath(@__DIR__, "Configurations", file)
     params = TOML.parsefile(filename)
-    generalParams = params["General"]
+    generalParams = from_dict(MPIScannerGeneral, params["General"])
+    devices = initiateDevices(params["Devices"])
 
-    @info "Init SurveillanceUnit"
-    surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
+    return new(name, configDir, generalParams, devices, guimode)
 
-    @info "Init DAQ"   # Restart the DAQ if necessary
-    waittime = 45
-    daq = nothing
-    daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    try
-      daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    catch e
-      @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
-      if !isnothing(surveillanceUnit) && typeof(surveillanceUnit) != DummySurveillanceUnit
-        resetDAQ(surveillanceUnit)
-        sleep(waittime)
-      end
-      daq = loadDeviceIfAvailable(params, DAbstractDAQAQ, "DAQ")
-    end
+    # @info "Init SurveillanceUnit"
+    # surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
 
-    @info "Init Robot"
-    if guimode
-      params["Robot"]["doReferenceCheck"] = false
-    end
-    robot = loadDeviceIfAvailable(params, Robot, "Robot")
-    @info "Init GaussMeter"
-    gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
-    @info "Init Safety"
-    safety = loadDeviceIfAvailable(params, RobotSetup, "Safety") 
-    @info "Init TemperatureSensor"
-    temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")   
-    @info "All components initialized!"
+    # @info "Init DAQ"   # Restart the DAQ if necessary
+    # waittime = 45
+    # daq = nothing
+    # daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
+    # try
+    #   daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
+    # catch e
+    #   @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
+    #   if !isnothing(surveillanceUnit) && typeof(surveillanceUnit) != DummySurveillanceUnit
+    #     resetDAQ(surveillanceUnit)
+    #     sleep(waittime)
+    #   end
+    #   daq = loadDeviceIfAvailable(params, DAbstractDAQAQ, "DAQ")
+    # end
 
-    return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)
+    # @info "Init Robot"
+    # if guimode
+    #   params["Robot"]["doReferenceCheck"] = false
+    # end
+    # robot = loadDeviceIfAvailable(params, Robot, "Robot")
+    # @info "Init GaussMeter"
+    # gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
+    # @info "Init Safety"
+    # safety = loadDeviceIfAvailable(params, RobotSetup, "Safety") 
+    # @info "Init TemperatureSensor"
+    # temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")   
+    # @info "All components initialized!"
+
+    # return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)
   end
 end
 
 function Base.close(scanner::MPIScanner)
-  if scanner.robot != nothing
-    close(scanner.robot)
+  for device in getDevices(Device)
+    close(device)
   end
-  if scanner.gaussmeter != nothing
-    close(scanner.gaussmeter)
-  end
-  if scanner.surveillanceUnit != nothing
-    close(scanner.surveillanceUnit)
-  end
-  if scanner.temperatureSensor != nothing
-    close(scanner.temperatureSensor)
-  end
-
 end
 
+getName(scanner::MPIScanner) = scanner.name
+getConfigDir(scanner::MPIScanner) = scanner.configDir
 getGeneralParams(scanner::MPIScanner) = scanner.generalParams
-getDAQ(scanner::MPIScanner) = scanner.daq
-getRobot(scanner::MPIScanner) = scanner.robot
-getGaussMeter(scanner::MPIScanner) = scanner.gaussmeter
-getSafety(scanner::MPIScanner) = scanner.saftey
-getSurveillanceUnit(scanner::MPIScanner) = scanner.surveillanceUnit
-getTemperatureSensor(scanner::MPIScanner) = scanner.temperatureSensor
+getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
+
+function getDevices(scanner::MPIScanner, deviceType::T) where T <: Device
+  matchingDevices = Dict{String, Device}()
+  for (deviceID, device) in scanner.devices
+    if typeof(device) <: deviceType
+      matchingDevices[deviceID] = device
+    end
+  end
+end
+function getDevices(scanner::MPIScanner, deviceType::String)
+  knownDeviceTypes = deepsubtypes(Device)
+  deviceTypeSearched = findall(type->string(type)==deviceType, knownDeviceTypes)
+  return getDevices(scanner, deviceTypeSearched)
+end
+
+getGUIMode(scanner::MPIScanner) = scanner.guiMode
+
+scannerBoreSize(scanner::MPIScanner) = scanner.generalParams.boreSize
+scannerFacility(scanner::MPIScanner) = scanner.generalParams.facility
+scannerManufacturer(scanner::MPIScanner) = scanner.generalParams.manufacturer
+scannerName(scanner::MPIScanner) = scanner.generalParams.name
+scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
+scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient

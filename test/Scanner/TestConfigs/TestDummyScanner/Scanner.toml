@@ -1,0 +1,21 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestDummyScanner"
+topology = "FFL"
+gradient = "42T/m"
+
+[Devices]
+initializationOrder = [
+    "my_daq_id",
+    "my_gauss_id"
+]
+
+[Devices.my_daq_id]
+deviceType = "DummyDAQ"
+samplesPerPeriod = 1000
+sendFrequency = "25kHz"
+
+[Devices.my_gauss_id]
+deviceType = "DummyGaussMeter"

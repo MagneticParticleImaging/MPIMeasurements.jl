@@ -2,4 +2,4 @@ using MPIMeasurements
 using Test
 using Unitful
 
-include("Safety/RobotSafetyTest.jl")
+include("Scanner/ScannerTests.jl")

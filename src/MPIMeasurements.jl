@@ -7,7 +7,6 @@ using Reexport
 #using IniFile
 @reexport using MPIFiles
 #@reexport using Redpitaya
-@reexport using RedPitayaDAQServer
 @reexport using Unitful
 @reexport using Unitful.DefaultSymbols
 @reexport using Pkg.TOML
@@ -20,54 +19,49 @@ using LinearAlgebra
 using Statistics
 using Dates
 using InteractiveUtils
+using Configurations
+using ReusePatterns
 #using Winston, Gtk, Gtk.ShortNames
 
 #using MPISimulations
 
-import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC, enableSlowDAC, readDataSlow
 import Base.write
 #import PyPlot.disconnect
 
-# abstract supertype for all possible serial devices
-abstract type Device end
-abstract type Robot end
-abstract type GaussMeter end
-abstract type SurveillanceUnit end
-abstract type TemperatureSensor end
+export deviceID, params, addConfigurationPath
 
 # abstract supertype for all measObj etc.
+# Note: This is placed here since e.g. the robot tour needs it, but measurements need AbstractDAQ.
+# TODO: A tour is more like a measurement and should not be with the device definitions.
 abstract type MeasObj end
-export Device, Robot, GaussMeter, MeasObj
 
-include("DAQ/DAQ.jl")
-#include("TransferFunction/TransferFunction.jl") #Moved to MPIFiles
-include("Safety/RobotSafety.jl")
-include("Safety/KnownSetups.jl")
+"""
+Abstract type for all device parameters
 
-# LibSerialPort currently only supports linux and julia versions above 0.6
-# TODO work this part out under julia-1.0.0
-if Sys.isunix() && VERSION >= v"0.6"
-  using LibSerialPort
-  include("SerialDevices/SerialDevices.jl")
+Every device must implement a parameter struct using @option in order
+to allow for automatic instantiation from the configuration file.
+"""
+abstract type DeviceParams end
+
+# """
+# (Quasi)Abstract supertype for all devices
+#
+# Every device has to implement its own device struct which identifies it.
+#
+# """
+@quasiabstract struct Device
+  deviceID::String
+  params::DeviceParams
 end
 
-#include("Robots/Robots.jl")
+deviceID(device::Device) = device.deviceID
+params(device::Device) = device.params
+
+scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
+
 include("Scanner/Scanner.jl")
-include("Robots/Robots.jl")
-include("Sequences/Sequences.jl")
-
-if Sys.isunix() && VERSION >= v"0.6"
-  include("GaussMeter/GaussMeter.jl")
-  include("TemperatureSensor/TemperatureSensor.jl")
-  include("Measurements/Measurements.jl")
-  include("SurveillanceUnit/SurveillanceUnit.jl")
-end
-
-
-#function __init__()
-#    Unitful.register(MPIMeasurements)
-#end
-
+include("Devices/Devices.jl")
+#include("Measurements/Measurements.jl") # Deactivate for now in order to not hinder the restructuring
 
 end # module
