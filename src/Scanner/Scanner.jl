@@ -92,6 +92,11 @@ Note: The fields correspond to the root section of an MDF file.
   gradient::typeof(1u"T/m")
 end
 
+"""
+Central part for setting up a scanner.
+
+TODO: Add more details on instantiation
+"""
 mutable struct MPIScanner
   name::String
   configDir::String
