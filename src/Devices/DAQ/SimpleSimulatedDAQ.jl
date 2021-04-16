@@ -1,4 +1,4 @@
-export DummyDAQ
+export SimpleSimulatedDAQ, SimpleSimulatedDAQParams
 
 @option struct SimpleSimulatedDAQParams <: DeviceParams
     samplesPerPeriod::Int
@@ -13,30 +13,30 @@ end
     end
 end
 
-function startTx(daq::DummyDAQ)
+function startTx(daq::SimpleSimulatedDAQ)
 end
 
-function stopTx(daq::DummyDAQ)
+function stopTx(daq::SimpleSimulatedDAQ)
 end
 
-function setTxParams(daq::DummyDAQ, Γ; postpone=false)
+function setTxParams(daq::SimpleSimulatedDAQ, Γ; postpone=false)
 end
 
-function currentFrame(daq::DummyDAQ)
+function currentFrame(daq::SimpleSimulatedDAQ)
     return 1;
 end
 
-function currentPeriod(daq::DummyDAQ)
+function currentPeriod(daq::SimpleSimulatedDAQ)
     return 1;
 end
 
-function disconnect(daq::DummyDAQ)
+function disconnect(daq::SimpleSimulatedDAQ)
 end
 
-enableSlowDAC(daq::DummyDAQ, enable::Bool, numFrames=0,
+enableSlowDAC(daq::SimpleSimulatedDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) = 1
 
-function readData(daq::DummyDAQ, startFrame, numFrames)
+function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
     uMeas = zeros(daq.params.rxNumSamplingPoints,1,1,1)
     uRef = zeros(daq.params.rxNumSamplingPoints,1,1,1)
 
@@ -46,7 +46,7 @@ function readData(daq::DummyDAQ, startFrame, numFrames)
     return uMeas, uRef
 end
 
-function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
+function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
     uMeas = zeros(daq.params.rxNumSamplingPoints,1,1,1)
     uRef = zeros(daq.params.rxNumSamplingPoints,1,1,1)
 
@@ -55,4 +55,4 @@ function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
     
     return uMeas, uRef
 end
-refToField(daq::DummyDAQ, d::Int64) = 0.0
+refToField(daq::SimpleSimulatedDAQ, d::Int64) = 0.0

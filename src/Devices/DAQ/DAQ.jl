@@ -30,6 +30,7 @@ end
 
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")
+include("SimpleSimulatedDAQ.jl")
 
 DAQ(params::Dict) = searchDeviceByType(AbstractDAQ, params)
 
