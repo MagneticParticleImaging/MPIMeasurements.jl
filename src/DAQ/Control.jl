@@ -77,6 +77,7 @@ function newDFValues(Γ::Matrix, Ω::Matrix, daq)
   if daq.params.correctCrossCoupling
     β = Γ*inv(κ)
   else 
+    @show size(Γ), size(κ)
     β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
   end
   newTx = inv(β)*Ω

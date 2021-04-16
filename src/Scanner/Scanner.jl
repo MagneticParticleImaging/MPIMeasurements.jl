@@ -32,6 +32,7 @@ mutable struct MPIScanner
     @info "Init DAQ"   # Restart the DAQ if necessary
     waittime = 45
     daq = nothing
+    daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
     try
       daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
     catch e
@@ -78,6 +79,6 @@ getGeneralParams(scanner::MPIScanner) = scanner.generalParams
 getDAQ(scanner::MPIScanner) = scanner.daq
 getRobot(scanner::MPIScanner) = scanner.robot
 getGaussMeter(scanner::MPIScanner) = scanner.gaussmeter
-getSafety(scanner::MPIScanner) = scanner.saftey
+getSafety(scanner::MPIScanner) = scanner.safety
 getSurveillanceUnit(scanner::MPIScanner) = scanner.surveillanceUnit
 getTemperatureSensor(scanner::MPIScanner) = scanner.temperatureSensor
