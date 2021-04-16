@@ -153,9 +153,9 @@ mutable struct MPIScanner
     # @info "Init GaussMeter"
     # gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
     # @info "Init Safety"
-    # safety = loadDeviceIfAvailable(params, RobotSetup, "Safety") 
+    # safety = loadDeviceIfAvailable(params, RobotSetup, "Safety")
     # @info "Init TemperatureSensor"
-    # temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")   
+    # temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")
     # @info "All components initialized!"
 
     # return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)

@@ -23,6 +23,11 @@ include("Parameters.jl")
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
+function startTxAndControl(daq::AbstractDAQ)
+  startTx(daq)
+  controlLoop(daq)
+end
+
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")
 

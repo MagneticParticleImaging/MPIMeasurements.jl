@@ -13,33 +13,46 @@ end
     end
 end
 
-
-function startTx(daq::SimpleSimulatedDAQ)
+function startTx(daq::DummyDAQ)
 end
 
-function stopTx(daq::SimpleSimulatedDAQ)
+function stopTx(daq::DummyDAQ)
 end
 
-function setTxParams(daq::SimpleSimulatedDAQ, amplitude, phase; postpone=false)
+function setTxParams(daq::DummyDAQ, Γ; postpone=false)
 end
 
-function currentFrame(daq::SimpleSimulatedDAQ)
+function currentFrame(daq::DummyDAQ)
     return 1;
 end
 
-function currentPeriod(daq::SimpleSimulatedDAQ)
+function currentPeriod(daq::DummyDAQ)
     return 1;
 end
 
-function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
-    uMeas=zeros(2,2,2,2)
-    uRef=zeros(2,2,2,2)
+function disconnect(daq::DummyDAQ)
+end
+
+enableSlowDAC(daq::DummyDAQ, enable::Bool, numFrames=0,
+              ffRampUpTime=0.4, ffRampUpFraction=0.8) = 1
+
+function readData(daq::DummyDAQ, startFrame, numFrames)
+    uMeas = zeros(daq.params.rxNumSamplingPoints,1,1,1)
+    uRef = zeros(daq.params.rxNumSamplingPoints,1,1,1)
+
+    uMeas[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.rxNumSamplingPoints))
+    uRef[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.rxNumSamplingPoints))
+
     return uMeas, uRef
 end
 
-function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
-    uMeas=zeros(2,2,2,2)
-    uRef=zeros(2,2,2,2)
+function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
+    uMeas = zeros(daq.params.rxNumSamplingPoints,1,1,1)
+    uRef = zeros(daq.params.rxNumSamplingPoints,1,1,1)
+
+    uMeas[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.rxNumSamplingPoints))
+    uRef[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.rxNumSamplingPoints))
+    
     return uMeas, uRef
 end
-refToField(daq::SimpleSimulatedDAQ, d::Int64) = 0.0
+refToField(daq::DummyDAQ, d::Int64) = 0.0

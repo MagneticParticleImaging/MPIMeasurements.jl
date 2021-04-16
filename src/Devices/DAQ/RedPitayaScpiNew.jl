@@ -93,11 +93,6 @@ function startTx(daq::DAQRedPitayaScpiNew)
   return nothing
 end
 
-function startTxAndControl(daq::DAQRedPitayaScpiNew)
-  startTx(daq)
-  controlLoop(daq)
-end
-
 function stopTx(daq::DAQRedPitayaScpiNew)
   setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
@@ -188,8 +183,4 @@ function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
   uRef = u[:,daq.params.refChanIdx,:]
 
   return uMeas, uRef
-end
-
-function readDataSlow(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
-  u = readDataSlow(daq.rpc, startFrame, numFrames)
 end
