@@ -4,7 +4,7 @@ export DummyGaussMeter, DummyGaussMeterParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 end
 
-@quasiabstract struct DummyGaussMeter <: GaussMeter
+@quasiabstract mutable struct DummyGaussMeter <: GaussMeter
   handle::Union{String, Nothing}
 
   function DummyGaussMeter(deviceID::String, params::DummyGaussMeterParams)

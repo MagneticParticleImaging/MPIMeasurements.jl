@@ -42,5 +42,30 @@ using ReusePatterns
       gauss = getDevice(scanner, "my_gauss_id")
       @test typeof(gauss) == concretetype(DummyGaussMeter) # This implies implementation details...
     end
+
+    @testset "Robots" begin
+      #robot = getDevice(scanner, "my_robot_id")
+    end
+
+    @testset "SurveillanceUnit" begin
+      surveillanceUnit = getDevice(scanner, "my_surveillance_unit_id")
+      @test getTemperatures(surveillanceUnit) == 30.0u"°C"
+      @test getACStatus(surveillanceUnit, scanner) == false # AC should be off in the beginning
+      enableACPower(surveillanceUnit, scanner)
+      @test getACStatus(surveillanceUnit, scanner) == true
+      disableACPower(surveillanceUnit, scanner)
+      @test getACStatus(surveillanceUnit, scanner) == false
+      #@test resetDAQ(surveillanceUnit) # Can't be tested at the moment
+    end
+
+    @testset "TemperatureSensor" begin
+      temperatureSensor = getDevice(scanner, "my_temperature_sensor_id")
+      @test typeof(temperatureSensor) == concretetype(DummyTemperatureSensor) # This implies implementation details...
+      @test numChannels(temperatureSensor) == 1
+      @test getTemperature(temperatureSensor) == [42u"°C"]
+      @test typeof(getTemperature(temperatureSensor)) == Vector{typeof(1u"°C")}
+      @test getTemperature(temperatureSensor, 1) == 42u"°C"
+      @test typeof(getTemperature(temperatureSensor, 1)) == typeof(1u"°C")
+    end
   end
 end

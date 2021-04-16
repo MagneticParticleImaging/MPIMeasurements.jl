@@ -32,7 +32,7 @@ end
   params::DeviceParams
 end
 
-@quasiabstract struct TestDevice <: Device
+@quasiabstract mutable struct TestDevice <: Device
   testDeviceParam::String
 
   function TestDevice(deviceID::String, params::TestDeviceParams)
@@ -41,6 +41,10 @@ end
 end
 
 test = TestDevice("id", TestDeviceParams("testparam"))
+
+@info test.testDeviceParam
+test.testDeviceParam = "test"
+@info test.testDeviceParam
 
 
 function testDispatch(device::TestDevice)

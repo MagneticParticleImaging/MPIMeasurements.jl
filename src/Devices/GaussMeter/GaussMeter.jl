@@ -5,7 +5,7 @@ export Gaussmeter, getXYZValues
 @quasiabstract struct GaussMeter <: Device end
 
 include("DummyGaussMeter.jl")
-include("LakeShore.jl")
+#include("LakeShore.jl")
 
 Base.close(gauss::GaussMeter) = nothing
 

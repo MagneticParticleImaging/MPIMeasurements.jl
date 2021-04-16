@@ -5,7 +5,7 @@ export DummyDAQ, DummyDAQParams
     sendFrequency::typeof(1u"kHz")
 end
 
-@quasiabstract struct DummyDAQ <: AbstractDAQ
+@quasiabstract mutable struct DummyDAQ <: AbstractDAQ
     handle::Union{String, Nothing}
 
     function DummyDAQ(deviceID::String, params::DummyDAQParams)

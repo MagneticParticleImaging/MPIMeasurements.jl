@@ -9,13 +9,21 @@ gradient = "42T/m" # Note: This is later parsed with Unitful
 [Devices]
 initializationOrder = [
     "my_daq_id",
-    "my_gauss_id"
+    "my_gauss_id",
+    "my_surveillance_unit_id",
+    "my_temperature_sensor_id",
 ]
 
 [Devices.my_daq_id]
 deviceType = "DummyDAQ"
 samplesPerPeriod = 1000
-sendFrequency = "25kHz" # Note: This is later parsed with Unitful
+sendFrequency = "25kHz"
 
 [Devices.my_gauss_id]
 deviceType = "DummyGaussMeter"
+
+[Devices.my_surveillance_unit_id]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.my_temperature_sensor_id]
+deviceType = "DummyTemperatureSensor"

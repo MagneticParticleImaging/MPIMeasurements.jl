@@ -9,7 +9,9 @@ gradient = "42T/m"
 [Devices]
 initializationOrder = [
     "my_daq_id",
-    "my_gauss_id"
+    "my_gauss_id",
+    "my_surveillance_unit_id",
+    "my_temperature_sensor_id",
 ]
 
 [Devices.my_daq_id]
@@ -19,3 +21,9 @@ sendFrequency = "25kHz"
 
 [Devices.my_gauss_id]
 deviceType = "DummyGaussMeter"
+
+[Devices.my_surveillance_unit_id]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.my_temperature_sensor_id]
+deviceType = "DummyTemperatureSensor"

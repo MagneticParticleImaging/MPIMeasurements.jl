@@ -1,15 +1,12 @@
 export TemperatureSensor
 
-abstract type TemperatureSensor <: Device end
+@quasiabstract struct TemperatureSensor <: Device end
 
-include("FOTemp.jl")
+include("DummyTemperatureSensor.jl")
+#include("FOTemp.jl")
 
 Base.close(t::TemperatureSensor) = nothing
 
-function TemperatureSensor(params::Dict)
-	if params["type"] == "FOTemp"
-    return FOTemp(params)
-  else
-    error("Cannot create TemperatureSensor!")
-  end
-end
+@mustimplement numChannels(sensor::TemperatureSensor)
+@mustimplement getTemperature(sensor::TemperatureSensor)
+@mustimplement getTemperature(sensor::TemperatureSensor, channel::Int)
