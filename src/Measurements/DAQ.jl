@@ -15,7 +15,7 @@ function measurement_(daq::AbstractDAQ)
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-
+  # sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
   stopTx(daq)
   disconnect(daq)
 
