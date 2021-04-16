@@ -90,10 +90,5 @@ MPIMeasurements, but also from the outside.
       @test daq.params.samplesPerPeriod == 1000
       @test daq.params.sendFrequency == 25u"kHz"
     end
-
-    @testset "GaussMeter" begin
-      gauss = getDevice(scanner, "my_gauss_id")
-      @test typeof(gauss) == concretetype(DummyGaussMeter) # This implies implementation details...
-    end
   end
 end
