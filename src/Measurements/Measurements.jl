@@ -1,5 +1,5 @@
-include("Sequences/Sequences.jl")
-include("Protocols/Protocols.jl")
+#include("Sequences/Sequences.jl")
+#include("Protocols/Protocols.jl")
 
 include("DAQ.jl")
 include("MagneticField.jl")
