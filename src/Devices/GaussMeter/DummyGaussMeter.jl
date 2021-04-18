@@ -1,14 +1,13 @@
-export DummyGaussMeter, DummyGaussMeterParams
+export DummyGaussMeter, DummyGaussMeterParams, getXValue, getYValue, getZValue
 
 @option struct DummyGaussMeterParams <: DeviceParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 end
 
 @quasiabstract mutable struct DummyGaussMeter <: GaussMeter
-  handle::Union{String, Nothing}
 
   function DummyGaussMeter(deviceID::String, params::DummyGaussMeterParams)
-    return new(deviceID, params, nothing)
+    return new(deviceID, params)
   end
 end
 

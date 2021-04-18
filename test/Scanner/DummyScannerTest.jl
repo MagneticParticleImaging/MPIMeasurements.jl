@@ -29,18 +29,32 @@ using ReusePatterns
 
   @testset "Devices" begin
 
-    # TODO: add getDevices tests
-
     @testset "DAQ" begin
       daq = getDevice(scanner, "my_daq_id")
       @test typeof(daq) == concretetype(DummyDAQ) # This implies implementation details...
       @test daq.params.samplesPerPeriod == 1000
       @test daq.params.sendFrequency == 25u"kHz"
+
+      daqs = getDevices(scanner, AbstractDAQ)
+      @test daqs[1] == daq
+      @test getDevices(scanner, "AbstractDAQ") == daqs
+      @test getDAQs(scanner) == daqs
+      @test getDAQ(scanner) == daq #TODO: Add testset that checks errors with multiple devices
     end
 
     @testset "GaussMeter" begin
-      gauss = getDevice(scanner, "my_gauss_id")
-      @test typeof(gauss) == concretetype(DummyGaussMeter) # This implies implementation details...
+      gaussMeter = getDevice(scanner, "my_gauss_id")
+      @test typeof(gaussMeter) == concretetype(DummyGaussMeter) # This implies implementation details...
+      @test getXValue(gaussMeter) == 1.0
+      @test getYValue(gaussMeter) == 2.0
+      @test getZValue(gaussMeter) == 3.0
+      @test getXYZValues(gaussMeter) == [1.0, 2.0, 3.0]
+
+      gaussMeters = getDevices(scanner, GaussMeter)
+      @test gaussMeters[1] == gaussMeter
+      @test getDevices(scanner, "GaussMeter") == gaussMeters
+      @test getGaussMeters(scanner) == gaussMeters
+      @test getGaussMeter(scanner) == gaussMeter #TODO: Add testset that checks errors with multiple devices
     end
 
     @testset "Robots" begin
@@ -56,6 +70,12 @@ using ReusePatterns
       disableACPower(surveillanceUnit, scanner)
       @test getACStatus(surveillanceUnit, scanner) == false
       #@test resetDAQ(surveillanceUnit) # Can't be tested at the moment
+
+      surveillanceUnits = getDevices(scanner, SurveillanceUnit)
+      @test surveillanceUnits[1] == surveillanceUnit
+      @test getDevices(scanner, "SurveillanceUnit") == surveillanceUnits
+      @test getSurveillanceUnits(scanner) == surveillanceUnits
+      @test getSurveillanceUnit(scanner) == surveillanceUnit #TODO: Add testset that checks errors with multiple devices
     end
 
     @testset "TemperatureSensor" begin
@@ -66,6 +86,12 @@ using ReusePatterns
       @test typeof(getTemperature(temperatureSensor)) == Vector{typeof(1u"°C")}
       @test getTemperature(temperatureSensor, 1) == 42u"°C"
       @test typeof(getTemperature(temperatureSensor, 1)) == typeof(1u"°C")
+
+      temperatureSensors = getDevices(scanner, TemperatureSensor)
+      @test temperatureSensors[1] == temperatureSensor
+      @test getDevices(scanner, "TemperatureSensor") == temperatureSensors
+      @test getTemperatureSensors(scanner) == temperatureSensors
+      @test getTemperatureSensor(scanner) == temperatureSensor #TODO: Add testset that checks errors with multiple devices
     end
   end
 end

@@ -173,17 +173,18 @@ getConfigDir(scanner::MPIScanner) = scanner.configDir
 getGeneralParams(scanner::MPIScanner) = scanner.generalParams
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 
-function getDevices(scanner::MPIScanner, deviceType::T) where T <: Device
-  matchingDevices = Dict{String, Device}()
+function getDevices(scanner::MPIScanner, deviceType::DataType)
+  matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
     if typeof(device) <: deviceType
-      matchingDevices[deviceID] = device
+      push!(matchingDevices, device)
     end
   end
+  return matchingDevices
 end
 function getDevices(scanner::MPIScanner, deviceType::String)
   knownDeviceTypes = deepsubtypes(Device)
-  deviceTypeSearched = findall(type->string(type)==deviceType, knownDeviceTypes)
+  deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
 end
 

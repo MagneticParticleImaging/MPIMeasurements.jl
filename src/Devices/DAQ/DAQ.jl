@@ -4,7 +4,7 @@ import Base: setindex!, getindex
 
 export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
-      readDataPeriod, currentPeriod
+      readDataPeriod, currentPeriod, getDAQ, getDAQs
 
 @quasiabstract struct AbstractDAQ <: Device end
 
@@ -20,6 +20,16 @@ include("Parameters.jl")
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 
+getDAQs(scanner::MPIScanner) = getDevices(scanner, AbstractDAQ)
+function getDAQ(scanner::MPIScanner)
+  daqs = getDAQs(scanner)
+  if length(daqs) > 1
+    error("The scanner has more than one DAQ device. Therefore, a single DAQ cannot be retrieved unambiguously.")
+  else
+    return daqs[1]
+  end
+end
+
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
@@ -31,8 +41,6 @@ end
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")
 include("SimpleSimulatedDAQ.jl")
-
-DAQ(params::Dict) = searchDeviceByType(AbstractDAQ, params)
 
 function initLUT(N,D, dfCycle, dfFreq)
   sinLUT = zeros(N,D)
