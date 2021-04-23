@@ -1,10 +1,5 @@
 [GaussMeter]
-coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
-range = 1
-fast = true
-autoRanging = false
-type = "LakeShore"
-connection = "/dev/ttyUSB1"
+type = "Dummy"
 
 [General]
 allowDFWaveformChanges = true
@@ -65,8 +60,8 @@ daq = "RedPitayaScpiNew"
 #ip = ["rp-f04972.local"]
 ip = ["192.168.178.52"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
-acqNumBGFrames = 200
-acqNumFGFrames = 200
+acqNumBGFrames = 1
+acqNumFGFrames = 1
 rxNumChannels = 1
 triggerMode = "EXTERNAL"
 #"INTERNAL"

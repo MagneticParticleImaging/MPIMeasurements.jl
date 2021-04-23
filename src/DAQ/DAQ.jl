@@ -23,14 +23,19 @@ include("Parameters.jl")
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
+function startTxAndControl(daq::AbstractDAQ)
+  startTx(daq)
+  controlLoop(daq)
+end
+
 include("RedPitayaScpiNew.jl")
-include("DummyRedPitaya.jl")
+include("DummyDAQ.jl")
 
 function DAQ(params::Dict)
   if params["daq"] == "RedPitayaScpiNew"
     return DAQRedPitayaScpiNew(params)
-  elseif params["daq"] == "DummyDAQRedPitaya"
-    return DummyDAQRedPitaya(params)
+  elseif params["daq"] == "DummyDAQ"
+    return DummyDAQ(params)
   else
     error("$(params["daq"]) not yet implemented!")
   end

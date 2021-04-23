@@ -43,7 +43,7 @@ params["controlLoopAmplitudeAccuracy"] = 0.0001
 
 params["correctCrossCoupling"] = false
 params["controlPhase"] = false
-uNoControl, uSlowADC = measurement(daq, params)
+uNoControl = measurement(daq, params)
 plotData(uNoControl, daq, 1)
 
 
@@ -51,7 +51,7 @@ scanner = MPIScanner("TestSingleRP2D.toml")
 daq = getDAQ(scanner)
 params["correctCrossCoupling"] = false
 params["controlPhase"] = true
-uNoCorr, uSlowADC = measurement(daq, params)
+uNoCorr = measurement(daq, params)
 plotData(uNoCorr, daq, 2)
 
 #=
@@ -59,7 +59,7 @@ scanner = MPIScanner("TestSingleRP2D.toml")
 daq = getDAQ(scanner)
 params["correctCrossCoupling"] = true
 params["controlPhase"] = true
-uCorr, uSlowADC = measurement(daq, params)
+uCorr = measurement(daq, params)
 plotData(uCorr, daq, 3)
 
 

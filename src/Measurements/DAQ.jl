@@ -15,9 +15,7 @@ function measurement_(daq::AbstractDAQ)
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-
-  uSlowADC = readDataSlow(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-
+  # sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
   stopTx(daq)
   disconnect(daq)
 
@@ -25,9 +23,9 @@ function measurement_(daq::AbstractDAQ)
     u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
                 daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
     uMeasAv = mean(u_, dims=5)[:,:,:,:,1]
-    return uMeasAv, uSlowADC
+    return uMeasAv
   else
-    return uMeas, uSlowADC
+    return uMeas
   end
 end
 
@@ -100,18 +98,15 @@ function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{F
 
   name = params["studyName"]
   date = params["studyDate"]
-  path = joinpath( studydir(store), getMDFStudyFolderName(name,date))
   subject = ""
 
-  newStudy = Study(path,name,subject,date)
-
-  addStudy(store, newStudy)
-  expNum = getNewExperimentNum(store, newStudy)
+  newStudy = Study(store, name; subject=subject, date=date)
+  expNum = getNewExperimentNum(newStudy)
 
   #daq["studyName"] = params["studyName"]
   params["experimentNumber"] = expNum
 
-  filename = joinpath(studydir(store), getMDFStudyFolderName(newStudy), string(expNum)*".mdf")
+  filename = joinpath(path(newStudy), string(expNum)*".mdf")
 
   saveasMDF(filename, daq, data, params; kargs... )
 

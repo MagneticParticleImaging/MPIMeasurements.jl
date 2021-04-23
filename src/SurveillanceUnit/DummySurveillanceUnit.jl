@@ -13,3 +13,5 @@ end
 function disableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)
   @info "Disable AC Power"
 end
+
+resetDAQ(su::DummySurveillanceUnit) = nothing

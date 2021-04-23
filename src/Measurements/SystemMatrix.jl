@@ -50,7 +50,7 @@ function store(sysObj::SystemMatrixRobotMeas)
   params["measIsBGPos"] = sysObj.measIsBGPos
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
-  params["temperatures"] = sysObj.temperatures
+  params["temperatures"] = vec(sysObj.temperatures)
 
   open(filename,"w") do f
     TOML.print(f, params)
@@ -175,7 +175,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
 
   @info "control Phase"
   timeControlPhase = @elapsed begin
-    if daq.params.controlPhase && mod1(index, 11) == 1 # only controll sometimes
+    if daq.params.controlPhase && mod1(index, 11) == 1 # only control sometimes
       controlLoop(daq)
     else
       setTxParams(daq, daq.params.currTx, postpone=true)
@@ -356,17 +356,14 @@ function MPIFiles.saveasMDF(calibObj::SystemMatrixRobotMeas)
 
     name = params["studyName"]
     date = params["studyDate"]
-    path = joinpath( studydir(store), getMDFStudyFolderName(name,date))
     subject = ""
-
-    newStudy = Study(path,name,subject,date)
-
-    addStudy(store, newStudy)
-    expNum = getNewExperimentNum(store, newStudy)
-
+  
+    newStudy = Study(store, name; subject=subject, date=date)
+    expNum = getNewExperimentNum(newStudy)
+  
     params["experimentNumber"] = expNum
-
-    filename = joinpath(studydir(store),getMDFStudyFolderName(newStudy),string(expNum)*".mdf")
+  
+    filename = joinpath(path(newStudy), string(expNum)*".mdf")
 
     saveasMDF(filename, calibObj, params)
   end
