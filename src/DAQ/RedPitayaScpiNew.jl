@@ -44,6 +44,11 @@ end
 function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
 
+  for l=1:(2*length(daq.rpc.rp))
+    offsetDAC(daq.rpc, l, daq.params.txOffsetVolt[l])
+    #@show offsetDAC(daq.rpc, l)
+  end
+
   for d=1:numTxChannels(daq)
     for e=1:numTxChannels(daq)
       frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e, daq.params.dfFreq[e]) 
