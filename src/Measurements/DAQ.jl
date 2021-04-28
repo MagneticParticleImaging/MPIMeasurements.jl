@@ -172,14 +172,13 @@ end
 
 function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
                                  store::DatasetStore, params::Dict, bgdata=nothing)
-  #try
     su = getSurveillanceUnit(scanner)
     daq = getDAQ(scanner)
-    tempSensor = getTemperatureSensor(scanner)
+    #tempSensor = getTemperatureSensor(scanner)
 
-    if tempSensor != nothing
-      measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
-    end
+    #if tempSensor != nothing
+    #  measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
+    #end
 
     setEnabled(getRobot(scanner), false)
     enableACPower(su, scanner)
@@ -189,21 +188,38 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                            daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-    for fr=1:daq.params.acqNumFrames
-      if tempSensor != nothing
-        for c = 1:numChannels(tempSensor)
-            measState.temperatures[c,fr] = getTemperature(tempSensor, c)
-        end
-      end
-      #println("FRAME NEU $fr")
-      uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages,
-                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
+    chunkTime = 2.0 #seconds
+    framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame *
+                  daq.params.dfCycle
+    chunk = min(daq.params.acqNumFrames,max(1,round(Int, chunkTime/framePeriod)))
+    
+    fr = 1
+    while fr <= daq.params.acqNumFrames
+      to = min(fr+chunk-1,daq.params.acqNumFrames) 
 
-      measState.buffer[:,:,:,fr] = mean(uMeas, dims=4)
+      #if tempSensor != nothing
+      #  for c = 1:numChannels(tempSensor)
+      #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
+      #  end
+      #end
+      @info "Measuring frame $fr to $to"
+      @time uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*(length(fr:to)),
+                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
+      @info "It should take $(daq.params.acqNumFrameAverages*(length(fr:to))*framePeriod)"
+      s = size(uMeas)
+      @info s
+      if daq.params.acqNumFrameAverages == 1
+        measState.buffer[:,:,:,fr:to] = uMeas
+      else
+        tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :)
+        measState.buffer[:,:,:,fr:to] = dropdims(mean(uMeas, dims=4),dims=4)
+      end
       measState.currFrame = fr
       measState.consumed = false
       #sleep(0.01)
       #yield()
+      fr += chunk
+
       if measState.cancelled
         break
       end
@@ -219,9 +235,6 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     end
 
     measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
-  #catch ex
-  #  @warn "Exception" ex stacktrace(catch_backtrace())
-  #end
 end
 
 

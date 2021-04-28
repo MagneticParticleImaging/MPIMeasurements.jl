@@ -48,7 +48,7 @@ allowDFWaveformChanges = true
 type = "ArduinoWithExternalTempUnit"
 #type = "Dummy"
 #connection = ["SurveillanceUnit", "TempUnit"]
-connection = ["/dev/ttyACM3", "/dev/ttyACM2"]
+connection = ["/dev/ttyACM1", "/dev/ttyACM2"]
 numSensors = 16
 maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]  #13 sensors
 selectSensors = [4,11,14,15,16] 
@@ -122,7 +122,7 @@ txOffsetVolt = [-0.0115, -0.0145, 0.0, 0.0, 0.0, 0.0]
 #ff calib Dip 123 FastDAQ
 calibFFCurrentToVolt = [0.027061248, 0.026531] #[0.04075, 0.04292] #]0.05150]
 acqNumBGFrames = 200
-rxChanIdx = [1,2,3,4,5,6] #,5,6]
+rxChanIdx = [1,2,3,4] #,5,6] #,5,6]
 #rxChanIdx = [3,4,1]
 acqNumFGFrames = 200
 acqNumFFChannels = 2

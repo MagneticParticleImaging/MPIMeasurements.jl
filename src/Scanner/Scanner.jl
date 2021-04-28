@@ -32,7 +32,6 @@ mutable struct MPIScanner
     @info "Init DAQ"   # Restart the DAQ if necessary
     waittime = 45
     daq = nothing
-    daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
     try
       daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
     catch e

@@ -154,6 +154,7 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages, 1)
 
+  @info "size u in readData: $(size(u))"
   c = daq.params.calibIntToVolt
   for d=1:size(u,2)
     u[:,d,:,:] .*= c[1,d]
