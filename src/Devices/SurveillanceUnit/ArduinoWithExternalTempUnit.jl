@@ -112,18 +112,26 @@ function getTemperatures(Arduino::ArduinoWithExternalTempUnit)
     TempDelim = "," 
     
     Temps = ArduinoCommand(Arduino, "GET:ALLTEMPS", 2)
+    
 
     Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
+
+    @info Temps
+
     temp =  tryparse.(Float64,split(Temps,TempDelim))
-    tempFloat = zeros(length(temp)) 
 
-    for i=1:min(length(tempFloat),length(temp)) 
-      if temp[i] != nothing
-          tempFloat[i] = temp[i]
-      end
+    if length(temp) == Arduino.numSensors
+        tempFloat = zeros(length(temp)) 
+        for i=1:min(length(tempFloat),length(temp)) 
+            if temp[i] != nothing
+                tempFloat[i] = temp[i]
+            end
+        end
+
+        return tempFloat[Arduino.selectSensors]
+    else
+        return zeros(length(Arduino.selectSensors))
     end
-
-    return tempFloat[Arduino.selectSensors]
 end
 
 

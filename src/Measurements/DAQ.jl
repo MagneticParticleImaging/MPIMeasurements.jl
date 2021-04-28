@@ -15,7 +15,7 @@ function measurement_(daq::AbstractDAQ)
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
   uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-
+  sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
   stopTx(daq)
   disconnect(daq)
 
@@ -98,18 +98,15 @@ function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{F
 
   name = params["studyName"]
   date = params["studyDate"]
-  path = joinpath( studydir(store), getMDFStudyFolderName(name,date))
   subject = ""
 
-  newStudy = Study(path,name,subject,date)
-
-  addStudy(store, newStudy)
-  expNum = getNewExperimentNum(store, newStudy)
+  newStudy = Study(store, name; subject=subject, date=date)
+  expNum = getNewExperimentNum(newStudy)
 
   #daq["studyName"] = params["studyName"]
   params["experimentNumber"] = expNum
 
-  filename = joinpath(studydir(store), getMDFStudyFolderName(newStudy), string(expNum)*".mdf")
+  filename = joinpath(path(newStudy), string(expNum)*".mdf")
 
   saveasMDF(filename, daq, data, params; kargs... )
 

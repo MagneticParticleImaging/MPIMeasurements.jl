@@ -39,6 +39,7 @@ mutable struct DAQParams
   refChanIdx::Vector{Int64}
   dfChanIdx::Vector{Int64}
   txLimitVolt::Vector{Float64}
+  txOffsetVolt::Vector{Float64}
   controlPhase::Bool
   acqFFSequence::String
   ffRampUpTime::Float64
@@ -71,6 +72,10 @@ function DAQParams(@nospecialize params_)
 
   if !haskey(params, "currTx")
     params["currTx"] = convert(Matrix{ComplexF64}, diagm(params["txLimitVolt"] / 10))
+  end
+
+  if !haskey(params, "txOffsetVolt")
+    params["txOffsetVolt"] = zeros(length(params["txLimitVolt"]))
   end
 
   if !haskey(params, "controlPhase")
@@ -186,6 +191,7 @@ function DAQParams(@nospecialize params_)
     params["refChanIdx"],
     params["dfChanIdx"],
     params["txLimitVolt"],
+    params["txOffsetVolt"],
     params["controlPhase"],
     params["acqFFSequence"],
     params["ffRampUpTime"],
@@ -236,6 +242,7 @@ function MPIFiles.toDict(p::DAQParams)
   params["refChanIdx"] = p.refChanIdx
   params["dfChanIdx"] = p.dfChanIdx
   params["txLimitVolt"] = p.txLimitVolt
+  params["txOffsetVolt"] = p.txOffsetVolt
   params["controlPhase"] = p.controlPhase
   params["acqFFSequence"] = p.acqFFSequence
   params["ffRampUpTime"] = p.ffRampUpTime
