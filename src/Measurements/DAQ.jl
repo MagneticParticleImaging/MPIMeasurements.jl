@@ -14,7 +14,9 @@ function measurement_(daq::AbstractDAQ)
   currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-  uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+  framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame*daq.params.dfCycle
+  @time uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+  @info "It should take $(daq.params.acqNumFrames*daq.params.acqNumFrameAverages*framePeriod)"
   sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
   stopTx(daq)
   disconnect(daq)

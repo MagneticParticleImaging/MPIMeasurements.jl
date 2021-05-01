@@ -252,4 +252,5 @@ end
      CheckACQ(Arduino,ACQ)
  end
  
+ hasResetDAQ(su::ArduinoWithExternalTempUnit) = true
  
