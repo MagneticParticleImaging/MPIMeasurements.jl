@@ -3,7 +3,8 @@ coordinateTransformation = [0.04, 0.02, -1.0, 0.01, 1.0, 0.01, 1.0, 0.0, 0.03]
 range = 1
 fast = true
 autoRanging = false
-type = "LakeShore"
+# type = "LakeShore"
+type = "Dummy"
 connection = "/dev/ttyUSB0"
 
 [Robot]
