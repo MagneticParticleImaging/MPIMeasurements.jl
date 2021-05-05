@@ -12,6 +12,22 @@ initializationOrder = [
 ]
 
 [Devices.my_daq_id]
-deviceType = "SimpleSimulatedDAQ" # This is not defined within MPIMeasurements!
-samplesPerPeriod = 1000
-sendFrequency = "25kHz"
+deviceType = "SimpleSimulatedDAQ"
+ip = "127.0.0.1"
+
+[Devices.my_daq_id.channels.tx_main]
+type = "tx"
+channel = 1
+limitPeak = "1 V"
+feedback.channel = "feedback_main"
+feedback.calibration = "0.1 V/mT"
+
+[Devices.my_daq_id.channels.rx_main]
+type = "rx"
+channel = 1
+limitPeak = "1 V"
+
+[Devices.my_daq_id.channels.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1 V"

@@ -2,6 +2,7 @@ using MPIMeasurements
 using Test
 using Unitful
 
+include("Devices/DeviceTests.jl")
 include("Scanner/ScannerTests.jl")
 
 # include("config.jl")
