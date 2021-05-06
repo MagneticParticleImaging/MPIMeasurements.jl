@@ -1,19 +1,19 @@
 # import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
 #                            setSlowDAC, getSlowADC, enableSlowDAC, readDataSlow
 
-export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
+export RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
        setTxParamsAll, disconnect
 using RedPitayaDAQServer #@reexport 
 
-mutable struct DAQRedPitayaScpiNew <: AbstractDAQ
+Base.@kwdef struct RedPitayaDAQ <: AbstractDAQ
   params::DAQParams
   rpc::RedPitayaCluster
 end
 
-function DAQRedPitayaScpiNew(params)
+function RedPitayaDAQ(params)
   p = DAQParams(params)
   rpc = RedPitayaCluster(params["ip"])
-  daq = DAQRedPitayaScpiNew(p, rpc)
+  daq = RedPitayaDAQ(p, rpc)
   setACQParams(daq)
   masterTrigger(daq.rpc, false)
   triggerMode(daq.rpc, params["triggerMode"])
@@ -25,7 +25,7 @@ function DAQRedPitayaScpiNew(params)
   return daq
 end
 
-function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
+function updateParams!(daq::RedPitayaDAQ, params_::Dict)
   connect(daq.rpc)
   
   daq.params = DAQParams(params_)
@@ -33,19 +33,19 @@ function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
   setACQParams(daq)
 end
 
-currentFrame(daq::DAQRedPitayaScpiNew) = currentFrame(daq.rpc)
-currentPeriod(daq::DAQRedPitayaScpiNew) = currentPeriod(daq.rpc)
+currentFrame(daq::RedPitayaDAQ) = currentFrame(daq.rpc)
+currentPeriod(daq::RedPitayaDAQ) = currentPeriod(daq.rpc)
 
 
-function calibIntToVoltRx(daq::DAQRedPitayaScpiNew)
+function calibIntToVoltRx(daq::RedPitayaDAQ)
   return daq.params.calibIntToVolt[:,daq.params.rxChanIdx]
 end
 
-function calibIntToVoltRef(daq::DAQRedPitayaScpiNew)
+function calibIntToVoltRef(daq::RedPitayaDAQ)
   return daq.params.calibIntToVolt[:,daq.params.refChanIdx]
 end
 
-function setACQParams(daq::DAQRedPitayaScpiNew)
+function setACQParams(daq::RedPitayaDAQ)
   decimation(daq.rpc, daq.params.decimation)
 
   for l=1:(2*length(daq.rpc.rp))
@@ -85,7 +85,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   return nothing
 end
 
-function startTx(daq::DAQRedPitayaScpiNew)
+function startTx(daq::RedPitayaDAQ)
   connect(daq.rpc)
   #connectADC(daq.rpc)
   masterTrigger(daq.rpc, false)
@@ -98,32 +98,32 @@ function startTx(daq::DAQRedPitayaScpiNew)
   return nothing
 end
 
-function stopTx(daq::DAQRedPitayaScpiNew)
+function stopTx(daq::RedPitayaDAQ)
   setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function disconnect(daq::DAQRedPitayaScpiNew)
+function disconnect(daq::RedPitayaDAQ)
   RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function setSlowDAC(daq::DAQRedPitayaScpiNew, value, channel)
+function setSlowDAC(daq::RedPitayaDAQ, value, channel)
 
   setSlowDAC(daq.rpc, channel, value.*daq.params.calibFFCurrentToVolt[channel])
 
   return nothing
 end
 
-function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
+function getSlowADC(daq::RedPitayaDAQ, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0,
+enableSlowDAC(daq::RedPitayaDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) =
             enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
 
-function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
+function setTxParams(daq::RedPitayaDAQ, Γ; postpone=false)
   if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
   end
@@ -152,10 +152,10 @@ function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
 end
 
 #TODO: calibRefToField should be multidimensional
-refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
+refToField(daq::RedPitayaDAQ, d::Int64) = daq.params.calibRefToField[d]
 
 
-function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
+function readData(daq::RedPitayaDAQ, numFrames, startFrame)
   u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages, 1)
 
   c = daq.params.calibIntToVolt
@@ -175,7 +175,7 @@ function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   return uMeas, uRef
 end
 
-function readDataPeriods(daq::DAQRedPitayaScpiNew, numPeriods, startPeriod)
+function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod)
   u = readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
 
   c = daq.params.calibIntToVolt

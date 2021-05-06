@@ -1,5 +1,3 @@
-using ReusePatterns
-
 @testset "Dummy scanner" begin
   scannerName_ = "TestDummyScanner"
   scanner = MPIScanner(scannerName_)
@@ -12,7 +10,7 @@ using ReusePatterns
 
   @testset "General" begin
     generalParams = getGeneralParams(scanner)
-    @test typeof(generalParams) == MPIScannerGeneral
+    @test generalParams isa MPIScannerGeneral
     @test generalParams.boreSize == 1337u"mm"
     @test generalParams.facility == "My awesome institute"
     @test generalParams.manufacturer == "Me, Myself and I"
@@ -31,7 +29,7 @@ using ReusePatterns
 
     @testset "DAQ" begin
       daq = getDevice(scanner, "my_daq_id")
-      @test typeof(daq) == concretetype(DummyDAQ) # This implies implementation details...
+      @test daq isa DummyDAQ
       @test daq.params.samplesPerPeriod == 1000
       @test daq.params.sendFrequency == 25u"kHz"
 
@@ -44,7 +42,7 @@ using ReusePatterns
 
     @testset "GaussMeter" begin
       gaussMeter = getDevice(scanner, "my_gauss_id")
-      @test typeof(gaussMeter) == concretetype(DummyGaussMeter) # This implies implementation details...
+      @test gaussMeter isa DummyGaussMeter
       @test getXValue(gaussMeter) == 1.0
       @test getYValue(gaussMeter) == 2.0
       @test getZValue(gaussMeter) == 3.0
@@ -63,6 +61,7 @@ using ReusePatterns
 
     @testset "SurveillanceUnit" begin
       surveillanceUnit = getDevice(scanner, "my_surveillance_unit_id")
+      @test surveillanceUnit isa DummySurveillanceUnit
       @test getTemperatures(surveillanceUnit) == 30.0u"°C"
       @test getACStatus(surveillanceUnit, scanner) == false # AC should be off in the beginning
       enableACPower(surveillanceUnit, scanner)
@@ -80,7 +79,7 @@ using ReusePatterns
 
     @testset "TemperatureSensor" begin
       temperatureSensor = getDevice(scanner, "my_temperature_sensor_id")
-      @test typeof(temperatureSensor) == concretetype(DummyTemperatureSensor) # This implies implementation details...
+      @test temperatureSensor isa DummyTemperatureSensor
       @test numChannels(temperatureSensor) == 1
       @test getTemperature(temperatureSensor) == [42u"°C"]
       @test typeof(getTemperature(temperatureSensor)) == Vector{typeof(1u"°C")}

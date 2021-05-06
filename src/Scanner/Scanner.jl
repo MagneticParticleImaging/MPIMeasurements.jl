@@ -6,21 +6,6 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
        getName, getConfigDir, getGeneralParams, getDevice, getDevices, getGUIMode
 
-"""
-Automatic conversion from string to Unitful quantities.
-
-Note: This is implicitly used in initiateDevices.
-"""
-function Base.convert(type::Type{T}, value::String) where T<:Quantity
-  parsedValue = uparse(value)
-  parsedType = typeof(parsedValue)
-  if parsedType == type
-    return parsedValue
-  else
-    error("The required type of $type does not match the type $parsedType implied by the value `$value`.")
-  end
-end
-
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
   subtypes_ = subtypes(type)
@@ -69,7 +54,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
       paramsInst = from_dict(DeviceParamsImpl, params)
-      devices[deviceID] = DeviceImpl(deviceID, paramsInst)
+      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst)
     else
       @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
     end
@@ -83,7 +68,7 @@ General description of the scanner
 
 Note: The fields correspond to the root section of an MDF file.
 """
-@option struct MPIScannerGeneral
+Base.@kwdef struct MPIScannerGeneral
   boreSize::typeof(1u"mm")
   facility::String
   manufacturer::String

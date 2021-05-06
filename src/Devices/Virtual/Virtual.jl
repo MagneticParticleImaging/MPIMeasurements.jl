@@ -1,3 +1,3 @@
-@quasiabstract struct VirtualDevice <: Device end
+abstract type VirtualDevice <: Device end
 
 include("SequenceController.jl")

@@ -1,14 +1,12 @@
 
 
-@option struct SequenceControllerParams <: DeviceParams
+Base.@kwdef struct SequenceControllerParams <: DeviceParams
   
 end
 
-@quasiabstract mutable struct SequenceController <: VirtualDevice
-  
-  function DummyDAQ(deviceID::String, params::DummyDAQParams)
-      return new(deviceID, params, nothing)
-  end
+Base.@kwdef mutable struct SequenceController <: VirtualDevice
+  deviceID::String
+  params::SequenceControllerParams
 end
 
 function setupSequence()

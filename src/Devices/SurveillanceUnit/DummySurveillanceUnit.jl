@@ -1,15 +1,13 @@
 export DummySurveillanceUnit, DummySurveillanceUnitParams
 
-@option struct DummySurveillanceUnitParams <: DeviceParams
+Base.@kwdef struct DummySurveillanceUnitParams <: DeviceParams
   
 end
 
-@quasiabstract mutable struct DummySurveillanceUnit <: SurveillanceUnit
-  acPowerEnabled::Bool
-
-  function DummySurveillanceUnit(deviceID::String, params::DummySurveillanceUnitParams)
-    return new(deviceID, params, false)
-  end
+Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
+  deviceID::String
+  params::DummySurveillanceUnitParams
+  acPowerEnabled::Bool = false
 end
 
 getTemperatures(su::DummySurveillanceUnit) = 30.0u"°C"

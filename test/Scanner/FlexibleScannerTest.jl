@@ -1,6 +1,3 @@
-using ReusePatterns
-using Configurations
-
 """
 Test the flexibility of the scanner instantiation
 
@@ -11,17 +8,14 @@ MPIMeasurements, but also from the outside.
   ### This section can be in a different package, which is not coupled to MPIMeasurements.jl as a dependency
   export FlexibleDAQ
   
-  @option struct FlexibleDAQParams <: MPIMeasurements.DeviceParams
+  Base.@kwdef struct FlexibleDAQParams <: MPIMeasurements.DeviceParams
     samplesPerPeriod::Int
     sendFrequency::typeof(1u"kHz")
   end
 
-  @quasiabstract struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
-    handle::Union{String, Nothing}
-
-    function FlexibleDAQ(deviceID::String, params::FlexibleDAQParams)
-      return new(deviceID, params, nothing)
-    end
+  Base.@kwdef mutable struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
+    deviceID::String
+    params::FlexibleDAQParams
   end
 
   function startTx(daq::FlexibleDAQ)
@@ -86,7 +80,7 @@ MPIMeasurements, but also from the outside.
 
     @testset "DAQ" begin
       daq = getDevice(scanner, "my_daq_id")
-      @test typeof(daq) == concretetype(FlexibleDAQ) # This implies implementation details...
+      @test daq isa FlexibleDAQ
       @test daq.params.samplesPerPeriod == 1000
       @test daq.params.sendFrequency == 25u"kHz"
     end
