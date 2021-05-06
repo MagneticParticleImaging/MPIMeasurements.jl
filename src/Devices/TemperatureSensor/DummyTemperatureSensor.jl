@@ -3,6 +3,7 @@ export DummyTemperatureSensor, DummyTemperatureSensorParams, numChannels, getTem
 Base.@kwdef struct DummyTemperatureSensorParams <: DeviceParams
   
 end
+DummyTemperatureSensorParams(dict::Dict) = from_dict(DummyTemperatureSensorParams, dict)
 
 Base.@kwdef mutable struct DummyTemperatureSensor <: TemperatureSensor
   deviceID::String

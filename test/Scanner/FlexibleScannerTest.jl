@@ -13,6 +13,8 @@ MPIMeasurements, but also from the outside.
     sendFrequency::typeof(1u"kHz")
   end
 
+  FlexibleDAQParams(dict::Dict) = from_dict(FlexibleDAQParams, dict)
+
   Base.@kwdef mutable struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
     deviceID::String
     params::FlexibleDAQParams

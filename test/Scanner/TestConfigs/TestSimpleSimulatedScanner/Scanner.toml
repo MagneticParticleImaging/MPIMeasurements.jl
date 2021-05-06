@@ -18,17 +18,17 @@ deviceType = "SimpleSimulatedDAQ"
 [Devices.my_daq_id.tx_main]
 type = "tx"
 channel = 1
-limitPeak = "1 V"
+limitPeak = "1V"
 sinkImpedance = "HIGH"
-feedback.channel = "feedback_main"
-feedback.calibration = "0.1 V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "0.1V/mT"
 
 [Devices.my_daq_id.rx_main]
 type = "rx"
 channel = 1
-limitPeak = "1 V"
+limitPeak = "1V"
 
 [Devices.my_daq_id.feedback_main]
 type = "rx"
 channel = 2
-limitPeak = "1 V"
+limitPeak = "1V"

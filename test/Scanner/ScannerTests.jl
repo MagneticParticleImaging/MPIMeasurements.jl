@@ -4,4 +4,4 @@ addConfigurationPath(testConfigDir)
 
 include("DummyScannerTest.jl")
 include("FlexibleScannerTest.jl")
-#include("SimpleSimulatedScannerTest.jl")
+include("SimpleSimulatedScannerTest.jl")

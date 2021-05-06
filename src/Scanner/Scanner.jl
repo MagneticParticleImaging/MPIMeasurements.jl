@@ -53,7 +53,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
-      paramsInst = from_dict(DeviceParamsImpl, params)
+      paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst)
     else
       @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."

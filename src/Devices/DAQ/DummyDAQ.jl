@@ -4,6 +4,7 @@ Base.@kwdef struct DummyDAQParams <: DeviceParams
     samplesPerPeriod::Int
     sendFrequency::typeof(1u"kHz")
 end
+DummyDAQParams(dict::Dict) = from_dict(DummyDAQParams, dict)
 
 Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
   deviceID::String

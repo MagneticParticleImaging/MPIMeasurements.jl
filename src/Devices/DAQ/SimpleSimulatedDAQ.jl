@@ -1,7 +1,55 @@
 export SimpleSimulatedDAQ, SimpleSimulatedDAQParams, simulateLangevinInduced
 
+abstract type ChannelParams end
+
+Base.@kwdef struct Feedback
+  channelID::AbstractString
+  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+end
+
+Base.@kwdef struct TxChannelParams <: ChannelParams
+  channel::Int64
+  limitPeak::typeof(1.0u"V")
+  sinkImpedance::SinkImpedance = SINK_HIGH
+  feedback::Union{Feedback, Nothing} = nothing
+end
+
+Base.@kwdef struct RxChannelParams <: ChannelParams
+  channel::Int64
+end
+
 Base.@kwdef struct SimpleSimulatedDAQParams <: DeviceParams
-    
+  channels::Dict{String, ChannelParams}
+end
+
+"Create the params struct from a dict. Typically called during scanner instantiation."
+function SimpleSimulatedDAQParams(dict::Dict)
+  channels = Dict{String, ChannelParams}()
+  for (key, value) in dict
+    if value isa Dict
+      splattingDict = Dict{Symbol, Any}()
+      if value["type"] == "tx"
+        splattingDict[:channel] = value["channel"]
+        splattingDict[:limitPeak] = uparse(value["limitPeak"])
+        if haskey(value, "sinkImpedance")
+          splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
+        end
+        if haskey(value, "feedback")
+          channelID=value["feedback"]["channelID"]
+          calibration=uparse(value["feedback"]["calibration"])
+
+          splattingDict[:feedback] = Feedback(channelID=channelID, calibration=calibration)
+        end
+        channels[key] = TxChannelParams(;splattingDict...)
+      elseif value["type"] == "rx"
+        channels[key] = RxChannelParams(channel=value["channel"])
+      end
+    else
+      error("There is an error in the configuration since there should
+             only be channel definitions in SimpleSimulatedDAQParams.")
+    end
+  end
+  return SimpleSimulatedDAQParams(channels=channels)
 end
 
 Base.@kwdef struct SimpleSimulatedDAQ <: AbstractDAQ

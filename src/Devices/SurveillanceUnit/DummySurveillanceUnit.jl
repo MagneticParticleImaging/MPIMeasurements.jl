@@ -3,6 +3,7 @@ export DummySurveillanceUnit, DummySurveillanceUnitParams
 Base.@kwdef struct DummySurveillanceUnitParams <: DeviceParams
   
 end
+DummySurveillanceUnitParams(dict::Dict) = from_dict(DummySurveillanceUnitParams, dict)
 
 Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
   deviceID::String
