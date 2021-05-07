@@ -1,115 +1,152 @@
 using Graphics: @mustimplement
+using Unitful
+# using OptionalUnits
 
-export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity,
-       parkPos, getMinMaxPosX, setEnabled
+import Base: reset
 
-abstract type Robot <: Device end
+export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
 
+@enum RobotState INIT DISABLED READY MOVING ERROR
+
+@quasiabstract struct Robot <: Device
+    state::RobotState
+    referenced::Bool
+end
+
+@mustimplement getPosition(rob::Robot)
+@mustimplement dof(rob::Robot)
+@mustimplement axisRange(rob::Robot) # must return Vector of Vectors
+
+defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that can handle velocities
+
+@mustimplement _moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+@mustimplement _moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+@mustimplement _enable(rob::Robot)
+@mustimplement _disable(rob::Robot)
+@mustimplement _reset(rob::Robot)
+@mustimplement _setup(rob::Robot)
+@mustimplement _doReferenceDrive(rob::Robot)
+
+include("DummyRobot.jl")
+include("SimulatedRobot.jl")
+include("IgusRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
-Base.close(::Robot) = nothing
+state(rob::Robot) = rob.state
+isReferenced(rob::Robot) = rob.referenced # maybe this is not the best implementation
 
-# The following methods need to be implemented by a robot
-@mustimplement moveAbs(robot::Robot, posX::typeof(1.0Unitful.mm),
-  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))
-@mustimplement moveRel(robot::Robot, distX::typeof(1.0Unitful.mm),
-    distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
-@mustimplement movePark(robot::Robot)
-@mustimplement moveCenter(robot::Robot)
-@mustimplement setBrake(robot::Robot,brake::Bool)
-@mustimplement setEnabled(robot::Robot,enabled::Bool)
-@mustimplement prepareRobot(robot::Robot)
-@mustimplement isReferenced(robot::Robot)
-@mustimplement getDefaultVelocity(robot::Robot)
-@mustimplement setRefVelocity(robot::Robot,vel::Array{Int64,1})
-@mustimplement parkPos(robot::Robot)
-@mustimplement getMinMaxPosX(robot::Robot)
+moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
+moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
+moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = moveAbs(rob, pos, speed * ones(dof(rob)))
 
-""" `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
-function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})
-  if length(xyzPos)!=3
-    error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
-  end
-  coordsTable = checkCoords(setup, xyzPos, getMinMaxPosX(robot))
-  moveAbsUnsafe(robot,xyzPos)
-end
+function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
 
-""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
-function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)})
-    if length(xyzPos)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
+    @assert length(pos) == dof(rob) "Position vector included $(length(pos)) axes, but the robot has $(dof(rob)) degrees-of-freedom"
+    @assert state(rob) == READY "Robot is currently in state $(state(rob)), to start a movement it has to be in state READY"
+    @assert isReferenced(rob) "Robot has to be referenced for absolute movement!" # TODO: maybe this does not have to be limited
+    
+    @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
+    #TODO: perform safety check of coordinates
+
+    rob.state = MOVING
+    try
+        @info "Started absolute robot movement to $pos with $speed."
+        _moveAbs(rob, pos, speed)
+        rob.state = READY
+    catch exc
+        @error "Some error occured during the robot drive" exc
+        rob.state = ERROR
     end
-    moveAbs(robot,xyzPos[1],xyzPos[2],xyzPos[3])
 end
 
-""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})` """
-function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})
-    if length(xyzPos)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
+moveRel(rob::Robot, dist::Vararg{Unitful.Length,N}) where N = moveRel(rob, [dist...])
+moveRel(rob::Robot, dist::Vector{<:Unitful.Length}) = moveRel(rob, dist, defaultVelocity(rob))
+moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = moveRel(rob, dist, speed * ones(dof(rob)))
+
+function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+
+    @assert length(dist) == dof(rob) "Distance vector included $(length(dist)) axes, but the robot has $(dof(rob)) degrees-of-freedom"
+    @assert state(rob) == READY "Robot is currently in state $(state(rob)), to start a movement it has to be in state READY"
+    
+    pos = getPosition(rob) + dist
+    @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
+    #TODO: perform safety check of coordinates
+    
+    rob.state = MOVING
+    
+    try
+        _moveRel(rob, dist, speed)
+        rob.state = READY
+    catch exc
+        @error "Some error occured during the robot drive" exc
+        rob.state = ERROR
     end
-    if length(xyzVel)!=3
-      error("position vector xyzVel needs to have length = 3, but has length: ",length(xyzPos))
+end
+
+function enable(rob::Robot)
+    if state(rob) == READY
+        return
+    elseif state(rob) == DISABLED
+        _enable(rob)
+        rob.state = READY
+    else
+        @error "Robot can not be enabled from state $(state(rob))"
     end
-    moveAbs(robot,xyzPos[1],xyzVel[1],xyzPos[2],xyzVel[2],xyzPos[3],xyzVel[3])
 end
 
-# """ `moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0Unitful.mm)})` """
-# function moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0Unitful.mm)})
-#   if length(xyzDist)!=3
-#     error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
-#   end
-#   coordsTable = checkCoords(setup, xyzDist)
-#   moveRelUnsafe(robot,xyzDist)
-# end
-
-""" `moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0Unitful.mm)})` """
-function moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0Unitful.mm)})
-    if length(xyzDist)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
+function disable(rob::Robot)
+    if state(rob) == DISABLED
+        return
+    elseif state(rob) == READY
+        _disable(rob)
+        rob.state=DISABLED
+    else
+        @error "Robot can not be disabled from state $(state(rob))"
     end
-    moveRel(robot,xyzDist[1],xyzDist[2],xyzDist[3])
 end
 
-function userGuidedPreparation(robot::Robot)
-  display("IselRobot is NOT referenced and needs to be referenced!")
-  display("Remove all attached devices from the robot before the robot will be referenced and move around!")
-  display("Type \"REF\" in console to continue")
-  userInput=readline(stdin)
-  if userInput=="REF"
-      display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
-      uIYes = readline(stdin)
-      if uIYes == "yes"
-          prepareRobot(robot)
-          display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
-          userInput=readline(stdin)
-          return
-      else
-          error("User failed to type \"yes\" to continue")
-      end
-  else
-      error("User failed to type \"REF\" to continue")
-  end
+function Base.reset(rob::Robot)
+    _reset(rob)
+    rob.referenced = false
+    rob.state = INIT
 end
 
-if Sys.isunix() && VERSION >= v"0.6"
-  include("IselRobot.jl")
+function setup(rob::Robot)
+    @assert state(rob) == INIT "Robot has to be in state INIT to be set up, it is currently in state $(state(rob))"
+    _setup(rob)
+    rob.state = DISABLED
 end
 
-include("BrukerRobot.jl")
-include("DummyRobot.jl")
-
-function Robot(params::Dict)
-  if params["type"] == "Dummy"
-    return DummyRobot()
-  elseif params["type"] == "Isel"
-    return IselRobot(params)
-  elseif params["type"] == "Bruker"
-    return BrukerRobot(params["connection"])
-  else
-    error("Cannot create Robot!")
-  end
+function doReferenceDrive(rob::Robot)
+    @assert state(rob) == READY "Robot has to be READY to perform a reference drive, it is currently in state $(state(rob))"
+    rob.state = MOVING
+    _doReferenceDrive(rob)
+    rob.state = READY
+    rob.referenced = true
 end
 
-include("Tour.jl")
+function checkAxisRange(rob::Robot, coords::Vector{<:Unitful.Length})
+    axes = axisRange(rob)
+    inRange = true
+    for i in 1:length(coords)
+        inRange &= (axes[i][1] <= coords[i] <= axes[i][2])
+        return inRange
+    end
+end
+
+function RobotState(s::Symbol)
+    reverse_dict = Dict(value => key for (key, value) in Base.Enums.namemap(RobotState))
+    if s in keys(reverse_dict)
+        return RobotState(reverse_dict[s])
+    else
+        throw(ArgumentError(string("invalid value for Enum RobotState: $s")))
+    end
+end
+
+
+Base.convert(t::Type{RobotState}, x::Union{Symbol,Int}) = t(x)
+Base.:(==)(x::RobotState, y::Union{Symbol,Int}) = try x == RobotState(y) catch ArgumentError return false end
+
+
+

@@ -1,6 +1,6 @@
 #include("SerialDevices/SerialDevices.jl")
 include("DAQ/DAQ.jl")
 include("GaussMeter/GaussMeter.jl")
-#include("Robots/Robots.jl")
+include("Robots/Robots.jl")
 include("SurveillanceUnit/SurveillanceUnit.jl")
 include("TemperatureSensor/TemperatureSensor.jl")
