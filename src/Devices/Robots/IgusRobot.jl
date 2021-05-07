@@ -49,17 +49,23 @@ Base.@kwdef struct IgusRobotParams <: DeviceParams
     timeout::typeof(1.0u"s") = 10u"s"
 end
 
-@quasiabstract mutable struct IgusRobot <: Robot
+mutable struct IgusRobot <: Robot
+    deviceID::String
+    params::IgusRobotParams
+    state::RobotState
     socket::Union{TCPSocket,Nothing}
     function IgusRobot(deviceID::String, params::IgusRobotParams)
-        return new(deviceID, params, INIT, false, nothing)
+        return new(deviceID, params, INIT, nothing)
     end
 end
+
+state(rob::IgusRobot) = rob.state
+setstate!(rob::IgusRobot, state::RobotState) = rob.state=state
 
 dof(rob::IgusRobot) = 1
 getPosition(rob::IgusRobot) = try [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"] catch; return [NaN]u"mm" end
 axisRange(rob::IgusRobot) = rob.params.axisRange
-isReferenced(rob::IgusRobot) = rob.referenced = (getSdoObject(rob, DIGITAL_OUTPUTS) & (1 << 26))!=0
+isReferenced(rob::IgusRobot) = (getSdoObject(rob, DIGITAL_OUTPUTS) & (1 << 26))!=0
 defaultVelocity(rob::IgusRobot) = rob.params.defaultVelocity
 
 function _moveAbs(rob::IgusRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})

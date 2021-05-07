@@ -5,13 +5,21 @@ Base.@kwdef struct SimulatedRobotParams <: DeviceParams
     axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500],[0,500],[0,250]]u"mm"
 end
 
-@quasiabstract mutable struct SimulatedRobot <: Robot
+mutable struct SimulatedRobot <: Robot
+    deviceID::String
+    params::SimulatedRobotParams
+    state::RobotState
+    referenced::Bool
     position::Vector{typeof(1.0u"mm")}
     connected::Bool
     function SimulatedRobot(deviceID::String, params::SimulatedRobotParams)
         return new(deviceID, params, INIT, false, [0,0,0]u"mm", false)
     end
 end
+
+state(rob::SimulatedRobot) = rob.state
+setstate!(rob::SimulatedRobot, state::RobotState) = rob.state=state
+isReferenced(rob::SimulatedRobot) = rob.referenced
 
 dof(rob::SimulatedRobot) = 3
 getPosition(rob::SimulatedRobot) = rob.position
@@ -57,5 +65,6 @@ function _doReferenceDrive(rob::SimulatedRobot)
     @info "SimulatedRobot: Doing reference drive"
     sleep(2)
     @info "SimulatedRobot: Reference drive complete"
+    rob.referenced = true
 end
 

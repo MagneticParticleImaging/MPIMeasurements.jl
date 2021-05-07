@@ -3,11 +3,19 @@ export DummyRobot, DummyRobotParams
 Base.@kwdef struct DummyRobotParams <: DeviceParams
 end
 
-@quasiabstract mutable struct DummyRobot <: Robot
+mutable struct DummyRobot <: Robot
+    deviceID::String
+    params::DummyRobotParams
+    state::RobotState
+    referenced::Bool
     function DummyRobot(deviceID::String, params::DummyRobotParams)
         return new(deviceID, params, INIT, false)
     end
 end
+
+state(rob::DummyRobot) = rob.state
+setstate!(rob::DummyRobot, state::RobotState) = rob.state=state
+isReferenced(rob::DummyRobot) = rob.referenced
 
 getPosition(rob::DummyRobot) = [1.0,0.0,0.0]u"mm"
 dof(rob::DummyRobot) = 3
@@ -39,4 +47,5 @@ end
 
 function _doReferenceDrive(rob::DummyRobot)
     @info "DummyRobot: Doing reference drive"
+    rob.referenced = true
 end

@@ -8,11 +8,11 @@ export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRe
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
-@quasiabstract struct Robot <: Device
-    state::RobotState
-    referenced::Bool
-end
+abstract type Robot <: Device end
 
+@mustimplement state(rob::Robot)
+@mustimplement setstate!(rob::Robot, state::RobotState)
+@mustimplement isReferenced(rob::Robot)
 @mustimplement getPosition(rob::Robot)
 @mustimplement dof(rob::Robot)
 @mustimplement axisRange(rob::Robot) # must return Vector of Vectors
@@ -33,9 +33,6 @@ include("IgusRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
-state(rob::Robot) = rob.state
-isReferenced(rob::Robot) = rob.referenced # maybe this is not the best implementation
-
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
 moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = moveAbs(rob, pos, speed * ones(dof(rob)))
@@ -49,14 +46,14 @@ function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{
     @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
     #TODO: perform safety check of coordinates
 
-    rob.state = MOVING
+    setstate!(rob, MOVING)
     try
         @info "Started absolute robot movement to $pos with $speed."
         _moveAbs(rob, pos, speed)
-        rob.state = READY
+        setstate!(rob, READY)
     catch exc
         @error "Some error occured during the robot drive" exc
-        rob.state = ERROR
+        setstate!(rob, ERROR)
     end
 end
 
@@ -73,14 +70,14 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
     @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
     #TODO: perform safety check of coordinates
     
-    rob.state = MOVING
+    setstate!(rob, MOVING)
     
     try
         _moveRel(rob, dist, speed)
-        rob.state = READY
+        setstate!(rob, READY)
     catch exc
         @error "Some error occured during the robot drive" exc
-        rob.state = ERROR
+        setstate!(rob, ERROR)
     end
 end
 
@@ -89,7 +86,7 @@ function enable(rob::Robot)
         return
     elseif state(rob) == DISABLED
         _enable(rob)
-        rob.state = READY
+        setstate!(rob, READY)
     else
         @error "Robot can not be enabled from state $(state(rob))"
     end
@@ -100,7 +97,7 @@ function disable(rob::Robot)
         return
     elseif state(rob) == READY
         _disable(rob)
-        rob.state=DISABLED
+        setstate!(rob, DISABLED)
     else
         @error "Robot can not be disabled from state $(state(rob))"
     end
@@ -108,22 +105,20 @@ end
 
 function Base.reset(rob::Robot)
     _reset(rob)
-    rob.referenced = false
-    rob.state = INIT
+    setstate!(rob, INIT)
 end
 
 function setup(rob::Robot)
     @assert state(rob) == INIT "Robot has to be in state INIT to be set up, it is currently in state $(state(rob))"
     _setup(rob)
-    rob.state = DISABLED
+    setstate!(rob, DISABLED)
 end
 
 function doReferenceDrive(rob::Robot)
     @assert state(rob) == READY "Robot has to be READY to perform a reference drive, it is currently in state $(state(rob))"
-    rob.state = MOVING
+    setstate!(rob, MOVING)
     _doReferenceDrive(rob)
-    rob.state = READY
-    rob.referenced = true
+    setstate!(rob, READY)
 end
 
 function checkAxisRange(rob::Robot, coords::Vector{<:Unitful.Length})
