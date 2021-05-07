@@ -14,7 +14,8 @@
     enable(rob)
     @test_throws AssertionError moveAbs(rob, [1,1,1]u"mm")
     @test_throws AssertionError moveRel(rob,[1,0,0]u"m") # out of range for axis 1
-    @test doReferenceDrive(rob)
+    doReferenceDrive(rob)
+    @test isReferenced(rob)
     moveAbs(rob, [1,1,1]u"mm")
     reset(rob)
     @test state(rob)==:INIT

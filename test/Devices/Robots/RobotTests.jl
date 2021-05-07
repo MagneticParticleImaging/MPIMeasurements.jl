@@ -1,8 +1,3 @@
-include("DummyRobot.jl")
-include("SimulatedRobot.jl")
-#include("IgusRobot.jl")
-
-
 @testset "test $type interface" for type in ["DummyRobot", "SimulatedRobot", "IgusRobot"]
     rob_type = eval(Symbol(type))
     par_type = eval(Symbol(type*"Params"))
@@ -30,4 +25,17 @@ include("SimulatedRobot.jl")
     end
 end
 
+@testset "DummyRobot" begin
+  include("DummyRobot.jl")
+end
+
+@testset "SimulatedRobot" begin
+  include("SimulatedRobot.jl")
+end
+
+#=
+@testset "IgusRobot" begin
+  include("IgusRobot.jl")
+end
+=#
 
