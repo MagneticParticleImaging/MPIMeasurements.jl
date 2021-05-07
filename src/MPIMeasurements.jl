@@ -19,8 +19,6 @@ using LinearAlgebra
 using Statistics
 using Dates
 using InteractiveUtils
-using Configurations
-using ReusePatterns
 #using Winston, Gtk, Gtk.ShortNames
 
 #using MPISimulations
@@ -38,28 +36,29 @@ abstract type MeasObj end
 """
 Abstract type for all device parameters
 
-Every device must implement a parameter struct using @option in order
-to allow for automatic instantiation from the configuration file.
+Every device must implement a parameter struct allowing for
+automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
-# """
-# (Quasi)Abstract supertype for all devices
-#
-# Every device has to implement its own device struct which identifies it.
-#
-# """
-@quasiabstract struct Device
-  deviceID::String
-  params::DeviceParams
-end
+"""
+Abstract type for all devices
 
-deviceID(device::Device) = device.deviceID
-params(device::Device) = device.params
+Every device has to implement its own device struct which identifies it.
+A concrete implementation should contain e.g. the handle to device ressources
+or internal variables.
+The device struct must at least have the fields `deviceID` and `params` and
+all other fields should have default values.
+"""
+abstract type Device end
+
+deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct must have a field `deviceID`.")
+params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct must have a field `params`.")
 
 scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
 addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
 
+include("Utils/Utils.jl")
 include("Scanner/Scanner.jl")
 include("Devices/Devices.jl")
 #include("Measurements/Measurements.jl") # Deactivate for now in order to not hinder the restructuring

@@ -1,14 +1,13 @@
 export DummyTemperatureSensor, DummyTemperatureSensorParams, numChannels, getTemperature
 
-@option struct DummyTemperatureSensorParams <: DeviceParams
+Base.@kwdef struct DummyTemperatureSensorParams <: DeviceParams
   
 end
+DummyTemperatureSensorParams(dict::Dict) = from_dict(DummyTemperatureSensorParams, dict)
 
-@quasiabstract mutable struct DummyTemperatureSensor <: TemperatureSensor
-
-  function DummyTemperatureSensor(deviceID::String, params::DummyTemperatureSensorParams)
-    return new(deviceID, params)
-  end
+Base.@kwdef mutable struct DummyTemperatureSensor <: TemperatureSensor
+  deviceID::String
+  params::DummyTemperatureSensorParams
 end
 
 numChannels(sensor::DummyTemperatureSensor) = 1

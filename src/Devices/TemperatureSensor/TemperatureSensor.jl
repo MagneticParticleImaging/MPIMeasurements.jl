@@ -1,6 +1,6 @@
 export TemperatureSensor, getTemperatureSensors, getTemperatureSensor, numChannels, getTemperatures, getTemperature
 
-@quasiabstract struct TemperatureSensor <: Device end
+abstract type TemperatureSensor <: Device end
 
 include("DummyTemperatureSensor.jl")
 #include("FOTemp.jl")

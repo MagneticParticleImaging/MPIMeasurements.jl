@@ -1,5 +1,9 @@
-using Configurations
-using ReusePatterns
+# using Configurations
+# using ReusePatterns
+
+using MPIMeasurements
+
+
 
 # "Option A"
 # @option struct Device
@@ -21,35 +25,35 @@ using ReusePatterns
 
 # option = from_dict(ConcreteDevice, d)
 
-abstract type DeviceParams end
+# abstract type DeviceParams end
 
-@option struct TestDeviceParams <: DeviceParams
-  testParam::String
-end
+# @option struct TestDeviceParams <: DeviceParams
+#   testParam::String
+# end
 
-@quasiabstract struct Device
-  deviceID::String
-  params::DeviceParams
-end
+# @quasiabstract struct Device
+#   deviceID::String
+#   params::DeviceParams
+# end
 
-@quasiabstract mutable struct TestDevice <: Device
-  testDeviceParam::String
+# @quasiabstract mutable struct TestDevice <: Device
+#   testDeviceParam::String
 
-  function TestDevice(deviceID::String, params::TestDeviceParams)
-    return new(deviceID, params, "bla")
-  end
-end
+#   function TestDevice(deviceID::String, params::TestDeviceParams)
+#     return new(deviceID, params, "bla")
+#   end
+# end
 
-test = TestDevice("id", TestDeviceParams("testparam"))
+# test = TestDevice("id", TestDeviceParams("testparam"))
 
-@info test.testDeviceParam
-test.testDeviceParam = "test"
-@info test.testDeviceParam
+# @info test.testDeviceParam
+# test.testDeviceParam = "test"
+# @info test.testDeviceParam
 
 
-function testDispatch(device::TestDevice)
-  @info device typeof(device) == TestDevice
-end
+# function testDispatch(device::TestDevice)
+#   @info device typeof(device) == TestDevice
+# end
 
 # testDispatch(test)
 

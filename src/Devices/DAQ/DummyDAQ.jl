@@ -1,25 +1,15 @@
 export DummyDAQ, DummyDAQParams
 
-@option struct DummyDAQParams <: DeviceParams
+Base.@kwdef struct DummyDAQParams <: DeviceParams
     samplesPerPeriod::Int
     sendFrequency::typeof(1u"kHz")
 end
+DummyDAQParams(dict::Dict) = from_dict(DummyDAQParams, dict)
 
-@quasiabstract mutable struct DummyDAQ <: AbstractDAQ
-    handle::Union{String, Nothing}
-
-    function DummyDAQ(deviceID::String, params::DummyDAQParams)
-        return new(deviceID, params, nothing)
-    end
+Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
+  deviceID::String
+  params::DummyDAQParams
 end
-
-
-# function updateParams!(daq::DummyDAQ, params_::Dict)
-#   daq.params = DAQParams(params_)
-#   #setACQParams(daq)
-# end
-
-
 
 function startTx(daq::DummyDAQ)
 end

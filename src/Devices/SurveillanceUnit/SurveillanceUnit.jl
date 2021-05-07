@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 
 export SurveillanceUnit, getSurveillanceUnits, getSurveillanceUnit, enableACPower, disableACPower, getTemperatures, getACStatus, resetDAQ
 
-@quasiabstract struct SurveillanceUnit <: Device end
+abstract type SurveillanceUnit <: Device end
 
 include("DummySurveillanceUnit.jl")
 #include("ArduinoSurveillanceUnit.jl")

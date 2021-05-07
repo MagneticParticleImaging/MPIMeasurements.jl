@@ -42,14 +42,19 @@ rxUnit = "V"
 scannerManufacturer = "IBI"
 measIsSpectralLeakageCorrected = false
 dfWaveform = "sine"
+allowDFWaveformChanges = true
 
 [SurveillanceUnit]
 type = "ArduinoWithExternalTempUnit"
 #type = "Dummy"
-connection = ["/dev/ttyACM0", "/dev/ttyACM2"]
-numSensors = 13
-maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53]  #13 sensors
-selectSensors = [7,10] 
+#connection = ["SurveillanceUnit", "TempUnit"]
+connection = ["/dev/ttyACM3", "/dev/ttyACM2"]
+numSensors = 16
+maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]  #13 sensors
+selectSensors = [4,11,14,15,16] 
+#numSensors = 13
+#maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53]  #13 sensors
+#selectSensors = [7,10] 
 
 
 #[TemperatureUnit]
@@ -83,8 +88,8 @@ defParkPos = [0.42, 0.1255, 0.1055]
 defAssemblePos = [0.42, 0.24, 0.25]
 #type = "Isel"
 type="Dummy"
-connection = "/dev/ttyUSB1"
-#connection = "/dev/ttyUSB0"
+#connection = "/dev/ttyUSB1"
+connection = "/dev/ttyUSB0"
 
 [Safety]
 receiveCoil = "headCoil"
@@ -104,17 +109,20 @@ acqFFValues = [1.0, 1.0]
 # ip = ["rp-f06c23.local","rp-f052d8.local"]
 #ip = ["192.168.1.103","192.168.1.104"]
 ip = ["192.168.1.103","192.168.1.104","192.168.1.105"]
-calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+#calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00026, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 controlPhase = false
 calibFieldToVolt = [63.310344827586206]
+txOffsetVolt = [-0.0115, -0.0145, 0.0, 0.0, 0.0, 0.0]
+#txOffsetVolt = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 # FF calib Dip 1
 #calibFFCurrentToVolt = [0.08004786511759439, 0.08004786511759439]
 #ff calib Dip 123
 #calibFFCurrentToVolt = [0.04447103617644134, 0.04447103617644134]
 #ff calib Dip 123 FastDAQ
-calibFFCurrentToVolt = [0.04075, 0.04292] #]0.05150]
+calibFFCurrentToVolt = [0.027061248, 0.026531] #[0.04075, 0.04292] #]0.05150]
 acqNumBGFrames = 200
-rxChanIdx = [3,4,1,2,5,6]
+rxChanIdx = [1,2,3,4,5,6] #,5,6]
 #rxChanIdx = [3,4,1]
 acqNumFGFrames = 200
 acqNumFFChannels = 2
@@ -136,6 +144,6 @@ ffRampUpFraction = 0.6
 acqFFSequence = "None"
 txLimitVolt = [0.8]
 dfBaseFrequency = 1.25e8
-ffRampUpTime = 0.2
+ffRampUpTime = 0.2 #2.0 #1.0 #0.2
 jumpSharpness = 0.1
 passPDMToFastDAC = [true,false, false]

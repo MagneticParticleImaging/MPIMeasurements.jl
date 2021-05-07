@@ -1,14 +1,13 @@
 export DummyGaussMeter, DummyGaussMeterParams, getXValue, getYValue, getZValue
 
-@option struct DummyGaussMeterParams <: DeviceParams
+Base.@kwdef struct DummyGaussMeterParams <: DeviceParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 end
+DummyGaussMeterParams(dict::Dict) = from_dict(DummyGaussMeterParams, dict)
 
-@quasiabstract mutable struct DummyGaussMeter <: GaussMeter
-
-  function DummyGaussMeter(deviceID::String, params::DummyGaussMeterParams)
-    return new(deviceID, params)
-  end
+Base.@kwdef mutable struct DummyGaussMeter <: GaussMeter
+  deviceID::String
+  params::DummyGaussMeterParams
 end
 
 getXValue(gauss::DummyGaussMeter) = 1.0
