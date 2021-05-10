@@ -1,6 +1,7 @@
-@testset "test $type interface" for type in ["DummyRobot", "SimulatedRobot", "IgusRobot"]
-    rob_type = eval(Symbol(type))
-    par_type = eval(Symbol(type*"Params"))
+using InteractiveUtils: subtypes
+
+@testset "test $rob_type interface" for rob_type in subtypes(Robot)
+    par_type = eval(Symbol(string(rob_type)*"Params"))
     params = par_type()
     rob = rob_type("test",params)
     
@@ -33,9 +34,10 @@ end
   include("SimulatedRobot.jl")
 end
 
-#=
-@testset "IgusRobot" begin
-  include("IgusRobot.jl")
+if "igus" in ARGS
+    @testset "IgusRobot" begin
+    include("IgusRobot.jl")
+    end
 end
-=#
+
 
