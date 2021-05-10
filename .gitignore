@@ -3,5 +3,6 @@
 *.jl.mem
 docs/build/
 test/images
+test/DAQ/images
 Manifest.toml
 .vscode

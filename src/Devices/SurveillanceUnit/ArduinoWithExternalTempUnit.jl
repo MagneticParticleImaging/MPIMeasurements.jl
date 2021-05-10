@@ -243,6 +243,7 @@ end
  
  function enableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
      ACQ=ArduinoCommand(Arduino,"ENABLE:AC", 1);
+     sleep(0.5)
      CheckACQ(Arduino,ACQ)
  end
  
@@ -251,4 +252,5 @@ end
      CheckACQ(Arduino,ACQ)
  end
  
+ hasResetDAQ(su::ArduinoWithExternalTempUnit) = true
  
