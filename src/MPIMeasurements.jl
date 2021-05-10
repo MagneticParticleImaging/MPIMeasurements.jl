@@ -4,13 +4,10 @@ using Pkg
 
 using Compat
 using Reexport
-#using IniFile
 @reexport using MPIFiles
-#@reexport using Redpitaya
-@reexport using Unitful
-@reexport using Unitful.DefaultSymbols
-@reexport using Pkg.TOML
-@reexport using ThreadPools
+using Unitful
+using TOML
+using ThreadPools
 using HDF5
 using ProgressMeter
 using Sockets
@@ -19,19 +16,15 @@ using LinearAlgebra
 using Statistics
 using Dates
 using InteractiveUtils
-#using Winston, Gtk, Gtk.ShortNames
-
-#using MPISimulations
 
 import Base.write
-#import PyPlot.disconnect
 
 export deviceID, params, addConfigurationPath
 
 # abstract supertype for all measObj etc.
 # Note: This is placed here since e.g. the robot tour needs it, but measurements need AbstractDAQ.
 # TODO: A tour is more like a measurement and should not be with the device definitions.
-abstract type MeasObj end
+# abstract type MeasObj end
 
 """
 Abstract type for all device parameters

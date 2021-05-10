@@ -13,32 +13,11 @@ abstract type AbstractDAQ <: Device end
   SINK_HIGH
 end
 
-Base.@kwdef mutable struct SendParameters
-  "Base frequency to derive drive field frequencies (Unit: Hz)"
-  baseFrequency::Int64
-  "Divider of the baseFrequency to determine the drive field frequencies"
-  divider::Array{Int64, 2}
-  "Applied drive field phase (Unit: rad)."
-  phase::Array{Float64, 3}
-  "Applied drive field voltage (Unit: V)."
-  amplitude::Array{Float64, 3}
-  "Waveform type: sine, triangle or custom"
-  waveform::Array{Waveform, 2}
-  "Impedance of the sink. Used to calculate the actual output amplitude."
-  sinkImpedance::Vector{SinkImpedance}
-  "Channels that should be enabled."
-  channelMapping::Vector{Int64}
-  "Minimum cycles that are performed for an amplitude and phase change."
-  minimumChangeCyles::Int64
-  "Amplification of the channels (Unit: V)."
-  amplification::Vector{Float64}
-end
-
 #include("Control.jl")
 #include("Plotting.jl")
 #include("Parameters.jl")
 
-@mustimplement setupTx(daq::AbstractDAQ, channels::Vector{ElectricalTxChannel})
+@mustimplement setupTx(daq::AbstractDAQ, channels::Vector{ElectricalTxChannel}, baseFrequency::typeof(1.0u"Hz"))
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
 @mustimplement correctAmpAndPhase(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)

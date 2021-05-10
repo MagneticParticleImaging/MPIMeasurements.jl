@@ -1,5 +1,3 @@
-using Pkg.TOML
-
 import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
@@ -59,6 +57,12 @@ function initiateDevices(devicesParams::Dict{String, Any})
       @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
     end
   end
+
+  # Add a sequence controller since it is always needed
+  id = "sequence_controller"
+  params = SequenceControllerParams()
+  sequenceController = SequenceController(deviceID=id, params=params)
+  devices[id] = sequenceController
 
   return devices
 end

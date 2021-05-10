@@ -1,2 +1,2 @@
-include("DAQ/DAQTests.jl")
-include("Virtual/SequenceControllerTest.jl")
+#include("DAQ/DAQTests.jl")
+#include("Virtual/SequenceControllerTest.jl")

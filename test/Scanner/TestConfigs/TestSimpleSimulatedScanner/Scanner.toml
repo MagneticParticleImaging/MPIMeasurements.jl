@@ -20,8 +20,10 @@ type = "tx"
 channel = 1
 limitPeak = "1V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
 feedback.channelID = "feedback_main"
-feedback.calibration = "0.1V/mT"
+feedback.calibration = "10mT/V"
 
 [Devices.my_daq_id.rx_main]
 type = "rx"
