@@ -2,12 +2,6 @@ using MPIMeasurements
 using Test
 using Unitful
 
-if isempty(ARGS) || "all" in ARGS
-  all_tests = true
-else
-  all_tests = false
-end
-
 include("Devices/DeviceTests.jl")
 include("Scanner/ScannerTests.jl")
 
