@@ -59,9 +59,6 @@ mutable struct IgusRobot <: Robot
     end
 end
 
-state(rob::IgusRobot) = rob.state
-setstate!(rob::IgusRobot, state::RobotState) = rob.state=state
-
 dof(rob::IgusRobot) = 1
 getPosition(rob::IgusRobot) = try [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"] catch; return [NaN]u"mm" end
 axisRange(rob::IgusRobot) = rob.params.axisRange

@@ -10,8 +10,8 @@ export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRe
 
 abstract type Robot <: Device end
 
-@mustimplement state(rob::Robot)
-@mustimplement setstate!(rob::Robot, state::RobotState)
+state(rob::Robot) = rob.state
+setstate!(rob::Robot, state::RobotState) = rob.state=state
 @mustimplement isReferenced(rob::Robot)
 @mustimplement getPosition(rob::Robot)
 @mustimplement dof(rob::Robot)

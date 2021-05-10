@@ -13,8 +13,6 @@ mutable struct DummyRobot <: Robot
     end
 end
 
-state(rob::DummyRobot) = rob.state
-setstate!(rob::DummyRobot, state::RobotState) = rob.state=state
 isReferenced(rob::DummyRobot) = rob.referenced
 
 getPosition(rob::DummyRobot) = [1.0,0.0,0.0]u"mm"

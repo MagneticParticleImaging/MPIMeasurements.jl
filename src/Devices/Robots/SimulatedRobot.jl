@@ -17,8 +17,6 @@ mutable struct SimulatedRobot <: Robot
     end
 end
 
-state(rob::SimulatedRobot) = rob.state
-setstate!(rob::SimulatedRobot, state::RobotState) = rob.state=state
 isReferenced(rob::SimulatedRobot) = rob.referenced
 
 dof(rob::SimulatedRobot) = 3
