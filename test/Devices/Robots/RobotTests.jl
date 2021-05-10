@@ -7,9 +7,6 @@ using InteractiveUtils: subtypes
     
     degrees = dof(rob)
     @test degrees isa Int
-    pos = getPosition(rob)
-    @test pos isa Vector{<:Unitful.Length}
-    @test length(pos) == degrees
 
     axes = axisRange(rob)
     @test axes isa Vector{<:Vector{<:Unitful.Length}}
@@ -27,17 +24,22 @@ using InteractiveUtils: subtypes
 end
 
 @testset "DummyRobot" begin
-  include("DummyRobot.jl")
+  include("DummyRobotTests.jl")
 end
 
 @testset "SimulatedRobot" begin
-  include("SimulatedRobot.jl")
+  include("SimulatedRobotTests.jl")
 end
 
 if "igus" in ARGS
     @testset "IgusRobot" begin
-    include("IgusRobot.jl")
+    include("IgusRobotTests.jl")
     end
 end
 
+if "isel" in ARGS
+    @testset "IselRobot" begin
+    include("IselRobotTests.jl")
+    end
+end
 
