@@ -30,6 +30,7 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 include("DummyRobot.jl")
 include("SimulatedRobot.jl")
 include("IgusRobot.jl")
+include("IselRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
