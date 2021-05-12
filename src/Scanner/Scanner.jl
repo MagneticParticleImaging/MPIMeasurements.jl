@@ -35,10 +35,14 @@ mutable struct MPIScanner
     try
       daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
     catch e
-      @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
-      resetDAQ(surveillanceUnit)
-      sleep(waittime)
-      daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+      if hasResetDAQ(surveillanceUnit)
+        @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
+        resetDAQ(surveillanceUnit)
+        sleep(waittime)
+        daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+      else
+        rethrow()
+      end
     end
 
     @info "Init Robot"

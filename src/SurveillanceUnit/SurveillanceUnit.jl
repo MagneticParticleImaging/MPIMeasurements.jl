@@ -1,6 +1,6 @@
 using Graphics: @mustimplement
 
-export enableACPower, disableACPower, getTemperatures, resetDAQ
+export enableACPower, disableACPower, getTemperatures, resetDAQ, hasResetDAQ
 
 include("DummySurveillanceUnit.jl")
 include("ArduinoSurveillanceUnit.jl")
@@ -27,3 +27,4 @@ end
 @mustimplement enableACPower(su::SurveillanceUnit, scanner::MPIScanner)
 @mustimplement disableACPower(su::SurveillanceUnit, scanner::MPIScanner)
 @mustimplement resetDAQ(su::SurveillanceUnit)
+@mustimplement hasResetDAQ(su::SurveillanceUnit)

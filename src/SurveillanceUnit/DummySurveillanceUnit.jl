@@ -15,3 +15,4 @@ function disableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)
 end
 
 resetDAQ(su::DummySurveillanceUnit) = nothing
+hasResetDAQ(su::DummySurveillanceUnit) = false

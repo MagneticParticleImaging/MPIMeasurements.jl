@@ -272,4 +272,5 @@ function disableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanne
     CheckACQ(Arduino,ACQ)
 end
  
+ hasResetDAQ(su::ArduinoWithExternalTempUnit) = true
  
