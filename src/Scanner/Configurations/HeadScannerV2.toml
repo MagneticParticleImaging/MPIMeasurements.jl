@@ -48,13 +48,16 @@ allowDFWaveformChanges = true
 type = "ArduinoWithExternalTempUnit"
 #type = "Dummy"
 #connection = ["SurveillanceUnit", "TempUnit"]
-connection = ["/dev/ttyACM1", "/dev/ttyACM2"]
+connection = ["/dev/ttyACM1", "/dev/ttyACM3"]
 numSensors = 16
 maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]  #13 sensors
-selectSensors = [4,11,14,15,16] 
-#numSensors = 13
-#maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53]  #13 sensors
-#selectSensors = [7,10] 
+#current wiring (05 May 2021)
+#1: RX1, 2: RX2, 3: RX3, 4: TX1/1, 5: TX1/2, 6: TX2/1, 7: TX2/2, 8: SefoCoilRight, 9:SefoCoilLeft,
+#10: ICN X, 11: ICN Z, 12: n.c., 13: (Rack), 14: SefoCoreRight, 15: SefoCoreLeft, 16: SefoCabinet
+#toDo: test if ICN X and Z are not reversed
+selectSensors = [1,2,3,4,5,6,7,8,9,10,11,13,14,15,16]
+nameSensors = ["RX1","RX2","RX3","TX1/1","TX1/2","TX2/1","TX2/2", "SefoCoilRight", "SefoCoilLeft", "ICN X", "ICN Z", "n.c.", "(Rack)", "SefoCoreRight", "SefoCoreLeft","SefoCabin"]
+
 
 
 #[TemperatureUnit]
