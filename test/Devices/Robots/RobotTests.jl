@@ -43,3 +43,8 @@ if "isel" in ARGS
     end
 end
 
+if "brukerrobot" in ARGS
+    @testset "BrukerRobot" begin
+    include("BrukerRobotTests.jl")
+    end
+end

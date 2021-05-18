@@ -31,6 +31,7 @@ include("DummyRobot.jl")
 include("SimulatedRobot.jl")
 include("IgusRobot.jl")
 include("IselRobot.jl")
+include("BrukerRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
@@ -142,7 +143,7 @@ end
 
 
 Base.convert(t::Type{RobotState}, x::Union{Symbol,Int}) = t(x)
-Base.:(==)(x::RobotState, y::Union{Symbol,Int}) = try x == RobotState(y) catch ArgumentError return false end
+Base.:(==)(x::RobotState, y::Union{Symbol,Int}) = try x == RobotState(y) catch _ return false end
 
 
 
