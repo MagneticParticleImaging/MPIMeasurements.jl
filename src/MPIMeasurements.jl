@@ -16,6 +16,7 @@ using LinearAlgebra
 using Statistics
 using Dates
 using InteractiveUtils
+using Graphics: @mustimplement
 
 import Base.write
 
@@ -45,8 +46,15 @@ all other fields should have default values.
 """
 abstract type Device end
 
-deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct must have a field `deviceID`.")
-params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct must have a field `params`.")
+deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct for `$(typeof(device))` must have a field `deviceID`.")
+params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct for `$(typeof(device))` must have a field `params`.")
+dependencies(device::Device) = :dependencies in fieldnames(typeof(device)) ? device.dependencies : error("The device struct for `$(typeof(device))` must have a field `dependencies`.")
+function dependencies(device::Device, type::DataType)
+  return [dependency for dependency in values(dependencies(device)) if dependency isa type]
+end
+
+@mustimplement init(device::Device)
+@mustimplement checkDependencies(device::Device)
 
 scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
 addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)

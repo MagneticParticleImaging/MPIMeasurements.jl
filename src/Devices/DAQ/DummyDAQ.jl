@@ -1,15 +1,25 @@
 export DummyDAQ, DummyDAQParams
 
 Base.@kwdef struct DummyDAQParams <: DeviceParams
-    samplesPerPeriod::Int
-    sendFrequency::typeof(1u"kHz")
+  samplesPerPeriod::Int
+  sendFrequency::typeof(1u"kHz")
 end
-DummyDAQParams(dict::Dict) = from_dict(DummyDAQParams, dict)
+DummyDAQParams(dict::Dict) = params_from_dict(DummyDAQParams, dict)
 
 Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
+  "Unique device ID for this device as defined in the configuration."
   deviceID::String
+  "Parameter struct for this devices read from the configuration."
   params::DummyDAQParams
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
 end
+
+function init(daq::DummyDAQ)
+  @debug "Initializing dummy DAQ with ID `$(daq.deviceID))`."
+end
+
+checkDependencies(daq::DummyDAQ) = true
 
 function startTx(daq::DummyDAQ)
 end
@@ -29,14 +39,14 @@ function currentPeriod(daq::DummyDAQ)
 end
 
 function readData(daq::DummyDAQ, startFrame, numFrames)
-    uMeas=zeros(2,2,2,2)
-    uRef=zeros(2,2,2,2)
-    return uMeas, uRef
+  uMeas=zeros(2,2,2,2)
+  uRef=zeros(2,2,2,2)
+  return uMeas, uRef
 end
 
 function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
-    uMeas=zeros(2,2,2,2)
-    uRef=zeros(2,2,2,2)
-    return uMeas, uRef
+  uMeas=zeros(2,2,2,2)
+  uRef=zeros(2,2,2,2)
+  return uMeas, uRef
 end
 refToField(daq::DummyDAQ, d::Int64) = 0.0

@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 import Base: setindex!, getindex
 
 export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,

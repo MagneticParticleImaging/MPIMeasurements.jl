@@ -44,25 +44,44 @@ device configuration struct.
 function initiateDevices(devicesParams::Dict{String, Any})
   devices = Dict{String, Device}()
 
+  # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
       deviceType = pop!(params, "deviceType")
 
+      dependencies_ = Dict{String, Union{Device, Missing}}()
+      if haskey(params, "dependencies")
+        deviceDepencencies = pop!(params, "dependencies")
+        for dependencyID in deviceDepencencies
+          dependencies_[dependencyID] = missing
+        end
+      end
+
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
       paramsInst = DeviceParamsImpl(params)
-      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst)
+      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
-      @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
+      throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
     end
   end
 
-  # Add a sequence controller since it is always needed
-  id = "sequence_controller"
-  params = SequenceControllerParams()
-  sequenceController = SequenceController(deviceID=id, params=params)
-  devices[id] = sequenceController
+  # Set dependencies for all devices
+  for device in values(devices)
+    for dependencyID in keys(dependencies(device))
+      device.dependencies[dependencyID] = devices[dependencyID]
+    end
+    
+    if !checkDependencies(device)
+      throw(ScannerConfigurationError("Unspecified dependency error in device with ID `$(deviceID(device))`."))
+    end
+  end
+
+  # Initiate all devices in the specified order
+  for deviceID in devicesParams["initializationOrder"]
+    init(devices[deviceID])
+  end
 
   return devices
 end
@@ -107,49 +126,16 @@ mutable struct MPIScanner
     end
 
     if isnothing(filename)
-      error("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath.")
+      throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
     end
 
+    @info "Instantiating scanner `$name` from configuration file at `$filename`."
+
     params = TOML.parsefile(filename)
-    generalParams = from_dict(MPIScannerGeneral, params["General"])
+    generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     devices = initiateDevices(params["Devices"])
 
     return new(name, configDir, generalParams, devices, guimode)
-
-    # @info "Init SurveillanceUnit"
-    # surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
-
-    # @info "Init DAQ"   # Restart the DAQ if necessary
-    # waittime = 45
-    # daq = nothing
-    # daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    # try
-    #   daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    # catch e
-    #   if hasResetDAQ(surveillanceUnit)
-    #     @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
-    #     resetDAQ(surveillanceUnit)
-    #     sleep(waittime)
-    #     daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
-    #   else
-    #     rethrow()
-    #   end
-    # end
-
-    # @info "Init Robot"
-    # if guimode
-    #   params["Robot"]["doReferenceCheck"] = false
-    # end
-    # robot = loadDeviceIfAvailable(params, Robot, "Robot")
-    # @info "Init GaussMeter"
-    # gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
-    # @info "Init Safety"
-    # safety = loadDeviceIfAvailable(params, RobotSetup, "Safety")
-    # @info "Init TemperatureSensor"
-    # temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")
-    # @info "All components initialized!"
-
-    # return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)
   end
 end
 

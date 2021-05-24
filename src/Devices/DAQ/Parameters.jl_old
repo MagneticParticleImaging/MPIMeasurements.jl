@@ -1,51 +1,55 @@
 export DAQParams
 
 mutable struct DAQParams
-  decimation::Int64
-  dfBaseFrequency::Float64
-  dfDivider::Vector{Int64}
-  dfFreq::Vector{Float64}
-  dfStrength::Vector{Float64}
-  dfPhase::Vector{Float64}
-  dfCycle::Float64
-  dfWaveform::String
-  jumpSharpness::Float64
-  rxBandwidth::Float64
-  acqNumPeriodsPerFrame::Int64
-  numSampPerPeriod::Int64
-  rxNumSamplingPoints::Int64
-  acqNumFrames::Int64
-  acqNumBGFrames::Int64
-  acqFramePeriod::Float64
-  acqNumAverages::Int64
-  acqNumFrameAverages::Int64
-  acqNumSubperiods::Int64
-  acqNumPeriodsPerPatch::Int64
-  sinLUT::Matrix{Float64}
-  cosLUT::Matrix{Float64}
-  acqNumFFChannels::Int64
-  acqFFValues::Matrix{Float64}
-  acqEnableSequence::Matrix{Bool}
-  calibIntToVolt::Matrix{Float64}
-  calibRefToField::Vector{Float64}
-  calibFieldToVolt::Vector{Float64}
-  calibFFCurrentToVolt::Vector{Float64}
-  currTx::Matrix{ComplexF64}
-  controlPause::Float64
-  controlLoopAmplitudeAccuracy::Float64
-  controlLoopPhaseAccuracy::Float64
-  correctCrossCoupling::Bool
-  rxChanIdx::Vector{Int64}
-  refChanIdx::Vector{Int64}
-  dfChanIdx::Vector{Int64}
-  txLimitVolt::Vector{Float64}
-  txOffsetVolt::Vector{Float64}
-  controlPhase::Bool
-  acqFFSequence::String
-  ffRampUpTime::Float64
-  ffRampUpFraction::Float64
-  triggerMode::String
-  passPDMToFastDAC::Vector{Bool}
+  decimation::Int64 -> RP specific
+
+  # Done
+  dfBaseFrequency::Float64 -> specific to Sequence
+  dfDivider::Vector{Int64} -> specific to Sequence
+  dfFreq::Vector{Float64} -> specific to Sequence
+  dfStrength::Vector{Float64} -> specific to Sequence
+  dfPhase::Vector{Float64} -> specific to Sequence
+  dfCycle::Float64 -> specific to Sequence
+  dfWaveform::String -> specific to Sequence
+  # /Done
+
+  jumpSharpness::Float64 -> RP specific
+  rxBandwidth::Float64 -> DAQ specific
+  acqNumPeriodsPerFrame::Int64 -> specific to Sequence
+  numSampPerPeriod::Int64 -> specific to Sequence
+  rxNumSamplingPoints::Int64 -> specific to Sequence
+  acqNumFrames::Int64 -> specific to Protocol
+  acqNumBGFrames::Int64 -> specific to Protocol
+  acqFramePeriod::Float64 -> specific to Sequence
+  acqNumAverages::Int64 -> specific to Protocol
+  acqNumFrameAverages::Int64 -> specific to Protocol
+  acqNumSubperiods::Int64 -> specific to Sequence
+  acqNumPeriodsPerPatch::Int64 -> specific to Protocol or Sequence
+  sinLUT::Matrix{Float64} -> specific to Sequence
+  cosLUT::Matrix{Float64} -> specific to Sequence
+  acqNumFFChannels::Int64 -> specific to Sequence
+  acqFFValues::Matrix{Float64} -> RP specific
+  acqEnableSequence::Matrix{Bool} -> RP specific but should be in Sequence
+  calibIntToVolt::Matrix{Float64} -> RP specific, can be removed by resolving issue #10 in DAQServer
+  calibRefToField::Vector{Float64} -> scanner specific
+  calibFieldToVolt::Vector{Float64} -> scanner specific
+  calibFFCurrentToVolt::Vector{Float64} -> scanner specific
+  currTx::Matrix{ComplexF64} -> specific to Sequence
+  controlPause::Float64 -> specific to Sequence
+  controlLoopAmplitudeAccuracy::Float64 -> specific to Sequence
+  controlLoopPhaseAccuracy::Float64 -> specific to Sequence
+  correctCrossCoupling::Bool -> specific to Sequence
+  rxChanIdx::Vector{Int64} -> specific to Sequence
+  refChanIdx::Vector{Int64} -> specific to Sequence
+  dfChanIdx::Vector{Int64} -> specific to Sequence
+  txLimitVolt::Vector{Float64} -> specific to Scanner
+  txOffsetVolt::Vector{Float64} -> specific to Sequence
+  controlPhase::Bool -> specific to Sequence
+  acqFFSequence::String -> specific to Sequence, but not yet there
+  ffRampUpTime::Float64 -> specific to Sequence, but not yet there
+  ffRampUpFraction::Float64 -> specific to Sequence, but not yet there
+  triggerMode::String -> RP specific
+  passPDMToFastDAC::Vector{Bool} -> RP specific
 end
 
 function calcDFFreq(baseFreq::Float64, divider::Vector{Int64})

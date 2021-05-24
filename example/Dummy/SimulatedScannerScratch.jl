@@ -6,6 +6,8 @@ using UnitfulRecipes
 pyplot()
 default(show = true)
 
+ENV["JULIA_DEBUG"] = "all"
+
 # Add test configurations to path
 testConfigDir = normpath(string(@__DIR__), "../../test/Scanner/TestConfigs")
 addConfigurationPath(testConfigDir)
@@ -17,6 +19,7 @@ path = normpath(testConfigDir, "TestSimpleSimulatedScanner/Sequences/Sequence.to
 sequence = sequenceFromTOML(path)
 setupSequence(scanner, sequence)
 
-uMeas, uRef = readData(getDAQ(scanner), 1, 2)
-plot(uRef[:,1,1,2])
-plot!(uMeas[:,1,1,2])
+uMeas, uRef, t = readData(getDAQ(scanner), 1, 5)
+# plot(t, uRef[:,1,1,2])
+# plot!(t, uMeas[:,1,1,2])
+plot(t[:, 1, 2], uRef[:,1,1,2])

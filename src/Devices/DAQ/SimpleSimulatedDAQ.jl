@@ -20,58 +20,89 @@ Base.@kwdef struct TxChannelParams <: ChannelParams
 end
 
 Base.@kwdef struct RxChannelParams <: ChannelParams
-  channel::Int64
+  channelIdx::Int64
 end
 
 Base.@kwdef struct SimpleSimulatedDAQParams <: DeviceParams
   channels::Dict{String, ChannelParams}
+
+  temperatureRise::Union{Dict{String, typeof(1.0u"K")}, Nothing} = nothing
+  temperatureRiseSlope::Union{Dict{String, typeof(1.0u"s")}, Nothing} = nothing
+  phaseChange::Union{Dict{String, typeof(1.0u"rad/K")}, Nothing} = nothing
+  amplitudeChange::Union{Dict{String, typeof(1.0u"T/K")}, Nothing} = nothing
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function SimpleSimulatedDAQParams(dict::Dict)
+  mainSectionFields = ["temperatureRise", "temperatureRiseSlope", "phaseChange", "amplitudeChange"]
+  
   channels = Dict{String, ChannelParams}()
   for (key, value) in dict
-    if value isa Dict
-      splattingDict = Dict{Symbol, Any}()
+    if value isa Dict && !(key in mainSectionFields)
+      splattingDictInner = Dict{Symbol, Any}()
       if value["type"] == "tx"
-        splattingDict[:channelIdx] = value["channel"]
-        splattingDict[:limitPeak] = uparse(value["limitPeak"])
+        splattingDictInner[:channelIdx] = value["channel"]
+        splattingDictInner[:limitPeak] = uparse(value["limitPeak"])
 
         if haskey(value, "sinkImpedance")
-          splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
+          splattingDictInner[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
         end
 
         if haskey(value, "allowedWaveforms")
-          splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
+          splattingDictInner[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
         end
 
         if haskey(value, "feedback")
           channelID=value["feedback"]["channelID"]
           calibration=uparse(value["feedback"]["calibration"])
 
-          splattingDict[:feedback] = Feedback(channelID=channelID, calibration=calibration)
+          splattingDictInner[:feedback] = Feedback(channelID=channelID, calibration=calibration)
         end
 
         if haskey(value, "calibration")
-          splattingDict[:calibration] = uparse.(value["calibration"])
+          splattingDictInner[:calibration] = uparse.(value["calibration"])
         end
 
-        channels[key] = TxChannelParams(;splattingDict...)
+        channels[key] = TxChannelParams(;splattingDictInner...)
       elseif value["type"] == "rx"
-        channels[key] = RxChannelParams(channel=value["channel"])
+        channels[key] = RxChannelParams(channelIdx=value["channel"])
       end
-    else
-      error("There is an error in the configuration since there should
-             only be channel definitions in SimpleSimulatedDAQParams.")
+
+      # Remove key in order to process the rest with the standard function
+      delete!(dict, key)
     end
   end
-  return SimpleSimulatedDAQParams(channels=channels)
+
+  splattingDict = dict_to_splatting(dict)
+  splattingDict[:channels] = channels
+
+  try
+    return SimpleSimulatedDAQParams(;splattingDict...)
+  catch e
+    if e isa UndefKeywordError
+      throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
+                                      "for a device with the params type `SimpleSimulatedDAQParams`."))
+    elseif e isa MethodError
+      @warn e.args e.world e.f
+      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
+                                      "with the params type `SimpleSimulatedDAQParams`. Please check "*
+                                      "the causing stacktrace."))
+    else
+      rethrow()
+    end
+  end
 end
 
 Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
+  "Unique device ID for this device as defined in the configuration."
   deviceID::String
+  "Parameter struct for this devices read from the configuration."
   params::SimpleSimulatedDAQParams
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
 
+  # The following fields are only used for the simulation state!
+  # The desired values for phase and amplitude are left within the sequence controller.
   "Base frequency to derive drive field frequencies."
   baseFrequency::Union{typeof(1.0u"Hz"), Missing} = missing
   "Divider of the baseFrequency to determine the drive field frequencies"
@@ -88,16 +119,39 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
   "Number of periods within a frame."
   numPeriodsPerFrame::Int64 = 1
 
-  rxChanIdx::Vector{Int64} = []
-  refChanIdx::Vector{Int64} = []
+  rxChannelIDMapping::Dict{String, Int64} = Dict{String, Int64}()
+  rxChanIDs::Vector{String} = []
+  refChanIDs::Vector{String} = []
   rxNumSamplingPoints::Int64 = 0
 
   currentFrame::Int64 = 1
   currentPeriod::Int64 = 1
 end
 
+function init(daq::SimpleSimulatedDAQ)
+  @info "Initializing simple simulated DAQ with ID `$(daq.deviceID)`."
+end
+
+function checkDependencies(daq::SimpleSimulatedDAQ)
+  dependencies_ = dependencies(daq)
+  if length(dependencies_) > 1
+    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
+                                    "has more than one dependency assigned but "*
+                                    "it only needs one simulation controller."))
+  elseif length(dependencies_) == 0
+    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
+                                    "has no dependencies assigned but "*
+                                    "it needs one simulation controller."))
+  elseif !(collect(values(dependencies_))[1] isa SimulationController)
+    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
+                                    "has a dependency assigned but it is not a simulation "*
+                                    "controller but a `$(typeof(values(dependencies_)[1]))`."))
+  else
+    return true
+  end                            
+end
+
 function setupTx(daq::SimpleSimulatedDAQ, channels::Vector{ElectricalTxChannel}, baseFrequency::typeof(1.0u"Hz"))
-  daq.refChanIdx = []
   daq.baseFrequency = baseFrequency
 
   periodicChannels = [channel for channel in channels if channel isa PeriodicElectricalChannel]
@@ -125,17 +179,19 @@ function setupTx(daq::SimpleSimulatedDAQ, channels::Vector{ElectricalTxChannel},
 
     # Activate corresponding receive channels
     if !isnothing(scannerChannel.feedback)
-      scannerFeedbackChannel = daq.params.channels[scannerChannel.feedback.channelID]
-      feedbackChannelMapping = scannerFeedbackChannel.channel # Switch to getter?
-      push!(daq.refChanIdx, feedbackChannelMapping)
+      feedbackChannelID = scannerChannel.feedback.channelID
+      scannerFeedbackChannel = daq.params.channels[feedbackChannelID]
+      feedbackChannelIdx = scannerFeedbackChannel.channelIdx # Switch to getter?
+      push!(daq.refChanIDs, feedbackChannelID)
+      daq.rxChannelIDMapping[feedbackChannelID] = feedbackChannelIdx
     end
 
     componentIndex = 1
     for component in channel.components
       daq.divider[componentIndex, channelMapping, 1] = component.divider
-      daq.phase[componentIndex, channelMapping, 1] = component.phase[1] # Only one period is allowed
-      daq.waveform[componentIndex, channelMapping] = channel.waveform # TODO: Allow waveform for every component (subtractive fourier synthesis)
-      daq.amplitude[componentIndex, channelMapping, 1] = component.amplitude[1]
+      daq.phase[componentIndex, channelMapping, 1] = component.phase[1] # Only one period is allowed for now
+      daq.waveform[componentIndex, channelMapping] = component.waveform # Only one period is allowed for now
+      daq.amplitude[componentIndex, channelMapping, 1] = component.amplitude[1] # Only one period is allowed for now
       componentIndex += 1
     end
   end
@@ -147,8 +203,8 @@ function setupRx(daq::SimpleSimulatedDAQ, channels::Vector{RxChannel}, numPeriod
 
   for channel in channels
     scannerChannel = daq.params.channels[channel.id]
-    channelMapping = scannerChannel.channel # Switch to getter?
-    push!(daq.rxChanIdx, channelMapping)
+    push!(daq.rxChanIDs, channel.id)
+    daq.rxChannelIDMapping[channel.id] = scannerChannel.channelIdx
   end
 end
 
@@ -161,6 +217,7 @@ function stopTx(daq::SimpleSimulatedDAQ)
 end
 
 function setTxParams(daq::SimpleSimulatedDAQ, Γ; postpone=false)
+# Needs to update period and frame
 end
 
 function currentFrame(daq::SimpleSimulatedDAQ)
@@ -181,29 +238,35 @@ function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
   startPeriod = startFrame*daq.numPeriodsPerFrame
   numPeriods = numFrames*daq.numPeriodsPerFrame
 
-  uMeasPeriods, uRefPeriods = readDataPeriods(daq, startPeriod, numPeriods)
+  uMeasPeriods, uRefPeriods, t = readDataPeriods(daq, startPeriod, numPeriods)
 
-  measShape = (size(uRefPeriods, 1), size(uRefPeriods, 2), daq.numPeriodsPerFrame, numFrames)
+  measShape = (size(uMeasPeriods, 1), size(uMeasPeriods, 2), daq.numPeriodsPerFrame, numFrames)
   uMeas = reshape(uMeasPeriods, measShape)
   refShape = (size(uRefPeriods, 1), size(uRefPeriods, 2), daq.numPeriodsPerFrame, numFrames)
   uRef = reshape(uRefPeriods, refShape)
+  tShape = (size(t, 1), daq.numPeriodsPerFrame, numFrames)
+  t = reshape(t, tShape)
 
-  return uMeas, uRef
+  return uMeas, uRef, t
 end
 
 function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
-  uMeas = zeros(daq.rxNumSamplingPoints, length(daq.rxChanIdx), numPeriods)u"V"
-  uRef = zeros(daq.rxNumSamplingPoints, length(daq.refChanIdx), numPeriods)u"V"
+  simCont = dependencies(daq, SimulationController)[1]
+
+  uMeas = zeros(daq.rxNumSamplingPoints, length(daq.rxChanIDs), numPeriods)u"V"
+  uRef = zeros(daq.rxNumSamplingPoints, length(daq.refChanIDs), numPeriods)u"V"
 
   numSendChannels = size(daq.divider, 2)
-  if numSendChannels != length(daq.rxChanIdx) || numSendChannels != length(daq.refChanIdx)
+  if numSendChannels != length(daq.rxChanIDs) || numSendChannels != length(daq.refChanIDs)
     error("For the simple simulated DAQ we assume a matching number of send, feedback and receive channels.")
   end
 
   cycle = lcm(daq.divider)/daq.baseFrequency
-  for sendChannelIdx in 1:numSendChannels
-    scannerChannel = [channel for (id, channel) in daq.params.channels if channel isa TxChannelParams && channel.channelIdx == sendChannelIdx][1]
-    t = collect(range(0u"s", stop=cycle-1/daq.baseFrequency, length=daq.rxNumSamplingPoints))
+  startTime = cycle*(startPeriod-1) |> u"s"
+  t = collect(range(startTime, stop=startTime+numPeriods*cycle-1/daq.baseFrequency, length=daq.rxNumSamplingPoints*numPeriods))
+
+  for (sendChannelID, sendChannel) in [(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams] 
+    sendChannelIdx = sendChannel.channelIdx
 
     # Work with field for now
     if dimension(daq.amplitude[1]) == dimension(u"T")
@@ -212,28 +275,46 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
       factor = 1/scannerChannel.calibration
     end
 
-    uₜₓ = zeros(daq.rxNumSamplingPoints)u"V"
-    uᵣₓ = zeros(daq.rxNumSamplingPoints)u"V"
+
+    temperatureRise = daq.params.temperatureRise[sendChannelID]
+    temperatureRiseSlope = daq.params.temperatureRiseSlope[sendChannelID]
+    phaseChange = daq.params.phaseChange[sendChannelID]
+    amplitudeChange = daq.params.amplitudeChange[sendChannelID]
+
+    ΔT = temperatureRise*t./(t.+temperatureRiseSlope)
+    T = initialCoilTemperatures(simCont)[sendChannelID] .+ ΔT
+    ΔB = T*amplitudeChange
+    Δϕ = T*phaseChange
+
+    uₜₓ = zeros(length(t))u"V"
+    uᵣₓ = zeros(length(t))u"V"
+    uᵣₑ = zeros(length(t))u"V"
     for componentIdx in 1:size(daq.amplitude, 1)
       f = daq.baseFrequency/daq.divider[componentIdx, sendChannelIdx]
       Bₘₐₓ = daq.amplitude[componentIdx, sendChannelIdx, 1]*factor
       ϕ = daq.phase[componentIdx, sendChannelIdx, 1]
-      B = Bₘₐₓ.*sin.(2π*f*t.+ϕ)
 
-      uₜₓ += B*scannerChannel.calibration
-      uᵣₓ += simulateLangevinInduced(t, B, f, ϕ)
+      Bᵢ = Bₘₐₓ.*sin.(2π*f*t.+ϕ) # Desired, ideal field without drift
+      Bᵣ = (Bₘₐₓ.+ΔB).*sin.(2π*f*t.+ϕ.+Δϕ) # Field with drift of phase and amplitude
+
+      uₜₓ .+= Bᵢ.*sendChannel.calibration
+      uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ)
+
+      # Assumes the same induced voltage from the field as given out with uₜₓ,
+      # just with a slight change in phase and amplitude
+      uᵣₑ .+= Bᵣ.*sendChannel.calibration
     end
-    uᵣₓ = uᵣₓ./maximum(uᵣₓ)*u"V" # We assume a nice LNA ;)
 
-    uMeas[:, sendChannelIdx, :] = repeat(uᵣₓ, outer=(1, numPeriods))
-    uRef[:, sendChannelIdx, :] = repeat(uₜₓ, outer=(1, numPeriods))
+    # Assumes one reference and one measurement channel for each send channel
+    uMeas[:, sendChannelIdx, :] = reshape(uᵣₓ, (daq.rxNumSamplingPoints, 1, numPeriods))
+    uRef[:, sendChannelIdx, :] = reshape(uᵣₑ, (daq.rxNumSamplingPoints, 1, numPeriods))
   end
 
   totalPeriods = daq.currentPeriod+numPeriods
   daq.currentPeriod = totalPeriods % daq.numPeriodsPerFrame
   daq.currentFrame = totalPeriods ÷ daq.numPeriodsPerFrame
 
-  return uMeas, uRef
+  return uMeas, uRef, reshape(t, (daq.rxNumSamplingPoints, numPeriods))
 end
 refToField(daq::SimpleSimulatedDAQ, d::Int64) = 0.0
 
@@ -254,10 +335,10 @@ function simulateLangevinInduced(t::Vector{typeof(1.0u"s")}, B::Vector{typeof(1.
   ξ̇ = (2π^2*Dₖ^3*Mₛ*ustrip.(u"Hz", f)*ustrip.(u"T", Bₘₐₓ))/(3*k_B*Tₐ)*cos.(2π*ustrip.(u"Hz", f)*ustrip.(u"s", t).+ustrip.(u"rad", ϕ))
   Ṁ = c/(3*ν)*Mₛ*(-ξ̇.*csch.(ξ).^2 + ξ̇./(ξ.^2))
 
-  u = -Ṁ;
+  u = -Ṁ; # Yes, this is wrong since it doesn't reflect the coil geometry or anything else, but I don't care at this point
 
   scalingFactor = 1/maximum(x->isnan(x) ? -Inf : x, u)
-  u = u.*scalingFactor # Scale to ±1 for the following correction
+  u = u.*scalingFactor # Scale to ±1 for the following correction and leave it like that; we assume a nice LNA ;)
 
   # This at least makes the function work for most values of ϕ.
   # I don't think we have to care about all special cases here.
@@ -280,6 +361,5 @@ function simulateLangevinInduced(t::Vector{typeof(1.0u"s")}, B::Vector{typeof(1.
     end
   end
 
-  # Scale back
-  return u./scalingFactor*u"V"
+  return u*u"V"
 end

@@ -25,6 +25,28 @@ function RedPitayaDAQ(params)
   return daq
 end
 
+function init(daq::RedPitayaDAQ)
+  # @info "Init SurveillanceUnit"
+  # surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
+
+  # @info "Init DAQ"   # Restart the DAQ if necessary
+  # waittime = 45
+  # daq = nothing
+  # daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
+  # try
+  #   daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
+  # catch e
+  #   if hasResetDAQ(surveillanceUnit)
+  #     @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
+  #     resetDAQ(surveillanceUnit)
+  #     sleep(waittime)
+  #     daq = loadDeviceIfAvailable(params, DAQ, "DAQ")
+  #   else
+  #     rethrow()
+  #   end
+  # end
+end
+
 function updateParams!(daq::RedPitayaDAQ, params_::Dict)
   connect(daq.rpc)
   

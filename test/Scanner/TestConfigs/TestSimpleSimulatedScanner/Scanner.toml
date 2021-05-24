@@ -8,12 +8,21 @@ gradient = "42T/m"
 
 [Devices]
 initializationOrder = [
-    "my_daq_id",
+  "my_daq_id",
+  "sequence_controller",
+  "simulation_controller"
 ]
 
 [Devices.my_daq_id]
 deviceType = "SimpleSimulatedDAQ"
+dependencies = [
+  "simulation_controller"
+]
 #ip = "127.0.0.1"
+temperatureRise.tx_main = "20K"
+temperatureRiseSlope.tx_main = "10s"
+phaseChange.tx_main  = "0.1°/K"
+amplitudeChange.tx_main  = "0.05mT/K"
 
 [Devices.my_daq_id.tx_main]
 type = "tx"
@@ -34,3 +43,11 @@ limitPeak = "1V"
 type = "rx"
 channel = 2
 limitPeak = "1V"
+
+[Devices.sequence_controller]
+deviceType = "SequenceController"
+
+[Devices.simulation_controller]
+deviceType = "SimulationController"
+initialCoilTemperatures.tx_main = "20.0°C"
+
