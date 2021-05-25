@@ -20,6 +20,6 @@ sequence = sequenceFromTOML(path)
 setupSequence(scanner, sequence)
 
 uMeas, uRef, t = readData(getDAQ(scanner), 1, 5)
-# plot(t, uRef[:,1,1,2])
-# plot!(t, uMeas[:,1,1,2])
-plot(t[:, 1, 2], uRef[:,1,1,2])
+showFrames = 1:5
+plot(t[:, 1, showFrames], uRef[:,1,1,showFrames])
+plot!(t[:, 1, showFrames], uMeas[:,1,1,showFrames])

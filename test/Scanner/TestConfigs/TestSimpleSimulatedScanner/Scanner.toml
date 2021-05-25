@@ -46,6 +46,9 @@ limitPeak = "1V"
 
 [Devices.sequence_controller]
 deviceType = "SequenceController"
+dependencies = [
+  "my_daq_id"
+]
 
 [Devices.simulation_controller]
 deviceType = "SimulationController"

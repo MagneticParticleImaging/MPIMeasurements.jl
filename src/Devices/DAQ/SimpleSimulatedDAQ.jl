@@ -275,16 +275,17 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
       factor = 1/scannerChannel.calibration
     end
 
-
     temperatureRise = daq.params.temperatureRise[sendChannelID]
     temperatureRiseSlope = daq.params.temperatureRiseSlope[sendChannelID]
     phaseChange = daq.params.phaseChange[sendChannelID]
     amplitudeChange = daq.params.amplitudeChange[sendChannelID]
 
+    # The temperature rises asymptotically to Tᵢₙᵢₜ+temperatureRise
+    Tᵢₙᵢₜ = initialCoilTemperatures(simCont, sendChannelID)
     ΔT = temperatureRise*t./(t.+temperatureRiseSlope)
-    T = initialCoilTemperatures(simCont)[sendChannelID] .+ ΔT
-    ΔB = T*amplitudeChange
-    Δϕ = T*phaseChange
+    T = Tᵢₙᵢₜ .+ ΔT
+    ΔB = ΔT*amplitudeChange
+    Δϕ = ΔT*phaseChange
 
     uₜₓ = zeros(length(t))u"V"
     uᵣₓ = zeros(length(t))u"V"
@@ -298,7 +299,7 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
       Bᵣ = (Bₘₐₓ.+ΔB).*sin.(2π*f*t.+ϕ.+Δϕ) # Field with drift of phase and amplitude
 
       uₜₓ .+= Bᵢ.*sendChannel.calibration
-      uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ)
+      uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ.+Δϕ) # f is not completely correct due to the phase change, but this is only a rough approximation anyways
 
       # Assumes the same induced voltage from the field as given out with uₜₓ,
       # just with a slight change in phase and amplitude
@@ -308,6 +309,9 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
     # Assumes one reference and one measurement channel for each send channel
     uMeas[:, sendChannelIdx, :] = reshape(uᵣₓ, (daq.rxNumSamplingPoints, 1, numPeriods))
     uRef[:, sendChannelIdx, :] = reshape(uᵣₑ, (daq.rxNumSamplingPoints, 1, numPeriods))
+
+    # Update temperature in simulation controller for further use in e.g. simulated temperature sensors
+    currentCoilTemperatures(simCont, sendChannelID, T[end])
   end
 
   totalPeriods = daq.currentPeriod+numPeriods
@@ -319,7 +323,7 @@ end
 refToField(daq::SimpleSimulatedDAQ, d::Int64) = 0.0
 
 "Very, very basic simulation of an MPI signal using the Langevin function."
-function simulateLangevinInduced(t::Vector{typeof(1.0u"s")}, B::Vector{typeof(1.0u"T")}, f::typeof(1.0u"Hz"), ϕ::typeof(1.0u"rad"))
+function simulateLangevinInduced(t::Vector{typeof(1.0u"s")}, B::Vector{typeof(1.0u"T")}, f::typeof(1.0u"Hz"), ϕ::Union{typeof(1.0u"rad"), Vector{typeof(1.0u"rad")}})
   Bₘₐₓ = maximum(B)
 
   c = 0.5e-6 # mol/m^3

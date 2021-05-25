@@ -41,4 +41,8 @@ end
 checkDependencies(simCont::SimulationController) = true
 
 currentCoilTemperatures(simCont::SimulationController) = simCont.coilTemperatures
+currentCoilTemperatures(simCont::SimulationController, channelID::String) = simCont.coilTemperatures[channelID]
+currentCoilTemperatures(simCont::SimulationController, channelID::String, value::typeof(1.0u"K")) = simCont.coilTemperatures[channelID] = value
+
 initialCoilTemperatures(simCont::SimulationController) = simCont.params.initialCoilTemperatures
+initialCoilTemperatures(simCont::SimulationController, channelID::String) = simCont.params.initialCoilTemperatures[channelID]
