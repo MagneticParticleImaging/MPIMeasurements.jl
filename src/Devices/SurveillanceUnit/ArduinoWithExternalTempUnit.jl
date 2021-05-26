@@ -8,6 +8,7 @@ struct ArduinoWithExternalTempUnit <: SurveillanceUnit
   numSensors::Number
   maxTemps::Array
   selectSensors::Array
+  nameSensors::Array
 end
 
 function Base.close(su::ArduinoWithExternalTempUnit)
@@ -22,13 +23,14 @@ function ArduinoWithExternalTempUnit(params::Dict)
   su = ArduinoWithExternalTempUnit(params["connection"],
                                    params["numSensors"],
                                    params["maxTemps"],  
-                                   params["selectSensors"])
+                                   params["selectSensors"],
+                                   params["nameSensors"])
   setMaximumTemps(su, params["maxTemps"])
   return su
 end
 
 
-function ArduinoWithExternalTempUnit(portAdress::Vector{T}, numSensors::Number, maxTemps::Array, selectSensors::Array) where T <: AbstractString
+function ArduinoWithExternalTempUnit(portAdress::Vector{T}, numSensors::Number, maxTemps::Array, selectSensors::Array, nameSensors::Array) where T <: AbstractString
     # general parameters
     pause_ms::Int=30
     timeout_ms = [500, 1000]
@@ -42,7 +44,7 @@ function ArduinoWithExternalTempUnit(portAdress::Vector{T}, numSensors::Number, 
     parity::SPParity=SP_PARITY_NONE
     nstopbits::Integer=1
 
-    # build SU arduino
+    ### build SU arduino ###
     spSU = SerialPort(portAdress[1])
     open(spSU)
 	set_speed(spSU, baudrate[1])
@@ -60,18 +62,18 @@ function ArduinoWithExternalTempUnit(portAdress::Vector{T}, numSensors::Number, 
         @info "Connection to ArduinoSU established."        
     end
 
-    # build Temp arduino
+    ### build Temp arduino ###
     spTU = SerialPort(portAdress[2])
     open(spTU)
 	set_speed(spTU, baudrate[2])
 	set_frame(spTU,ndatabits=ndatabits,parity=parity,nstopbits=nstopbits)
 	#set_flow_control(spTU,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
-    sleep(2)
+    sleep(2) 
     flush(spTU)
     write(spTU, "!ConnectionEstablished*#")
     response=readuntil(spTU, Vector{Char}(delim_read), timeout_ms[2]);
     @info response
-    if(!(response == "ArduinoTemperatureUnitV2#") ) 
+    if(!(response == "ArduinoTemperatureUnitV2") ) 
         close(spTU)
         @error "Connected to wrong Device: TU" response portAdress[2]
     else
@@ -81,43 +83,29 @@ function ArduinoWithExternalTempUnit(portAdress::Vector{T}, numSensors::Number, 
     sds = [SerialDevice(spSU, pause_ms, timeout_ms[1], delim_read, delim_write), 
            SerialDevice(spTU, pause_ms, timeout_ms[2], delim_read, delim_write)]
 
-    sp = ArduinoWithExternalTempUnit(sds, CommandStart, CommandEnd, delim, numSensors, maxTemps, selectSensors)
+    sp = ArduinoWithExternalTempUnit(sds, CommandStart, CommandEnd, delim, numSensors, maxTemps, selectSensors, nameSensors)
 
     return sp;
 end
 
 
+### general command structure
 function ArduinoCommand(Arduino::ArduinoWithExternalTempUnit, cmd::String, id::Int)
     cmd=Arduino.CommandStart*cmd*Arduino.CommandEnd*Arduino.delim;
     return query(Arduino.sd[id],cmd);
 end
 
-### Surveillance Things
 
+###############################################
+#----------- Temperature Unit ---------- "id=2"
 
-function CheckACQ(Arduino::ArduinoWithExternalTempUnit,ACQ)
-    if ACQ=="ACQ"
-        @info "Command Received"
-        return ACQ;
-    else
-        @warn "Error, Unknown response" ACQ
-    end
-end
-
-
-
-### Temperature Things
-
-function getTemperatures(Arduino::ArduinoWithExternalTempUnit)
+function getTemperatures(Arduino::ArduinoWithExternalTempUnit; names::Bool=false)
     TempDelim = "," 
     
     Temps = ArduinoCommand(Arduino, "GET:ALLTEMPS", 2)
-    
-
     Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
 
-    @info Temps
-
+    #@info Temps now() 
     temp =  tryparse.(Float64,split(Temps,TempDelim))
 
     if length(temp) == Arduino.numSensors
@@ -128,13 +116,17 @@ function getTemperatures(Arduino::ArduinoWithExternalTempUnit)
             end
         end
 
-        return tempFloat[Arduino.selectSensors]
+        if names
+            return [tempFloat[Arduino.selectSensors] Arduino.nameSensors[Arduino.selectSensors]]
+        else
+            return tempFloat[Arduino.selectSensors]
+        end
     else
         return zeros(length(Arduino.selectSensors))
     end
 end
 
-
+export showCommands
 function showCommands(Arduino::ArduinoWithExternalTempUnit)
     print(ArduinoCommand(Arduino, "GET:COMMANDS", 2))
 end
@@ -159,35 +151,53 @@ end
 
 export getMaximumTemps
 function getMaximumTemps(Arduino::ArduinoWithExternalTempUnit)
-    print(ArduinoCommand(Arduino, "GET:MAXTEMPS", 2))
+    println(ArduinoCommand(Arduino, "GET:MAXTEMPS", 2))
 end
 
 
+################################################
+#----------- Surveillance Unit ---------- "id=1"
 
+export CheckACQ
+function CheckACQ(Arduino::ArduinoWithExternalTempUnit,ACQ)
+    if ACQ=="ACQ"
+        @info "Command Received"
+        return ACQ;
+    else
+        @warn "Error, Unknown response" ACQ
+    end
+end
+
+export ArEnableWatchDog
 function ArEnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
     ACQ= ArduinoCommand(Arduino, "ENABLE:WD", 1)
     CheckACQ(Arduino,ACQ)
- end
- 
- function ArDisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
+end
+
+export ArDisableWatchDog
+function ArDisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
      ACQ= ArduinoCommand(Arduino, "DISABLE:WD", 1)
      CheckACQ(Arduino,ACQ)
- end
- 
- function GetDigital(Arduino::ArduinoWithExternalTempUnit, DIO::Int)
-     DIO=ArduinoCommand(Arduino,"GET:DIGITAL:"*string(DIO), 1)
-     return DIO;
- end
- function GetAnalog(Arduino::ArduinoWithExternalTempUnit, ADC::Int)
-     ADC=ArduinoCommand(Arduino,"GET:ANALOG:A"*string(ADC), 1)
-     return ADC;
- end
- 
- function GetErrorStatus(Arduino::ArduinoWithExternalTempUnit)
-     Errorcode=ArduinoCommand(Arduino,"GET:STATUS", 1);
-     ErrorcodeBool=[parsebool(x) for x in Errorcode]
-     return ErrorcodeBool
- end
+end
+
+export GetDigital
+function GetDigital(Arduino::ArduinoWithExternalTempUnit, DIO::Int)
+    DIO=ArduinoCommand(Arduino,"GET:DIGITAL:"*string(DIO), 1)
+    return DIO;
+end
+
+export GetAnalog
+function GetAnalog(Arduino::ArduinoWithExternalTempUnit, ADC::Int)
+    ADC=ArduinoCommand(Arduino,"GET:ANALOG:A"*string(ADC), 1)
+    return ADC;
+end
+
+export GetErrorStatus
+function GetErrorStatus(Arduino::ArduinoWithExternalTempUnit)
+    Errorcode=ArduinoCommand(Arduino,"GET:STATUS", 1);
+    ErrorcodeBool=[parsebool(x) for x in Errorcode]
+    return ErrorcodeBool
+end
 
 export GetStatus
 function GetStatus(Arduino::ArduinoWithExternalTempUnit)
@@ -200,57 +210,67 @@ function resetDAQ(Arduino::ArduinoWithExternalTempUnit)
     ACQ = ArduinoCommand(Arduino,"RESET:RP", 1)
     CheckACQ(Arduino,ACQ)
 end
- 
+
+export ResetWatchDog
 function ResetWatchDog(Arduino::ArduinoWithExternalTempUnit)
      ACQ=ArduinoCommand(Arduino,"RESET:WD", 1)
      CheckACQ(Arduino,ACQ)
 end
+
+export EnableWatchDog
+function EnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"ENABLE:WD", 1)
+    CheckACQ(Arduino,ACQ)
+end
+
+export DisableWatchDog
+function DisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"DISABLE:WD", 1)
+    CheckACQ(Arduino,ACQ)
+end
+
+export ResetFail
+function ResetFail(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"RESET:FAIL", 1)
+    CheckACQ(Arduino,ACQ)
+end
+
+export DisableSurveillance
+function DisableSurveillance(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"DISABLE:SURVEILLANCE", 1)
+    CheckACQ(Arduino,ACQ)
+end
  
- function EnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"ENABLE:WD", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function DisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"DISABLE:WD", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function ResetFail(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"RESET:FAIL", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function DisableSurveillance(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"DISABLE:SURVEILLANCE", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function EnableSurveillance(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"ENABLE:SURVEILLANCE", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function GetCycletime(Arduino::ArduinoWithExternalTempUnit)
-     tcycle=ArduinoCommand(Arduino,"GET:CYCLETIME", 1)
-     return tcycle;
- end
- 
- function ResetArduino(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"RESET:ARDUINO", 1)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function enableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
-     ACQ=ArduinoCommand(Arduino,"ENABLE:AC", 1);
-     sleep(0.5)
-     CheckACQ(Arduino,ACQ)
- end
- 
- function disableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
-     ACQ=ArduinoCommand(Arduino,"DISABLE:AC", 1);
-     CheckACQ(Arduino,ACQ)
- end
+export EnableSurveillance
+function EnableSurveillance(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"ENABLE:SURVEILLANCE", 1)
+    CheckACQ(Arduino,ACQ)
+end
+
+export GetCycletime
+function GetCycletime(Arduino::ArduinoWithExternalTempUnit)
+    tcycle=ArduinoCommand(Arduino,"GET:CYCLETIME", 1)
+    return tcycle;
+end
+
+export ResetArduino
+function ResetArduino(Arduino::ArduinoWithExternalTempUnit)
+    ACQ=ArduinoCommand(Arduino,"RESET:ARDUINO", 1)
+    CheckACQ(Arduino,ACQ)
+end
+
+export enableACPower
+function enableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
+    ACQ=ArduinoCommand(Arduino,"ENABLE:AC", 1);
+    sleep(0.5)
+    CheckACQ(Arduino,ACQ)
+end
+
+export disableACPower
+function disableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
+    ACQ=ArduinoCommand(Arduino,"DISABLE:AC", 1);
+    CheckACQ(Arduino,ACQ)
+end
  
  hasResetDAQ(su::ArduinoWithExternalTempUnit) = true
  
