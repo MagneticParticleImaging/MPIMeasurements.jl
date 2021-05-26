@@ -69,3 +69,8 @@ function stopSequence(scanner::MPIScanner)
   daq = getDAQ(scanner)
   stopTx(daq)
 end
+
+function trigger(scanner::MPIScanner)
+  daq = getDAQ(scanner)
+  trigger(daq)
+end

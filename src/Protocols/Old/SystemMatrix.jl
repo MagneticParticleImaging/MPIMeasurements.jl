@@ -124,7 +124,7 @@ function init(sysObj::SystemMatrixRobotMeas, positions::GridPositions,
   numTotalFrames = numFGPos + daq.params.acqNumBGFrames*numBGPos
 
   currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,1)
-  if tempSensor != nothing
+  if !isnothing(tempSensornothing)
     temperatures = zeros(Float32,numChannels(tempSensor),numTotalFrames)
   else
     temperatures = zeros(0,0)
