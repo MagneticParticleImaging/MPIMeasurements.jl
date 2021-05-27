@@ -44,12 +44,12 @@ checkDependencies(seqCont::SequenceController) = true
 
 setupControlLoop() = @warn "control loop not yet implemented"
 
-function setupSequence(scanner::MPIScanner, sequence::Sequence)
+function setupSequence(seqCont::SequenceController, sequence::Sequence)
+  daq = dependency(seqCont, AbstractDAQ) # This doesn't work for multiple DAQs yet, since this case is not really a priority
+
   @debug "controller called"
   setupControlLoop() #TODO: Check which fields have to be controlled
   electricalChannels = electricalTxChannels(sequence)
-  sequenceController = getSequenceController(scanner)
-  daq = getDAQ(scanner) # This doesn't work for multiple DAQs yet, since this case is not really a priority
   setupTx(daq, electricalChannels, sequence.baseFrequency)
 
   # TODO: Setup mechanical channels
@@ -60,17 +60,17 @@ function setupSequence(scanner::MPIScanner, sequence::Sequence)
   setupRx(daq, sequence.rxChannels, sequence.numPeriodsPerFrame, numSamplingPoints)
 end
 
-function startSequence(scanner::MPIScanner)
-  daq = getDAQ(scanner)
+function startSequence(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
   startTx(daq)
 end
 
-function stopSequence(scanner::MPIScanner)
-  daq = getDAQ(scanner)
+function stopSequence(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
   stopTx(daq)
 end
 
-function trigger(scanner::MPIScanner)
-  daq = getDAQ(scanner)
+function trigger(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
   trigger(daq)
 end

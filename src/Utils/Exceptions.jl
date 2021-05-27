@@ -12,6 +12,13 @@ struct ScannerConfigurationError <: ConfigurationError
 end
 
 """
+    Specialized error type for errors in protocol configuration files
+"""
+struct ProtocolConfigurationError <: ConfigurationError
+  message::String
+end
+
+"""
     Base.show(io::IO, ex::ConfigurationError)
 Custom printing of `ConfigurationError` subtypes
 """

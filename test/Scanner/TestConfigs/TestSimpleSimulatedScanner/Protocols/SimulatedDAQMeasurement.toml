@@ -1,0 +1,5 @@
+name = "SimulatedDAQMeasurement"
+type = "DAQMeasurementProtocol"
+description = "A simulated acquisition"
+targetScanner = "TestSimpleSimulatedScanner"
+sequenceName = "Sequence"

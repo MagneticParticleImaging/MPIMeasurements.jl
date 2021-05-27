@@ -25,6 +25,8 @@ end
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement numTxChannels(daq::AbstractDAQ)
 @mustimplement numRxChannels(daq::AbstractDAQ)
+@mustimplement canPostpone(daq::AbstractDAQ)
+@mustimplement canConvolute(daq::AbstractDAQ)
 
 getDAQs(scanner::MPIScanner) = getDevices(scanner, AbstractDAQ)
 function getDAQ(scanner::MPIScanner)

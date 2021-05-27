@@ -2,7 +2,7 @@ import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
-       getName, getConfigDir, getGeneralParams, getDevice, getDevices, getGUIMode
+       name, configDir, generalParams, getDevice, getDevices, getGUIMode
 
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
@@ -106,13 +106,13 @@ Central part for setting up a scanner.
 TODO: Add more details on instantiation
 """
 mutable struct MPIScanner
-  name::String
-  configDir::String
+  name::AbstractString
+  configDir::AbstractString
   generalParams::MPIScannerGeneral
-  devices::Dict{String, Device}
+  devices::Dict{AbstractString, Device}
   guiMode::Bool
 
-  function MPIScanner(name::String; guimode=false)
+  function MPIScanner(name::AbstractString; guimode=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     filename = nothing
@@ -133,6 +133,7 @@ mutable struct MPIScanner
 
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
+    @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
     return new(name, configDir, generalParams, devices, guimode)
@@ -145,9 +146,9 @@ function Base.close(scanner::MPIScanner)
   end
 end
 
-getName(scanner::MPIScanner) = scanner.name
-getConfigDir(scanner::MPIScanner) = scanner.configDir
-getGeneralParams(scanner::MPIScanner) = scanner.generalParams
+name(scanner::MPIScanner) = scanner.name #TODO: Duplication with scanner name
+configDir(scanner::MPIScanner) = scanner.configDir
+generalParams(scanner::MPIScanner) = scanner.generalParams
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 
 function getDevices(scanner::MPIScanner, deviceType::DataType)

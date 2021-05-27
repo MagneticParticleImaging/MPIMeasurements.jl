@@ -1,3 +1,61 @@
+export DAQMeasurementProtocol, DAQMeasurementProtocolParams, sequenceName, sequence
+
+Base.@kwdef mutable struct DAQMeasurementProtocolParams <: ProtocolParams
+  sequenceName::AbstractString
+end
+
+Base.@kwdef mutable struct DAQMeasurementProtocol <: Protocol
+  name::AbstractString
+  description::AbstractString
+  scanner::MPIScanner
+  params::DAQMeasurementProtocolParams
+
+  sequence::Union{Sequence, Missing} = missing
+end
+
+sequenceName(protocol::DAQMeasurementProtocol) = protocol.params.sequenceName
+sequence(protocol::DAQMeasurementProtocol) = protocol.sequence
+
+function init(protocol::DAQMeasurementProtocol)
+  scanner_ = scanner(protocol)
+  configDir_ = configDir(scanner_)
+  sequenceName_ = sequenceName(protocol)
+  filename = joinpath(configDir_, "Sequences", "$sequenceName_.toml")
+  protocol.sequence = Sequence(filename)
+end
+
+function execute(protocol::DAQMeasurementProtocol)
+  scanner_ = scanner(protocol)
+  seqCont = getSequenceController(scanner_)
+
+  setupSequence(seqCont, sequence(protocol))
+  startSequence(seqCont)
+end
+
+function cleanup(protocol::DAQMeasurementProtocol)
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### OLD PART ##########
+
 export measurement, asyncMeasurement, measurementCont, measurementRepeatability,
        MeasState
 
