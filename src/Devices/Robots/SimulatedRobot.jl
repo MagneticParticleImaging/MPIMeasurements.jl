@@ -17,10 +17,10 @@ mutable struct SimulatedRobot <: Robot
     end
 end
 
-isReferenced(rob::SimulatedRobot) = rob.referenced
+_isReferenced(rob::SimulatedRobot) = rob.referenced
 
 dof(rob::SimulatedRobot) = 3
-getPosition(rob::SimulatedRobot) = rob.position
+_getPosition(rob::SimulatedRobot) = rob.position
 axisRange(rob::SimulatedRobot) = rob.params.axisRange
 
 function _moveAbs(rob::SimulatedRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})

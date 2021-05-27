@@ -13,9 +13,9 @@ mutable struct DummyRobot <: Robot
     end
 end
 
-isReferenced(rob::DummyRobot) = rob.referenced
+_isReferenced(rob::DummyRobot) = rob.referenced
 
-getPosition(rob::DummyRobot) = [1.0,0.0,0.0]u"mm"
+_getPosition(rob::DummyRobot) = [1.0,0.0,0.0]u"mm"
 dof(rob::DummyRobot) = 3
 axisRange(rob::DummyRobot) = [[-Inf, Inf], [-Inf, Inf], [-Inf, Inf]]u"m"
 

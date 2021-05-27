@@ -41,10 +41,10 @@ const err = "err?\n"
 
 
 dof(rob::BrukerRobot) = 3
-getPosition(rob::BrukerRobot) = sendCommand(rob, BrukerCommand(pos))
 axisRange(rob::BrukerRobot) = rob.params.axisRange
-isReferenced(rob::BrukerRobot) = true
 defaultVelocity(rob::BrukerRobot) = nothing
+_getPosition(rob::BrukerRobot) = sendCommand(rob, BrukerCommand(pos))
+_isReferenced(rob::BrukerRobot) = true
 _enable(rob::BrukerRobot) = nothing
 _disable(rob::BrukerRobot) = nothing
 _reset(rob::BrukerRobot) = nothing
@@ -54,12 +54,12 @@ _doReferenceDrive(rob::BrukerRobot) = nothing
 
 """ Move Bruker Robot to center"""
 function moveCenter(sd::BrukerRobot)
-    _sendCommand(sd, BrukerCommand(center))
+    sendCommand(sd, BrukerCommand(center))
 end
 
 """ Move Bruker Robot to park"""
 function movePark(sd::BrukerRobot)
-    _sendCommand(sd, BrukerCommand(park))
+    sendCommand(sd, BrukerCommand(park))
 end
 
 function _moveAbs(rob::BrukerRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -67,7 +67,7 @@ function _moveAbs(rob::BrukerRobot, pos::Vector{<:Unitful.Length}, speed::Union{
         @warn "BrukerRobot does not support setting velocities!"
     end
     cmd = BrukerCommand("goto $(ustrip(Float64, u"mm", pos[1])),$(ustrip(Float64, u"mm", pos[2])),$(ustrip(Float64, u"mm", pos[3]))\n")
-    res = _sendCommand(rob, cmd)
+    res = sendCommand(rob, cmd)
 end
 
 """ Not Implemented """
@@ -78,21 +78,21 @@ end
 
 """ Send Command `sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)`"""
 function sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
+
     (result, startmovetime, endmovetime) = _sendCommand(sd, brukercmd)
+    
     if result == "0\n"
         return true
     elseif length(split(result, ",")) == 3
-      @info "$(brukercmd.command) returned position: $(result)"
-      return true
-  elseif result == "?\n"
-      @warn "$(brukercmd.command) is unknown! Try again..."
-      return false
-  elseif result == "!\n"
-      @error "Error during command $(brukercmd.command) execution."
-      return false
-  else
-      @error "$(brukercmd.command) has unexpected result $(result)"
-      return false
+        @info "$(brukercmd.command) returned position: $(result)"
+        return parse.(Float64, split(result, ",")) * u"mm"
+    elseif result == "?\n"
+        @warn "$(brukercmd.command) is unknown! Try again..."
+        return false
+    elseif result == "!\n"
+        throw(ErrorException("Error during command $(brukercmd.command) execution."))
+    else
+        throw(ErrorException("$(brukercmd.command) has unexpected result $(result)"))
     end
 end
 

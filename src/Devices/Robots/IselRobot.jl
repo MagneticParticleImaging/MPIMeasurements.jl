@@ -57,14 +57,11 @@ end
 
 Base.close(rob::IselRobot) = close(rob.sd.sp)
 
-state(rob::IselRobot) = rob.state
-setstate!(rob::IselRobot, state::RobotState) = rob.state=state
-
 dof(rob::IselRobot) = 3
 defaultVelocity(rob::IselRobot) = rob.params.defaultVel
 axisRange(rob::IselRobot) = rob.params.axisRange
 
-function getPosition(robot::IselRobot)
+function _getPosition(robot::IselRobot)
   ret = queryIsel(robot.sd, "@0P", 19)
   checkError(string(ret[1]))
   pos = parsePos(ret[2:19])
@@ -98,7 +95,7 @@ function _doReferenceDrive(rob::IselRobot)
   end
 end
 
-function isReferenced(robot::IselRobot)
+function _isReferenced(robot::IselRobot)
   currPos = getPosition(robot)
   currPos[1] += 0.01u"mm"
 # need to add 0.01mm, otherwise moveAbs returns 0 although it is no longer referenced

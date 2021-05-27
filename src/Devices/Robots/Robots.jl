@@ -1,8 +1,5 @@
 using Graphics: @mustimplement
 using Unitful
-# using OptionalUnits
-
-import Base: reset
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
 
@@ -10,15 +7,12 @@ export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRe
 
 abstract type Robot <: Device end
 
-state(rob::Robot) = rob.state
-setstate!(rob::Robot, state::RobotState) = rob.state=state
-@mustimplement isReferenced(rob::Robot)
-@mustimplement getPosition(rob::Robot)
+# general interface functions to be implemented by devices
 @mustimplement dof(rob::Robot)
 @mustimplement axisRange(rob::Robot) # must return Vector of Vectors
-
 defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that can handle velocities
 
+# device specific implementations of basic functionality
 @mustimplement _moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
 @mustimplement _moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
 @mustimplement _enable(rob::Robot)
@@ -26,7 +20,14 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _reset(rob::Robot)
 @mustimplement _setup(rob::Robot)
 @mustimplement _doReferenceDrive(rob::Robot)
+@mustimplement _isReferenced(rob::Robot)
+@mustimplement _getPosition(rob::Robot)
 
+# can be overwritten, but does not have to be
+state(rob::Robot) = rob.state
+setstate!(rob::Robot, state::RobotState) = rob.state = state
+
+include("RobotExceptions.jl")
 include("DummyRobot.jl")
 include("SimulatedRobot.jl")
 include("IgusRobot.jl")
@@ -41,21 +42,21 @@ moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = mo
 
 function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
 
-    @assert length(pos) == dof(rob) "Position vector included $(length(pos)) axes, but the robot has $(dof(rob)) degrees-of-freedom"
-    @assert state(rob) == READY "Robot is currently in state $(state(rob)), to start a movement it has to be in state READY"
-    @assert isReferenced(rob) "Robot has to be referenced for absolute movement!" # TODO: maybe this does not have to be limited
+    length(pos) == dof(rob) || throw(RobotDOFError(rob, length(pos)))
+    state(rob) == READY || throw(RobotStateError(rob, READY))
+    isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
+    checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
     
-    @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
     #TODO: perform safety check of coordinates
 
     setstate!(rob, MOVING)
     try
-        @info "Started absolute robot movement to $pos with $speed."
+        @debug "Started absolute robot movement to $pos with $speed."
         _moveAbs(rob, pos, speed)
         setstate!(rob, READY)
     catch exc
-        @error "Some error occured during the robot drive" exc
         setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
     end
 end
 
@@ -65,11 +66,12 @@ moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = m
 
 function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
 
-    @assert length(dist) == dof(rob) "Distance vector included $(length(dist)) axes, but the robot has $(dof(rob)) degrees-of-freedom"
-    @assert state(rob) == READY "Robot is currently in state $(state(rob)), to start a movement it has to be in state READY"
+    length(dist) == dof(rob) || throw(RobotDOFError(rob, length(dist)))
+    state(rob) == READY || throw(RobotStateError(rob, READY))
     
     pos = getPosition(rob) + dist
-    @assert checkAxisRange(rob, pos) "Final position $(pos) is out of the robots axes range."
+    checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+    
     #TODO: perform safety check of coordinates
     
     setstate!(rob, MOVING)
@@ -78,50 +80,94 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
         _moveRel(rob, dist, speed)
         setstate!(rob, READY)
     catch exc
-        @error "Some error occured during the robot drive" exc
         setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))        
     end
 end
 
 function enable(rob::Robot)
     if state(rob) == READY
-        return
+        return READY
     elseif state(rob) == DISABLED
-        _enable(rob)
-        setstate!(rob, READY)
+        try
+            _enable(rob)
+            setstate!(rob, READY)
+        catch exc
+            setstate!(rob, ERROR)
+            throw(RobotDeviceError(rob, exc))
+        end
     else
-        @error "Robot can not be enabled from state $(state(rob))"
+        throw(RobotStateError(rob, DISABLED))
     end
 end
 
 function disable(rob::Robot)
     if state(rob) == DISABLED
-        return
+        return DISABLED
     elseif state(rob) == READY
-        _disable(rob)
-        setstate!(rob, DISABLED)
+        try
+            _disable(rob)
+            setstate!(rob, DISABLED)
+        catch exc
+            setstate!(rob, ERROR)
+            throw(RobotDeviceError(rob, exc))
+        end
     else
-        @error "Robot can not be disabled from state $(state(rob))"
+        throw(RobotStateError(rob, READY))
     end
 end
 
 function Base.reset(rob::Robot)
-    _reset(rob)
-    setstate!(rob, INIT)
+    try
+        _reset(rob)
+        setstate!(rob, INIT)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
 end
 
 function setup(rob::Robot)
-    @assert state(rob) == INIT "Robot has to be in state INIT to be set up, it is currently in state $(state(rob))"
-    _setup(rob)
+    state(rob) == INIT || throw(RobotStateError(rob, INIT))
+    try
+        _setup(rob)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
     setstate!(rob, DISABLED)
 end
 
 function doReferenceDrive(rob::Robot)
-    @assert state(rob) == READY "Robot has to be READY to perform a reference drive, it is currently in state $(state(rob))"
-    setstate!(rob, MOVING)
-    _doReferenceDrive(rob)
-    setstate!(rob, READY)
+    state(rob) == READY || throw(RobotStateError(rob, READY))
+    try
+        setstate!(rob, MOVING)
+        _doReferenceDrive(rob)
+        setstate!(rob, READY)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
 end
+
+function getPosition(rob::Robot)
+    try
+        _getPosition(rob)
+    catch exc
+        setstate!(rob, ERROR) # maybe it is not necessary to make this an error
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
+function isReferenced(rob::Robot)
+    try
+        _isReferenced(rob)::Bool
+    catch exc
+        setstate!(rob, ERROR) # maybe it is not necessary to make this an error
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
 
 function checkAxisRange(rob::Robot, coords::Vector{<:Unitful.Length})
     axes = axisRange(rob)

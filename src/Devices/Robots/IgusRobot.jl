@@ -60,9 +60,9 @@ mutable struct IgusRobot <: Robot
 end
 
 dof(rob::IgusRobot) = 1
-getPosition(rob::IgusRobot) = try [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"] catch; return [NaN]u"mm" end
+_getPosition(rob::IgusRobot) = [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"]
 axisRange(rob::IgusRobot) = rob.params.axisRange
-isReferenced(rob::IgusRobot) = (getSdoObject(rob, DIGITAL_OUTPUTS) & (1 << 26))!=0
+_isReferenced(rob::IgusRobot) = (getSdoObject(rob, DIGITAL_OUTPUTS) & (1 << 26))!=0
 defaultVelocity(rob::IgusRobot) = rob.params.defaultVelocity
 
 function _moveAbs(rob::IgusRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -82,9 +82,7 @@ function _moveAbs(rob::IgusRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
-			@error "Timeout: Movement not completed in expected time"
-            rob.state = :ERROR
-            return
+			throw(Error("Timeout: Movement not completed in expected time"))
         end
     end
     @debug "Finished movement at x=$(getPosition(rob)[1])"
@@ -107,9 +105,7 @@ function _moveRel(rob::IgusRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
-			@error "Timeout: Movement not completed in expected time"
-            rob.state = :ERROR
-            return
+			throw(Error("Timeout: Movement not completed in expected time"))
         end
     end
     @debug "Finished relative movement"
@@ -117,7 +113,7 @@ end
 
 function _enable(rob::IgusRobot)
     if (getSdoObject(rob, DIGITAL_INPUTS) & (1 << 22)) == 0
-        error("Enable ist nicht gesetzt, bitte D7 im Webinterface aktivieren")
+        throw(Error("Enable ist nicht gesetzt, bitte D7 im Webinterface aktivieren"))
     end
     
 
@@ -191,9 +187,7 @@ function _doReferenceDrive(rob::IgusRobot)
         waittime += 0.1u"s"
         if waittime > abs(diff(axisRange(rob)[1])[1]) / rob.params.homVelSwitch + rob.params.timeout
             sleep(0.05)
-            @error "Timeout: Reference drive not completed in expected time!"
-            rob.state = :ERROR
-            return false
+            throw(Error("Timeout: Reference drive not completed in expected time!"))
         end
     end
 
@@ -255,19 +249,19 @@ function readModbusTelegram(telegram::Vector{UInt8})
     if telegram[7] == 0xab
         errCode = telegram[9]
 		if errCode == 1
-			@error "Fehler im Antwort-Telegram: Ungültiger Funktions-Code" # Sollte nicht auftreten, ist in createModbusTelegram hart eincodiert
+			throw(Error("Fehler im Antwort-Telegram: Ungültiger Funktions-Code")) # Sollte nicht auftreten, ist in createModbusTelegram hart eincodiert
         elseif errCode == 2
-			@error "Fehler im Antwort-Telegram: Ungültige Daten-Adresse"
+			throw(Error("Fehler im Antwort-Telegram: Ungültige Daten-Adresse"))
 		elseif errCode == 3
-			@error "Fehler im Antwort-Telegram: Ungültiger Daten-Wert"
+			throw(Error("Fehler im Antwort-Telegram: Ungültiger Daten-Wert"))
         elseif errCode == 4
-			@error "Fehler im Antwort-Telegram: Geräte Fehler"
+			throw(Error("Fehler im Antwort-Telegram: Geräte Fehler"))
         elseif errCode == 5
-            @error "Fehler im Antwort-Telegram: Bestätigung. (Verarbeitung dauert noch, Nachricht aber erhalten)"
+            throw(Error("Fehler im Antwort-Telegram: Bestätigung. (Verarbeitung dauert noch, Nachricht aber erhalten)"))
 		elseif errCode == 6
-			@error "Fehler im Antwort-Telegram: Server ausgelastet"
+			throw(Error("Fehler im Antwort-Telegram: Server ausgelastet"))
         else
-			@error "Unbekannter Fehler im Antworttelegramm"
+			throw(Error("Unbekannter Fehler im Antworttelegramm"))
         end
         return nothing
 
@@ -298,8 +292,7 @@ function getSdoObject(rob::IgusRobot, sdoObject::SDOObj)
     recvTelegram = sendAndReceiveTelegram(rob, telegram)
     data = readModbusTelegram(recvTelegram)
     if data === nothing
-        rob.state = :ERROR
-        return nothing
+        throw(ErrorException("Received empty data, I think this error should not happen, since an exception will be thrown before this happens"))
     end
     return data
 
@@ -314,8 +307,7 @@ function setSdoObject(rob::IgusRobot, sdoObject::SDOObj, value::Integer)
     telegram = createModbusTelegram(sdoObject, value)
     rsp = sendAndReceiveTelegram(rob, telegram)
     if readModbusTelegram(rsp) === nothing
-        rob.state = :ERROR
-        return false
+        throw(ErrorException("Received empty data, I think this error should not happen, since an exception will be thrown before this happens"))
     end
     return true    
 
@@ -327,35 +319,28 @@ end
 """
 function sendAndReceiveTelegram(rob::IgusRobot, telegram::Vector{UInt8})
 
-    try 
-        if rob.socket === nothing || !isopen(rob.socket)
-            @debug "Opening socket"
-            rob.socket = connect(rob.params.ip, rob.params.port)
-        end
-
-    # the base length is always 19, if the telegram is a read request the length of the object will be added to the response
-        answerBytes = 19 + (1 - telegram[10]) * telegram[19] 
-
-        write(rob.socket, telegram)
-
-        rsp = read(rob.socket, answerBytes)
-
-        if telegram[1] != rsp[1]
-            @error "Die erhaltene Antwort stimmt nicht mit der ID der Anfrage überein. Dies passiert eigentlich nur, wenn man auch etwas falsches/unerwartetes geschickt hat und die Steuerung überfordert ist... Der Socket wird geschlossen und die Verbindung bei der nächsten Anfrage neu aufgebaut"
-            rob.state = :ERROR
-            close(rob.socket)
-            rob.socket = nothing
-        elseif !rob.params.keepSocketOpen
-            @debug "Closing socket"
-            close(rob.socket)
-            rob.socket = nothing
-        end
-
-        return rsp
-
-    catch e
-        @error "The communication to IgusRobot failed with error $e"
-        rob.state = :ERROR
-        return nothing
+    if rob.socket === nothing || !isopen(rob.socket)
+        @debug "Opening socket"
+        rob.socket = connect(rob.params.ip, rob.params.port)
     end
+
+# the base length is always 19, if the telegram is a read request the length of the object will be added to the response
+    answerBytes = 19 + (1 - telegram[10]) * telegram[19] 
+
+    write(rob.socket, telegram)
+
+    rsp = read(rob.socket, answerBytes)
+
+    if telegram[1] != rsp[1]
+        @error "Die erhaltene Antwort stimmt nicht mit der ID der Anfrage überein. Dies passiert eigentlich nur, wenn man auch etwas falsches/unerwartetes geschickt hat und die Steuerung überfordert ist... Der Socket wird geschlossen und die Verbindung bei der nächsten Anfrage neu aufgebaut, dies kann den Fehler beheben. Eventuell sollte hier jedoch eine excpetion geworfen werden"
+        close(rob.socket)
+        rob.socket = nothing
+    elseif !rob.params.keepSocketOpen
+        @debug "Closing socket"
+        close(rob.socket)
+        rob.socket = nothing
+    end
+
+    return rsp
+
 end

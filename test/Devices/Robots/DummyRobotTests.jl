@@ -6,12 +6,12 @@ rob = DummyRobot("dummy",params)
 
 setup(rob)
 @test state(rob)==:DISABLED
-@test_throws AssertionError moveAbs(rob,[1,1,1]u"mm")
-@test_throws AssertionError setup(rob)
+@test_throws RobotStateError moveAbs(rob,[1,1,1]u"mm")
+@test_throws RobotStateError setup(rob)
 
 @test !isReferenced(rob)
 enable(rob)
-@test_throws AssertionError moveAbs(rob, [1,1,1]u"mm")
+@test_throws RobotReferenceError moveAbs(rob, [1,1,1]u"mm")
 moveRel(rob,[1,0,0]u"m")
 doReferenceDrive(rob)
 @test isReferenced(rob)
