@@ -17,6 +17,8 @@ using Statistics
 using Dates
 using InteractiveUtils
 using Graphics: @mustimplement
+using Scratch
+using Mmap
 
 import Base.write
 

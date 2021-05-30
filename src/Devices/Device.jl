@@ -1,4 +1,4 @@
-export Device, DeviceParams, deviceID, params, dependencies, init, checkDependencies
+export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, checkDependencies
 
 """
 Abstract type for all device parameters
@@ -41,6 +41,9 @@ function dependency(device::Device, type::DataType)
     return dependencies_[1]
   end
 end
+
+"Chech whether the device has a dependency of the given `type`."
+hasDependency(device::Device, type::DataType) = length(dependencies(device, type)) > 0
 
 @mustimplement init(device::Device)
 @mustimplement checkDependencies(device::Device)

@@ -49,6 +49,7 @@ deviceType = "SequenceController"
 dependencies = [
   "my_daq_id"
 ]
+numFrameSave = 1
 
 [Devices.simulation_controller]
 deviceType = "SimulationController"

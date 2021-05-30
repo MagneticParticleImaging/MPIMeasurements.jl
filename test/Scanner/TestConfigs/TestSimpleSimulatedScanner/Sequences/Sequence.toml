@@ -23,7 +23,10 @@ divider = 5000
 amplitude = ["0.02T"]
 phase = ["0.0rad"]
 
-[Receive]
+[Acquisition]
+bandwidth = "7.8125MHz"
 numFrames = 1
 numPeriodsPerFrame = 1
-rxChannels = ["rx_main"]
+numAverages = 1
+numFrameAverages = 1
+channels = ["rx_main"]

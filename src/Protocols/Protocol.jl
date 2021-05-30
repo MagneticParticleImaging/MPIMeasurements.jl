@@ -65,7 +65,7 @@ function runProtocol(protocol::Protocol)
 end
 
 @mustimplement init(protocol::Protocol)
-@mustimplement execute(protocol::Protocol)
+@mustimplement execute!(protocol::Protocol)
 @mustimplement cleanup(protocol::Protocol)
 
 

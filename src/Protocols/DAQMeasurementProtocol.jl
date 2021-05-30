@@ -1,4 +1,4 @@
-export DAQMeasurementProtocol, DAQMeasurementProtocolParams, sequenceName, sequence
+export DAQMeasurementProtocol, DAQMeasurementProtocolParams, sequenceName, sequence, mdf, prepareMDF
 
 Base.@kwdef mutable struct DAQMeasurementProtocolParams <: ProtocolParams
   sequenceName::AbstractString
@@ -9,12 +9,33 @@ Base.@kwdef mutable struct DAQMeasurementProtocol <: Protocol
   description::AbstractString
   scanner::MPIScanner
   params::DAQMeasurementProtocolParams
-
+  
   sequence::Union{Sequence, Missing} = missing
+  mdf::Union{MDFv2InMemory, Missing} = missing
+  filename::AbstractString = ""
 end
 
 sequenceName(protocol::DAQMeasurementProtocol) = protocol.params.sequenceName
 sequence(protocol::DAQMeasurementProtocol) = protocol.sequence
+mdf(protocol::DAQMeasurementProtocol) = protocol.mdf
+
+#TODO: This has currently no link to an MDF store. How should we integrate it?
+function prepareMDF(protocol::DAQMeasurementProtocol, study::MDFv2Study, experiment::MDFv2Experiment, filename::AbstractString, operator::AbstractString="anonymous")
+  protocol.mdf = MDFv2InMemory()
+  protocol.mdf.root = defaultMDFv2Root()
+  protocol.mdf.study = study
+  protocol.mdf.experiment = experiment
+  protocol.mdf.scanner = MDFv2Scanner(
+    boreSize = ustrip(u"m", scannerBoreSize(protocol.scanner)),
+    facility = scannerFacility(protocol.scanner),
+    manufacturer = scannerManufacturer(protocol.scanner),
+    name = scannerName(protocol.scanner),
+    operator = operator,
+    topology = scannerTopology(protocol.scanner)
+  )
+
+  protocol.filename = filename
+end
 
 function init(protocol::DAQMeasurementProtocol)
   scanner_ = scanner(protocol)
@@ -30,10 +51,19 @@ function execute(protocol::DAQMeasurementProtocol)
 
   setupSequence(seqCont, sequence(protocol))
   startSequence(seqCont)
+
+  sleep(5.0)
+  trigger(seqCont)
+  trigger(seqCont)
+  trigger(seqCont)
+  finish(seqCont)
+  wait(seqCont)
+  fillMDF(seqCont, protocol.mdf)
+  saveasMDF(protocol.filename, protocol.mdf)
 end
 
 function cleanup(protocol::DAQMeasurementProtocol)
-
+  
 end
 
 
