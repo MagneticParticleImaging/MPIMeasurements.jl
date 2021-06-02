@@ -4,6 +4,8 @@ export SequenceControllerParams, SequenceController, getSequenceControllers,
 Base.@kwdef struct SequenceControllerParams <: DeviceParams
   "Time after which the data should be saved to an mmapped temp file."
   saveInterval::typeof(1.0u"s") = 2.0u"s"
+  "Number of times the control loop tries to control the field."
+  maxControlSteps::Integer = 2
 end
 
 SequenceControllerParams(dict::Dict) = params_from_dict(SequenceControllerParams, dict)
@@ -52,14 +54,15 @@ end
 
 checkDependencies(seqCont::SequenceController) = true # TODO: Add daq
 
-setupControlLoop() = @warn "control loop not yet implemented"
+function setupControlLoop(seqCont::SequenceController, sequence::Sequence)
+
+end
 
 function setupSequence(seqCont::SequenceController, sequence::Sequence)
   seqCont.sequence = sequence
   daq = dependency(seqCont, AbstractDAQ) # This doesn't work for multiple DAQs yet, since this case is not really a priority
-
-  @debug "controller called"
-  setupControlLoop() #TODO: Check which fields have to be controlled
+  
+  setupControlLoop(seqCont, sequence)
   electricalChannels = electricalTxChannels(seqCont.sequence)
   setupTx(daq, electricalChannels, txBaseFrequency(seqCont.sequence))
 

@@ -19,8 +19,8 @@ dependencies = [
   "simulation_controller"
 ]
 #ip = "127.0.0.1"
-temperatureRise.tx_main = "20K"
-temperatureRiseSlope.tx_main = "10s"
+temperatureRise.tx_main = "10K"
+temperatureRiseSlope.tx_main = "0.005s"
 phaseChange.tx_main  = "0.1°/K"
 amplitudeChange.tx_main  = "0.05mT/K"
 
@@ -49,7 +49,8 @@ deviceType = "SequenceController"
 dependencies = [
   "my_daq_id"
 ]
-saveInterval = "0.01s"
+saveInterval = "0.5s"
+maxControlSteps = 5
 
 [Devices.simulation_controller]
 deviceType = "SimulationController"

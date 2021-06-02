@@ -264,8 +264,7 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
   cycle = lcm(daq.divider)/daq.baseFrequency
   startTime = cycle*(startPeriod-1) |> u"s"
   t = collect(range(startTime, stop=startTime+numPeriods*cycle-1/daq.baseFrequency, length=daq.rxNumSamplingPoints*numPeriods))
-  #@debug cycle startTime length(t) daq.divider daq.baseFrequency numPeriods daq.rxNumSamplingPoints startPeriod
-
+  
   for (sendChannelID, sendChannel) in [(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams] 
     sendChannelIdx = sendChannel.channelIdx
 
@@ -305,14 +304,13 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
       Bᵣ = (Bₘₐₓ.+ΔB).*sin.(2π*f*t.+ϕ.+Δϕ) # Field with drift of phase and amplitude
 
       uₜₓ .+= Bᵢ.*sendChannel.calibration
-      #@debug length(Bᵣ) Bₘₐₓ length(ΔB) ΔB amplitudeChange length(ΔT) length(t)
       uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ.+Δϕ) # f is not completely correct due to the phase change, but this is only a rough approximation anyways
 
       # Assumes the same induced voltage from the field as given out with uₜₓ,
       # just with a slight change in phase and amplitude
       uᵣₑ .+= Bᵣ.*sendChannel.calibration
     end
-
+    
     # Assumes one reference and one measurement channel for each send channel
     uMeas[:, sendChannelIdx, :] = reshape(uᵣₓ, (daq.rxNumSamplingPoints, 1, numPeriods))
     uRef[:, sendChannelIdx, :] = reshape(uᵣₑ, (daq.rxNumSamplingPoints, 1, numPeriods))

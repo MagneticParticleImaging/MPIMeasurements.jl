@@ -20,7 +20,7 @@ sequence(protocol::DAQMeasurementProtocol) = protocol.sequence
 mdf(protocol::DAQMeasurementProtocol) = protocol.mdf
 
 #TODO: This has currently no link to an MDF store. How should we integrate it?
-function prepareMDF(protocol::DAQMeasurementProtocol, study::MDFv2Study, experiment::MDFv2Experiment, filename::AbstractString, operator::AbstractString="anonymous")
+function prepareMDF(protocol::DAQMeasurementProtocol, filename::AbstractString, study::MDFv2Study, experiment::MDFv2Experiment, operator::AbstractString="anonymous")
   protocol.mdf = MDFv2InMemory()
   protocol.mdf.root = defaultMDFv2Root()
   protocol.mdf.study = study
@@ -62,7 +62,7 @@ function execute(protocol::DAQMeasurementProtocol)
            "Please ckeck the associated sequence configuration."
   elseif numTriggers == 1
     @info "This configuration of the DAQMeasurementProtocol only reads foreground frames."
-    decision = getUserDecision("Do you have everything prepared to start the measurement? "*
+    decision = ask_dialog("Do you have everything prepared to start the measurement? "*
                                "If the answer is no, the protocol will be stopped.")
     if decision
       trigger(seqCont)
@@ -73,7 +73,7 @@ function execute(protocol::DAQMeasurementProtocol)
       return
     end
   elseif numTriggers == 2
-    decision = getUserDecision("Do you have removed the sample in order to take the background measurement "*
+    decision = ask_dialog("Do you have removed the sample in order to take the background measurement "*
                                 "and do you want to start?\nIf the answer is no, the protocol will be stopped ")
     if decision
       trigger(seqCont, true)
@@ -86,7 +86,7 @@ function execute(protocol::DAQMeasurementProtocol)
 
     waitTriggerReady(seqCont)
 
-    decision = getUserDecision("Do you have everything prepared to start the foreground measurement?\n"*
+    decision = ask_dialog("Do you have everything prepared to start the foreground measurement?\n"*
                                 "If the answer is no, the protocol will be stopped.")
     if decision
       trigger(seqCont, false)

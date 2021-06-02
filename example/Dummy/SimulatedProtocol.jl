@@ -4,7 +4,9 @@ using Unitful
 using UnitfulRecipes
 using UUIDs
 
-pyplot()
+#pyplot()
+#plotly()
+#inspectdr()
 default(show = true)
 
 ENV["JULIA_DEBUG"] = "all"
@@ -32,8 +34,14 @@ experiment = MDFv2Experiment(;
 
 scannerName_ = "TestSimpleSimulatedScanner"
 protocolName_ = "SimulatedDAQMeasurement"
+operator = "Jonas"
 filename = joinpath("./tmp.mdf")
 
 protocol = Protocol(protocolName_, scannerName_)
-prepareMDF(protocol, study, experiment, filename)
+prepareMDF(protocol, filename, study, experiment, operator)
 runProtocol(protocol)
+
+data = protocol.mdf.measurement.data
+#dataRMS = mapslices(x -> sqrt(1/length(x)*sum(x.^2)), data, dims = 1)
+#plot(reshape(dataRMS, length(dataRMS)))
+#plot(reshape(data, length(data)))
