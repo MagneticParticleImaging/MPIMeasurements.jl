@@ -235,7 +235,7 @@ enableSlowDAC(daq::SimpleSimulatedDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) = 1
 
 function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
-  startPeriod = startFrame*daq.numPeriodsPerFrame
+  startPeriod = (startFrame-1)*daq.numPeriodsPerFrame+1
   numPeriods = numFrames*daq.numPeriodsPerFrame
 
   uMeasPeriods, uRefPeriods, t = readDataPeriods(daq, startPeriod, numPeriods)
@@ -264,6 +264,7 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
   cycle = lcm(daq.divider)/daq.baseFrequency
   startTime = cycle*(startPeriod-1) |> u"s"
   t = collect(range(startTime, stop=startTime+numPeriods*cycle-1/daq.baseFrequency, length=daq.rxNumSamplingPoints*numPeriods))
+  #@debug cycle startTime length(t) daq.divider daq.baseFrequency numPeriods daq.rxNumSamplingPoints startPeriod
 
   for (sendChannelID, sendChannel) in [(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams] 
     sendChannelIdx = sendChannel.channelIdx
@@ -282,7 +283,12 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
 
     # The temperature rises asymptotically to Tᵢₙᵢₜ+temperatureRise
     Tᵢₙᵢₜ = initialCoilTemperatures(simCont, sendChannelID)
-    ΔT = temperatureRise*t./(t.+temperatureRiseSlope)
+    if t[1] == 0.0u"s"
+      ΔT = fill(0.0u"K", size(t))
+      ΔT[2:end] = temperatureRise*t[2:end]./(t[2:end].+temperatureRiseSlope)
+    else
+      ΔT = temperatureRise*t./(t.+temperatureRiseSlope)
+    end
     T = Tᵢₙᵢₜ .+ ΔT
     ΔB = ΔT*amplitudeChange
     Δϕ = ΔT*phaseChange
@@ -299,6 +305,7 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
       Bᵣ = (Bₘₐₓ.+ΔB).*sin.(2π*f*t.+ϕ.+Δϕ) # Field with drift of phase and amplitude
 
       uₜₓ .+= Bᵢ.*sendChannel.calibration
+      #@debug length(Bᵣ) Bₘₐₓ length(ΔB) ΔB amplitudeChange length(ΔT) length(t)
       uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ.+Δϕ) # f is not completely correct due to the phase change, but this is only a rough approximation anyways
 
       # Assumes the same induced voltage from the field as given out with uₜₓ,
@@ -320,7 +327,11 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
 
   return uMeas, uRef, reshape(t, (daq.rxNumSamplingPoints, numPeriods))
 end
-refToField(daq::SimpleSimulatedDAQ, d::Int64) = 0.0
+
+numTxChannels(daq::SimpleSimulatedDAQ) = length([(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams])
+numRxChannels(daq::SimpleSimulatedDAQ) = length(daq.rxChanIDs)
+canPostpone(daq::SimpleSimulatedDAQ) = false
+canConvolute(daq::SimpleSimulatedDAQ) = false
 
 "Very, very basic simulation of an MPI signal using the Langevin function."
 function simulateLangevinInduced(t::Vector{typeof(1.0u"s")}, B::Vector{typeof(1.0u"T")}, f::typeof(1.0u"Hz"), ϕ::Union{typeof(1.0u"rad"), Vector{typeof(1.0u"rad")}})

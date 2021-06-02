@@ -8,9 +8,9 @@ triggered = false
 [Fields]
 
 [Fields.my_df]
-safeStart = true
-safeEnd = true
-safeError = true
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
 control = true
 decouple = true
 
@@ -25,8 +25,8 @@ phase = ["0.0rad"]
 
 [Acquisition]
 bandwidth = "7.8125MHz"
-numFrames = 1
-numPeriodsPerFrame = 1
-numAverages = 1
-numFrameAverages = 1
+numFrames = [5,10]
+numPeriodsPerFrame = 5
+numAverages = 10
+numFrameAverages = 3
 channels = ["rx_main"]

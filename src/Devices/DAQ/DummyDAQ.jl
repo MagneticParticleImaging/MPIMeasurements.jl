@@ -49,4 +49,8 @@ function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
   uRef=zeros(2,2,2,2)
   return uMeas, uRef
 end
-refToField(daq::DummyDAQ, d::Int64) = 0.0
+
+numTxChannels(daq::DummyDAQ) = 1
+numRxChannels(daq::DummyDAQ) = 1
+canPostpone(daq::DummyDAQ) = false
+canConvolute(daq::DummyDAQ) = false

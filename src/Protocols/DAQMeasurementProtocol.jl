@@ -52,14 +52,17 @@ function execute(protocol::DAQMeasurementProtocol)
   setupSequence(seqCont, sequence(protocol))
   startSequence(seqCont)
 
+  sleep(1.0)
+  trigger(seqCont)
   sleep(5.0)
   trigger(seqCont)
-  trigger(seqCont)
-  trigger(seqCont)
+  @info "All triggers applied. Now finishing sequence."
   finish(seqCont)
   wait(seqCont)
+  @info "Sequence finished. Now saving to MDF."
   fillMDF(seqCont, protocol.mdf)
   saveasMDF(protocol.filename, protocol.mdf)
+  @info "Protocol finished."
 end
 
 function cleanup(protocol::DAQMeasurementProtocol)

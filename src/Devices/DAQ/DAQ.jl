@@ -61,7 +61,7 @@ function initLUT(N,D, dfCycle, dfFreq)
 end
 
 function dataConversionFactor(daq::AbstractDAQ) #default
-  factor = zeros(2,numRxChannels(daq))
+  factor = zeros(2, numRxChannels(daq))
   factor[1,:] = 1.0
   factor[2,:] = 0.0
   return factor

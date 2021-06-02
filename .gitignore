@@ -5,4 +5,7 @@ docs/build/
 test/images
 test/DAQ/images
 Manifest.toml
+*.h5
+*.mdf
+*.bin
 .vscode

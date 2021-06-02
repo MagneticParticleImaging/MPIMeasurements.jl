@@ -2,8 +2,8 @@ export SequenceControllerParams, SequenceController, getSequenceControllers,
        getSequenceController, setupSequence, startSequence, cancel, trigger
 
 Base.@kwdef struct SequenceControllerParams <: DeviceParams
-  "Number of frames after which the data should be saved to a mmapped temp file."
-  numFrameSave::Integer = 1
+  "Number of frames after which the data should be saved to an mmapped temp file."
+  saveInterval::typeof(1.0u"s") = 2.0u"s"
 end
 
 SequenceControllerParams(dict::Dict) = params_from_dict(SequenceControllerParams, dict)
@@ -23,8 +23,8 @@ Base.@kwdef mutable struct SequenceController <: VirtualDevice
   trigger::Channel{Int64} = Channel{Int64}(8)
   triggerCount::Threads.Atomic{Int64} = Threads.Atomic{Int64}(0)
   cancelled::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
-  done::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
-  buffer::Vector{Array{Float32, 4}} = []
+  buffer::Vector{Array{typeof(1.0u"V"), 4}} = []
+  isBackgroundTrigger::Vector{Bool} = []
 end
 
 function getSequenceControllers(scanner::MPIScanner)
@@ -69,9 +69,6 @@ end
 
 function startSequence(seqCont::SequenceController)
   if isnothing(seqCont.task) && !seqCont.cancelled[]
-    #seqCont.running = true
-    
-
     # Spawn acquisition thread
     if Threads.nthreads() == 1
       @warn "You are currently just using one thread. This could be troublesome in some cases "*
@@ -79,28 +76,25 @@ function startSequence(seqCont::SequenceController)
     end
 
     @info "Starting acquisition thread."
-    seqCont.task = @tspawnat 2 acquisitionThread(seqCont)
-    sleep(0.1)
-
-    @debug "Trigger first acquisition"
-    #trigger(seqCont) # Trigger the first acquisition
+    seqCont.task = Threads.@spawn acquisitionThread(seqCont)
   else
     @info "The sequence is already running"
   end
 end
 
 function cancel(seqCont::SequenceController)
-  if isnothing(seqCont.task) ||!istaskstarted(seqCont.task)
+  if isnothing(seqCont.task) || !istaskstarted(seqCont.task)
     @info "The sequence is not running and can therefore not be cancelled."
   else
-    seqCont.cancelled[] = true
+    Threads.atomic_xchg!(seqCont.cancelled, true)
     finish(seqCont) # Has to be called in order to stop the thread from waiting for triggers
   end
 end
 
-function trigger(seqCont::SequenceController)
+function trigger(seqCont::SequenceController, isBackground::Bool=false)
   Threads.atomic_add!(seqCont.triggerCount, 1)
   put!(seqCont.trigger, seqCont.triggerCount[])
+  push!(seqCont.isBackgroundTrigger, isBackground)
 end
 
 function finish(seqCont::SequenceController)
@@ -108,130 +102,160 @@ function finish(seqCont::SequenceController)
 end
 
 function wait(seqCont::SequenceController)
-  while !seqCont.done[]
-    sleep(0.1)
-  end
+  Base.wait(seqCont.task)
 end
 
 function acquisitionThread(seqCont::SequenceController)
-  # currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
-  #                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
-
   seqCont.startTime = now()
-  @info "The acquisition thread just started (start time is $(seqCont.startTime))."
+  @info "The acquisition thread (id $(Threads.threadid())) just started (start time is $(seqCont.startTime))."
 
   seqScratchDirectory = @get_scratch!(seqCont.sequence.name)
   @info "The scratch directory for intermediate data is `$seqScratchDirectory`."
+  #TODO: Detect leftovers and recover from a failed state
 
-  # rxNumSamplingPoints_ = rxNumSamplingPoints(seqCont.sequence)
-  # numPeriods = acqNumPeriodsPerFrame(seqCont.sequence)
+  # Use surveillance unit if available
+  if hasDependency(seqCont, SurveillanceUnit)
+    su = dependency(seqCont, SurveillanceUnit)
+    enableACPower(su)
+  else
+    @warn "The sequence controller does not have access to a surveillance unit. "*
+          "Please check closely if this should be the case."
+  end
 
-  # # Use surveillance unit if available
-  # if hasDependency(seqCont, SurveillanceUnit)
-  #   su = dependency(seqCont, SurveillanceUnit)
-  #   enableACPower(su)
-  # else
-  #   @warn "The sequence controller does not have access to a surveillance unit. "*
-  #         "Please check closely if this should be the case."
-  # end
-
-  # daq = dependency(seqCont, AbstractDAQ)
-  # @info "Starting transmit part of the sequence"
-  # startTx(daq)
+  daq = dependency(seqCont, AbstractDAQ)
+  @info "Starting transmit part of the sequence"
+  startTx(daq)
 
   # TODO: Control
   @warn "The control loop should be started here"
 
+  numSamplingPoints_ = rxNumSamplingPoints(seqCont.sequence)
+  numPeriodsPerFrame = acqNumPeriodsPerFrame(seqCont.sequence)
+
   while !seqCont.cancelled[]
-    @info "Waiting for acquisition trigger."
+    @debug "Waiting for acquisition trigger."
     currTriggerCount = take!(seqCont.trigger)
 
     if currTriggerCount == -1
-      @info "The acquisition thread received the signal to finish acquisition and will now return."
+      @debug "The acquisition thread received the signal to finish acquisition and will now return."
       break
     end
 
-    @info "Received an acquisition trigger. The current count is $currTriggerCount."
+    @debug "Received an acquisition trigger. The current trigger count is $currTriggerCount."
 
     if seqCont.cancelled[]
       @debug "The acquisition thread was cancelled while waiting for a trigger."
       break
     end
 
-    # numFrames = acqNumFrames(seqCont.sequence)
-    # if length(numFrames) > 1
-    #   if length(numFrames) <= currTriggerCount
-    #     numFrames = numFrames[currTriggerCount]
-    #   else
-    #     @error "The specified amount of possible triggers for the number of frames is "*
-    #            "$(length(numFrames)), but an additional trigger has been applied."
-    #     break
-    #   end
-    # end
+    numFrames = acqNumFrames(seqCont.sequence)
+    if length(numFrames) > 1 # If there is only a scalar defined, we allow an infinte amount of triggers
+      if currTriggerCount <= length(numFrames)
+        numFrames = numFrames[currTriggerCount]
+      else
+        @error "The specified amount of possible triggers for the number of frames is "*
+               "$(length(numFrames)), but an additional trigger has been applied. "*
+               "The acquisition will stop now."
+        break
+      end
+    end
 
-    # triggerFilename = joinpath(seqScratchDirectory, "$(seqCont.startTime)_trigger_$(currTriggerCount).bin")
-    # shape = (rxNumSamplingPoints, numRxChannels(daq), numPeriods, numFrames)
-    # triggerBuffer = Mmap.mmap(triggerFilename, Matrix{Int}, shape)
+    triggerSavePath = joinpath(seqScratchDirectory, Dates.format(seqCont.startTime, "yyyy-mm-dd_HH-MM-SS"))
+    mkpath(triggerSavePath)
+    triggerFilename = joinpath(triggerSavePath, "trigger_$(currTriggerCount).bin")
+    numRxChannels_ = numRxChannels(daq)
+    bufferShape = (numSamplingPoints_, numRxChannels_, numPeriodsPerFrame, numFrames)
+    triggerBuffer = Mmap.mmap(triggerFilename, Array{typeof(1.0u"V"), 4}, bufferShape)
 
+    numFrameAverages = acqNumFrameAverages(seqCont.sequence)
+    chunkTime = seqCont.params.saveInterval
+    framePeriod = numFrameAverages*numPeriodsPerFrame*dfCycle(seqCont.sequence)
+    chunk = min(numFrames, max(1, round(Int, ustrip(chunkTime/framePeriod))))
 
-    # fr = 1
-    # while fr <= daq.params.acqNumFrames
-    #   to = min(fr+chunk-1,daq.params.acqNumFrames) 
+    #TODO: How to deal with the slow DAC?
+    # currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
+    #                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-    #   #if tempSensor != nothing
-    #   #  for c = 1:numChannels(tempSensor)
-    #   #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
-    #   #  end
-    #   #end
-    #   @info "Measuring frame $fr to $to"
-    #   @time uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*(length(fr:to)),
-    #                               currFr + (fr-1)*daq.params.acqNumFrameAverages)
-    #   @info "It should take $(daq.params.acqNumFrameAverages*(length(fr:to))*framePeriod)"
-    #   s = size(uMeas)
-    #   @info s
-    #   if daq.params.acqNumFrameAverages == 1
-    #     measState.buffer[:,:,:,fr:to] = uMeas
-    #   else
-    #     tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :)
-    #     measState.buffer[:,:,:,fr:to] = dropdims(mean(uMeas, dims=4),dims=4)
-    #   end
-    #   measState.currFrame = fr
-    #   measState.consumed = false
-    #   #sleep(0.01)
-    #   #yield()
-    #   fr += chunk
+    @info "Starting acquisition for $numFrames frames with an averaging factor of $numFrameAverages."
+    fr = 1
+    while fr <= numFrames
+      to = min(fr+chunk-1, numFrames) 
 
-    #   # Write the current chunk to our temp file
-    #   Mmap.sync!()
+      #if tempSensor != nothing
+      #  for c = 1:numChannels(tempSensor)
+      #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
+      #  end
+      #end
+      @debug "Measuring frame $fr to $to."
+      @time uMeas, uRef = readData(daq, (fr-1)*numFrameAverages+1, numFrameAverages*(length(fr:to)))
+      @debug "It should take $(numFrameAverages*(length(fr:to))*framePeriod |> u"s")."
+      s = size(uMeas)
+      @debug "The size of the measured data is $s."
+      if numFrameAverages == 1
+        triggerBuffer[:,:,:,fr:to] = uMeas
+      else
+        tmp = reshape(uMeas, (s[1], s[2], s[3], numFrameAverages, :))
+        triggerBuffer[:,:,:,fr:to] = dropdims(mean(tmp, dims=4), dims=4)
+      end
+      fr = to+1
+      
+      # Write the current chunk to our temp file
+      Mmap.sync!(triggerBuffer)
+    end
 
-    #   if measState.cancelled
-    #     break
-    #   end
-    # end
-
-    
+    push!(seqCont.buffer, triggerBuffer)
   end
   
   #sleep(daq.params.ffRampUpTime)
-  # stopTx(daq)
-  # if hasDependency(seqCont, SurveillanceUnit)
-  #   disableACPower(su, scanner)
-  # end
-  # disconnect(daq)
+  @info "Stop sending and disable AC power (if applicable)."
+  stopTx(daq)
+  if hasDependency(seqCont, SurveillanceUnit)
+    disableACPower(su, scanner)
+  end
+  disconnect(daq)
 
   # if length(measState.temperatures) > 0
   #   params["calibTemperatures"] = measState.temperatures
   # end
-
-  seqCont.done[] = true
 end
 
 function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
+  # /measurement/ subgroup
+  numFrames = sum([size(triggerBuffer, 4) for triggerBuffer in seqCont.buffer])
+  numPeriodsPerFrame_ = acqNumPeriodsPerFrame(seqCont.sequence)
+  numRxChannels_ = rxNumChannels(seqCont.sequence)
+  numSamplingPoints_ = rxNumSamplingPoints(seqCont.sequence)
+
+  seqScratchDirectory = @get_scratch!(seqCont.sequence.name)
+  triggerSavePath = joinpath(seqScratchDirectory, Dates.format(seqCont.startTime, "yyyy-mm-dd_HH-MM-SS"))
+  fullDataFilename = joinpath(triggerSavePath, "fullProtocol.bin")
+  dataShape = (numSamplingPoints_, numRxChannels_, numPeriodsPerFrame_, numFrames)
+  data = Mmap.mmap(fullDataFilename, Array{typeof(1.0u"V"), 4}, dataShape)
+  isBackgroundFrame = Vector{Bool}()
+
+  currentFrame = 1
+  for (idx, triggerBuffer) in enumerate(seqCont.buffer)
+    data[:, :, :, currentFrame:(currentFrame+size(triggerBuffer, 4))-1] = triggerBuffer
+    currentFrame += size(triggerBuffer, 4)
+    append!(isBackgroundFrame, fill(seqCont.isBackgroundTrigger[idx], size(triggerBuffer, 4)))
+  end
+
+  measData(mdf, ustrip.(u"V", data))
+  measIsBackgroundCorrected(mdf, false)
+  measIsBackgroundFrame(mdf, isBackgroundFrame)
+  measIsFastFrameAxis(mdf, false)
+  measIsFourierTransformed(mdf, false)
+  measIsFramePermutation(mdf, false)
+  measIsFrequencySelection(mdf, false)
+  measIsSparsityTransformed(mdf, false)
+  measIsSpectralLeakageCorrected(mdf, false)
+  measIsTransferFunctionCorrected(mdf, false)
+
   # /acquisition/ subgroup
   acqGradient(mdf, acqGradient(seqCont.sequence))
   acqNumAverages(mdf, acqNumAverages(seqCont.sequence))
-  acqNumFrames(mdf, acqNumFrames(seqCont.sequence)) # TODO: Calculate from data (triggered acquisition)
-  acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(seqCont.sequence))
+  acqNumFrames(mdf, numFrames) # TODO: Calculate from data (triggered acquisition)
+  acqNumPeriodsPerFrame(mdf, numPeriodsPerFrame_)
   acqOffsetField(mdf, acqOffsetField(seqCont.sequence))
   acqStartTime(mdf, seqCont.startTime)
 
@@ -248,8 +272,8 @@ function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
   rxBandwidth(mdf, ustrip(u"Hz", rxBandwidth(seqCont.sequence)))
   #dataConversionFactor TODO: Should we include it or convert the samples directly
   #inductionFactor TODO: should be added from datastore!?
-  rxNumChannels(mdf, rxNumChannels(seqCont.sequence))
-  rxNumSamplingPoints(mdf, rxNumSamplingPoints(seqCont.sequence))
+  rxNumChannels(mdf, numRxChannels_)
+  rxNumSamplingPoints(mdf, numSamplingPoints_)
   #transferFunction TODO: should be added from datastore!?
   rxUnit(mdf, "V")
 end
