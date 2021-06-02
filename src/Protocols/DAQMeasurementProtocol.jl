@@ -52,16 +52,63 @@ function execute(protocol::DAQMeasurementProtocol)
   setupSequence(seqCont, sequence(protocol))
   startSequence(seqCont)
 
-  sleep(1.0)
-  trigger(seqCont)
-  sleep(5.0)
-  trigger(seqCont)
+  # Give the acquisition thread some time, so we don't have mixed up messages when prompting for input
+  waitTriggerReady(seqCont)
+
+  numTriggers = length(acqNumFrames(seqCont.sequence))
+  if numTriggers > 2
+    @error "The DAQMeasurementProtocol is only designed to acquire with one trigger "*
+           "(just foreground frames) or two triggers (background and foreground frames). "*
+           "Please ckeck the associated sequence configuration."
+  elseif numTriggers == 1
+    @info "This configuration of the DAQMeasurementProtocol only reads foreground frames."
+    decision = getUserDecision("Do you have everything prepared to start the measurement? "*
+                               "If the answer is no, the protocol will be stopped.")
+    if decision
+      trigger(seqCont)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+  elseif numTriggers == 2
+    decision = getUserDecision("Do you have removed the sample in order to take the background measurement "*
+                                "and do you want to start?\nIf the answer is no, the protocol will be stopped ")
+    if decision
+      trigger(seqCont, true)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+
+    waitTriggerReady(seqCont)
+
+    decision = getUserDecision("Do you have everything prepared to start the foreground measurement?\n"*
+                                "If the answer is no, the protocol will be stopped.")
+    if decision
+      trigger(seqCont, false)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+  end
+
   @info "All triggers applied. Now finishing sequence."
   finish(seqCont)
   wait(seqCont)
-  @info "Sequence finished. Now saving to MDF."
-  fillMDF(seqCont, protocol.mdf)
-  saveasMDF(protocol.filename, protocol.mdf)
+  if !ismissing(protocol.mdf)
+    @info "Sequence finished. Now saving to MDF."
+    fillMDF(seqCont, protocol.mdf)
+    saveasMDF(protocol.filename, protocol.mdf)
+  else
+    @warn "No MDF defined and thus, no data is saved. If this is a mistake "*
+          "please run `prepareMDF` prior to calling `runProtocol`."
+  end
   @info "Protocol finished."
 end
 

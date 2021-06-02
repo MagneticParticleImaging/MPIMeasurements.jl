@@ -19,6 +19,7 @@ using InteractiveUtils
 using Graphics: @mustimplement
 using Scratch
 using Mmap
+using Gtk
 
 import Base.write
 

@@ -2,7 +2,7 @@ export SequenceControllerParams, SequenceController, getSequenceControllers,
        getSequenceController, setupSequence, startSequence, cancel, trigger
 
 Base.@kwdef struct SequenceControllerParams <: DeviceParams
-  "Number of frames after which the data should be saved to an mmapped temp file."
+  "Time after which the data should be saved to an mmapped temp file."
   saveInterval::typeof(1.0u"s") = 2.0u"s"
 end
 
@@ -23,6 +23,7 @@ Base.@kwdef mutable struct SequenceController <: VirtualDevice
   trigger::Channel{Int64} = Channel{Int64}(8)
   triggerCount::Threads.Atomic{Int64} = Threads.Atomic{Int64}(0)
   cancelled::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
+  readyForTrigger::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
   buffer::Vector{Array{typeof(1.0u"V"), 4}} = []
   isBackgroundTrigger::Vector{Bool} = []
 end
@@ -105,6 +106,12 @@ function wait(seqCont::SequenceController)
   Base.wait(seqCont.task)
 end
 
+function waitTriggerReady(seqCont::SequenceController)
+  while !seqCont.readyForTrigger[]
+    sleep(0.1)
+  end
+end
+
 function acquisitionThread(seqCont::SequenceController)
   seqCont.startTime = now()
   @info "The acquisition thread (id $(Threads.threadid())) just started (start time is $(seqCont.startTime))."
@@ -133,8 +140,10 @@ function acquisitionThread(seqCont::SequenceController)
   numPeriodsPerFrame = acqNumPeriodsPerFrame(seqCont.sequence)
 
   while !seqCont.cancelled[]
-    @debug "Waiting for acquisition trigger."
+    # Signal the readiness to receive trigger
+    Threads.atomic_xchg!(seqCont.readyForTrigger, true)
     currTriggerCount = take!(seqCont.trigger)
+    Threads.atomic_xchg!(seqCont.readyForTrigger, false)
 
     if currTriggerCount == -1
       @debug "The acquisition thread received the signal to finish acquisition and will now return."
@@ -177,7 +186,7 @@ function acquisitionThread(seqCont::SequenceController)
     #                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
     @info "Starting acquisition for $numFrames frames with an averaging factor of $numFrameAverages."
-    fr = 1
+    fr = currentFrame(daq)
     while fr <= numFrames
       to = min(fr+chunk-1, numFrames) 
 
@@ -231,8 +240,14 @@ function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
   fullDataFilename = joinpath(triggerSavePath, "fullProtocol.bin")
   dataShape = (numSamplingPoints_, numRxChannels_, numPeriodsPerFrame_, numFrames)
   data = Mmap.mmap(fullDataFilename, Array{typeof(1.0u"V"), 4}, dataShape)
-  isBackgroundFrame = Vector{Bool}()
 
+  # Sort the frames such that background frames are at the end
+  # TODO: Do we only need this if a sparsity transformation is applied
+  # bgPermutation = sortperm(seqCont.isBackgroundTrigger)
+  # seqCont.buffer[bgPermutation] = seqCont.buffer
+  # seqCont.isBackgroundTrigger[bgPermutation] = seqCont.isBackgroundTrigger
+
+  isBackgroundFrame = Vector{Bool}()
   currentFrame = 1
   for (idx, triggerBuffer) in enumerate(seqCont.buffer)
     data[:, :, :, currentFrame:(currentFrame+size(triggerBuffer, 4))-1] = triggerBuffer
