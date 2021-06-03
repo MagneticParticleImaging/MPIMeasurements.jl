@@ -1,4 +1,4 @@
-export tryuparse, from_dict
+export tryuparse, dict_to_splatting, params_from_dict
 
 
 function tryuparse(val::Any)

@@ -32,7 +32,7 @@ function controlLoop_(daq::AbstractDAQ)
     i += 1
   end
 
-  # TODO: This is no generic!
+  # TODO: This is not generic!
   setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
   setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
   
