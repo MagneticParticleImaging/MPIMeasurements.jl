@@ -19,7 +19,12 @@ using InteractiveUtils
 using Graphics: @mustimplement
 using Scratch
 using Mmap
-using Gtk
+
+# TODO: This is a workaround for CI with GTK since precompilation fails with headless systems
+# Remove after https://github.com/JuliaGraphics/Gtk.jl/issues/346 is resolved
+if isinteractive()
+  using Gtk
+end
 
 import Base.write
 
