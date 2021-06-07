@@ -2,6 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
+export teachPos, gotoPos, saveTeachedPos, namedPositions
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -26,6 +27,7 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
+namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
 
 include("RobotExceptions.jl")
 include("DummyRobot.jl")
@@ -35,6 +37,45 @@ include("IselRobot.jl")
 include("BrukerRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
+
+function gotoPos(rob::Robot, pos_name::AbstractString)
+    if haskey(namedPositions(rob), pos_name)
+        pos = namedPositions(rob)[pos_name]
+        moveAbs(rob, pos)
+    else
+        error("Position $pos_name is not found in the list of named positions of robot $(deviceID(rob)). Available positions are $(namedPositions(rob).keys)")
+    end
+    
+end
+
+function teachPos(rob::Robot, pos_name::AbstractString; override=false)
+    pos = getPosition(rob)
+    if haskey(namedPositions(rob), pos_name)
+        if !override
+            error("Position $pos_name is already found in the list of named positions of robot $(deviceID(rob)). To override the current value pass override=true")
+        else
+            namedPositions(rob)[pos_name] = pos
+        end
+    else
+        push!(namedPositions(rob),pos_name=>pos)
+    end
+end
+
+function saveTeachedPos(rob::Robot)
+    println("To save the positions, that have been tought in the current session copy and paste the following section into the config file: ")
+    println()
+    println("[Devices.$(deviceID(rob)).namedPositions]")
+    for (key, value) in namedPositions(rob)
+        print("$(key) = [")
+        for dim in value
+            print("\"$(dim)\", ")
+        end
+        print("\033[2D") # move cursor back 2 characters (remove last comma and space)
+        println("]")
+    end
+    println()
+end
+    
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))

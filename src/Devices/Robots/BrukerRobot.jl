@@ -8,6 +8,7 @@ export moveCenter, movePark
 Base.@kwdef struct BrukerRobotParams <: DeviceParams
     connectionName::String = "RobotServer"
     axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[-85.0,225.0], [-Inf, Inf], [-Inf, Inf]]u"mm"
+    namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
 end
 
 mutable struct BrukerRobot <: Robot

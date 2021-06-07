@@ -3,6 +3,7 @@ export SimulatedRobot, SimulatedRobotParams
 Base.@kwdef struct SimulatedRobotParams <: DeviceParams
     defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
     axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500],[0,500],[0,250]]u"mm"
+    namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
 end
 
 mutable struct SimulatedRobot <: Robot
