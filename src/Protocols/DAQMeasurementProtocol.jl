@@ -62,7 +62,7 @@ function execute(protocol::DAQMeasurementProtocol)
            "Please ckeck the associated sequence configuration."
   elseif numTriggers == 1
     @info "This configuration of the DAQMeasurementProtocol only reads foreground frames."
-    decision = ask_dialog("Do you have everything prepared to start the measurement? "*
+    decision = askConfirmation("Do you have everything prepared to start the measurement? "*
                                "If the answer is no, the protocol will be stopped.")
     if decision
       trigger(seqCont)
@@ -73,7 +73,7 @@ function execute(protocol::DAQMeasurementProtocol)
       return
     end
   elseif numTriggers == 2
-    decision = ask_dialog("Do you have removed the sample in order to take the background measurement "*
+    decision = askConfirmation("Do you have removed the sample in order to take the background measurement "*
                                 "and do you want to start?\nIf the answer is no, the protocol will be stopped ")
     if decision
       trigger(seqCont, true)
@@ -86,7 +86,7 @@ function execute(protocol::DAQMeasurementProtocol)
 
     waitTriggerReady(seqCont)
 
-    decision = ask_dialog("Do you have everything prepared to start the foreground measurement?\n"*
+    decision = askConfirmation("Do you have everything prepared to start the foreground measurement?\n"*
                                 "If the answer is no, the protocol will be stopped.")
     if decision
       trigger(seqCont, false)

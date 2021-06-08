@@ -9,7 +9,7 @@ default(show = true)
 ENV["JULIA_DEBUG"] = "all"
 
 # Add test configurations to path
-testConfigDir = normpath(string(@__DIR__), "../../test/Scanner/TestConfigs")
+testConfigDir = normpath(string(@__DIR__), "../test/Scanner/TestConfigs")
 addConfigurationPath(testConfigDir)
 
 scannerName_ = "TestSimpleSimulatedScanner"

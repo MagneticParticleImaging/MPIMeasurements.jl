@@ -12,7 +12,7 @@ default(show = true)
 ENV["JULIA_DEBUG"] = "all"
 
 # Add test configurations to path
-testConfigDir = normpath(string(@__DIR__), "../../test/Scanner/TestConfigs")
+testConfigDir = normpath(string(@__DIR__), "../test/TestConfigs")
 addConfigurationPath(testConfigDir)
 
 study = MDFv2Study(
@@ -32,8 +32,8 @@ experiment = MDFv2Experiment(;
   uuid = UUIDs.uuid4()
 )
 
-scannerName_ = "TestSimpleSimulatedScanner"
-protocolName_ = "SimulatedDAQMeasurement"
+scannerName_ = "TestRedPitayaScanner"
+protocolName_ = "RedPitayaDAQMeasurement"
 operator = "Jonas"
 filename = joinpath("./tmp.mdf")
 

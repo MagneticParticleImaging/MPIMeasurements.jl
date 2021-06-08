@@ -1,7 +1,7 @@
 [General]
-name = "SimpleSimulatedSequence"
+name = "SimpleRedPitayaSequence"
 description = "Precise description."
-targetScanner = "MyAwesomeScanner"
+targetScanner = "TestRedPitayaScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]
@@ -24,7 +24,7 @@ phase = ["0.0rad"]
 
 [Acquisition]
 bandwidth = "7.8125MHz"
-numFrames = 20000
+numFrames = 100
 numPeriodsPerFrame = 1
 numAverages = 1
 numFrameAverages = 1

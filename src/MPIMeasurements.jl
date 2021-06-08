@@ -1,5 +1,7 @@
 module MPIMeasurements
 
+using Dates: include
+using Reexport: include
 using Pkg
 
 using Compat
@@ -22,8 +24,13 @@ using Mmap
 
 # TODO: This is a workaround for CI with GTK since precompilation fails with headless systems
 # Remove after https://github.com/JuliaGraphics/Gtk.jl/issues/346 is resolved
-if isinteractive()
+try
   using Gtk
+  @info "This session is interactive and thus we loaded Gtk.jl"
+catch e
+  if e isa InitError
+    @warn "This session is NOT interactive and thus we won't load Gtk.jl. This might lead to errors when calling certain functions."
+  end
 end
 
 import Base.write

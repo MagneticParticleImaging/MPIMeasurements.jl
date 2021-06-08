@@ -16,7 +16,7 @@ Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
 end
 
 function init(daq::DummyDAQ)
-  @debug "Initializing dummy DAQ with ID `$(daq.deviceID))`."
+  @debug "Initializing dummy DAQ with ID `$(daq.deviceID)`."
 end
 
 checkDependencies(daq::DummyDAQ) = true

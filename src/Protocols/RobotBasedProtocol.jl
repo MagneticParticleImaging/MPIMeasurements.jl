@@ -49,3 +49,6 @@ end
 @mustimplement preMoveAction(protocol::RobotBasedProtocol)
 @mustimplement postMoveAction(protocol::RobotBasedProtocol)
 
+include("RobotBasedMagneticFieldStaticProtocol.jl")
+include("RobotBasedMagneticFieldSweepProtocol.jl")
+include("RobotBasedSystemMatrixProtocol.jl")

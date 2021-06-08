@@ -63,12 +63,11 @@ function setupSequence(seqCont::SequenceController, sequence::Sequence)
   daq = dependency(seqCont, AbstractDAQ) # This doesn't work for multiple DAQs yet, since this case is not really a priority
   
   setupControlLoop(seqCont, sequence)
-  electricalChannels = electricalTxChannels(seqCont.sequence)
-  setupTx(daq, electricalChannels, txBaseFrequency(seqCont.sequence))
+  setupTx(daq, seqCont.sequence)
 
   # TODO: Setup mechanical channels
 
-  setupRx(daq, rxChannels(sequence), acqNumPeriodsPerFrame(sequence), rxNumSamplingPoints(sequence))
+  setupRx(daq, sequence)
 end
 
 function startSequence(seqCont::SequenceController)
@@ -139,6 +138,10 @@ function acquisitionThread(seqCont::SequenceController)
   # TODO: Control
   @warn "The control loop should be started here"
 
+  # Create directory for the intermediate trigger files
+  triggerSavePath = joinpath(seqScratchDirectory, Dates.format(seqCont.startTime, "yyyy-mm-dd_HH-MM-SS"))
+  mkpath(triggerSavePath)
+
   numSamplingPoints_ = rxNumSamplingPoints(seqCont.sequence)
   numPeriodsPerFrame = acqNumPeriodsPerFrame(seqCont.sequence)
 
@@ -172,8 +175,6 @@ function acquisitionThread(seqCont::SequenceController)
       end
     end
 
-    triggerSavePath = joinpath(seqScratchDirectory, Dates.format(seqCont.startTime, "yyyy-mm-dd_HH-MM-SS"))
-    mkpath(triggerSavePath)
     triggerFilename = joinpath(triggerSavePath, "trigger_$(currTriggerCount).bin")
     numRxChannels_ = numRxChannels(daq)
     bufferShape = (numSamplingPoints_, numRxChannels_, numPeriodsPerFrame, numFrames)
@@ -245,7 +246,7 @@ function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
   data = Mmap.mmap(fullDataFilename, Array{typeof(1.0u"V"), 4}, dataShape)
 
   # Sort the frames such that background frames are at the end
-  # TODO: Do we only need this if a sparsity transformation is applied
+  # TODO: Do we only need this if a sparsity transformation is applied?
   # bgPermutation = sortperm(seqCont.isBackgroundTrigger)
   # seqCont.buffer[bgPermutation] = seqCont.buffer
   # seqCont.isBackgroundTrigger[bgPermutation] = seqCont.isBackgroundTrigger

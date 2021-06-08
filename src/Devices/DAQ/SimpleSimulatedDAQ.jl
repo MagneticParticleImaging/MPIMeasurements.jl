@@ -3,28 +3,9 @@ export SimpleSimulatedDAQ, SimpleSimulatedDAQParams, simulateLangevinInduced
 # TODO: Testing 
 using Plots
 
-abstract type ChannelParams end
-
-Base.@kwdef struct Feedback
-  channelID::AbstractString
-  calibration::Union{typeof(1.0u"T/V"), Nothing} = nothing
-end
-
-Base.@kwdef struct TxChannelParams <: ChannelParams
-  channelIdx::Int64
-  limitPeak::typeof(1.0u"V")
-  sinkImpedance::SinkImpedance = SINK_HIGH
-  allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
-  feedback::Union{Feedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
-end
-
-Base.@kwdef struct RxChannelParams <: ChannelParams
-  channelIdx::Int64
-end
-
-Base.@kwdef struct SimpleSimulatedDAQParams <: DeviceParams
-  channels::Dict{String, ChannelParams}
+Base.@kwdef struct SimpleSimulatedDAQParams <: DAQParams
+  "Channels of this DAQ device"
+  channels::Dict{String, DAQChannelParams}
 
   temperatureRise::Union{Dict{String, typeof(1.0u"K")}, Nothing} = nothing
   temperatureRiseSlope::Union{Dict{String, typeof(1.0u"s")}, Nothing} = nothing
@@ -33,64 +14,9 @@ Base.@kwdef struct SimpleSimulatedDAQParams <: DeviceParams
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
-function SimpleSimulatedDAQParams(dict::Dict)
+function SimpleSimulatedDAQParams(dict::Dict{String, Any})
   mainSectionFields = ["temperatureRise", "temperatureRiseSlope", "phaseChange", "amplitudeChange"]
-  
-  channels = Dict{String, ChannelParams}()
-  for (key, value) in dict
-    if value isa Dict && !(key in mainSectionFields)
-      splattingDictInner = Dict{Symbol, Any}()
-      if value["type"] == "tx"
-        splattingDictInner[:channelIdx] = value["channel"]
-        splattingDictInner[:limitPeak] = uparse(value["limitPeak"])
-
-        if haskey(value, "sinkImpedance")
-          splattingDictInner[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-        end
-
-        if haskey(value, "allowedWaveforms")
-          splattingDictInner[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-        end
-
-        if haskey(value, "feedback")
-          channelID=value["feedback"]["channelID"]
-          calibration=uparse(value["feedback"]["calibration"])
-
-          splattingDictInner[:feedback] = Feedback(channelID=channelID, calibration=calibration)
-        end
-
-        if haskey(value, "calibration")
-          splattingDictInner[:calibration] = uparse.(value["calibration"])
-        end
-
-        channels[key] = TxChannelParams(;splattingDictInner...)
-      elseif value["type"] == "rx"
-        channels[key] = RxChannelParams(channelIdx=value["channel"])
-      end
-
-      # Remove key in order to process the rest with the standard function
-      delete!(dict, key)
-    end
-  end
-
-  splattingDict = dict_to_splatting(dict)
-  splattingDict[:channels] = channels
-
-  try
-    return SimpleSimulatedDAQParams(;splattingDict...)
-  catch e
-    if e isa UndefKeywordError
-      throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
-                                      "for a device with the params type `SimpleSimulatedDAQParams`."))
-    elseif e isa MethodError
-      @warn e.args e.world e.f
-      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
-                                      "with the params type `SimpleSimulatedDAQParams`. Please check "*
-                                      "the causing stacktrace."))
-    else
-      rethrow()
-    end
-  end
+  return createDAQParams(SimpleSimulatedDAQParams, dict)
 end
 
 Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
@@ -104,7 +30,7 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
   # The following fields are only used for the simulation state!
   # The desired values for phase and amplitude are left within the sequence controller.
   "Base frequency to derive drive field frequencies."
-  baseFrequency::Union{typeof(1.0u"Hz"), Missing} = missing
+  baseFrequency::typeof(1.0u"Hz") = 125.0u"MHz"
   "Divider of the baseFrequency to determine the drive field frequencies"
   divider::Union{Array{Int64, 2}, Missing} = missing
   "Applied drive field phase."
@@ -115,14 +41,16 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
   waveform::Union{Array{Waveform, 2}, Missing} = missing
 
   txRunning::Bool = false
+
   
   "Number of periods within a frame."
   numPeriodsPerFrame::Int64 = 1
+  "Number of samples per period."
+  rxNumSamplingPoints::Int64 = 1
 
   rxChannelIDMapping::Dict{String, Int64} = Dict{String, Int64}()
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
-  rxNumSamplingPoints::Int64 = 0
 
   currentFrame::Int64 = 1
   currentPeriod::Int64 = 1
@@ -151,9 +79,10 @@ function checkDependencies(daq::SimpleSimulatedDAQ)
   end                            
 end
 
-function setupTx(daq::SimpleSimulatedDAQ, channels::Vector{ElectricalTxChannel}, baseFrequency::typeof(1.0u"Hz"))
-  daq.baseFrequency = baseFrequency
+function setupTx(daq::SimpleSimulatedDAQ, sequence::Sequence)
+  daq.baseFrequency = txBaseFrequency(sequence)
 
+  channels = electricalTxChannels(sequence)
   periodicChannels = [channel for channel in channels if channel isa PeriodicElectricalChannel]
   stepwiseChannels = [channel for channel in channels if channel isa StepwiseElectricalTxChannel]
 
@@ -197,11 +126,11 @@ function setupTx(daq::SimpleSimulatedDAQ, channels::Vector{ElectricalTxChannel},
   end
 end
 
-function setupRx(daq::SimpleSimulatedDAQ, channels::Vector{RxChannel}, numPeriodsPerFrame::Int64, numSamplingPoints::Int64)
-  daq.numPeriodsPerFrame = numPeriodsPerFrame
-  daq.rxNumSamplingPoints = numSamplingPoints
-
-  for channel in channels
+function setupRx(daq::SimpleSimulatedDAQ, sequence::Sequence)
+  daq.numPeriodsPerFrame = acqNumPeriodsPerFrame(sequence)
+  daq.rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  
+  for channel in rxChannels(sequence)
     scannerChannel = daq.params.channels[channel.id]
     push!(daq.rxChanIDs, channel.id)
     daq.rxChannelIDMapping[channel.id] = scannerChannel.channelIdx
@@ -262,10 +191,10 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
   end
 
   cycle = lcm(daq.divider)/daq.baseFrequency
-  startTime = cycle*(startPeriod-1) |> u"s"
+  startTime = upreferred(cycle*(startPeriod-1))
   t = collect(range(startTime, stop=startTime+numPeriods*cycle-1/daq.baseFrequency, length=daq.rxNumSamplingPoints*numPeriods))
   
-  for (sendChannelID, sendChannel) in [(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams] 
+  for (sendChannelID, sendChannel) in [(id, channel) for (id, channel) in daq.params.channels if channel isa DAQTxChannelParams] 
     sendChannelIdx = sendChannel.channelIdx
 
     # Work with field for now

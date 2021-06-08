@@ -25,8 +25,8 @@ mutable struct DAQParams
   acqNumFrameAverages::Int64 -> specific to Protocol
   acqNumSubperiods::Int64 -> specific to Sequence
   acqNumPeriodsPerPatch::Int64 -> specific to Protocol or Sequence
-  sinLUT::Matrix{Float64} -> specific to Sequence
-  cosLUT::Matrix{Float64} -> specific to Sequence
+  sinLUT::Matrix{Float64} -> specific to Control
+  cosLUT::Matrix{Float64} -> specific to Control
   acqNumFFChannels::Int64 -> specific to Sequence
   acqFFValues::Matrix{Float64} -> RP specific
   acqEnableSequence::Matrix{Bool} -> RP specific but should be in Sequence
@@ -34,7 +34,7 @@ mutable struct DAQParams
   calibRefToField::Vector{Float64} -> scanner specific
   calibFieldToVolt::Vector{Float64} -> scanner specific
   calibFFCurrentToVolt::Vector{Float64} -> scanner specific
-  currTx::Matrix{ComplexF64} -> specific to Sequence
+  currTx::Matrix{ComplexF64} -> specific to Control
   controlPause::Float64 -> specific to Sequence
   controlLoopAmplitudeAccuracy::Float64 -> specific to Sequence
   controlLoopPhaseAccuracy::Float64 -> specific to Sequence
