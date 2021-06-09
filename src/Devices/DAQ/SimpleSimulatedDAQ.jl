@@ -4,7 +4,7 @@ export SimpleSimulatedDAQ, SimpleSimulatedDAQParams, simulateLangevinInduced
 using Plots
 
 Base.@kwdef struct SimpleSimulatedDAQParams <: DAQParams
-  "Channels of this DAQ device"
+  "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
 
   temperatureRise::Union{Dict{String, typeof(1.0u"K")}, Nothing} = nothing
@@ -163,7 +163,7 @@ end
 enableSlowDAC(daq::SimpleSimulatedDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) = 1
 
-function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
+function readData(daq::SimpleSimulatedDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
   startPeriod = (startFrame-1)*daq.numPeriodsPerFrame+1
   numPeriods = numFrames*daq.numPeriodsPerFrame
 
@@ -179,7 +179,7 @@ function readData(daq::SimpleSimulatedDAQ, startFrame, numFrames)
   return uMeas, uRef, t
 end
 
-function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
+function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod::Integer, numPeriods::Integer, numBlockAverages::Integer=1)
   simCont = dependencies(daq, SimulationController)[1]
 
   uMeas = zeros(daq.rxNumSamplingPoints, length(daq.rxChanIDs), numPeriods)u"V"
@@ -255,8 +255,13 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod, numPeriods)
   return uMeas, uRef, reshape(t, (daq.rxNumSamplingPoints, numPeriods))
 end
 
-numTxChannels(daq::SimpleSimulatedDAQ) = length([(id, channel) for (id, channel) in daq.params.channels if channel isa TxChannelParams])
-numRxChannels(daq::SimpleSimulatedDAQ) = length(daq.rxChanIDs)
+numTxChannelsTotal(daq::SimpleSimulatedDAQ) = 10 # Arbitrary number, since we are just simulating
+numRxChannelsTotal(daq::SimpleSimulatedDAQ) = 10 # Arbitrary number, since we are just simulating
+numTxChannelsActive(daq::SimpleSimulatedDAQ) = length([channel for (id, channel) in daq.params.channels if channel isa TxChannelParams])
+numRxChannelsActive(daq::SimpleSimulatedDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
+numRxChannelsReference(daq::SimpleSimulatedDAQ) = length(daq.refChanIDs)
+numRxChannelsMeasurement(daq::SimpleSimulatedDAQ) = length(daq.rxChanIDs)
+numComponentsMax(daq::SimpleSimulatedDAQ) = 1
 canPostpone(daq::SimpleSimulatedDAQ) = false
 canConvolute(daq::SimpleSimulatedDAQ) = false
 

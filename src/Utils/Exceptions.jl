@@ -19,6 +19,13 @@ struct ProtocolConfigurationError <: ConfigurationError
 end
 
 """
+    Specialized error type for errors in sequence configuration files
+"""
+struct SequenceConfigurationError <: ConfigurationError
+  message::String
+end
+
+"""
     Base.show(io::IO, ex::ConfigurationError)
 Custom printing of `ConfigurationError` subtypes
 """

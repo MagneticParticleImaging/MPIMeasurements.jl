@@ -38,19 +38,24 @@ function currentPeriod(daq::DummyDAQ)
     return 1;
 end
 
-function readData(daq::DummyDAQ, startFrame, numFrames)
+function readData(daq::DummyDAQ, startFrame, numFrames, numBlockAverages)
   uMeas=zeros(2,2,2,2)
   uRef=zeros(2,2,2,2)
   return uMeas, uRef
 end
 
-function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
+function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods, numBlockAverages)
   uMeas=zeros(2,2,2,2)
   uRef=zeros(2,2,2,2)
   return uMeas, uRef
 end
 
-numTxChannels(daq::DummyDAQ) = 1
-numRxChannels(daq::DummyDAQ) = 1
+numTxChannelsTotal(daq::DummyDAQ) = 1
+numRxChannelsTotal(daq::DummyDAQ) = 1
+numTxChannelsActive(daq::DummyDAQ) = 1
+numRxChannelsActive(daq::DummyDAQ) = 1
+numRxChannelsReference(daq::DummyDAQ) = 0
+numRxChannelsMeasurement(daq::DummyDAQ) = 1
+
 canPostpone(daq::DummyDAQ) = false
 canConvolute(daq::DummyDAQ) = false

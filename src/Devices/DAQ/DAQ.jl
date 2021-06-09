@@ -2,8 +2,10 @@ import Base: setindex!, getindex
 
 export AbstractDAQ, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
        createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
-       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
-       readDataPeriod, currentPeriod, getDAQ, getDAQs
+       readDataControlled, numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
+       DAQ, dataConversionFactor, readDataPeriod, currentPeriod, getDAQ, getDAQs,
+       channelIdx, limitPeak, sinkImpedance, allowedWaveforms, isWaveformAllowed,
+       feedbackChannelID, feedbackCalibration, calibration
 
 abstract type AbstractDAQ <: Device end
 abstract type DAQParams <: DeviceParams end
@@ -112,16 +114,22 @@ end
 #include("Plotting.jl")
 #include("Parameters.jl")
 
-@mustimplement setupTx(daq::AbstractDAQ, channels::Vector{ElectricalTxChannel}, baseFrequency::typeof(1.0u"Hz"))
+@mustimplement setupTx(daq::AbstractDAQ, sequence::Sequence)
+@mustimplement setupRx(daq::AbstractDAQ, sequence::Sequence)
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
-@mustimplement correctAmpAndPhase(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)
-@mustimplement trigger(daq::AbstractDAQ)
+@mustimplement setTxParams(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)
+#@mustimplement trigger(daq::AbstractDAQ)
 @mustimplement currentFrame(daq::AbstractDAQ)
-@mustimplement readData(daq::AbstractDAQ, startFrame, numFrames)
+@mustimplement readData(daq::AbstractDAQ, startFrame, numFrames, numBlockAverages)
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
-@mustimplement numTxChannels(daq::AbstractDAQ)
-@mustimplement numRxChannels(daq::AbstractDAQ)
+@mustimplement numTxChannelsTotal(daq::AbstractDAQ)
+@mustimplement numRxChannelsTotal(daq::AbstractDAQ)
+@mustimplement numTxChannelsActive(daq::AbstractDAQ)
+@mustimplement numRxChannelsActive(daq::AbstractDAQ)
+@mustimplement numRxChannelsReference(daq::AbstractDAQ)
+@mustimplement numRxChannelsMeasurement(daq::AbstractDAQ)
+@mustimplement numComponentsMax(daq::AbstractDAQ)
 @mustimplement canPostpone(daq::AbstractDAQ)
 @mustimplement canConvolute(daq::AbstractDAQ)
 
@@ -140,17 +148,29 @@ function startTxAndControl(daq::AbstractDAQ)
   controlLoop(daq)
 end
 
-function readDataControlled(daq::AbstractDAQ, numFrames)
+function readDataControlled(daq::AbstractDAQ, numFrames::Integer)
   controlLoop(daq)
   readData(daq, numFrames, currentFrame(daq))
 end
 
-function dataConversionFactor(daq::AbstractDAQ) #default
-  factor = zeros(2, numRxChannels(daq))
-  factor[1,:] = 1.0
-  factor[2,:] = 0.0
-  return factor
-end
+# function dataConversionFactor(daq::AbstractDAQ) #default
+#   factor = zeros(2, numRxChannels(daq))
+#   factor[1,:] = 1.0
+#   factor[2,:] = 0.0
+#   return factor
+# end
+
+channel(daq::AbstractDAQ, channelID::AbstractString) = daq.params.channels[channelID]
+channelIdx(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).channelIdx
+channelIdx(daq::AbstractDAQ, channelIDs::Vector{<:AbstractString}) = [channel(daq, channelID).channelIdx for channelID in channelIDs]
+limitPeak(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).limitPeak
+sinkImpedance(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).sinkImpedance
+allowedWaveforms(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).allowedWaveforms
+isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Waveform) = waveform in allowedWaveforms(daq, channelID)
+feedback(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).feedback
+feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).channelID
+feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).calibration
+calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).calibration
 
 include("RedPitayaDAQ.jl")
 include("DummyDAQ.jl")

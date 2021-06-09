@@ -11,15 +11,15 @@ using RedPitayaDAQServer
 end
 
 Base.@kwdef struct RedPitayaDAQParams <: DAQParams
-  "Channels of this DAQ device"
+  "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
 
   "IPs of the Red Pitayas"
   ips::Vector{String}
   "Trigger mode of the Red Pitayas. Default: `EXTERNAL`."
   triggerMode::RPTriggerMode = EXTERNAL
-  "Time to wait for a response until a reset is issued."
-  resetWaittime::typeof(1.0u"s") = 45.0u"s"
+  "Time to wait after a reset has been issued."
+  resetWaittime::typeof(1.0u"s") = 45u"s"
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -38,7 +38,6 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   "Reference to the Red Pitaya cluster"
   rpc::Union{RedPitayaCluster, Missing} = missing
 
-  rxChannelIDMapping::Dict{String, Int64} = Dict{String, Int64}()
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
 end
@@ -80,7 +79,7 @@ checkDependencies(daq::RedPitayaDAQ) = true
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
                                                    "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
-
+  
   # The decimation can only be a power of 2 beginning with 8
   decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence)/2)
   if decimation_ in [2^n for n in 3:8]
@@ -91,21 +90,41 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
                                     "but has to be a power of 2"))
   end
 
+  channels = electricalTxChannels(sequence)
+  periodicChannels = [channel for channel in channels if channel isa PeriodicElectricalChannel]
+  stepwiseChannels = [channel for channel in channels if channel isa StepwiseElectricalTxChannel]
 
+  if !isempty(stepwiseChannels)
+    @warn "The Red Pitaya DAQ can only process periodic channels. Other channels are ignored."
+  end
 
-  # for l=1:(2*length(daq.rpc.rp))
+  if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
+    error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
+  end
 
-  #   offsetDAC(daq.rpc, l, daq.params.txOffsetVolt[l])
-  # end
+  # Iterate over sequence(!) channels
+  for channel in periodicChannels
+    channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
 
-  # for d=1:numTxChannels(daq)
-  #   for e=1:numTxChannels(daq)
-  #     frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e, daq.params.dfFreq[e]) 
-  #   end
+    offsetVolts = offset(channel)*calibration(daq, id(channel))
+    offsetDAC(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
+    #jumpSharpnessDAC(daq.rpc, channelIdx_, daq.params.jumpSharpness) # TODO: Can we determine this somehow from the sequence?
 
-  #   signalTypeDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.dfWaveform)
-  #   jumpSharpnessDAC(daq.rpc, daq.params.dfChanIdx[d], daq.params.jumpSharpness)
-  # end
+    for (idx, component) in enumerate(components(channel))
+      frequencyDAC(daq.rpc, channelIdx_, idx, divider(component))
+    end
+
+    # In the Red Pitaya, the signal type can only be set per channel
+    waveform_ = unique([waveform(component) for component in components(channel)])
+    if length(waveform_) == 1
+      waveform_ = uppercase(fromWaveform(waveform_[1]))
+      signalTypeDAC(daq.rpc, channelIdx_, waveform_)
+    else
+      throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
+                                       "defines different waveforms in its components. This is not supported "*
+                                       "by the Red Pitaya."))
+    end
+  end
 
   #TODO: Should be derived from sequence when I have understood how the passing works
   #passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)  
@@ -136,7 +155,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
     try
       scannerChannel = daq.params.channels[channel.id]
       push!(daq.rxChanIDs, channel.id)
-      daq.rxChannelIDMapping[channel.id] = scannerChannel.channelIdx
+      #daq.rxChannelIDMapping[channel.id] = scannerChannel.channelIdx
     catch e
       if e isa KeyError
         throw(ScannerConfigurationError("The given sequence `$(name(sequence))` requires a receive "*
@@ -175,28 +194,55 @@ function stopTx(daq::RedPitayaDAQ)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-#@mustimplement correctAmpAndPhase(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)
+function setTxParams(daq::RedPitayaDAQ, Γ; postpone=false)
+  if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
+    error("This should never happen!!! \n Tx voltage is above the limit")
+  end
+
+  for d=1:numTxChannels(daq)
+    for e=1:numTxChannels(daq)
+
+      amp = abs(Γ[d,e])
+      ph = angle(Γ[d,e])
+      phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
+
+      #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
+
+      #if postpone
+      # The following is a very bad and dangerous hack. Right now postponing the activation of 
+      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
+      # directly
+      if postpone && daq.params.dfChanIdx[d] <= 2   
+        amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
+      else
+        amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
+      end
+    end
+  end
+  return nothing
+end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)
 currentPeriod(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentPeriod(daq.rpc)
 
-function readData(daq::RedPitayaDAQ, numFrames, startFrame)
-  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages, 1)
+function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
+  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1)
 
   @info "size u in readData: $(size(u))"
-  c = daq.params.calibIntToVolt
+  # TODO: Should be replaced when https://github.com/tknopp/RedPitayaDAQServer/pull/32 is resolved
+  c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
   for d=1:size(u,2)
     u[:,d,:,:] .*= c[1,d]
     u[:,d,:,:] .+= c[2,d]
   end
 
-  uMeas = u[:,daq.rxChanIdx,:,:]
-  uRef = u[:,daq.refChanIdx,:,:]
+  uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:,:]u"V"
+  uRef = u[:,channelIdx(daq, daq.refChanIDs),:,:]u"V"
 
-  lostSteps = numLostStepsSlowADC(master(daq.rpc))
-  if lostSteps > 0
-    @error "WE LOST $lostSteps SLOW DAC STEPS!"
-  end
+  # lostSteps = numLostStepsSlowADC(master(daq.rpc))
+  # if lostSteps > 0
+  #   @error "WE LOST $lostSteps SLOW DAC STEPS!"
+  # end
 
   @debug size(uMeas) size(uRef) 
 
@@ -206,21 +252,26 @@ end
 function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod)
   u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
 
-  c = daq.params.calibIntToVolt
+  # TODO: Should be replaced when https://github.com/tknopp/RedPitayaDAQServer/pull/32 is resolved
+  c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
   for d=1:size(u,2)
     u[:,d,:,:] .*= c[1,d]
     u[:,d,:,:] .+= c[2,d]
   end
 
-  uMeas = u[:,daq.params.rxChanIdx,:] # TODO: This Indexing is wrong
-  uRef = u[:,daq.params.refChanIdx,:]
+  uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:]
+  uRef = u[:,channelIdx(daq, daq.refChanIDs),:]
 
   return uMeas, uRef
 end
 
-numTxChannels(daq::RedPitayaDAQ) = 2 # TODO: Get actual number. Should this the the number of available or active channels
-numRxChannels(daq::RedPitayaDAQ) = 2
-
+numTxChannelsTotal(daq::RedPitayaDAQ) = numChan(daq.rpc)
+numRxChannelsTotal(daq::RedPitayaDAQ) = numChan(daq.rpc)
+numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all available channels are active
+numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
+numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
+numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
+numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 
@@ -276,33 +327,7 @@ enableSlowDAC(daq::RedPitayaDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) =
             enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
 
-function setTxParams(daq::RedPitayaDAQ, Γ; postpone=false)
-  if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
-    error("This should never happen!!! \n Tx voltage is above the limit")
-  end
 
-  for d=1:numTxChannels(daq)
-    for e=1:numTxChannels(daq)
-
-      amp = abs(Γ[d,e])
-      ph = angle(Γ[d,e])
-      phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
-
-      #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
-
-      #if postpone
-      # The following is a very bad and dangerous hack. Right now postponing the activation of 
-      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
-      # directly
-      if postpone && daq.params.dfChanIdx[d] <= 2   
-        amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
-      else
-        amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
-      end
-    end
-  end
-  return nothing
-end
 
 #TODO: calibRefToField should be multidimensional
 refToField(daq::RedPitayaDAQ, d::Int64) = daq.params.calibRefToField[d]

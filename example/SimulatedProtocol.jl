@@ -2,6 +2,7 @@ using MPIMeasurements
 using Plots
 using Unitful
 using UnitfulRecipes
+using Dates
 using UUIDs
 
 #pyplot()
@@ -44,4 +45,4 @@ runProtocol(protocol)
 data = protocol.mdf.measurement.data
 #dataRMS = mapslices(x -> sqrt(1/length(x)*sum(x.^2)), data, dims = 1)
 #plot(reshape(dataRMS, length(dataRMS)))
-#plot(reshape(data, length(data)))
+plot(reshape(data, length(data)))

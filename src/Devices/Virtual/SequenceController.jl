@@ -22,7 +22,7 @@ Base.@kwdef mutable struct SequenceController <: VirtualDevice
 
   startTime::Union{DateTime, Nothing} = nothing
   task::Union{Task, Nothing} = nothing
-  trigger::Channel{Int64} = Channel{Int64}(8)
+  trigger::Channel{Tuple{Int64, Bool}} = Channel{Tuple{Int64, Bool}}(8)
   triggerCount::Threads.Atomic{Int64} = Threads.Atomic{Int64}(0)
   cancelled::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
   readyForTrigger::Threads.Atomic{Bool} = Threads.Atomic{Bool}(false)
@@ -96,12 +96,12 @@ end
 
 function trigger(seqCont::SequenceController, isBackground::Bool=false)
   Threads.atomic_add!(seqCont.triggerCount, 1)
-  put!(seqCont.trigger, seqCont.triggerCount[])
+  put!(seqCont.trigger, (seqCont.triggerCount[], isBackground))
   push!(seqCont.isBackgroundTrigger, isBackground)
 end
 
 function finish(seqCont::SequenceController)
-  put!(seqCont.trigger, -1) # Signals the acquisition thread to get out of the loop
+  put!(seqCont.trigger, (-1, false)) # Signals the acquisition thread to get out of the loop
 end
 
 function wait(seqCont::SequenceController)
@@ -148,7 +148,7 @@ function acquisitionThread(seqCont::SequenceController)
   while !seqCont.cancelled[]
     # Signal the readiness to receive trigger
     Threads.atomic_xchg!(seqCont.readyForTrigger, true)
-    currTriggerCount = take!(seqCont.trigger)
+    currTriggerCount, isBackground = take!(seqCont.trigger)
     Threads.atomic_xchg!(seqCont.readyForTrigger, false)
 
     if currTriggerCount == -1
@@ -163,24 +163,25 @@ function acquisitionThread(seqCont::SequenceController)
       break
     end
 
-    numFrames = acqNumFrames(seqCont.sequence)
-    if length(numFrames) > 1 # If there is only a scalar defined, we allow an infinte amount of triggers
-      if currTriggerCount <= length(numFrames)
-        numFrames = numFrames[currTriggerCount]
-      else
-        @error "The specified amount of possible triggers for the number of frames is "*
-               "$(length(numFrames)), but an additional trigger has been applied. "*
-               "The acquisition will stop now."
+    numFrames = -1
+    try
+      numFrames = acqNumFrames(seqCont.sequence, currTriggerCount, isBackground)
+    catch e
+      if e isa BoundsError
+        @error "The specified amount of possible triggers is $(numTriggers(sequence, isBackground))"*
+               ", but an additional trigger has been applied. The acquisition will stop now."
         break
+      else
+        rethrow()
       end
     end
 
     triggerFilename = joinpath(triggerSavePath, "trigger_$(currTriggerCount).bin")
-    numRxChannels_ = numRxChannels(daq)
+    numRxChannels_ = numRxChannelsMeasurement(daq)
     bufferShape = (numSamplingPoints_, numRxChannels_, numPeriodsPerFrame, numFrames)
     triggerBuffer = Mmap.mmap(triggerFilename, Array{typeof(1.0u"V"), 4}, bufferShape)
 
-    numFrameAverages = acqNumFrameAverages(seqCont.sequence)
+    numFrameAverages = acqNumFrameAverages(seqCont.sequence, isBackground)
     chunkTime = seqCont.params.saveInterval
     framePeriod = numFrameAverages*numPeriodsPerFrame*dfCycle(seqCont.sequence)
     chunk = min(numFrames, max(1, round(Int, ustrip(chunkTime/framePeriod))))
@@ -190,18 +191,23 @@ function acquisitionThread(seqCont::SequenceController)
     #                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
     @info "Starting acquisition for $numFrames frames with an averaging factor of $numFrameAverages."
-    fr = currentFrame(daq)
+    startFrame = MPIMeasurements.currentFrame(daq)
+    fr = 1
     while fr <= numFrames
-      to = min(fr+chunk-1, numFrames) 
+      to = min(fr+chunk-1, numFrames)
 
       #if tempSensor != nothing
       #  for c = 1:numChannels(tempSensor)
       #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
       #  end
       #end
+      currFrame = startFrame+(fr-1)*numFrameAverages
+      numFramesForChunk = numFrameAverages*(length(fr:to))
       @debug "Measuring frame $fr to $to."
-      @time uMeas, uRef = readData(daq, (fr-1)*numFrameAverages+1, numFrameAverages*(length(fr:to)))
-      @debug "It should take $(numFrameAverages*(length(fr:to))*framePeriod |> u"s")."
+      @debug "It should take $(numFramesForChunk*framePeriod |> u"s")."
+      @debug startFrame fr to currFrame numFramesForChunk
+
+      @time uMeas, uRef = readData(daq, currFrame, numFramesForChunk, acqNumAverages(seqCont.sequence))
       s = size(uMeas)
       @debug "The size of the measured data is $s."
       if numFrameAverages == 1
@@ -214,6 +220,7 @@ function acquisitionThread(seqCont::SequenceController)
       
       # Write the current chunk to our temp file
       Mmap.sync!(triggerBuffer)
+      break # TODO: Debugging
     end
 
     push!(seqCont.buffer, triggerBuffer)
