@@ -79,7 +79,7 @@ function _moveAbs(rob::IgusRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
 	setSdoObject(rob, CONTROLWORD, COMMANDS["START_OPERATION"])
 
 	waittime = 0.0u"s"
-	while (getSdoObject(rob, STATUSWORD) & 1 << 10) == 0  # Bis das Bit Target Reached nicht gesetzt ist, warte noch ein bisschen
+	while getSdoObject(rob, STATUSWORD) & (1 << 10) != (1 << 10)  # Bis das Bit Target Reached nicht gesetzt ist, warte noch ein bisschen
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
@@ -102,7 +102,7 @@ function _moveRel(rob::IgusRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
 	setSdoObject(rob, CONTROLWORD, COMMANDS["START_OPERATION"] | 1 << 6)
 
 	waittime = 0.0u"s"
-	while (getSdoObject(rob, STATUSWORD) & 1 << 10) == 0  # Bis das Bit Target Reached nicht gesetzt ist, warte noch ein bisschen
+	while getSdoObject(rob, STATUSWORD) & (1 << 10) != (1 << 10)  # Bis das Bit Target Reached nicht gesetzt ist, warte noch ein bisschen
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
@@ -165,6 +165,10 @@ function _setup(rob::IgusRobot)
 end
 
 function _doReferenceDrive(rob::IgusRobot)
+    if _isReferenced(rob)
+        @info "The robot is already referenced. Skipping reference drive..."
+        return true
+    end
     # Die Homing Methode 0x6098 muss über die Webserver Benutzeroberfläche eingestellt werden
 	# Ebenso der Homing Offset
 
@@ -180,10 +184,11 @@ function _doReferenceDrive(rob::IgusRobot)
     sleep(0.2) # wait for the mode to be activated
 
     @debug "Performing reference drive"
+    setSdoObject(rob, CONTROLWORD, COMMANDS["ENABLE_OPERATION"]) # in theory this line should not be necessary, however I encountered a bug where the homing just wont start and this helped... The manual says something like "wait one cycle to ensure the mode is activated"
     setSdoObject(rob, CONTROLWORD, COMMANDS["START_OPERATION"])
     sleep(0.2)
     waittime = 0.2u"s"
-    while (getSdoObject(rob, STATUSWORD) & 0x1400) == 0
+    while getSdoObject(rob, STATUSWORD) & 0x1400 != 0x1400
         sleep(0.1)
         waittime += 0.1u"s"
         if waittime > abs(diff(axisRange(rob)[1])[1]) / rob.params.homVelSwitch + rob.params.timeout
@@ -274,7 +279,9 @@ function readModbusTelegram(telegram::Vector{UInt8})
      # convert bytes to int (little endian)
         for i in 1:objectSize
             data += telegram[19 + i] * 256^(i - 1)
-            @debug "Reading telegram" telegram[19 + i]
+        end
+        if objectSize>0
+            @debug "Reading telegram" telegram[20:end]
         end
         
         return data
