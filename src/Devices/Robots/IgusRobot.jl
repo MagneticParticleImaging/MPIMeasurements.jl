@@ -61,7 +61,7 @@ mutable struct IgusRobot <: Robot
 end
 
 dof(rob::IgusRobot) = 1
-_getPosition(rob::IgusRobot) = [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"]
+_getPosition(rob::IgusRobot) = _isReferenced(rob) ? [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"] : [NaN]u"mm"
 axisRange(rob::IgusRobot) = rob.params.axisRange
 _isReferenced(rob::IgusRobot) = (getSdoObject(rob, DIGITAL_OUTPUTS) & (1 << 26))!=0
 defaultVelocity(rob::IgusRobot) = rob.params.defaultVelocity
