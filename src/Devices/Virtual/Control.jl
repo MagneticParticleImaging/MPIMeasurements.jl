@@ -1,3 +1,16 @@
+function initLUT(N,D, dfCycle, dfFreq)
+  sinLUT = zeros(N,D)
+  cosLUT = zeros(N,D)
+  for d=1:D
+    Y = round(Int64, dfCycle*dfFreq[d] )
+    for n=1:N
+      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
+      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
+    end
+  end
+  return sinLUT, cosLUT
+end
+
 
 function controlLoop(daq::AbstractDAQ)
   if daq.params.controlPhase
@@ -31,6 +44,8 @@ function controlLoop_(daq::AbstractDAQ)
     sleep(daq.params.controlPause)
     i += 1
   end
+
+  # TODO: This is not generic!
   setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
   setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
   

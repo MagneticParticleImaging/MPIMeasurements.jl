@@ -6,49 +6,58 @@ MPIMeasurements, but also from the outside.
 """
 @testset "Flexible scanner" begin
   ### This section can be in a different package, which is not coupled to MPIMeasurements.jl as a dependency
-  export FlexibleDAQ
+  export FlexibleDAQ, FlexibleDAQParams
   
   Base.@kwdef struct FlexibleDAQParams <: MPIMeasurements.DeviceParams
     samplesPerPeriod::Int
     sendFrequency::typeof(1u"kHz")
   end
 
-  FlexibleDAQParams(dict::Dict) = from_dict(FlexibleDAQParams, dict)
+  FlexibleDAQParams(dict::Dict) = params_from_dict(FlexibleDAQParams, dict)
 
   Base.@kwdef mutable struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
+    "Unique device ID for this device as defined in the configuration."
     deviceID::String
+    "Parameter struct for this devices read from the configuration."
     params::FlexibleDAQParams
+    "Vector of dependencies for this device."
+    dependencies::Dict{String, Union{Device, Missing}}
   end
 
-  function startTx(daq::FlexibleDAQ)
+  function MPIMeasurements.init(daq::FlexibleDAQ)
+    @info "Initializing flexible DAQ with ID `$(daq.deviceID)`."
+  end
+  
+  MPIMeasurements.checkDependencies(daq::FlexibleDAQ) = true
+
+  function MPIMeasurements.startTx(daq::FlexibleDAQ)
   end
 
-  function stopTx(daq::FlexibleDAQ)
+  function MPIMeasurements.stopTx(daq::FlexibleDAQ)
   end
 
-  function setTxParams(daq::FlexibleDAQ, amplitude, phase; postpone=false)
+  function MPIMeasurements.setTxParams(daq::FlexibleDAQ, amplitude, phase; postpone=false)
   end
 
-  function currentFrame(daq::FlexibleDAQ)
+  function MPIMeasurements.currentFrame(daq::FlexibleDAQ)
       return 1;
   end
 
-  function currentPeriod(daq::FlexibleDAQ)
+  function MPIMeasurements.currentPeriod(daq::FlexibleDAQ)
       return 1;
   end
 
-  function readData(daq::FlexibleDAQ, startFrame, numFrames)
+  function MPIMeasurements.readData(daq::FlexibleDAQ, startFrame, numFrames)
     uMeas=zeros(2,2,2,2)
     uRef=zeros(2,2,2,2)
     return uMeas, uRef
   end
 
-  function readDataPeriods(daq::FlexibleDAQ, startPeriod, numPeriods)
+  function MPIMeasurements.readDataPeriods(daq::FlexibleDAQ, startPeriod, numPeriods)
     uMeas=zeros(2,2,2,2)
     uRef=zeros(2,2,2,2)
     return uMeas, uRef
   end
-  refToField(daq::FlexibleDAQ, d::Int64) = 0.0
 
   ### / External section
 
@@ -56,20 +65,20 @@ MPIMeasurements, but also from the outside.
   scanner = MPIScanner(scannerName_)
 
   @testset "Meta" begin
-    @test getName(scanner) == scannerName_
-    @test getConfigDir(scanner) == joinpath(testConfigDir, scannerName_)
+    @test name(scanner) == scannerName_
+    @test configDir(scanner) == joinpath(testConfigDir, scannerName_)
     @test getGUIMode(scanner::MPIScanner) == false
   end
 
   @testset "General" begin
-    generalParams = getGeneralParams(scanner)
-    @test typeof(generalParams) == MPIScannerGeneral
-    @test generalParams.boreSize == 1337u"mm"
-    @test generalParams.facility == "My awesome institute"
-    @test generalParams.manufacturer == "Me, Myself and I"
-    @test generalParams.name == scannerName_
-    @test generalParams.topology == "FFL"
-    @test generalParams.gradient == 42u"T/m"
+    generalParams_ = generalParams(scanner)
+    @test generalParams_ isa MPIScannerGeneral
+    @test generalParams_.boreSize == 1337u"mm"
+    @test generalParams_.facility == "My awesome institute"
+    @test generalParams_.manufacturer == "Me, Myself and I"
+    @test generalParams_.name == scannerName_
+    @test generalParams_.topology == "FFL"
+    @test generalParams_.gradient == 42u"T/m"
     @test scannerBoreSize(scanner) == 1337u"mm"
     @test scannerFacility(scanner) == "My awesome institute"
     @test scannerManufacturer(scanner) == "Me, Myself and I"

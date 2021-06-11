@@ -1,3 +1,141 @@
+export DAQMeasurementProtocol, DAQMeasurementProtocolParams, sequenceName, sequence, mdf, prepareMDF
+
+Base.@kwdef mutable struct DAQMeasurementProtocolParams <: ProtocolParams
+  sequenceName::AbstractString
+end
+
+Base.@kwdef mutable struct DAQMeasurementProtocol <: Protocol
+  name::AbstractString
+  description::AbstractString
+  scanner::MPIScanner
+  params::DAQMeasurementProtocolParams
+  
+  sequence::Union{Sequence, Missing} = missing
+  mdf::Union{MDFv2InMemory, Missing} = missing
+  filename::AbstractString = ""
+end
+
+sequenceName(protocol::DAQMeasurementProtocol) = protocol.params.sequenceName
+sequence(protocol::DAQMeasurementProtocol) = protocol.sequence
+mdf(protocol::DAQMeasurementProtocol) = protocol.mdf
+
+#TODO: This has currently no link to an MDF store. How should we integrate it?
+function prepareMDF(protocol::DAQMeasurementProtocol, filename::AbstractString, study::MDFv2Study, experiment::MDFv2Experiment, operator::AbstractString="anonymous")
+  protocol.mdf = MDFv2InMemory()
+  protocol.mdf.root = defaultMDFv2Root()
+  protocol.mdf.study = study
+  protocol.mdf.experiment = experiment
+  protocol.mdf.scanner = MDFv2Scanner(
+    boreSize = ustrip(u"m", scannerBoreSize(protocol.scanner)),
+    facility = scannerFacility(protocol.scanner),
+    manufacturer = scannerManufacturer(protocol.scanner),
+    name = scannerName(protocol.scanner),
+    operator = operator,
+    topology = scannerTopology(protocol.scanner)
+  )
+
+  protocol.filename = filename
+end
+
+function init(protocol::DAQMeasurementProtocol)
+  scanner_ = scanner(protocol)
+  configDir_ = configDir(scanner_)
+  sequenceName_ = sequenceName(protocol)
+  filename = joinpath(configDir_, "Sequences", "$sequenceName_.toml")
+  protocol.sequence = Sequence(filename)
+end
+
+function execute(protocol::DAQMeasurementProtocol)
+  scanner_ = scanner(protocol)
+  seqCont = getSequenceController(scanner_)
+
+  setupSequence(seqCont, sequence(protocol))
+  startSequence(seqCont)
+
+  # Give the acquisition thread some time, so we don't have mixed up messages when prompting for input
+  waitTriggerReady(seqCont)
+
+  numTriggers = length(acqNumFrames(seqCont.sequence))
+  if numTriggers > 2
+    @error "The DAQMeasurementProtocol is only designed to acquire with one trigger "*
+           "(just foreground frames) or two triggers (background and foreground frames). "*
+           "Please ckeck the associated sequence configuration."
+  elseif numTriggers == 1
+    @info "This configuration of the DAQMeasurementProtocol only reads foreground frames."
+    decision = askConfirmation("Do you have everything prepared to start the measurement? "*
+                               "If the answer is no, the protocol will be stopped.")
+    if decision
+      trigger(seqCont)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+  elseif numTriggers == 2
+    decision = askConfirmation("Do you have removed the sample in order to take the background measurement "*
+                                "and do you want to start?\nIf the answer is no, the protocol will be stopped ")
+    if decision
+      trigger(seqCont, true)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+
+    waitTriggerReady(seqCont)
+
+    decision = askConfirmation("Do you have everything prepared to start the foreground measurement?\n"*
+                                "If the answer is no, the protocol will be stopped.")
+    if decision
+      trigger(seqCont, false)
+    else
+      finish(seqCont)
+      wait(seqCont)
+      @info "Protocol stopped"
+      return
+    end
+  end
+
+  @info "All triggers applied. Now finishing sequence."
+  finish(seqCont)
+  wait(seqCont)
+  if !ismissing(protocol.mdf)
+    @info "Sequence finished. Now saving to MDF."
+    fillMDF(seqCont, protocol.mdf)
+    saveasMDF(protocol.filename, protocol.mdf)
+  else
+    @warn "No MDF defined and thus, no data is saved. If this is a mistake "*
+          "please run `prepareMDF` prior to calling `runProtocol`."
+  end
+  @info "Protocol finished."
+end
+
+function cleanup(protocol::DAQMeasurementProtocol)
+  
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### OLD PART ##########
+
 export measurement, asyncMeasurement, measurementCont, measurementRepeatability,
        MeasState
 
@@ -14,7 +152,9 @@ function measurement_(daq::AbstractDAQ)
   currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-  uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+  framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame*daq.params.dfCycle
+  @time uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
+  @info "It should take $(daq.params.acqNumFrames*daq.params.acqNumFrameAverages*framePeriod)"
   sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
   stopTx(daq)
   disconnect(daq)
@@ -172,14 +312,13 @@ end
 
 function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
                                  store::DatasetStore, params::Dict, bgdata=nothing)
-  #try
     su = getSurveillanceUnit(scanner)
     daq = getDAQ(scanner)
-    tempSensor = getTemperatureSensor(scanner)
+    #tempSensor = getTemperatureSensor(scanner)
 
-    if tempSensor != nothing
-      measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
-    end
+    #if tempSensor != nothing
+    #  measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
+    #end
 
     setEnabled(getRobot(scanner), false)
     enableACPower(su, scanner)
@@ -189,21 +328,38 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                            daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
-    for fr=1:daq.params.acqNumFrames
-      if tempSensor != nothing
-        for c = 1:numChannels(tempSensor)
-            measState.temperatures[c,fr] = getTemperature(tempSensor, c)
-        end
-      end
-      #println("FRAME NEU $fr")
-      uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages,
-                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
+    chunkTime = 2.0 #seconds
+    framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame *
+                  daq.params.dfCycle
+    chunk = min(daq.params.acqNumFrames,max(1,round(Int, chunkTime/framePeriod)))
+    
+    fr = 1
+    while fr <= daq.params.acqNumFrames
+      to = min(fr+chunk-1,daq.params.acqNumFrames) 
 
-      measState.buffer[:,:,:,fr] = mean(uMeas, dims=4)
+      #if tempSensor != nothing
+      #  for c = 1:numChannels(tempSensor)
+      #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
+      #  end
+      #end
+      @info "Measuring frame $fr to $to"
+      @time uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*(length(fr:to)),
+                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
+      @info "It should take $(daq.params.acqNumFrameAverages*(length(fr:to))*framePeriod)"
+      s = size(uMeas)
+      @info s
+      if daq.params.acqNumFrameAverages == 1
+        measState.buffer[:,:,:,fr:to] = uMeas
+      else
+        tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :)
+        measState.buffer[:,:,:,fr:to] = dropdims(mean(uMeas, dims=4),dims=4)
+      end
       measState.currFrame = fr
       measState.consumed = false
       #sleep(0.01)
       #yield()
+      fr += chunk
+
       if measState.cancelled
         break
       end
@@ -219,9 +375,6 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
     end
 
     measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
-  #catch ex
-  #  @warn "Exception" ex stacktrace(catch_backtrace())
-  #end
 end
 
 

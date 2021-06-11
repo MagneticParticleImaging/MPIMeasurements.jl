@@ -1,44 +1,118 @@
-using Graphics: @mustimplement
-
 import Base: setindex!, getindex
 
-export AbstractDAQ, startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
-      readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
-      readDataPeriod, currentPeriod, getDAQ, getDAQs
+export AbstractDAQ, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
+       createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
+       readDataControlled, numRxChannels, numTxChannels, DAQ, dataConversionFactor,
+       readDataPeriod, currentPeriod, getDAQ, getDAQs
 
 abstract type AbstractDAQ <: Device end
+abstract type DAQParams <: DeviceParams end
 
 @enum SinkImpedance begin
   SINK_FIFTY_OHM
   SINK_HIGH
 end
 
-Base.@kwdef mutable struct SendParameters
-  "Base frequency to derive drive field frequencies (Unit: Hz)"
-  baseFrequency::Int64
-  "Divider of the baseFrequency to determine the drive field frequencies"
-  divider::Array{Int64, 2}
-  "Applied drive field phase (Unit: rad)."
-  phase::Array{Float64, 3}
-  "Applied drive field voltage (Unit: V)."
-  amplitude::Array{Float64, 3}
-  "Waveform type: sine, triangle or custom"
-  waveform::Array{Waveform, 2}
-  "Impedance of the sink. Used to calculate the actual output amplitude."
-  sinkImpedance::Vector{SinkImpedance}
-  "Channels that should be enabled."
-  channelMapping::Vector{Int64}
-  "Minimum cycles that are performed for an amplitude and phase change."
-  minimumChangeCyles::Int64
-  "Amplification of the channels (Unit: V)."
-  amplification::Vector{Float64}
+abstract type DAQChannelParams end
+
+Base.@kwdef struct DAQFeedback
+  channelID::AbstractString
+  calibration::Union{typeof(1.0u"T/V"), Nothing} = nothing
+end
+
+Base.@kwdef struct DAQTxChannelParams <: DAQChannelParams
+  channelIdx::Int64
+  limitPeak::typeof(1.0u"V")
+  sinkImpedance::SinkImpedance = SINK_HIGH
+  allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
+  feedback::Union{DAQFeedback, Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+end
+
+Base.@kwdef struct DAQRxChannelParams <: DAQChannelParams
+  channelIdx::Int64
+end
+
+"Create DAQ channel description from device dict part."
+function createDAQChannels(dict::Dict{String, Any})
+  channels = Dict{String, DAQChannelParams}()
+  for (key, value) in dict
+    splattingDict = Dict{Symbol, Any}()
+    if value["type"] == "tx"
+      splattingDict[:channelIdx] = value["channel"]
+      splattingDict[:limitPeak] = uparse(value["limitPeak"])
+
+      if haskey(value, "sinkImpedance")
+        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
+      end
+
+      if haskey(value, "allowedWaveforms")
+        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
+      end
+
+      if haskey(value, "feedback")
+        channelID=value["feedback"]["channelID"]
+        calibration=uparse(value["feedback"]["calibration"])
+
+        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
+      end
+
+      if haskey(value, "calibration")
+        splattingDict[:calibration] = uparse.(value["calibration"])
+      end
+
+      channels[key] = DAQTxChannelParams(;splattingDict...)
+    elseif value["type"] == "rx"
+      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
+    end
+  end
+
+  return channels
+end
+
+"Create the params struct from a dict. Typically called during scanner instantiation."
+function createDAQParams(DAQType::DataType, dict::Dict{String, Any})
+  @assert DAQType <: DAQParams "The supplied type `$type` cannot be used for creating DAQ params, since it does not inherit from `DAQParams`."
+  
+  # Extract all main section fields which means excluding `channels`
+  mainSectionFields = [string(field) for field in fieldnames(DAQType) if field != :channels]
+
+  # Split between main section fields and channels, which are dictionaries
+  channelDict = Dict{String, Any}()
+  for (key, value) in dict
+    if value isa Dict && !(key in mainSectionFields)
+      channelDict[key] = value
+      
+      # Remove key in order to process the rest with the standard function
+      delete!(dict, key)
+    end
+  end
+
+  splattingDict = dict_to_splatting(dict)
+  splattingDict[:channels] = createDAQChannels(channelDict)
+
+  try
+    return DAQType(;splattingDict...)
+  catch e
+    if e isa UndefKeywordError
+      throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
+                                      "for a device with the params type `$DAQType`."))
+    elseif e isa MethodError
+      @warn e.args e.world e.f
+      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
+                                      "with the params type `$DAQType`. Please check "*
+                                      "the causing stacktrace."))
+    else
+      rethrow()
+    end
+  end
 end
 
 #include("Control.jl")
 #include("Plotting.jl")
 #include("Parameters.jl")
 
-@mustimplement setupTx(daq::AbstractDAQ, channels::Vector{ElectricalTxChannel})
+@mustimplement setupTx(daq::AbstractDAQ, channels::Vector{ElectricalTxChannel}, baseFrequency::typeof(1.0u"Hz"))
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
 @mustimplement correctAmpAndPhase(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)
@@ -48,6 +122,8 @@ end
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement numTxChannels(daq::AbstractDAQ)
 @mustimplement numRxChannels(daq::AbstractDAQ)
+@mustimplement canPostpone(daq::AbstractDAQ)
+@mustimplement canConvolute(daq::AbstractDAQ)
 
 getDAQs(scanner::MPIScanner) = getDevices(scanner, AbstractDAQ)
 function getDAQ(scanner::MPIScanner)
@@ -64,33 +140,18 @@ function startTxAndControl(daq::AbstractDAQ)
   controlLoop(daq)
 end
 
-#include("RedPitayaDAQ.jl")
-include("DummyDAQ.jl")
-include("SimpleSimulatedDAQ.jl")
-
-function initLUT(N,D, dfCycle, dfFreq)
-  sinLUT = zeros(N,D)
-  cosLUT = zeros(N,D)
-  for d=1:D
-    Y = round(Int64, dfCycle*dfFreq[d] )
-    for n=1:N
-      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
-      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
-    end
-  end
-  return sinLUT, cosLUT
-end
-
-function dataConversionFactor(daq::AbstractDAQ) #default
-  factor = zeros(2,numRxChannels(daq))
-  factor[1,:] = 1.0
-  factor[2,:] = 0.0
-  return factor
-end
-
 function readDataControlled(daq::AbstractDAQ, numFrames)
   controlLoop(daq)
   readData(daq, numFrames, currentFrame(daq))
 end
 
-#include("TransferFunction.jl")
+function dataConversionFactor(daq::AbstractDAQ) #default
+  factor = zeros(2, numRxChannels(daq))
+  factor[1,:] = 1.0
+  factor[2,:] = 0.0
+  return factor
+end
+
+include("RedPitayaDAQ.jl")
+include("DummyDAQ.jl")
+include("SimpleSimulatedDAQ.jl")

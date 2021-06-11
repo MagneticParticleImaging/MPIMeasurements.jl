@@ -1,0 +1,58 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestSimpleSimulatedScanner"
+topology = "FFL"
+gradient = "42T/m"
+
+[Devices]
+initializationOrder = [
+  "my_daq_id",
+  "sequence_controller",
+  "simulation_controller"
+]
+
+[Devices.my_daq_id]
+deviceType = "SimpleSimulatedDAQ"
+dependencies = [
+  "simulation_controller"
+]
+#ip = "127.0.0.1"
+temperatureRise.tx_main = "10K"
+temperatureRiseSlope.tx_main = "0.005s"
+phaseChange.tx_main  = "0.1°/K"
+amplitudeChange.tx_main  = "0.05mT/K"
+
+[Devices.my_daq_id.tx_main]
+type = "tx"
+channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
+
+[Devices.my_daq_id.rx_main]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+
+[Devices.my_daq_id.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.sequence_controller]
+deviceType = "SequenceController"
+dependencies = [
+  "my_daq_id"
+]
+saveInterval = "0.5s"
+maxControlSteps = 5
+
+[Devices.simulation_controller]
+deviceType = "SimulationController"
+initialCoilTemperatures.tx_main = "20.0°C"
+

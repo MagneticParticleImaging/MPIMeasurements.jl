@@ -3,20 +3,20 @@
   scanner = MPIScanner(scannerName_)
 
   @testset "Meta" begin
-    @test getName(scanner) == scannerName_
-    @test getConfigDir(scanner) == joinpath(testConfigDir, scannerName_)
+    @test name(scanner) == scannerName_
+    @test configDir(scanner) == joinpath(testConfigDir, scannerName_)
     @test getGUIMode(scanner::MPIScanner) == false
   end
 
   @testset "General" begin
-    generalParams = getGeneralParams(scanner)
-    @test generalParams isa MPIScannerGeneral
-    @test generalParams.boreSize == 1337u"mm"
-    @test generalParams.facility == "My awesome institute"
-    @test generalParams.manufacturer == "Me, Myself and I"
-    @test generalParams.name == scannerName_
-    @test generalParams.topology == "FFL"
-    @test generalParams.gradient == 42u"T/m"
+    generalParams_ = generalParams(scanner)
+    @test generalParams_ isa MPIScannerGeneral
+    @test generalParams_.boreSize == 1337u"mm"
+    @test generalParams_.facility == "My awesome institute"
+    @test generalParams_.manufacturer == "Me, Myself and I"
+    @test generalParams_.name == scannerName_
+    @test generalParams_.topology == "FFL"
+    @test generalParams_.gradient == 42u"T/m"
     @test scannerBoreSize(scanner) == 1337u"mm"
     @test scannerFacility(scanner) == "My awesome institute"
     @test scannerManufacturer(scanner) == "Me, Myself and I"

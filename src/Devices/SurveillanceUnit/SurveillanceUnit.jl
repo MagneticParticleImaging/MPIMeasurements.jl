@@ -16,6 +16,7 @@ Base.close(su::SurveillanceUnit) = nothing
 @mustimplement enableACPower(su::SurveillanceUnit, scanner::MPIScanner)
 @mustimplement disableACPower(su::SurveillanceUnit, scanner::MPIScanner)
 @mustimplement resetDAQ(su::SurveillanceUnit)
+@mustimplement hasResetDAQ(su::SurveillanceUnit)
 
 getSurveillanceUnits(scanner::MPIScanner) = getDevices(scanner, SurveillanceUnit)
 function getSurveillanceUnit(scanner::MPIScanner)

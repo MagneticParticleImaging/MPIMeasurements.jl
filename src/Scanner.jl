@@ -1,10 +1,8 @@
-using Pkg.TOML
-
 import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
-       getName, getConfigDir, getGeneralParams, getDevice, getDevices, getGUIMode
+       name, configDir, generalParams, getDevice, getDevices, getGUIMode
 
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
@@ -46,18 +44,43 @@ device configuration struct.
 function initiateDevices(devicesParams::Dict{String, Any})
   devices = Dict{String, Device}()
 
+  # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
       deviceType = pop!(params, "deviceType")
 
+      dependencies_ = Dict{String, Union{Device, Missing}}()
+      if haskey(params, "dependencies")
+        deviceDepencencies = pop!(params, "dependencies")
+        for dependencyID in deviceDepencencies
+          dependencies_[dependencyID] = missing
+        end
+      end
+
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
       paramsInst = DeviceParamsImpl(params)
-      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst)
+      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
-      @error "The device ID `$deviceID` was not found in the configuration. Please check your configuration."
+      throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
     end
+  end
+
+  # Set dependencies for all devices
+  for device in values(devices)
+    for dependencyID in keys(dependencies(device))
+      device.dependencies[dependencyID] = devices[dependencyID]
+    end
+    
+    if !checkDependencies(device)
+      throw(ScannerConfigurationError("Unspecified dependency error in device with ID `$(deviceID(device))`."))
+    end
+  end
+
+  # Initiate all devices in the specified order
+  for deviceID in devicesParams["initializationOrder"]
+    init(devices[deviceID])
   end
 
   return devices
@@ -83,13 +106,13 @@ Central part for setting up a scanner.
 TODO: Add more details on instantiation
 """
 mutable struct MPIScanner
-  name::String
-  configDir::String
+  name::AbstractString
+  configDir::AbstractString
   generalParams::MPIScannerGeneral
-  devices::Dict{String, Device}
+  devices::Dict{AbstractString, Device}
   guiMode::Bool
 
-  function MPIScanner(name::String; guimode=false)
+  function MPIScanner(name::AbstractString; guimode=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     filename = nothing
@@ -103,47 +126,17 @@ mutable struct MPIScanner
     end
 
     if isnothing(filename)
-      error("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath.")
+      throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
     end
 
+    @info "Instantiating scanner `$name` from configuration file at `$filename`."
+
     params = TOML.parsefile(filename)
-    generalParams = from_dict(MPIScannerGeneral, params["General"])
+    generalParams = params_from_dict(MPIScannerGeneral, params["General"])
+    @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
     return new(name, configDir, generalParams, devices, guimode)
-
-    # @info "Init SurveillanceUnit"
-    # surveillanceUnit = loadDeviceIfAvailable(params, SurveillanceUnit, "SurveillanceUnit")
-
-    # @info "Init DAQ"   # Restart the DAQ if necessary
-    # waittime = 45
-    # daq = nothing
-    # daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    # try
-    #   daq = loadDeviceIfAvailable(params, AbstractDAQ, "DAQ")
-    # catch e
-    #   @info "connection to DAQ could not be established! Restart (wait $(waittime) seconds...)!"
-    #   if !isnothing(surveillanceUnit) && typeof(surveillanceUnit) != DummySurveillanceUnit
-    #     resetDAQ(surveillanceUnit)
-    #     sleep(waittime)
-    #   end
-    #   daq = loadDeviceIfAvailable(params, DAbstractDAQAQ, "DAQ")
-    # end
-
-    # @info "Init Robot"
-    # if guimode
-    #   params["Robot"]["doReferenceCheck"] = false
-    # end
-    # robot = loadDeviceIfAvailable(params, Robot, "Robot")
-    # @info "Init GaussMeter"
-    # gaussmeter = loadDeviceIfAvailable(params, GaussMeter, "GaussMeter")
-    # @info "Init Safety"
-    # safety = loadDeviceIfAvailable(params, RobotSetup, "Safety")
-    # @info "Init TemperatureSensor"
-    # temperatureSensor = loadDeviceIfAvailable(params, TemperatureSensor, "TemperatureSensor")
-    # @info "All components initialized!"
-
-    # return new(file,params,generalParams,daq,robot,gaussmeter,safety,surveillanceUnit,temperatureSensor)
   end
 end
 
@@ -153,9 +146,9 @@ function Base.close(scanner::MPIScanner)
   end
 end
 
-getName(scanner::MPIScanner) = scanner.name
-getConfigDir(scanner::MPIScanner) = scanner.configDir
-getGeneralParams(scanner::MPIScanner) = scanner.generalParams
+name(scanner::MPIScanner) = scanner.name #TODO: Duplication with scanner name
+configDir(scanner::MPIScanner) = scanner.configDir
+generalParams(scanner::MPIScanner) = scanner.generalParams
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 
 function getDevices(scanner::MPIScanner, deviceType::DataType)

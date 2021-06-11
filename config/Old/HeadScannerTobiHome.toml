@@ -1,10 +1,5 @@
 [GaussMeter]
-coordinateTransformation = [0.0, 0.11, -1.0, 0.0, -1.0, 0.01, -1.0, -0.01, 0.0]
-range = 1
-fast = true
-autoRanging = false
-type = "LakeShore"
-connection = "/dev/ttyUSB1"
+type="Dummy"
 
 [General]
 #transferFunction = "PreinstalledUH"
@@ -81,10 +76,11 @@ controlLoopPhaseAccuracy = 1.0
 #ip = ["192.168.1.100"]#, "192.168.1.27"]
 #ip = ["rp-f044d6"]
 #ip = ["rp-f04972.local"]
-ip = ["192.168.178.52"]
+#ip = ["192.168.178.52"]
 #ip = ["rp-f07083.local"]
 #ip = ["192.168.178.46","192.168.178.47","192.168.178.48"] #rp-f04972.local"]#, "rp-f044d6.local"]
-#ip = ["rp-f04972.local", "rp-f044d6.local"]#, "rp-f05395.local"]
+#ip = ["rp-f04972", "rp-f044d6"] #, "rp-f05395.local"]
+ip = ["192.168.178.52", "192.168.178.53"]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 calibFieldToVolt = [20]
 acqNumBGFrames = 200
@@ -95,11 +91,11 @@ triggerMode = "EXTERNAL"
 controlPause = 0.05
 controlPhase = false
 # true
-decimation = 8
+decimation = 64
 acqNumFrames = 1
 dfDivider = [4864]
 dfStrength = [0.005]
-txLimitVolt = [0.8]
+txLimitVolt = [0.8, 1.0, 1.0, 1.0]
 controlLoopAmplitudeAccuracy = 0.04
 dfPhase = [0.0]
 calibRefToField = [0.05]
@@ -111,8 +107,8 @@ acqFFSequence = "None"
 acqFFLinear = false
 acqNumAverages = 1
 acqNumFrameAverages = 1
-rxChanIdx = [1]
-#rxChanIdx = [1,3,4,5,6]
+#rxChanIdx = [1]
+rxChanIdx = [1,2,3,4]
 refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
