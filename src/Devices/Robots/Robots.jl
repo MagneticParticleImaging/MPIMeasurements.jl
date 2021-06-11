@@ -38,12 +38,12 @@ include("BrukerRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
-function gotoPos(rob::Robot, pos_name::AbstractString)
+function gotoPos(rob::Robot, pos_name::AbstractString, args...)
     if haskey(namedPositions(rob), pos_name)
         pos = namedPositions(rob)[pos_name]
-        moveAbs(rob, pos)
+        moveAbs(rob, pos, args...)
     else
-        error("Position $pos_name is not found in the list of named positions of robot $(deviceID(rob)). Available positions are $(namedPositions(rob).keys)")
+        throw(RobotTeachError(rob, pos_name))
     end
     
 end
@@ -52,7 +52,7 @@ function teachPos(rob::Robot, pos_name::AbstractString; override=false)
     pos = getPosition(rob)
     if haskey(namedPositions(rob), pos_name)
         if !override
-            error("Position $pos_name is already found in the list of named positions of robot $(deviceID(rob)). To override the current value pass override=true")
+            throw(RobotTeachError(rob, pos_name))
         else
             namedPositions(rob)[pos_name] = pos
         end

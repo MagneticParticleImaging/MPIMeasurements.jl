@@ -1,4 +1,4 @@
-export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError
+export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError
 
 abstract type RobotException <: Exception end
 
@@ -26,6 +26,11 @@ struct RobotDeviceError <: RobotException
     exc::Exception
 end
 
+struct RobotTeachError <: RobotException
+    robot::Robot
+    pos_name::String
+end
+
 function Base.showerror(io::IO, ex::RobotStateError)
     if ex.state === nothing
         print(io, "RobotStateError: robot '$(deviceID(ex.robot))' is in state $(state(ex.robot))")
@@ -45,3 +50,11 @@ Base.showerror(io::IO, ex::RobotDOFError) = print(io, "RobotDOFError: coordinate
 Base.showerror(io::IO, ex::RobotReferenceError) = print(io, "RobotReferenceError: robot '$(deviceID(ex.robot)) has to be referenced to perform this action")
 
 Base.showerror(io::IO, ex::RobotDeviceError) = (println(io, "RobotDeviceError: during the communication with robot '$(deviceID(ex.robot))' the following error occured:"); showerror(io, ex.exc))
+
+function Base.showerror(io::IO, ex::RobotTeachError)
+    if haskey(namedPositions(ex.robot), ex.pos_name)
+        print(io, "RobotTeachError: the desired position name $(ex.pos_name) is already defined for robot '$(deviceID(ex.robot)), to override the current value pass override=true")   
+    else
+        print(io, "RobotTeachError: the desired position $(ex.pos_name) is not defined for robot '$(deviceID(ex.robot)), use one of $(keys(namedPositions(ex.robot)))")
+    end
+end
