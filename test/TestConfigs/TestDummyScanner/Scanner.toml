@@ -27,3 +27,6 @@ deviceType = "DummySurveillanceUnit"
 
 [Devices.my_temperature_sensor_id]
 deviceType = "DummyTemperatureSensor"
+
+[Devices.my_robot_id]
+deviceType = "DummyRobot"

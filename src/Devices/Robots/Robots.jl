@@ -1,115 +1,241 @@
 using Graphics: @mustimplement
+using Unitful
 
-export moveAbs, moveAbsUnsafe, moveRelUnsafe, movePark, moveCenter
-export Robot, isReferenced, prepareRobot, getDefaultVelocity, setRefVelocity,
-       parkPos, getMinMaxPosX, setEnabled
+export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
+export teachPos, gotoPos, saveTeachedPos, namedPositions
+
+@enum RobotState INIT DISABLED READY MOVING ERROR
 
 abstract type Robot <: Device end
 
+# general interface functions to be implemented by devices
+@mustimplement dof(rob::Robot)
+@mustimplement axisRange(rob::Robot) # must return Vector of Vectors
+defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that can handle velocities
+
+# device specific implementations of basic functionality
+@mustimplement _moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+@mustimplement _moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+@mustimplement _enable(rob::Robot)
+@mustimplement _disable(rob::Robot)
+@mustimplement _reset(rob::Robot)
+@mustimplement _setup(rob::Robot)
+@mustimplement _doReferenceDrive(rob::Robot)
+@mustimplement _isReferenced(rob::Robot)
+@mustimplement _getPosition(rob::Robot)
+
+# can be overwritten, but does not have to be
+state(rob::Robot) = rob.state
+setstate!(rob::Robot, state::RobotState) = rob.state = state
+namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
+
+include("RobotExceptions.jl")
+include("DummyRobot.jl")
+include("SimulatedRobot.jl")
+include("IgusRobot.jl")
+include("IselRobot.jl")
+include("BrukerRobot.jl")
 include("Safety.jl")
 include("KnownSetups.jl")
 
-Base.close(::Robot) = nothing
-
-# The following methods need to be implemented by a robot
-@mustimplement moveAbs(robot::Robot, posX::typeof(1.0Unitful.mm),
-  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))
-@mustimplement moveRel(robot::Robot, distX::typeof(1.0Unitful.mm),
-    distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
-@mustimplement movePark(robot::Robot)
-@mustimplement moveCenter(robot::Robot)
-@mustimplement setBrake(robot::Robot,brake::Bool)
-@mustimplement setEnabled(robot::Robot,enabled::Bool)
-@mustimplement prepareRobot(robot::Robot)
-@mustimplement isReferenced(robot::Robot)
-@mustimplement getDefaultVelocity(robot::Robot)
-@mustimplement setRefVelocity(robot::Robot,vel::Array{Int64,1})
-@mustimplement parkPos(robot::Robot)
-@mustimplement getMinMaxPosX(robot::Robot)
-
-""" `moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
-function moveAbs(robot::Robot, setup::RobotSetup, xyzPos::Vector{typeof(1.0Unitful.mm)})
-  if length(xyzPos)!=3
-    error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
-  end
-  coordsTable = checkCoords(setup, xyzPos, getMinMaxPosX(robot))
-  moveAbsUnsafe(robot,xyzPos)
-end
-
-""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)})` """
-function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)})
-    if length(xyzPos)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
+function gotoPos(rob::Robot, pos_name::AbstractString, args...)
+    if haskey(namedPositions(rob), pos_name)
+        pos = namedPositions(rob)[pos_name]
+        moveAbs(rob, pos, args...)
+    else
+        throw(RobotTeachError(rob, pos_name))
     end
-    moveAbs(robot,xyzPos[1],xyzPos[2],xyzPos[3])
+    
 end
 
-""" `moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})` """
-function moveAbsUnsafe(robot::Robot, xyzPos::Vector{typeof(1.0Unitful.mm)}, xyzVel::Vector{Int64})
-    if length(xyzPos)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzPos))
+function teachPos(rob::Robot, pos_name::AbstractString; override=false)
+    pos = getPosition(rob)
+    if haskey(namedPositions(rob), pos_name)
+        if !override
+            throw(RobotTeachError(rob, pos_name))
+        else
+            namedPositions(rob)[pos_name] = pos
+        end
+    else
+        push!(namedPositions(rob),pos_name=>pos)
     end
-    if length(xyzVel)!=3
-      error("position vector xyzVel needs to have length = 3, but has length: ",length(xyzPos))
+end
+
+function saveTeachedPos(rob::Robot)
+    println("To save the positions, that have been tought in the current session copy and paste the following section into the config file: ")
+    println()
+    println("[Devices.$(deviceID(rob)).namedPositions]")
+    for (key, value) in namedPositions(rob)
+        print("$(key) = [")
+        for dim in value
+            print("\"$(dim)\", ")
+        end
+        print("\033[2D") # move cursor back 2 characters (remove last comma and space)
+        println("]")
     end
-    moveAbs(robot,xyzPos[1],xyzVel[1],xyzPos[2],xyzVel[2],xyzPos[3],xyzVel[3])
+    println()
 end
+    
 
-# """ `moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0Unitful.mm)})` """
-# function moveRel(robot::Robot, setup::RobotSetup, xyzDist::Vector{typeof(1.0Unitful.mm)})
-#   if length(xyzDist)!=3
-#     error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
-#   end
-#   coordsTable = checkCoords(setup, xyzDist)
-#   moveRelUnsafe(robot,xyzDist)
-# end
+moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
+moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
+moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = moveAbs(rob, pos, speed * ones(dof(rob)))
 
-""" `moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0Unitful.mm)})` """
-function moveRelUnsafe(robot::Robot, xyzDist::Vector{typeof(1.0Unitful.mm)})
-    if length(xyzDist)!=3
-      error("position vector xyzPos needs to have length = 3, but has length: ",length(xyzDist))
+function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+
+    length(pos) == dof(rob) || throw(RobotDOFError(rob, length(pos)))
+    state(rob) == READY || throw(RobotStateError(rob, READY))
+    isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
+    checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+    
+    #TODO: perform safety check of coordinates
+
+    setstate!(rob, MOVING)
+    try
+        @debug "Started absolute robot movement to $pos with $speed."
+        _moveAbs(rob, pos, speed)
+        setstate!(rob, READY)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
     end
-    moveRel(robot,xyzDist[1],xyzDist[2],xyzDist[3])
 end
 
-function userGuidedPreparation(robot::Robot)
-  display("IselRobot is NOT referenced and needs to be referenced!")
-  display("Remove all attached devices from the robot before the robot will be referenced and move around!")
-  display("Type \"REF\" in console to continue")
-  userInput=readline(stdin)
-  if userInput=="REF"
-      display("Are you sure you have removed everything and the robot can move freely without damaging anything? Type \"yes\" if you want to continue")
-      uIYes = readline(stdin)
-      if uIYes == "yes"
-          prepareRobot(robot)
-          display("The robot is now referenced. You can mount your sample. Press any key to proceed.")
-          userInput=readline(stdin)
-          return
-      else
-          error("User failed to type \"yes\" to continue")
-      end
-  else
-      error("User failed to type \"REF\" to continue")
-  end
+moveRel(rob::Robot, dist::Vararg{Unitful.Length,N}) where N = moveRel(rob, [dist...])
+moveRel(rob::Robot, dist::Vector{<:Unitful.Length}) = moveRel(rob, dist, defaultVelocity(rob))
+moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Unitful.Velocity) = moveRel(rob, dist, speed * ones(dof(rob)))
+
+function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+
+    length(dist) == dof(rob) || throw(RobotDOFError(rob, length(dist)))
+    state(rob) == READY || throw(RobotStateError(rob, READY))
+    
+    if isReferenced(rob)
+        pos = getPosition(rob) + dist
+        checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+    else
+        checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
+        @warn "Performing relative movement in unreferenced state, cannot validate coordinates! Please proceed carefully and perform only movements which are safe!"
+    end
+    
+    #TODO: perform safety check of coordinates
+    
+    setstate!(rob, MOVING)
+    
+    try
+        _moveRel(rob, dist, speed)
+        setstate!(rob, READY)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))        
+    end
 end
 
-if Sys.isunix() && VERSION >= v"0.6"
-  include("IselRobot.jl")
+function enable(rob::Robot)
+    if state(rob) == READY
+        return READY
+    elseif state(rob) == DISABLED
+        try
+            _enable(rob)
+            setstate!(rob, READY)
+        catch exc
+            setstate!(rob, ERROR)
+            throw(RobotDeviceError(rob, exc))
+        end
+    else
+        throw(RobotStateError(rob, DISABLED))
+    end
 end
 
-include("BrukerRobot.jl")
-include("DummyRobot.jl")
-
-function Robot(params::Dict)
-  if params["type"] == "Dummy"
-    return DummyRobot()
-  elseif params["type"] == "Isel"
-    return IselRobot(params)
-  elseif params["type"] == "Bruker"
-    return BrukerRobot(params["connection"])
-  else
-    error("Cannot create Robot!")
-  end
+function disable(rob::Robot)
+    if state(rob) == DISABLED
+        return DISABLED
+    elseif state(rob) == READY
+        try
+            _disable(rob)
+            setstate!(rob, DISABLED)
+        catch exc
+            setstate!(rob, ERROR)
+            throw(RobotDeviceError(rob, exc))
+        end
+    else
+        throw(RobotStateError(rob, READY))
+    end
 end
 
-include("Tour.jl")
+function Base.reset(rob::Robot)
+    try
+        _reset(rob)
+        setstate!(rob, INIT)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
+function setup(rob::Robot)
+    state(rob) == INIT || throw(RobotStateError(rob, INIT))
+    try
+        _setup(rob)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
+    setstate!(rob, DISABLED)
+end
+
+function doReferenceDrive(rob::Robot)
+    state(rob) == READY || throw(RobotStateError(rob, READY))
+    try
+        setstate!(rob, MOVING)
+        _doReferenceDrive(rob)
+        setstate!(rob, READY)
+    catch exc
+        setstate!(rob, ERROR)
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
+function getPosition(rob::Robot)
+    try
+        _getPosition(rob)
+    catch exc
+        setstate!(rob, ERROR) # maybe it is not necessary to make this an error
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
+function isReferenced(rob::Robot)
+    try
+        _isReferenced(rob)::Bool
+    catch exc
+        setstate!(rob, ERROR) # maybe it is not necessary to make this an error
+        throw(RobotDeviceError(rob, exc))
+    end
+end
+
+
+function checkAxisRange(rob::Robot, coords::Vector{<:Unitful.Length})
+    axes = axisRange(rob)
+    inRange = true
+    for i in 1:length(coords)
+        inRange &= (axes[i][1] <= coords[i] <= axes[i][2])
+        return inRange
+    end
+end
+
+function RobotState(s::Symbol)
+    reverse_dict = Dict(value => key for (key, value) in Base.Enums.namemap(RobotState))
+    if s in keys(reverse_dict)
+        return RobotState(reverse_dict[s])
+    else
+        throw(ArgumentError(string("invalid value for Enum RobotState: $s")))
+    end
+end
+
+
+Base.convert(t::Type{RobotState}, x::Union{Symbol,Int}) = t(x)
+Base.:(==)(x::RobotState, y::Union{Symbol,Int}) = try x == RobotState(y) catch _ return false end
+
+
+
