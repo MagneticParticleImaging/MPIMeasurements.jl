@@ -17,6 +17,7 @@ enable(rob)
 @test_throws RobotReferenceError moveAbs(rob, [1,1,1]u"mm")
 @test_throws RobotReferenceError gotoPos(rob, "origin")
 @test_throws RobotAxisRangeError moveRel(rob, [1,0,0]u"m") # out of range for axis 1
+moveRel(rob, [10,0,0]u"mm")
 doReferenceDrive(rob)
 @test isReferenced(rob)
 moveAbs(rob, [1,1,1]u"mm")
