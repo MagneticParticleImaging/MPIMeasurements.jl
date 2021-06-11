@@ -26,7 +26,8 @@ axisRange(rob::SimulatedRobot) = rob.params.axisRange
 
 function _moveAbs(rob::SimulatedRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
     @info "SimulatedRobot: Moving to pos=$pos"
-    projected_time = maximum(abs.(rob.position-pos)./rob.params.defaultVelocity)
+    vel = speed!==nothing ? speed : rob.params.defaultVelocity
+    projected_time = maximum(abs.(rob.position-pos)./vel)
     sleep(ustrip(u"s",projected_time))
     rob.position = pos
     @info "SimulatedRobot: Movement completed"
@@ -34,7 +35,8 @@ end
 
 function _moveRel(rob::SimulatedRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
     @info "SimulatedRobot: Moving dist=$dist"
-    projected_time = maximum(abs.(dist)./speed)
+    vel = speed!==nothing ? speed : rob.params.defaultVelocity
+    projected_time = maximum(abs.(dist)./vel)
     sleep(ustrip(u"s",projected_time))
     rob.position += dist
     @info "SimulatedRobot: Movement completed"
