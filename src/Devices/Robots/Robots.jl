@@ -110,8 +110,13 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
     length(dist) == dof(rob) || throw(RobotDOFError(rob, length(dist)))
     state(rob) == READY || throw(RobotStateError(rob, READY))
     
-    pos = getPosition(rob) + dist
-    checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+    if isReferenced(rob)
+        pos = getPosition(rob) + dist
+        checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+    else
+        checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
+        @warn "Performing relative movement in unreferenced state, cannot validate coordinates! Please proceed carefully and perform only movements which are safe!"
+    end
     
     #TODO: perform safety check of coordinates
     
