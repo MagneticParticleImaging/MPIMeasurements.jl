@@ -1,3 +1,10 @@
+function startTxAndControl(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
+
+  startTx(daq)
+  controlLoop(seqCont)
+end
+
 function initLUT(N,D, dfCycle, dfFreq)
   sinLUT = zeros(N,D)
   cosLUT = zeros(N,D)
@@ -12,7 +19,16 @@ function initLUT(N,D, dfCycle, dfFreq)
 end
 
 
-function controlLoop(daq::AbstractDAQ)
+function controlLoop(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
+
+  for 
+
+  if canConvolute(daq)
+  # Init LUT
+
+  # Loop over fields
+  #   -> Control and decouple fields
   if daq.params.controlPhase
     controlLoop_(daq)
   else

@@ -2,8 +2,8 @@ import Base: setindex!, getindex
 
 export AbstractDAQ, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
        createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
-       readDataControlled, numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
-       DAQ, dataConversionFactor, readDataPeriod, currentPeriod, getDAQ, getDAQs,
+       numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
+       DAQ, readDataPeriod, currentPeriod, getDAQ, getDAQs,
        channelIdx, limitPeak, sinkImpedance, allowedWaveforms, isWaveformAllowed,
        feedbackChannelID, feedbackCalibration, calibration
 
@@ -141,16 +141,6 @@ function getDAQ(scanner::MPIScanner)
   else
     return daqs[1]
   end
-end
-
-function startTxAndControl(daq::AbstractDAQ)
-  startTx(daq)
-  controlLoop(daq)
-end
-
-function readDataControlled(daq::AbstractDAQ, numFrames::Integer)
-  controlLoop(daq)
-  readData(daq, numFrames, currentFrame(daq))
 end
 
 # function dataConversionFactor(daq::AbstractDAQ) #default

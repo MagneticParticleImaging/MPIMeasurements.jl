@@ -117,6 +117,10 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     # In the Red Pitaya, the signal type can only be set per channel
     waveform_ = unique([waveform(component) for component in components(channel)])
     if length(waveform_) == 1
+      if !isWaveformAllowed(daq, id(channel), waveform_)
+        throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
+                                       "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+      end
       waveform_ = uppercase(fromWaveform(waveform_[1]))
       signalTypeDAC(daq.rpc, channelIdx_, waveform_)
     else
@@ -153,9 +157,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   
   for channel in rxChannels(sequence)
     try
-      scannerChannel = daq.params.channels[channel.id]
-      push!(daq.rxChanIDs, channel.id)
-      #daq.rxChannelIDMapping[channel.id] = scannerChannel.channelIdx
+      push!(daq.rxChanIDs, id(channel))
     catch e
       if e isa KeyError
         throw(ScannerConfigurationError("The given sequence `$(name(sequence))` requires a receive "*
@@ -191,35 +193,54 @@ end
 function stopTx(daq::RedPitayaDAQ)
   #setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
+  masterTrigger(daq.rpc, false)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function setTxParams(daq::RedPitayaDAQ, Γ; postpone=false)
-  if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
-    error("This should never happen!!! \n Tx voltage is above the limit")
+"""
+Set the amplitude and phase for all the selected channels.
+
+Note: `amplitudes` and `phases` are defined as a dictionary of
+vectors, since every channel referenced by the dict's key could
+have a different amount of components.
+"""
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
+  # Determine the worst case voltage per channel 
+  # Note: this would actually need a fourier synthesis with the given signal type,
+  # but I don't think this is necessary
+  for (channelID, components_) in amplitudes
+    channelVoltage = 0
+    for (componentIdx, amplitude_) in components_
+      channelVoltage += amplitude_
+    end
+      
+    if channelVoltage >= limitPeak(daq, channelID)
+      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
+    end
+  end
+    
+  
+  for (channelID, components_) in phases
+    for (componentIdx, phase_) in components_
+      phaseDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"rad", phase_))
+    end
   end
 
-  for d=1:numTxChannels(daq)
-    for e=1:numTxChannels(daq)
-
-      amp = abs(Γ[d,e])
-      ph = angle(Γ[d,e])
-      phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
-
-      #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
+  for (channelID, components_) in amplitudes
+    for (componentIdx, amplitude_) in components_
 
       #if postpone
       # The following is a very bad and dangerous hack. Right now postponing the activation of 
       # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
       # directly
-      if postpone && daq.params.dfChanIdx[d] <= 2   
-        amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
+      # Note: The Red Pitaya does not allow for convoltution of the signal. Falls back to postponing.
+      if convolute && channelIdx(channelID) <= 2   
+        amplitudeDACNext(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_)) 
       else
-        amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
+        amplitudeDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_))
       end
     end
   end
-  return nothing
 end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)

@@ -78,6 +78,24 @@ function startSequence(seqCont::SequenceController)
             "(e.g. with an acquisition running while also having a temperature controller running)"
     end
 
+    # Use surveillance unit if available
+    if hasDependency(seqCont, SurveillanceUnit)
+      su = dependency(seqCont, SurveillanceUnit)
+      enableACPower(su)
+    else
+      @warn "The sequence controller does not have access to a surveillance unit. "*
+            "Please check closely if this should be the case."
+    end
+
+    daq = dependency(seqCont, AbstractDAQ)
+
+    if needsControlOrDecoupling(seqCont.sequence)
+      startTxAndControl(seqCont)
+    else
+      @info "Nothing to control and thus directly starting transmit part of the sequence"
+      startTx(daq)
+    end
+
     @info "Starting acquisition thread."
     seqCont.task = Threads.@spawn acquisitionThread(seqCont)
   else
@@ -121,22 +139,6 @@ function acquisitionThread(seqCont::SequenceController)
   seqScratchDirectory = @get_scratch!(seqCont.sequence.name)
   @info "The scratch directory for intermediate data is `$seqScratchDirectory`."
   #TODO: Detect leftovers and recover from a failed state
-
-  # Use surveillance unit if available
-  if hasDependency(seqCont, SurveillanceUnit)
-    su = dependency(seqCont, SurveillanceUnit)
-    enableACPower(su)
-  else
-    @warn "The sequence controller does not have access to a surveillance unit. "*
-          "Please check closely if this should be the case."
-  end
-
-  daq = dependency(seqCont, AbstractDAQ)
-  @info "Starting transmit part of the sequence"
-  startTx(daq)
-
-  # TODO: Control
-  @warn "The control loop should be started here"
 
   # Create directory for the intermediate trigger files
   triggerSavePath = joinpath(seqScratchDirectory, Dates.format(seqCont.startTime, "yyyy-mm-dd_HH-MM-SS"))
@@ -303,3 +305,5 @@ function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
   #transferFunction TODO: should be added from datastore!?
   rxUnit(mdf, "V")
 end
+
+include("Control.jl")

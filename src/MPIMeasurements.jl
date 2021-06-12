@@ -6,6 +6,7 @@ module MPIMeasurements
 #using Pkg
 
 #using Compat
+using Reexport: include
 using Reexport
 @reexport using MPIFiles
 using Unitful
