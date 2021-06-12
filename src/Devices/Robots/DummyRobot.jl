@@ -1,59 +1,49 @@
-export DummyRobot
+export DummyRobot, DummyRobotParams
+
+Base.@kwdef struct DummyRobotParams <: DeviceParams
+end
 
 mutable struct DummyRobot <: Robot
-  referenced::Bool
-
-  DummyRobot() = new(true)
+    deviceID::String
+    params::DummyRobotParams
+    state::RobotState
+    referenced::Bool
+    function DummyRobot(deviceID::String, params::DummyRobotParams)
+        return new(deviceID, params, INIT, false)
+    end
 end
 
-function moveAbs(robot::DummyRobot, posX::typeof(1.0Unitful.mm),
-  posY::typeof(1.0Unitful.mm), posZ::typeof(1.0Unitful.mm))
-  @info "DummyRobot: move to pos $posX  $posY  $posZ"
-  sleep(0.05)
+_isReferenced(rob::DummyRobot) = rob.referenced
+
+_getPosition(rob::DummyRobot) = [1.0,0.0,0.0]u"mm"
+dof(rob::DummyRobot) = 3
+axisRange(rob::DummyRobot) = [[-Inf, Inf], [-Inf, Inf], [-Inf, Inf]]u"m"
+
+function _moveAbs(rob::DummyRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+    @info "DummyRobot: movAbs pos=$pos"
 end
 
-""" Moves absolute in mm `moveRel(sd::SerialDevice{IselRobot},distX::typeof(1.0Unitful.mm), velX,
-  distY::typeof(1.0Unitful.mm), velY,   distZ::typeof(1.0Unitful.mm), velZ)` """
-function moveAbs(robot::DummyRobot,posX::typeof(1.0Unitful.mm), velX, posY::typeof(1.0Unitful.mm), velY, posZ::typeof(1.0Unitful.mm), velZ,isCheckError=true)
-    @info "DummyRobot: move to pos $posX $velX  $posY $velY $posZ $velZ"
-    sleep(0.05)
+function _moveRel(rob::DummyRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+    @info "DummyRobot: movRel dist=$dist"
 end
 
-function moveRel(robot::DummyRobot, distX::typeof(1.0Unitful.mm),
-  distY::typeof(1.0Unitful.mm), distZ::typeof(1.0Unitful.mm))
-  @info "DummyRobot: move distance $distX  $distY  $distZ"
-  sleep(0.05)
+function _enable(rob::DummyRobot)
+    @info "DummyRobot: enable"
 end
 
-function movePark(robot::DummyRobot)
-  @info "Moving to Park Position!"
+function _disable(rob::DummyRobot)
+    @info "DummyRobot: disable"
 end
 
-function moveCenter(robot::DummyRobot)
-  @info "Moving to Center Position!"
+function _reset(rob::DummyRobot)
+    @info "DummyRobot: reset"
 end
 
-function setBrake(robot::DummyRobot, brake::Bool)
-  @info "Setting brake to $(brake) !"
+function _setup(rob::DummyRobot)
+    @info "DummyRobot: setup"
 end
 
-function setEnabled(robot::DummyRobot, enabled::Bool)
-  @info "Setting enabled $(enabled) !"
-end
-
-function prepareRobot(robot::DummyRobot)
-  @info "Doing Dummy Reference Drive!"
-  robot.referenced = true
-end
-
-isReferenced(robot::DummyRobot) = robot.referenced
-getDefaultVelocity(robot::DummyRobot) = zeros(Int64,3) .+ 20000
-parkPos(robot::DummyRobot) = [0.0Unitful.mm,0.0Unitful.mm,0.0Unitful.mm]
-
-function setRefVelocity(robot::DummyRobot, vel::Array{Int64,1})
-    @info "Setting velcities for Dummy Robot!"
-end
-
-function getMinMaxPosX(robot::DummyRobot)
-    return [-70.0Unitful.mm, 200.0Unitful.mm]
+function _doReferenceDrive(rob::DummyRobot)
+    @info "DummyRobot: Doing reference drive"
+    rob.referenced = true
 end
