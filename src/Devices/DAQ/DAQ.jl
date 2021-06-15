@@ -1,6 +1,6 @@
 import Base: setindex!, getindex
 
-export AbstractDAQ, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
+export AbstractDAQ, DAQParams, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
        createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
        numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
        DAQ, readDataPeriod, currentPeriod, getDAQ, getDAQs,

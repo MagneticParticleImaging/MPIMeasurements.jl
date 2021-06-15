@@ -22,20 +22,20 @@ end
 function controlLoop(seqCont::SequenceController)
   daq = dependency(seqCont, AbstractDAQ)
 
-  for 
+  # for 
 
-  if canConvolute(daq)
-  # Init LUT
+  # if canConvolute(daq)
+  # # Init LUT
 
-  # Loop over fields
-  #   -> Control and decouple fields
-  if daq.params.controlPhase
-    controlLoop_(daq)
-  else
-    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
-    setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)), postpone=true)
-  end
-  return
+  # # Loop over fields
+  # #   -> Control and decouple fields
+  # if daq.params.controlPhase
+  #   controlLoop_(daq)
+  # else
+  #   tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+  #   setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)), postpone=true)
+  # end
+  # return
 end
 
 function controlLoop_(daq::AbstractDAQ)
