@@ -21,6 +21,10 @@ end
 
 checkDependencies(daq::DummyDAQ) = true
 
+function setup(daq::DummyDAQ, sequence::Sequence)
+  
+end
+
 function startTx(daq::DummyDAQ)
 end
 

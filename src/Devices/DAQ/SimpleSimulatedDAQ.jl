@@ -79,6 +79,11 @@ function checkDependencies(daq::SimpleSimulatedDAQ)
   end                            
 end
 
+function setup(daq::SimpleSimulatedDAQ, sequence::Sequence)
+  setupTx(daq, sequence)
+  setupRx(daq, sequence)
+end
+
 function setupTx(daq::SimpleSimulatedDAQ, sequence::Sequence)
   daq.baseFrequency = txBaseFrequency(sequence)
 

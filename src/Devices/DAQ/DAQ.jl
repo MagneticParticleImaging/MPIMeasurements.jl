@@ -114,8 +114,7 @@ end
 #include("Plotting.jl")
 #include("Parameters.jl")
 
-@mustimplement setupTx(daq::AbstractDAQ, sequence::Sequence)
-@mustimplement setupRx(daq::AbstractDAQ, sequence::Sequence)
+@mustimplement setup(daq::AbstractDAQ, sequence::Sequence)
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
 @mustimplement setTxParams(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)

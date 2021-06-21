@@ -63,11 +63,9 @@ function setupSequence(seqCont::SequenceController, sequence::Sequence)
   daq = dependency(seqCont, AbstractDAQ) # This doesn't work for multiple DAQs yet, since this case is not really a priority
   
   setupControlLoop(seqCont, sequence)
-  setupTx(daq, seqCont.sequence)
+  setup(daq, seqCont.sequence)
 
   # TODO: Setup mechanical channels
-
-  setupRx(daq, sequence)
 end
 
 function startSequence(seqCont::SequenceController)
@@ -133,6 +131,8 @@ function waitTriggerReady(seqCont::SequenceController)
 end
 
 function acquisitionThread(seqCont::SequenceController)
+  daq = dependency(seqCont, AbstractDAQ)
+
   seqCont.startTime = now()
   @info "The acquisition thread (id $(Threads.threadid())) just started (start time is $(seqCont.startTime))."
 

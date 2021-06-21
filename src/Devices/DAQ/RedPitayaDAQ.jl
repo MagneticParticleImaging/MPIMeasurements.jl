@@ -76,6 +76,11 @@ end
 
 checkDependencies(daq::RedPitayaDAQ) = true
 
+function setup(daq::RedPitayaDAQ, sequence::Sequence)
+  setupTx(daq, sequence)
+  setupRx(daq, sequence)
+end
+
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
                                                    "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
