@@ -15,7 +15,8 @@ function controlLoop_(daq::AbstractDAQ)
   @info "Init control with Tx= " daq.params.currTx
   @info daq.params.correctCrossCoupling
 
-  setTxParams(daq, daq.params.currTx, postpone=false)
+  setTxParams(daq, daq.params.currTx)
+  startTx(daq)
   sleep(daq.params.controlPause)
 
   controlPhaseDone = false
@@ -34,6 +35,7 @@ function controlLoop_(daq::AbstractDAQ)
   setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
   setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
   
+  stopTx(daq)
   return 
 end
 

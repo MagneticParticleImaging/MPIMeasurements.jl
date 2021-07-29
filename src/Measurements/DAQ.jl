@@ -11,6 +11,7 @@ function measurement_(daq::AbstractDAQ)
 
   startTxAndControl(daq)
 
+  # Prepare acqSeq
   currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 

@@ -4,6 +4,7 @@ export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
 mutable struct DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
   rpc::RedPitayaCluster
+  acqSeq::Union{AbstractSequence, Nothing}
 end
 
 function DAQRedPitayaScpiNew(params)
@@ -15,7 +16,6 @@ function DAQRedPitayaScpiNew(params)
   triggerMode(daq.rpc, params["triggerMode"])
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
-  masterTrigger(daq.rpc, true)
 
   daq.params.currTx = convert(Matrix{ComplexF64}, diagm(daq.params.txLimitVolt ./ 10))
   return daq
@@ -61,18 +61,26 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
 
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
-  slowDACStepsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
+  # Previously slowDACStepsPerFrame
+  stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
+  samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(rpc) * periodsPerFrame(rpc), stepsPerSequence))
  
   if !isempty(daq.params.acqFFValues) 
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
-    setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
+    lut = daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt
+    enable = nothing
     if !isempty(daq.params.acqEnableSequence)
-      enableDACLUT(master(daq.rpc), daq.params.acqEnableSequence)
-    else # We might want to solve this differently
-      enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
+      enable = daq.params.acqEnableSequence
     end
+    daq.acqSeq = ArbitrarySequence(lut, enable, stepsPerRepetition,
+    daq.params.acqNumFrames*daq.params.acqNumFrameAverages, daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+    # No enable should be equivalent to just full ones, alternatively implement constant function for enableLUT too
+    #else # We might want to solve this differently
+    #  enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
+    #end
   else
     numSlowDACChan(master(daq.rpc), 0)
+    daq.acqSeq = nothing
   end
 
 
@@ -115,10 +123,11 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0,
-              ffRampUpTime=0.4, ffRampUpFraction=0.8) =
-            enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
-
+function enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0, ffRampUpTime=0.4, ffRampUpFraction=0.8) 
+  appendSequence(daq.rpc, daq.acqSeq)
+  prepareSequence(daq.rpc)
+enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
+end
 function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
   if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
@@ -137,11 +146,11 @@ function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
       # The following is a very worse and dangerous hack. Right now postponing the activation of 
       # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
       # directly
-      if postpone && daq.params.dfChanIdx[d] <= 2   
-        amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
-      else
-        amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
-      end
+      #if postpone && daq.params.dfChanIdx[d] <= 2   
+      #  amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
+      #else
+      amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
+      #end
     end
   end
   return nothing

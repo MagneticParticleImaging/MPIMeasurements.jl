@@ -24,7 +24,11 @@ numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
 function startTxAndControl(daq::AbstractDAQ)
-  startTx(daq)
+  #startTx(daq) control starts and stops Tx itself
+  controlLoop(daq)
+end
+
+function startControl(daq::AbstractDAQ)
   controlLoop(daq)
 end
 
