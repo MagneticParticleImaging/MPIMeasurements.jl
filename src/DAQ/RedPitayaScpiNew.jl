@@ -10,7 +10,7 @@ end
 function DAQRedPitayaScpiNew(params)
   p = DAQParams(params)
   rpc = RedPitayaCluster(params["ip"])
-  daq = DAQRedPitayaScpiNew(p, rpc)
+  daq = DAQRedPitayaScpiNew(p, rpc, nothing)
   setACQParams(daq)
   masterTrigger(daq.rpc, false)
   triggerMode(daq.rpc, params["triggerMode"])
@@ -44,7 +44,7 @@ end
 function setACQParams(daq::DAQRedPitayaScpiNew)
   decimation(daq.rpc, daq.params.decimation)
 
-  for l=1:(2*length(daq.rpc.rp))
+  for l=1:(2*length(daq.rpc))
     offsetDAC(daq.rpc, l, daq.params.txOffsetVolt[l])
     #@show offsetDAC(daq.rpc, l)
   end
@@ -63,7 +63,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
   # Previously slowDACStepsPerFrame
   stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
-  samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(rpc) * periodsPerFrame(rpc), stepsPerSequence))
+  samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
  
   if !isempty(daq.params.acqFFValues) 
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
@@ -123,11 +123,20 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-function enableSlowDAC(daq::DAQRedPitayaScpiNew, enable::Bool, numFrames=0, ffRampUpTime=0.4, ffRampUpFraction=0.8) 
-  appendSequence(daq.rpc, daq.acqSeq)
-  prepareSequence(daq.rpc)
-enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
+function enableSlowDAC(daq::DAQRedPitayaScpiNew) 
+  startFrame = 0
+  if !isnothing(daq.acqSeq)
+    appendSequence(daq.rpc, daq.acqSeq)
+    prepareSequence(daq.rpc)
+    bandwidth = div(125e6, decimation(daq.rpc))
+    period = div(samplesPerSlowDACStep(master(daq.rpc) * slowDACStepsPerSequence(master(daq.rpc))), bandwidth)
+    startFrame = ceil(daq.acqSeq.rampTime / period) 
+  end
+  setTxParams(daq.rpc, )
+  
+  return startFrame
 end
+
 function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
   if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
@@ -159,6 +168,45 @@ end
 #TODO: calibRefToField should be multidimensional
 refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
+function convertSamplesToFrames(samples, daq::DAQRedPitayaScpiNew)
+  unusedSamples = samples
+  frames = nothing
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  samplesInBuffer = size(samples)[2]
+  framesInBuffer = div(samplesInBuffer, samplesPerFrame)
+  if framesInBuffer > 0
+      samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
+      frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.params.acqNumAverages, 1)
+      
+
+      c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?
+      for d = 1:size(frames, 2)
+        frames[:, d, :, :] .*= c[1,d]
+        frames[:, d, :, :] .+= c[2,d]
+      end
+      
+      if (samplesPerFrame * framesInBuffer) + 1 <= samplesInBuffer
+          unusedSamples = samples[:, (samplesPerFrame * framesInBuffer) + 1:samplesInBuffer]
+      end
+  end
+
+  return unusedSamples, frames
+end
+
+function startAsyncProducer(daq::DAQRedPitayaScpiNew, channel::Channel, startSample, samplesToRead, chunkSize)
+  readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) # rp info here
+end
+
+function convertSamplesToMeasAndRef(samples, daq::DAQRedPitayaScpiNew)
+  unusedSamples, frames = convertSamplesToFrames(samples, daq)
+  uMeas = nothing
+  uRef = nothing
+  if !isnothing(frames)
+    uMeas = frames[:,daq.params.rxChanIdx,:,:]
+    uRef = frames[:,daq.params.refChanIdx,:,:]
+  end
+  return unusedSamples, uMeas, uRef
+end
 
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)
   u = readData(daq.rpc, startFrame, numFrames, daq.params.acqNumAverages, 1)

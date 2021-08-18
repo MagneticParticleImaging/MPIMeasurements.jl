@@ -136,21 +136,74 @@ function measurement(daq::AbstractDAQ, params::Dict, store::DatasetStore;
 end
 
 ####  Async version  ####
+abstract type AsyncMeasTyp end
+struct FrameAveragedAsyncMeas <:AsyncMeasTyp end
+struct RegularAsyncMeas <:AsyncMeasTyp end
+asyncMeasTyp(daq::AbstractDAQ) = daq.params.acqNumFrameAverages > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
 mutable struct MeasState
-  task::Union{Task,Nothing}
+  producer::Union{Task,Nothing}
+  consumer::Union{Task, Nothing}
   numFrames::Int
   currFrame::Int
+  nextFrame::Int
   cancelled::Bool
+  channel::Union{Channel, Nothing}
+  rawSamples::Union{Matrix{Int16}, Nothing}
   buffer::Array{Float32,4}
+  avgBuffer::Union{FrameAverageBuffer, Nothing}
   consumed::Bool
   filename::String
   temperatures::Matrix{Float64}
 end
 
-MeasState() = MeasState(nothing, 0, 0, false, zeros(Float64,0,0,0,0), false, "", zeros(Float64,0,0))
+mutable struct FrameAverageBuffer
+  buffer::Array{Float32, 4}
+  setIndex::Int
+end
+FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
+
+function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
+  #setIndex - 1 = how many frames were written to the buffer
+
+  # Compute how many frames there will be
+  avgSize = size(avgBuffer.buffer)
+  resultFrames = div(avgBuffer.setIndex - 1 + size(frames, 4), avgSize[4])
+
+  result = nothing
+  if resultFrames > 0
+    result = zeros(Float32, avgSize[1], avgSize[2], avgSize[3], resultFrames)
+  end
+
+  setResult = 1
+  fr = 1 
+  while fr <= size(frames, 4)
+    # How many left vs How many can fit into avgBuffer
+    fit = min(size(frames, 4) - fr, avgSize[4] - avgBuffer.setIndex)
+    
+    # Insert into buffer
+    toFrames = fr + fit 
+    toAvg = avgBuffer.setIndex + fit 
+    avgBuffer.buffer[:, :, :, avgBuffer.setIndex:toAvg] = frames[:, :, :, fr:toFrames]
+    avgBuffer.setIndex += length(avgBuffer.setIndex:toAvg)
+    fr = toFrames + 1
+    
+    # Average and add to result
+    if avgBuffer.setIndex - 1 == avgSize[4]
+      avgFrame = mean(avgBuffer.buffer, dims=4)[:,:,:,:]
+      result[:, :, :, setResult] = avgFrame
+      setResult += 1
+      avgBuffer.setIndex = 1    
+    end
+  end
+
+  return result
+end
+
+MeasState() = MeasState(nothing, nothing, 0, 0, 1, false, nothing, nothing, zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
 
 function cancel(calibState::MeasState)
+  close(calibState.channe)
   measState.cancelled = true
   measState.consumed = true
 end
@@ -164,13 +217,124 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   numFrames = daq.params.acqNumFrames
   rxNumSamplingPoints = daq.params.rxNumSamplingPoints
   numPeriods = daq.params.acqNumPeriodsPerFrame
-  buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
 
-  measState = MeasState(nothing, numFrames, 0, false, buffer, false, "", zeros(Float64,0,0))
-  measState.task = @tspawnat 2 asyncMeasurementInner(measState,scanner,store,params,bgdata)
-  #measState.task = Threads.@spawn asyncMeasurementInner(measState,scanner,store,params,bgdata)
+  # Prepare buffering structures
+  buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
+  avgBuffer = nothing
+  if daq.params.acqNumFrameAverages > 1
+    avgBuffer = FrameAverageBuffer(rxNumSamplingPoints, numRxChannels(daq), numPeriods, daq.params.acqNumFrameAverages)
+  end
+  measState.channel = Channel{Matrix{Int16}}(32)
+
+  # Start Producer, consumer tasks
+  measState = MeasState(nothing, nothing, numFrames, 0, 1, false, nothing, nothing, buffer, avgBuffer, false, "", zeros(Float64,0,0))
+  measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, rxNumSamplingPoints, numPeriods, numFrames * daq.params.acqNumFrameAverages)
+  bind(measState.channel, measState.producer)
+  measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, store, params, bgdata)
 
   return measState
+end
+
+function asyncProducer(channel::Channel, scanner::MPIScanner, samplesPerPeriod, periodsPerFrame, numFrames)
+  su = getSurveillanceUnit(scanner)
+  daq = getDAQ(scanner)
+  #tempSensor = getTemperatureSensor(scanner)
+
+  #if tempSensor != nothing
+  #  measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
+  #end
+  setEnabled(getRobot(scanner), false)
+  enableACPower(su, scanner)
+
+  startTxAndControl(daq)
+  samplesPerFrame = samplesPerPeriod * periodsPerFrame
+  startFrame = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
+  daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+  startSample = startFrame * samplesPerFrame
+
+  # One frame needs to fit into the buffer, otherwise we deadlock on the channel
+  channelSize = channel.sz_max
+  chunkSize = div(4 * samplesPerFrame, channelSize)
+
+  samplesToRead = samplesPerFrame * numFrames
+
+  # Start pipeline
+  try 
+    startAsyncProducer(daq, channel, startSample, samplesToRead, chunkSize)
+  catch e
+    @error (e) # TODO CHECK PROPER LOGGING
+  end
+
+  sleep(daq.params.ffRampUpTime)
+  stopTx(daq)
+  disableACPower(su, scanner)
+  disconnect(daq)
+  setEnabled(getRobot(scanner), true)
+
+end
+
+function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, store::DatasetStore, params::Dict, bgdata=nothing)
+  # Consumer must not invoke SCPI commands as the server is busy with pipeline
+  while isopen(channel) || isready(channel)
+    while isready(channel)
+      newSamples = take!(channel)
+      if !isnothing(measState.rawSamples)
+        measState.rawSamples = hcat(measState.rawSamples, newSamples)
+      else
+        measState.rawSamples = newSamples
+      end
+      handleSamplesToFrames(measState, getDAQ(scanner))
+    end
+  end
+
+  if length(measState.temperatures) > 0
+    params["calibTemperatures"] = measState.temperatures
+  end
+
+  measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
+
+end
+
+function handleSamplesToFrames(measState::MeasState, daq::AbstractDAQ)
+  samples, uMeas, uRef = convertSamplesToMeasAndRef(measState.rawSamples, daq)
+  measState.rawSamples = samples
+  if !isnothing(uMeas)
+    isNewFrameAvailable, fr = handleNewFrame(asyncMeasTyp(daq), measState, uMeas)
+    if isNewFrameAvailable
+      measState.currFrame = fr 
+      measState.consumed = false
+    end
+  end
+end
+
+function handleNewFrame(::RegularAsyncMeas, measState::MeasState, uMeas)
+  isNewFrameAvailable = false
+
+  fr = addFramesFrom(measState, uMeas)
+  isNewFrameAvailable = true
+
+  return isNewFrameAvailable, fr
+end
+
+function handleNewFrame(::FrameAveragedAsyncMeas, measState::MeasState, uMeas)
+  isNewFrameAvailable = false
+
+  fr = 0
+  framesAvg = addFramesToAvg(measState.avgBuffer, uMeas)
+  if !isnothing(framesAvg)
+    fr = addFramesFrom(measState, framesAvg)
+    isNewFrameAvailable = true
+  end
+
+  return isNewFrameAvailable, fr
+end
+
+function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
+  fr = measState.nextFrame
+  to = fr + size(frames, 4) - 1
+  measState.buffer[:,:,:,fr:to] = frames
+  measState.nextFrame = to + 1
+  return fr
 end
 
 function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
@@ -214,8 +378,15 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
       if daq.params.acqNumFrameAverages == 1
         measState.buffer[:,:,:,fr:to] = uMeas
       else
-        tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :)
+        tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :) # bug?
         measState.buffer[:,:,:,fr:to] = dropdims(mean(uMeas, dims=4),dims=4)
+        #
+        #I think was meant to be this:
+        temp = reshape(uMeas, s[1], s[2], s[3],
+                daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
+        uMeasAv = mean(temp, dims=5)[:,:,:,:,1]
+        #...need to wait for enough frames to be acquired for averaging in new async
+        #
       end
       measState.currFrame = fr
       measState.consumed = false

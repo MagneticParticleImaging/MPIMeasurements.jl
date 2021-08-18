@@ -20,11 +20,12 @@ include("Parameters.jl")
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 
+
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
 
 function startTxAndControl(daq::AbstractDAQ)
-  #startTx(daq) control starts and stops Tx itself
+  startTx(daq) #control starts and stops Tx itself
   controlLoop(daq)
 end
 
