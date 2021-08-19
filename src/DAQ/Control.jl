@@ -1,15 +1,5 @@
 
 function controlLoop(daq::AbstractDAQ)
-  if daq.params.controlPhase
-    controlLoop_(daq)
-  else
-    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
-    setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)), postpone=true)
-  end
-  return
-end
-
-function controlLoop_(daq::AbstractDAQ)
   N = daq.params.numSampPerPeriod
   numChannels = numTxChannels(daq)
   @info "Init control with Tx= " daq.params.currTx
@@ -32,10 +22,9 @@ function controlLoop_(daq::AbstractDAQ)
     sleep(daq.params.controlPause)
     i += 1
   end
-  setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
-  setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
-  
   stopTx(daq)
+  
+  setTxParams(daq, daq.params.currTx) # set value for next true measurement
   return 
 end
 
@@ -125,7 +114,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
 
     if checkDFValues(newTx, oldTx, Γ, daq)
       daq.params.currTx[:] = newTx
-      setTxParams(daq, daq.params.currTx, postpone=false)
+      setTxParams(daq, daq.params.currTx)
     else
       @warn "New values are above voltage limits or are different than expected!"
     end

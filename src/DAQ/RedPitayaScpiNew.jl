@@ -72,8 +72,9 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     if !isempty(daq.params.acqEnableSequence)
       enable = daq.params.acqEnableSequence
     end
+    #TODO IMPLEMENT RAMP DOWN TIMING
     daq.acqSeq = ArbitrarySequence(lut, enable, stepsPerRepetition,
-    daq.params.acqNumFrames*daq.params.acqNumFrameAverages, daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+    daq.params.acqNumFrames*daq.params.acqNumFrameAverages, computeRamping(daq.rpc, daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
     # No enable should be equivalent to just full ones, alternatively implement constant function for enableLUT too
     #else # We might want to solve this differently
     #  enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
@@ -90,22 +91,33 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
 end
 
 function startTx(daq::DAQRedPitayaScpiNew)
-  connect(daq.rpc)
-  #connectADC(daq.rpc)
-  masterTrigger(daq.rpc, false)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
+  @info "Started tx"
+  return nothing
+end
 
-  while currentPeriod(daq.rpc) < 1
-    sleep(0.001)
+
+function prepareTx(daq::DAQRedPitayaScpiNew)
+  connect(daq.rpc)
+  stopTx(daq)
+
+  if daq.params.controlPhase
+    controlLoop(daq)
+  else 
+    tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+    setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)))
   end
   return nothing
 end
 
 function stopTx(daq::DAQRedPitayaScpiNew)
-  setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
+  #setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
+  masterTrigger(daq.rpc, false)
   stopADC(daq.rpc)
   #RedPitayaDAQServer.disconnect(daq.rpc)
+  @info "Stopped tx"
+  return nothing
 end
 
 function disconnect(daq::DAQRedPitayaScpiNew)
@@ -123,43 +135,31 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-function enableSlowDAC(daq::DAQRedPitayaScpiNew) 
+function enableSequence(daq::DAQRedPitayaScpiNew) 
   startFrame = 0
+  endFrame = 0
   if !isnothing(daq.acqSeq)
     appendSequence(daq.rpc, daq.acqSeq)
     prepareSequence(daq.rpc)
-    bandwidth = div(125e6, decimation(daq.rpc))
-    period = div(samplesPerSlowDACStep(master(daq.rpc) * slowDACStepsPerSequence(master(daq.rpc))), bandwidth)
-    startFrame = ceil(daq.acqSeq.rampTime / period) 
+    startSample = start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)
+    startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+    endFrame = div((start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
   end
-  setTxParams(daq.rpc, )
-  
-  return startFrame
+  startTx(daq)
+  return startFrame, endFrame
 end
 
-function setTxParams(daq::DAQRedPitayaScpiNew, Γ; postpone=false)
+function setTxParams(daq::DAQRedPitayaScpiNew, Γ)
   if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
   end
 
   for d=1:numTxChannels(daq)
     for e=1:numTxChannels(daq)
-
       amp = abs(Γ[d,e])
       ph = angle(Γ[d,e])
       phaseDAC(daq.rpc, daq.params.dfChanIdx[d], e, ph )
-
-      #@info "$d $e mapping = $(daq.params.dfChanIdx[d]) $amp   $ph   $(frequencyDAC(daq.rpc, daq.params.dfChanIdx[d], e))"
-
-      #if postpone
-      # The following is a very worse and dangerous hack. Right now postponing the activation of 
-      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
-      # directly
-      #if postpone && daq.params.dfChanIdx[d] <= 2   
-      #  amplitudeDACNext(daq.rpc, daq.params.dfChanIdx[d], e, amp) 
-      #else
       amplitudeDAC(daq.rpc, daq.params.dfChanIdx[d], e, amp)
-      #end
     end
   end
   return nothing
@@ -186,15 +186,22 @@ function convertSamplesToFrames(samples, daq::DAQRedPitayaScpiNew)
       end
       
       if (samplesPerFrame * framesInBuffer) + 1 <= samplesInBuffer
+          samplesBefore = size(samples, 2)
+          removedSamples = samplesPerFrame * framesInBuffer
+          @info "Sample buffer had $samplesBefore samples, removed $removedSamples"
           unusedSamples = samples[:, (samplesPerFrame * framesInBuffer) + 1:samplesInBuffer]
+          samplesLeft = size(unusedSamples, 2)
+          @info "Samples left $samplesLeft"
+      else 
+        unusedSamples = nothing
       end
   end
 
   return unusedSamples, frames
 end
 
-function startAsyncProducer(daq::DAQRedPitayaScpiNew, channel::Channel, startSample, samplesToRead, chunkSize)
-  readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) # rp info here
+function startAsyncProducer(daq::DAQRedPitayaScpiNew, channel::Channel, startSample, samplesToRead)
+  readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel) # rp info here
 end
 
 function convertSamplesToMeasAndRef(samples, daq::DAQRedPitayaScpiNew)

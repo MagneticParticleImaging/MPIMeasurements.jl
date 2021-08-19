@@ -23,7 +23,7 @@ using Dates
 #using MPISimulations
 
 import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC, enableSlowDAC
+                           setSlowDAC, getSlowADC, enableSlowDAC, start, convertSamplesToFrames
 import Base.write
 #import PyPlot.disconnect
 

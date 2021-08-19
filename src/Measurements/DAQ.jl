@@ -12,7 +12,7 @@ function measurement_(daq::AbstractDAQ)
   startTxAndControl(daq)
 
   # Prepare acqSeq
-  currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
+  currFr = enableSequence(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                          daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
   framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame*daq.params.dfCycle
@@ -141,6 +141,12 @@ struct FrameAveragedAsyncMeas <:AsyncMeasTyp end
 struct RegularAsyncMeas <:AsyncMeasTyp end
 asyncMeasTyp(daq::AbstractDAQ) = daq.params.acqNumFrameAverages > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
+mutable struct FrameAverageBuffer
+  buffer::Array{Float32, 4}
+  setIndex::Int
+end
+FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
+
 mutable struct MeasState
   producer::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
@@ -156,12 +162,6 @@ mutable struct MeasState
   filename::String
   temperatures::Matrix{Float64}
 end
-
-mutable struct FrameAverageBuffer
-  buffer::Array{Float32, 4}
-  setIndex::Int
-end
-FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
 
 function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
   #setIndex - 1 = how many frames were written to the buffer
@@ -219,15 +219,17 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   numPeriods = daq.params.acqNumPeriodsPerFrame
 
   # Prepare buffering structures
+  @info "Allocating buffer for $numFrames frames"
   buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
   avgBuffer = nothing
   if daq.params.acqNumFrameAverages > 1
     avgBuffer = FrameAverageBuffer(rxNumSamplingPoints, numRxChannels(daq), numPeriods, daq.params.acqNumFrameAverages)
   end
-  measState.channel = Channel{Matrix{Int16}}(32)
+  channel = Channel{Matrix{Int16}}(32)
 
   # Start Producer, consumer tasks
   measState = MeasState(nothing, nothing, numFrames, 0, 1, false, nothing, nothing, buffer, avgBuffer, false, "", zeros(Float64,0,0))
+  measState.channel = channel
   measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, rxNumSamplingPoints, numPeriods, numFrames * daq.params.acqNumFrameAverages)
   bind(measState.channel, measState.producer)
   measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, store, params, bgdata)
@@ -246,26 +248,29 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, samplesPerPeriod, 
   setEnabled(getRobot(scanner), false)
   enableACPower(su, scanner)
 
-  startTxAndControl(daq)
+  @info "Prepare Tx"
+  prepareTx(daq)
   samplesPerFrame = samplesPerPeriod * periodsPerFrame
-  startFrame = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
-  daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+  @info "Enable seqeuence"
+  startFrame, endFrame = enableSequence(daq)
+  @info "Enabled sequence"
   startSample = startFrame * samplesPerFrame
-
-  # One frame needs to fit into the buffer, otherwise we deadlock on the channel
-  channelSize = channel.sz_max
-  chunkSize = div(4 * samplesPerFrame, channelSize)
+  @info "Start: Frame $startFrame, Sample $startSample"
+  #channelSize = channel.sz_max
+  #chunkSize = div(4 * samplesPerFrame, channelSize)
 
   samplesToRead = samplesPerFrame * numFrames
+  @info "Pipelining $samplesToRead with $samplesPerFrame samples per frame"
 
   # Start pipeline
   try 
-    startAsyncProducer(daq, channel, startSample, samplesToRead, chunkSize)
+    startAsyncProducer(daq, channel, startSample, samplesToRead)
   catch e
     @error (e) # TODO CHECK PROPER LOGGING
   end
 
-  sleep(daq.params.ffRampUpTime)
+  @info "Pipeline finished"
+  sleep(daq.params.ffRampUpTime) # TODO not sleep but accurate wait from rampDown to finish
   stopTx(daq)
   disableACPower(su, scanner)
   disconnect(daq)
@@ -275,6 +280,7 @@ end
 
 function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, store::DatasetStore, params::Dict, bgdata=nothing)
   # Consumer must not invoke SCPI commands as the server is busy with pipeline
+  @info "Consumer start"
   while isopen(channel) || isready(channel)
     while isready(channel)
       newSamples = take!(channel)
@@ -285,13 +291,15 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
       end
       handleSamplesToFrames(measState, getDAQ(scanner))
     end
+    sleep(0.001)
   end
+  @info "Consumer end"
 
   if length(measState.temperatures) > 0
     params["calibTemperatures"] = measState.temperatures
   end
 
-  measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
+  measState.filename = saveasMDF(store, getDAQ(scanner), measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
 
 end
 
@@ -300,7 +308,7 @@ function handleSamplesToFrames(measState::MeasState, daq::AbstractDAQ)
   measState.rawSamples = samples
   if !isnothing(uMeas)
     isNewFrameAvailable, fr = handleNewFrame(asyncMeasTyp(daq), measState, uMeas)
-    if isNewFrameAvailable
+    if isNewFrameAvailable && fr > 0
       measState.currFrame = fr 
       measState.consumed = false
     end
@@ -332,9 +340,14 @@ end
 function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
   fr = measState.nextFrame
   to = fr + size(frames, 4) - 1
-  measState.buffer[:,:,:,fr:to] = frames
-  measState.nextFrame = to + 1
-  return fr
+  limit = size(measState.buffer, 4)
+  @info "Add frames $fr to $to to framebuffer with $limit size"
+  if to <= limit
+    measState.buffer[:,:,:,fr:to] = frames
+    measState.nextFrame = to + 1
+    return fr
+  end
+  return -1 
 end
 
 function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
@@ -352,7 +365,7 @@ function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
 
     startTxAndControl(daq)
 
-    currFr = enableSlowDAC(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
+    currFr = enableSequence(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
                            daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
 
     chunkTime = 2.0 #seconds

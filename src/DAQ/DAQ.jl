@@ -19,19 +19,11 @@ include("Parameters.jl")
 @mustimplement readData(daq::AbstractDAQ, startFrame, numFrames)
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
+@mustimplement prepareTx(daq::AbstractDAQ)
 
 
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
-
-function startTxAndControl(daq::AbstractDAQ)
-  startTx(daq) #control starts and stops Tx itself
-  controlLoop(daq)
-end
-
-function startControl(daq::AbstractDAQ)
-  controlLoop(daq)
-end
 
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")

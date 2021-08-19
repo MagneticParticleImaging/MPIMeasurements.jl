@@ -37,7 +37,7 @@ end
 function disconnect(daq::DummyDAQ)
 end
 
-enableSlowDAC(daq::DummyDAQ, enable::Bool, numFrames=0,
+enableSequence(daq::DummyDAQ, enable::Bool, numFrames=0,
               ffRampUpTime=0.4, ffRampUpFraction=0.8) = 1
 
 function readData(daq::DummyDAQ, startFrame, numFrames)
