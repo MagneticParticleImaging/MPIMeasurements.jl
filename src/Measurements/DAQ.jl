@@ -208,7 +208,7 @@ function cancel(calibState::MeasState)
   measState.consumed = true
 end
 
-function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dict, bgdata=nothing)
+function asyncMeasurement(scanner::MPIScanner, params_::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
   daq = getDAQ(scanner)
   params = copy(params_)
   updateParams!(daq, params_)
@@ -232,7 +232,7 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   measState.channel = channel
   measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, numFrames * daq.params.acqNumFrameAverages)
   bind(measState.channel, measState.producer)
-  measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, store, params, bgdata)
+  measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, params, bgdata, store = store)
 
   return measState
 end
@@ -253,7 +253,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, numFrames)
   setEnabled(getRobot(scanner), true)
 end
 
-function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, store::DatasetStore, params::Dict, bgdata=nothing)
+function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
   # Consumer must not invoke SCPI commands as the server is busy with pipeline
   @info "Consumer start"
   while isopen(channel) || isready(channel)
@@ -270,8 +270,9 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
     params["calibTemperatures"] = measState.temperatures
   end
 
-  measState.filename = saveasMDF(store, getDAQ(scanner), measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
-
+  if !isnothing(store)
+    storeAsyncMeasurementResult(store, getDAQ(scanner), measState.buffer, params, bgdata=bgdata)
+  end
 end
 
 function updateFrameBuffer!(measState::MeasState, daq::AbstractDAQ)
@@ -320,80 +321,31 @@ function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
   return -1 
 end
 
-function asyncMeasurementInner(measState::MeasState, scanner::MPIScanner,
-                                 store::DatasetStore, params::Dict, bgdata=nothing)
-    su = getSurveillanceUnit(scanner)
-    daq = getDAQ(scanner)
-    #tempSensor = getTemperatureSensor(scanner)
-
-    #if tempSensor != nothing
-    #  measState.temperatures = zeros(Float32, numChannels(tempSensor), daq.params.acqNumFrames)
-    #end
-
-    setEnabled(getRobot(scanner), false)
-    enableACPower(su, scanner)
-
-    startTxAndControl(daq)
-
-    currFr = enableSequence(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
-                           daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
-
-    chunkTime = 2.0 #seconds
-    framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame *
-                  daq.params.dfCycle
-    chunk = min(daq.params.acqNumFrames,max(1,round(Int, chunkTime/framePeriod)))
-    
-    fr = 1
-    while fr <= daq.params.acqNumFrames
-      to = min(fr+chunk-1,daq.params.acqNumFrames) 
-
-      #if tempSensor != nothing
-      #  for c = 1:numChannels(tempSensor)
-      #      measState.temperatures[c,fr] = getTemperature(tempSensor, c)
-      #  end
-      #end
-      @info "Measuring frame $fr to $to"
-      @time uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*(length(fr:to)),
-                                  currFr + (fr-1)*daq.params.acqNumFrameAverages)
-      @info "It should take $(daq.params.acqNumFrameAverages*(length(fr:to))*framePeriod)"
-      s = size(uMeas)
-      @info s
-      if daq.params.acqNumFrameAverages == 1
-        measState.buffer[:,:,:,fr:to] = uMeas
-      else
-        tmp = reshape(uMeas, s[1], s[2], s[3], daq.params.acqNumFrameAverages, :) # bug?
-        measState.buffer[:,:,:,fr:to] = dropdims(mean(uMeas, dims=4),dims=4)
-        #
-        #I think was meant to be this:
-        temp = reshape(uMeas, s[1], s[2], s[3],
-                daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
-        uMeasAv = mean(temp, dims=5)[:,:,:,:,1]
-        #...need to wait for enough frames to be acquired for averaging in new async
-        #
-      end
-      measState.currFrame = fr
-      measState.consumed = false
-      #sleep(0.01)
-      #yield()
-      fr += chunk
-
-      if measState.cancelled
-        break
-      end
-    end
-    sleep(daq.params.ffRampUpTime)
-    stopTx(daq)
-    disableACPower(su, scanner)
-    disconnect(daq)
-    setEnabled(getRobot(scanner), true)
-
-    if length(measState.temperatures) > 0
-      params["calibTemperatures"] = measState.temperatures
-    end
-
-    measState.filename = saveasMDF(store, daq, measState.buffer, params; bgdata=bgdata) #, auxData=auxData)
+function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
+  saveasMDF(store, daq, data, params; bgdata=bgdata, auxData=nothing) # TODO auxData?
 end
 
 
+#### Sync version ####
+function measurement(scanner::MPIScanner, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing} = nothing)
+  measState = asyncMeasurement(scanner, params, bgdata, store = store)
+  result = nothing
+  try
+    wait(measState.consumer)
+  catch e
+    if isa(e, TaskFailedException)
+      @error e.task.exception
+      result = nothing
+    end
+  end
 
+  # Check tasks
+  if Base.istaskfailed(measState.producer) || Base.istaskfailed(measState.consumer)
+    @warn "Inner async measurement failed"
+    result = nothing
+  else
+    result = measState.buffer
+  end
+  return measState
+end
 
