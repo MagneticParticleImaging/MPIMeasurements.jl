@@ -155,7 +155,7 @@ mutable struct MeasState
   nextFrame::Int
   cancelled::Bool
   channel::Union{Channel, Nothing}
-  rawSamples::Union{Matrix{Int16}, Nothing}
+  asyncBuffer::AsyncBuffer
   buffer::Array{Float32,4}
   avgBuffer::Union{FrameAverageBuffer, Nothing}
   consumed::Bool
@@ -223,21 +223,21 @@ function asyncMeasurement(scanner::MPIScanner, store::DatasetStore, params_::Dic
   buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
   avgBuffer = nothing
   if daq.params.acqNumFrameAverages > 1
-    avgBuffer = FrameAverageBuffer(rxNumSamplingPoints, numRxChannels(daq), numPeriods, daq.params.acqNumFrameAverages)
+    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, daq.params.acqNumFrameAverages)), 1)
   end
-  channel = Channel{Matrix{Int16}}(32)
+  channel = Channel{channelType(daq)}(32)
 
   # Start Producer, consumer tasks
-  measState = MeasState(nothing, nothing, numFrames, 0, 1, false, nothing, nothing, buffer, avgBuffer, false, "", zeros(Float64,0,0))
+  measState = MeasState(nothing, nothing, numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0))
   measState.channel = channel
-  measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, rxNumSamplingPoints, numPeriods, numFrames * daq.params.acqNumFrameAverages)
+  measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, numFrames * daq.params.acqNumFrameAverages)
   bind(measState.channel, measState.producer)
   measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, store, params, bgdata)
 
   return measState
 end
 
-function asyncProducer(channel::Channel, scanner::MPIScanner, samplesPerPeriod, periodsPerFrame, numFrames)
+function asyncProducer(channel::Channel, scanner::MPIScanner, numFrames)
   su = getSurveillanceUnit(scanner)
   daq = getDAQ(scanner)
   #tempSensor = getTemperatureSensor(scanner)
@@ -247,35 +247,10 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, samplesPerPeriod, 
   #end
   setEnabled(getRobot(scanner), false)
   enableACPower(su, scanner)
-
-  @info "Prepare Tx"
-  prepareTx(daq)
-  samplesPerFrame = samplesPerPeriod * periodsPerFrame
-  @info "Enable seqeuence"
-  startFrame, endFrame = enableSequence(daq)
-  @info "Enabled sequence"
-  startSample = startFrame * samplesPerFrame
-  @info "Start: Frame $startFrame, Sample $startSample"
-  #channelSize = channel.sz_max
-  #chunkSize = div(4 * samplesPerFrame, channelSize)
-
-  samplesToRead = samplesPerFrame * numFrames
-  @info "Pipelining $samplesToRead with $samplesPerFrame samples per frame"
-
-  # Start pipeline
-  try 
-    startAsyncProducer(daq, channel, startSample, samplesToRead)
-  catch e
-    @error (e) # TODO CHECK PROPER LOGGING
-  end
-
-  @info "Pipeline finished"
-  sleep(daq.params.ffRampUpTime) # TODO not sleep but accurate wait from rampDown to finish
-  stopTx(daq)
+  asyncProducer(channel, daq, numFrames)
   disableACPower(su, scanner)
   disconnect(daq)
   setEnabled(getRobot(scanner), true)
-
 end
 
 function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, store::DatasetStore, params::Dict, bgdata=nothing)
@@ -283,13 +258,9 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
   @info "Consumer start"
   while isopen(channel) || isready(channel)
     while isready(channel)
-      newSamples = take!(channel)
-      if !isnothing(measState.rawSamples)
-        measState.rawSamples = hcat(measState.rawSamples, newSamples)
-      else
-        measState.rawSamples = newSamples
-      end
-      handleSamplesToFrames(measState, getDAQ(scanner))
+      chunk = take!(channel)
+      updateAsyncBuffer!(measState.asyncBuffer, chunk)
+      updateFrameBuffer!(measState, getDAQ(scanner))
     end
     sleep(0.001)
   end
@@ -303,9 +274,8 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
 
 end
 
-function handleSamplesToFrames(measState::MeasState, daq::AbstractDAQ)
-  samples, uMeas, uRef = convertSamplesToMeasAndRef(measState.rawSamples, daq)
-  measState.rawSamples = samples
+function updateFrameBuffer!(measState::MeasState, daq::AbstractDAQ)
+  uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
     isNewFrameAvailable, fr = handleNewFrame(asyncMeasTyp(daq), measState, uMeas)
     if isNewFrameAvailable && fr > 0

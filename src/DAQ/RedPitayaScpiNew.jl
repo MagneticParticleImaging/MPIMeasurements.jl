@@ -168,12 +168,60 @@ end
 #TODO: calibRefToField should be multidimensional
 refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
-function convertSamplesToFrames(samples, daq::DAQRedPitayaScpiNew)
-  unusedSamples = samples
+mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
+  samples::Union{Matrix{Int16}, Nothing}
+end
+AsyncBuffer(daq::DAQRedPitayaScpiNew) = RedPitayaAsyncBuffer(nothing)
+
+channelType(daq::DAQRedPitayaScpiNew) = Matrix{Int16}
+
+function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, samples)
+  if !isnothing(buffer.samples)
+    buffer.samples = hcat(buffer.samples, samples)
+  else 
+    buffer.samples = samples
+  end
+end
+
+function frameAverageBufferSize(daq::DAQRedPitayaScpiNew, frameAverages) 
+  return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
+end
+
+function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames)
+  @info "Prepare Tx"
+  prepareTx(daq)
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  @info "Enable seqeuence"
+  startFrame, endFrame = enableSequence(daq)
+  @info "Enabled sequence"
+  startSample = startFrame * samplesPerFrame
+  @info "Start: Frame $startFrame, Sample $startSample"
+  #channelSize = channel.sz_max
+  #chunkSize = div(4 * samplesPerFrame, channelSize)
+
+  samplesToRead = samplesPerFrame * numFrames
+  @info "Pipelining $samplesToRead with $samplesPerFrame samples per frame"
+
+  # Start pipeline
+  try 
+    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel) 
+  catch e
+    @error e 
+  end
+  @info "Pipeline finished"
+
+  sleep(daq.params.ffRampUpTime) # TODO not sleep but accurate wait from rampDown to finish
+  stopTx(daq)
+end
+
+function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpiNew)
+  unusedSamples = buffer.samples
+  samples = buffer.samples
   frames = nothing
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   samplesInBuffer = size(samples)[2]
   framesInBuffer = div(samplesInBuffer, samplesPerFrame)
+  
   if framesInBuffer > 0
       samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
       frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.params.acqNumAverages, 1)
@@ -186,33 +234,31 @@ function convertSamplesToFrames(samples, daq::DAQRedPitayaScpiNew)
       end
       
       if (samplesPerFrame * framesInBuffer) + 1 <= samplesInBuffer
-          samplesBefore = size(samples, 2)
-          removedSamples = samplesPerFrame * framesInBuffer
-          @info "Sample buffer had $samplesBefore samples, removed $removedSamples"
+          #samplesBefore = size(samples, 2)
+          #removedSamples = samplesPerFrame * framesInBuffer
+          #@info "Sample buffer had $samplesBefore samples, removed $removedSamples"
           unusedSamples = samples[:, (samplesPerFrame * framesInBuffer) + 1:samplesInBuffer]
-          samplesLeft = size(unusedSamples, 2)
-          @info "Samples left $samplesLeft"
+          #samplesLeft = size(unusedSamples, 2)
+          #@info "Samples left $samplesLeft"
       else 
         unusedSamples = nothing
       end
   end
 
-  return unusedSamples, frames
+  buffer.samples = unusedSamples
+  return frames
+
 end
 
-function startAsyncProducer(daq::DAQRedPitayaScpiNew, channel::Channel, startSample, samplesToRead)
-  readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel) # rp info here
-end
-
-function convertSamplesToMeasAndRef(samples, daq::DAQRedPitayaScpiNew)
-  unusedSamples, frames = convertSamplesToFrames(samples, daq)
+function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpiNew)
+  frames = convertSamplesToFrames!(buffer, daq)
   uMeas = nothing
   uRef = nothing
   if !isnothing(frames)
     uMeas = frames[:,daq.params.rxChanIdx,:,:]
     uRef = frames[:,daq.params.refChanIdx,:,:]
   end
-  return unusedSamples, uMeas, uRef
+  return uMeas, uRef
 end
 
 function readData(daq::DAQRedPitayaScpiNew, numFrames, startFrame)

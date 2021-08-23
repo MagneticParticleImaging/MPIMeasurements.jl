@@ -20,10 +20,14 @@ include("Parameters.jl")
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 @mustimplement prepareTx(daq::AbstractDAQ)
+@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames)
+@mustimplement channelType(daq::AbstractDAQ)
 
 
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
+
+abstract type AsyncBuffer end
 
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")
