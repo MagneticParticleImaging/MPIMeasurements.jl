@@ -60,3 +60,7 @@ function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
     return uMeas, uRef
 end
 refToField(daq::DummyDAQ, d::Int64) = 0.0
+
+mutable struct DummyAsyncBuffer <: AsyncBuffer
+    # Empty
+end

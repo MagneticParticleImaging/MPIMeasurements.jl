@@ -200,7 +200,7 @@ function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4}
   return result
 end
 
-MeasState() = MeasState(nothing, nothing, 0, 0, 1, false, nothing, nothing, zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
+MeasState() = MeasState(nothing, nothing, 0, 0, 1, false, nothing, DummyAsyncBuffer(), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
 
 function cancel(calibState::MeasState)
   close(calibState.channe)
@@ -271,6 +271,7 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
   end
 
   if !isnothing(store)
+    @info "Storing result"
     storeAsyncMeasurementResult(store, getDAQ(scanner), measState.buffer, params, bgdata=bgdata)
   end
 end
@@ -322,7 +323,7 @@ function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
 end
 
 function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
-  saveasMDF(store, daq, data, params; bgdata=bgdata, auxData=nothing) # TODO auxData?
+  saveasMDF(store, daq, data, params; bgdata=bgdata) # auxData?
 end
 
 
@@ -346,6 +347,6 @@ function measurement(scanner::MPIScanner, params::Dict, bgdata=nothing; store::U
   else
     result = measState.buffer
   end
-  return measState
+  return result
 end
 
