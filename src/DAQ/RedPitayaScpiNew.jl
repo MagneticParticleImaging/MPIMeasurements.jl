@@ -98,11 +98,11 @@ function startTx(daq::DAQRedPitayaScpiNew)
 end
 
 
-function prepareTx(daq::DAQRedPitayaScpiNew)
+function prepareTx(daq::DAQRedPitayaScpiNew; allowControlLoop = true)
   connect(daq.rpc)
   stopTx(daq)
 
-  if daq.params.controlPhase
+  if daq.params.controlPhase && allowControlLoop
     controlLoop(daq)
   else 
     tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
@@ -196,7 +196,7 @@ function frameAverageBufferSize(daq::DAQRedPitayaScpiNew, frameAverages)
   return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
 end
 
-function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames)
+function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; allowControlLoop = true)
   @info "Prepare Tx"
   prepareTx(daq)
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)

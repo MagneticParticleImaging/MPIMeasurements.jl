@@ -20,7 +20,7 @@ include("Parameters.jl")
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
 @mustimplement prepareTx(daq::AbstractDAQ)
-@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames)
+@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; allowControlLoop)
 @mustimplement channelType(daq::AbstractDAQ)
 
 

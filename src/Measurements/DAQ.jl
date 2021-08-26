@@ -1,37 +1,7 @@
 export measurement, asyncMeasurement, measurementCont, measurementRepeatability,
        MeasState
 
-function measurement(daq::AbstractDAQ, params_::Dict;
-                     kargs... )
-  updateParams!(daq, params_)
-  measurement_(daq; kargs...)
-end
-
-function measurement_(daq::AbstractDAQ)
-
-  startTxAndControl(daq)
-
-  # Prepare acqSeq
-  currFr = enableSequence(daq, true, daq.params.acqNumFrames*daq.params.acqNumFrameAverages,
-                         daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
-
-  framePeriod = daq.params.acqNumFrameAverages*daq.params.acqNumPeriodsPerFrame*daq.params.dfCycle
-  @time uMeas, uRef = readData(daq, daq.params.acqNumFrames*daq.params.acqNumFrameAverages, currFr)
-  @info "It should take $(daq.params.acqNumFrames*daq.params.acqNumFrameAverages*framePeriod)"
-  sleep(daq.params.ffRampUpTime)    ### This should be analog to asyncMeasurementInner
-  stopTx(daq)
-  disconnect(daq)
-
-  if daq.params.acqNumFrameAverages > 1
-    u_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
-                daq.params.acqNumFrames,daq.params.acqNumFrameAverages)
-    uMeasAv = mean(u_, dims=5)[:,:,:,:,1]
-    return uMeasAv
-  else
-    return uMeas
-  end
-end
-
+### STORAGE ###
 function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Float32,4},
                              params::Dict; bgdata=nothing, auxData=nothing )
 

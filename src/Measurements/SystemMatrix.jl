@@ -3,6 +3,7 @@ export init, stop, isStarted
 
 mutable struct SystemMatrixRobotMeas <: MeasObj
   task::Union{Task,Nothing}
+  consumer::Union{Task, Nothing}
   scanner::Union{MPIScanner,Nothing}
   store::DatasetStore
   params::Dict
@@ -21,6 +22,7 @@ end
 function SystemMatrixRobotMeas(scanner, store)
   return SystemMatrixRobotMeas(
     nothing,
+    nothing, 
     scanner,
     store,
     Dict{String,Any}(),
@@ -105,6 +107,7 @@ function init(sysObj::SystemMatrixRobotMeas, positions::GridPositions,
   updateParams!(daq, params)
 
   if !daq.params.controlPhase
+    # Repeated in prepareTx in asyncProducer
     tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
     daq.params.currTx = convert(Matrix{ComplexF64}, diagm(tx))
   end
@@ -171,74 +174,73 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
    daq = getDAQ(measObj.scanner)
    robot = getRobot(measObj.scanner)
    tempSensor = getTemperatureSensor(measObj.scanner)
+   channel = Channel{channelType(daq)}(32)
   end
 
-  @info "control Phase"
-  timeControlPhase = @elapsed begin
-    if daq.params.controlPhase && mod1(index, 11) == 1 # only control sometimes
-      controlLoop(daq)
-    else
-      setTxParams(daq, daq.params.currTx, postpone=true)
-    end
-  end
-
+  allowControlLoop = mod1(index, 11) == 1
+  
   numFrames = measObj.measIsBGPos[index] ? daq.params.acqNumBGFrames : 1
 
-  @info "enableSlowDAC"
+  @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
-    currFr = enableSlowDAC(daq, true, daq.params.acqNumFrameAverages*numFrames,
-                    daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+    actualFrames = daq.params.acqNumFrameAverages*numFrames
+    measObj.consumer = @tspawnat 3 asyncConsumer(channel, measObj, index, numFrames)
+    asyncProducer(channel, daq, actualFrames, allowControlLoop = allowControlLoop)
   end
+  close(channel)
 
-  @info "readData"
-  @show daq.params.acqNumFrameAverages numFrames currFr daq.params.ffRampUpTime daq.params.ffRampUpFraction
-  timeReadData = @elapsed begin
-    uMeas, uRef = readData(daq, daq.params.acqNumFrameAverages*numFrames, currFr)
-  end
-  @info "readData Done"
- 
-  setTxParams(daq, daq.params.currTx * 0.0 )
-  
-  timeOtherThings = @elapsed begin
-
-  startIdx = measObj.posToIdx[index]
-  stopIdx = measObj.posToIdx[index] + numFrames - 1
-
-  if measObj.measIsBGPos[index]
-    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
-                            daq.params.acqNumFrameAverages, numFrames)
-    measObj.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
-  else
-    measObj.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
-  end
-
-  measObj.measIsBGFrame[ startIdx:stopIdx ] .= measObj.measIsBGPos[index]
-
-  if tempSensor != nothing
-    for l in startIdx:stopIdx
-      for c = 1:numChannels(tempSensor)
-        measObj.temperatures[c,l] = getTemperature(tempSensor, c)
-      end
-    end
-  end
-
-
-
-  measObj.currentSignal = uMeas[:,:,:,1:1]
-
-  end
-
-  @info "store"
-  timeStore = @elapsed store(measObj)
-  @info "done"
-
-  allTimes = timeControlPhase+timeEnableSlowDAC+timeReadData+timeStore+timeGetThings+timeOtherThings
-  @show timeGetThings timeControlPhase timeEnableSlowDAC timeReadData timeStore timeOtherThings allTimes
+  #allTimes = timeControlPhase+timeEnableSlowDAC+timeReadData+timeStore+timeGetThings+timeOtherThings
+  #@show timeGetThings timeControlPhase timeEnableSlowDAC timeReadData timeStore timeOtherThings allTimes
 
   return
 end
 
+function asyncConsumer(channel::Channel, calib::SystemMatrixRobotMeas, index, numFrames)
+  @info "readData"
+  daq = getDAQ(calib.scanner)
+  tempSensor = getTemperatureSensor(calib.scanner)
+  asyncBuffer = AsyncBuffer(daq)
+  while isopen(channel) || isready(channel)
+    while isready(channel)
+      chunk = take!(channel)
+      updateAsyncBuffer!(asyncBuffer, chunk)
+    end
+    if !isready(channel)
+      sleep(0.001)
+    end
+  end
 
+  uMeas, uRef = retrieveMeasAndRef!(asyncBuffer, getDAQ(calib.scanner))
+
+  startIdx = calib.posToIdx[index]
+  stopIdx = calib.posToIdx[index] + numFrames - 1
+
+  if calib.measIsBGPos[index]
+    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
+                            daq.params.acqNumFrameAverages, numFrames)
+    calib.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
+  else
+    calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
+  end
+
+  calib.measIsBGFrame[ startIdx:stopIdx ] .= calib.measIsBGPos[index]
+
+  calib.currentSignal = uMeas[:,:,:,1:1]
+
+
+  if !isnothing(tempSensor)
+    for l in startIdx:stopIdx
+      for c = 1:numChannels(tempSensor)
+        calib.temperatures[c,l] = getTemperature(tempSensor, c)
+      end
+    end
+  end
+
+  @info "store"
+  timeStore = @elapsed store(calib)
+  @info "done"
+
+end
 ###########################
 
 
@@ -259,6 +261,11 @@ function start(calib::SystemMatrixRobotMeas)
   return
 end
 
+function waitConsumer(calib::SystemMatrixRobotMeas)
+  return @elapsed if !isnothing(calib.consumer)
+    wait(calib.consumer)
+  end
+end
 
 function performCalibrationInner(calib::SystemMatrixRobotMeas)
   @info  "performCalibrationInner Start"
@@ -284,6 +291,8 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
     if calib.stopped
+      # Wait for open tasks to finish (consumer will finish either way but this way we are in a known state)
+      waitConsumer(calib)
       @info  "performCalibrationInner stopped"
       break
     end
@@ -301,9 +310,11 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         setEnabled(robot, false)
         #sleep(0.1)
 
+        timeWaitConsumer = waitConsumer(calib)
+
         timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
-        @info "############### robot move time: $(timeRobotMoved) meas time: $(timePostMove)"
+        @info "############### robot move time: $(timeRobotMoved), wait time: $timeWaitConsumer, meas time: $(timePostMove)"
 
         setEnabled(robot, true)
         calib.currPos +=1
@@ -311,6 +322,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
     end
 
     if calib.currPos > numPos
+        waitConsumer(calib)
         @info "Store SF"
         stopTx(daq)
         disableACPower(su, calib.scanner)
@@ -325,12 +337,6 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         break
     end
 
-    if mod(calib.currPos,100) == 0
-      # This is a hack. The RP gets issues when measuring to long (about 30 minutes)
-      # it seems to help to restart
-      stopTx(daq)
-      startTx(daq)
-    end
   end
   catch ex
     @warn "Exception" ex stacktrace(catch_backtrace())
