@@ -272,7 +272,7 @@ function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScann
 
   if !isnothing(store)
     @info "Storing result"
-    storeAsyncMeasurementResult(store, getDAQ(scanner), measState.buffer, params, bgdata=bgdata)
+    measState.filename = saveasMDF(store, getDAQ(scanner), measState.buffer, params, bgdata=bgdata)
   end
 end
 
@@ -323,7 +323,7 @@ function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
 end
 
 function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
-  saveasMDF(store, daq, data, params; bgdata=bgdata) # auxData?
+  return saveasMDF(store, daq, data, params; bgdata=bgdata) # auxData?
 end
 
 
