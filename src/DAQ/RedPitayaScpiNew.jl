@@ -170,17 +170,26 @@ refToField(daq::DAQRedPitayaScpiNew, d::Int64) = daq.params.calibRefToField[d]
 
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
   samples::Union{Matrix{Int16}, Nothing}
+  performance::Vector{Vector{PerformanceData}}
 end
-AsyncBuffer(daq::DAQRedPitayaScpiNew) = RedPitayaAsyncBuffer(nothing)
+AsyncBuffer(daq::DAQRedPitayaScpiNew) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
 
-channelType(daq::DAQRedPitayaScpiNew) = Matrix{Int16}
+channelType(daq::DAQRedPitayaScpiNew) = SampleChunk
 
-function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, samples)
+function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+  samples = chunk.samples
+  perfs = chunk.performance
+  push!(buffer.performance, perfs)
   if !isnothing(buffer.samples)
     buffer.samples = hcat(buffer.samples, samples)
   else 
     buffer.samples = samples
   end
+  for (i, p) in enumerate(perfs)
+    if p.status.overwritten || p.status.corrupted
+        @warn "RedPitaya $i lost data"
+    end
+end
 end
 
 function frameAverageBufferSize(daq::DAQRedPitayaScpiNew, frameAverages) 
@@ -201,10 +210,11 @@ function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames)
 
   samplesToRead = samplesPerFrame * numFrames
   @info "Pipelining $samplesToRead with $samplesPerFrame samples per frame"
+  chunkSize = Int(ceil(0.1 * (125e6/decimation(daq.rpc))))
 
   # Start pipeline
   try 
-    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel) 
+    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
   catch e
     @error e 
   end
