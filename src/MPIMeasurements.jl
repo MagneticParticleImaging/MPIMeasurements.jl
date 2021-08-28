@@ -6,7 +6,6 @@ module MPIMeasurements
 #using Pkg
 
 #using Compat
-using Reexport: include
 using Reexport
 @reexport using MPIFiles
 using Unitful
@@ -39,7 +38,7 @@ import Base.write
 
 export addConfigurationPath
 
-scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
 addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
 
 include("Devices/Device.jl")
@@ -47,5 +46,12 @@ include("Utils/Utils.jl")
 include("Scanner.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
+
+function __init__()
+  defaultScannerConfigurationPath = joinpath(homedir(),".mpi")
+  if isdir(defaultScannerConfigurationPath)
+    addConfigurationPath(defaultScannerConfigurationPath)
+  end
+end
 
 end # module
