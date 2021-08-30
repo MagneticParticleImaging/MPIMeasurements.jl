@@ -5,12 +5,13 @@ mutable struct DAQRedPitayaScpiNew <: AbstractDAQ
   params::DAQParams
   rpc::RedPitayaCluster
   acqSeq::Union{AbstractSequence, Nothing}
+  samplesPerStep::Int32
 end
 
 function DAQRedPitayaScpiNew(params)
   p = DAQParams(params)
   rpc = RedPitayaCluster(params["ip"])
-  daq = DAQRedPitayaScpiNew(p, rpc, nothing)
+  daq = DAQRedPitayaScpiNew(p, rpc, nothing, 0)
   setACQParams(daq)
   masterTrigger(daq.rpc, false)
   triggerMode(daq.rpc, params["triggerMode"])
@@ -64,6 +65,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   # Previously slowDACStepsPerFrame
   stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
   samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
+  daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
   clearSequence(daq.rpc)
 
   if !isempty(daq.params.acqFFValues) 
@@ -134,9 +136,9 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
 end
 
 function getFrameTiming(daq::DAQRedPitayaScpiNew)
-  startSample = start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)
+  startSample = start(daq.acqSeq) * daq.samplesPerStep
   startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
-  endFrame = div((length(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  endFrame = div((length(daq.acqSeq) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
   return startFrame, endFrame
 end
 
@@ -223,38 +225,28 @@ function endSequence(daq::DAQRedPitayaScpiNew)
 end
 
 function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; prepTx = true, prepSeq = true, endSeq = true)
-  timePrepTx = @elapsed begin 
-    if prepTx
-      prepareTx(daq)
-    end
+  if prepTx
+    prepareTx(daq)
   end
-  timeEnable = @elapsed begin 
-    startFrame, endFrame = enableSequence(daq, prepareSeq = prepSeq)
-  end
-  timeBookkeeping = @elapsed begin
-    samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
-    startSample = startFrame * samplesPerFrame
-    samplesToRead = samplesPerFrame * numFrames
-    chunkSize = Int(ceil(0.1 * (125e6/daq.params.decimation)))
-  end
+  startFrame, endFrame = enableSequence(daq, prepareSeq = prepSeq)
+  
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  startSample = startFrame * samplesPerFrame
+  samplesToRead = samplesPerFrame * numFrames
+  chunkSize = Int(ceil(0.1 * (125e6/daq.params.decimation)))
 
   # Start pipeline
-  timePipeline = 0.0
   @info "Pipeline started"
   try 
-    timePipeline = @elapsed readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
+    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
   catch e
     @error e 
   end
   @info "Pipeline finished"
 
-  @info "$endFrame"
-  timeRampDown = @elapsed begin
-    if endSeq
-      endSequence(daq, endFrame)
-    end
+  if endSeq
+    endSequence(daq, endFrame)
   end
-  @show timePrepTx timeEnable timeBookkeeping timePipeline timeRampDown
 end
 
 function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpiNew)
