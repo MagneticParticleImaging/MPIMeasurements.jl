@@ -17,6 +17,7 @@ mutable struct SystemMatrixRobotMeas <: MeasObj
   posToIdx::Vector{Int64}
   measIsBGFrame::Vector{Bool}
   temperatures::Matrix{Float64}
+  prepared::Bool
 end
 
 function SystemMatrixRobotMeas(scanner, store)
@@ -29,7 +30,8 @@ function SystemMatrixRobotMeas(scanner, store)
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, false, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     0.0, Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0)
+    Matrix{Float64}(undef,0,0),
+    false
   )
 end
 
@@ -185,7 +187,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   timeEnableSlowDAC = @elapsed begin
     actualFrames = daq.params.acqNumFrameAverages*numFrames
     measObj.consumer = @tspawnat 3 asyncConsumer(channel, measObj, index, numFrames)
-    asyncProducer(channel, daq, actualFrames, allowControlLoop = allowControlLoop)
+    asyncProducer(channel, daq, actualFrames, allowControlLoop = allowControlLoop, prepareSequence = false)
   end
   close(channel)
 
@@ -286,7 +288,6 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
   enableACPower(su, calib.scanner)
   stopTx(daq)
-  startTx(daq)
 
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -299,8 +300,10 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
     if calib.currPos <= numPos
         pos = uconvert.(Unitful.mm, positions[calib.currPos])
-        timeRobotMoved = @elapsed moveAbsUnsafe(robot, pos) # comment for testing
-
+        timeRobotMoved = @elapsed @sync begin
+          @async prepareSequence(daq) 
+          @async moveAbsUnsafe(robot, pos) 
+        end
         diffTime = calib.waitTime - timeRobotMoved
         if diffTime > 0.0
           sleep(diffTime)

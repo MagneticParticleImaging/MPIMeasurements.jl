@@ -1,4 +1,4 @@
-export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connectToServer,
+export DAQRedPitayaScpiNew, disconnect, setSlowDAC, getSlowADC, connect,
        setTxParamsAll, disconnect
 
 mutable struct DAQRedPitayaScpiNew <: AbstractDAQ
@@ -64,7 +64,8 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   # Previously slowDACStepsPerFrame
   stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
   samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
- 
+  clearSequence(daq.rpc)
+
   if !isempty(daq.params.acqFFValues) 
     numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
     lut = daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt
@@ -73,8 +74,10 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
       enable = daq.params.acqEnableSequence
     end
     #TODO IMPLEMENT RAMP DOWN TIMING
+    #TODO Distribute sequence on multiple redpitayas, not all the same
     daq.acqSeq = ArbitrarySequence(lut, enable, stepsPerRepetition,
     daq.params.acqNumFrames*daq.params.acqNumFrameAverages, computeRamping(daq.rpc, daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+    appendSequence(daq.rpc, daq.acqSeq)
     # No enable should be equivalent to just full ones, alternatively implement constant function for enableLUT too
     #else # We might want to solve this differently
     #  enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
@@ -135,15 +138,30 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
   return getSlowADC(daq.rpc, channel)
 end
 
-function enableSequence(daq::DAQRedPitayaScpiNew) 
+function getFrameTiming(daq::DAQRedPitayaScpiNew)
+  startSample = start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)
+  startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  endFrame = div((start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  return startFrame, endFrame
+end
+
+function prepareSequence(daq::DAQRedPitayaScpiNew)
   startFrame = 0
   endFrame = 0
   if !isnothing(daq.acqSeq)
-    appendSequence(daq.rpc, daq.acqSeq)
-    prepareSequence(daq.rpc)
-    startSample = start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)
-    startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
-    endFrame = div((start(daq.acqSeq) * samplesPerSlowDACStep(daq.rpc)), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+    RedPitayaDAQServer.prepareSequence(daq.rpc)
+    startFrame, endFrame = getFrameTiming(daq)
+  end
+  return startFrame, endFrame
+end
+
+function enableSequence(daq::DAQRedPitayaScpiNew; prepareSeq = true)
+  startFrame = 0
+  endFrame = 0
+  if prepareSeq 
+    startFrame, endFrame = prepareSequence(daq)
+  else 
+    startFrame, endFrame = getFrameTiming(daq)
   end
   startTx(daq)
   return startFrame, endFrame
@@ -196,13 +214,13 @@ function frameAverageBufferSize(daq::DAQRedPitayaScpiNew, frameAverages)
   return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
 end
 
-function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; allowControlLoop = true)
+function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; allowControlLoop = true, prepareSequence = true)
   @info "Prepare Tx"
-  prepareTx(daq)
+  prepareTx(daq, allowControlLoop = allowControlLoop)
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
-  @info "Enable seqeuence"
-  startFrame, endFrame = enableSequence(daq)
-  @info "Enabled sequence"
+  @info "Start seqeuence"
+  startFrame, endFrame = enableSequence(daq, prepareSeq = prepareSequence)
+  @info "Started sequence"
   startSample = startFrame * samplesPerFrame
   @info "Start: Frame $startFrame, Sample $startSample"
   #channelSize = channel.sz_max
