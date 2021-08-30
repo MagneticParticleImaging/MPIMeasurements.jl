@@ -4,6 +4,7 @@ export init, stop, isStarted
 mutable struct SystemMatrixRobotMeas <: MeasObj
   task::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
+  producerFinalizer::Union{Task, Nothing}
   scanner::Union{MPIScanner,Nothing}
   store::DatasetStore
   params::Dict
@@ -24,6 +25,7 @@ function SystemMatrixRobotMeas(scanner, store)
   return SystemMatrixRobotMeas(
     nothing,
     nothing, 
+    nothing,
     scanner,
     store,
     Dict{String,Any}(),
@@ -179,7 +181,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
    channel = Channel{channelType(daq)}(32)
   end
 
-  allowControlLoop = mod1(index, 11) == 1
+  allowControlLoop = mod1(index, 11) == 1 # Only when control loop is necessery we need to prepareTx again
   
   numFrames = measObj.measIsBGPos[index] ? daq.params.acqNumBGFrames : 1
 
@@ -187,14 +189,12 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   timeEnableSlowDAC = @elapsed begin
     actualFrames = daq.params.acqNumFrameAverages*numFrames
     measObj.consumer = @tspawnat 3 asyncConsumer(channel, measObj, index, numFrames)
-    asyncProducer(channel, daq, actualFrames, allowControlLoop = allowControlLoop, prepareSequence = false)
+    asyncProducer(channel, daq, actualFrames, prepTx = allowControlLoop, prepSeq = false, endSeq = false)
   end
   close(channel)
 
-  #allTimes = timeControlPhase+timeEnableSlowDAC+timeReadData+timeStore+timeGetThings+timeOtherThings
-  #@show timeGetThings timeControlPhase timeEnableSlowDAC timeReadData timeStore timeOtherThings allTimes
-
-  return
+  @show timeEnableSlowDAC
+  measObj.producerFinalizer = @async endSequence(daq)
 end
 
 function asyncConsumer(channel::Channel, calib::SystemMatrixRobotMeas, index, numFrames)
@@ -263,9 +263,9 @@ function start(calib::SystemMatrixRobotMeas)
   return
 end
 
-function waitConsumer(calib::SystemMatrixRobotMeas)
-  return @elapsed if !isnothing(calib.consumer)
-    wait(calib.consumer)
+function waitTask(task::Union{Task, Nothing})
+  if !isnothing(task)
+    wait(task)
   end
 end
 
@@ -293,31 +293,42 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
     if calib.stopped
       # Wait for open tasks to finish (consumer will finish either way but this way we are in a known state)
-      waitConsumer(calib)
+      waitTask(calib.consumer)
+      waitTask(calib.producerFinalizer)
       @info  "performCalibrationInner stopped"
       break
     end
 
     if calib.currPos <= numPos
         pos = uconvert.(Unitful.mm, positions[calib.currPos])
-        timeRobotMoved = @elapsed @sync begin
-          @async prepareSequence(daq) 
+        
+        timePreparing = @elapsed @sync begin
+          # Prepare Robot/Sample
           @async moveAbsUnsafe(robot, pos) 
+          # Prepare DAQ
+          @async begin 
+            waitTask(calib.producerFinalizer)
+            prepareSequence(daq)
+            prepareTx(daq, allowControlLoop = false)
+            waitTask(calib.consumer)
+          end
         end
-        diffTime = calib.waitTime - timeRobotMoved
+
+        diffTime = calib.waitTime - timePreparing
         if diffTime > 0.0
           sleep(diffTime)
         end
-        #yield()
 
         setEnabled(robot, false)
-        #sleep(0.1)
 
-        timeWaitConsumer = waitConsumer(calib)
+        timeWait = @elapsed begin
+          waitTask(calib.consumer)
+          waitTask(calib.producerFinalizer)
+        end 
 
         timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
-        @info "############### robot move time: $(timeRobotMoved), wait time: $timeWaitConsumer, meas time: $(timePostMove)"
+        @info "############### Preparing Time: $(timePreparing), wait time: $timeWait, meas time: $(timePostMove)"
 
         setEnabled(robot, true)
         calib.currPos +=1
@@ -325,7 +336,8 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
     end
 
     if calib.currPos > numPos
-        waitConsumer(calib)
+        waitTask(calib.consumer)
+        waitTask(calib.producerFinalizer)
         @info "Store SF"
         stopTx(daq)
         disableACPower(su, calib.scanner)
