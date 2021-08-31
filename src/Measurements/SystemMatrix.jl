@@ -180,8 +180,6 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
    tempSensor = getTemperatureSensor(measObj.scanner)
    channel = Channel{channelType(daq)}(32)
   end
-
-  allowControlLoop = mod1(index, 11) == 1 # Only when control loop is necessery we need to prepareTx again
   
   numFrames = measObj.measIsBGPos[index] ? daq.params.acqNumBGFrames : 1
 
@@ -189,7 +187,7 @@ function postMoveAction(measObj::SystemMatrixRobotMeas,
   timeEnableSlowDAC = @elapsed begin
     actualFrames = daq.params.acqNumFrameAverages*numFrames
     measObj.consumer = @tspawnat 3 asyncConsumer(channel, measObj, index, numFrames)
-    asyncProducer(channel, daq, actualFrames, prepTx = allowControlLoop, prepSeq = false, endSeq = false)
+    asyncProducer(channel, daq, actualFrames, prepTx = false, prepSeq = false, endSeq = false)
   end
   close(channel)
 
@@ -302,14 +300,17 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
     if calib.currPos <= numPos
         pos = uconvert.(Unitful.mm, positions[calib.currPos])
         
+        timeMove = 0
+        timePrepDAQ = 0
         timePreparing = @elapsed @sync begin
           # Prepare Robot/Sample
-          @async moveAbsUnsafe(robot, pos) 
+          @async timeMove = @elapsed moveAbsUnsafe(robot, pos) 
           # Prepare DAQ
-          @async begin 
+          @async timePrepDAQ = @elapsed begin
+            allowControlLoop = mod1(calib.currPos, 11) == 1  
             waitTask(calib.producerFinalizer)
             prepareSequence(daq)
-            prepareTx(daq, allowControlLoop = false)
+            prepareTx(daq, allowControlLoop = allowControlLoop)
             waitTask(calib.consumer)
           end
         end
@@ -321,14 +322,9 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
         setEnabled(robot, false)
 
-        timeWait = @elapsed begin
-          waitTask(calib.consumer)
-          waitTask(calib.producerFinalizer)
-        end 
-
         timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
-        @info "############### Preparing Time: $(timePreparing), wait time: $timeWait, meas time: $(timePostMove)"
+        @info "############### Preparing Time: $(timePreparing), Prep DAQ time $timePrepDAQ, Move robot $timeMove, meas time: $(timePostMove)"
 
         setEnabled(robot, true)
         calib.currPos +=1
