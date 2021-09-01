@@ -78,7 +78,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     #TODO IMPLEMENT RAMP DOWN TIMING
     #TODO Distribute sequence on multiple redpitayas, not all the same
     daq.acqSeq = ArbitrarySequence(lut, enable, stepsPerRepetition,
-    daq.params.acqNumFrames*daq.params.acqNumFrameAverages, computeRamping(daq.rpc, daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+    daq.params.acqNumFrames*daq.params.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
     appendSequence(daq.rpc, daq.acqSeq)
     # No enable should be equivalent to just full ones, alternatively implement constant function for enableLUT too
     #else # We might want to solve this differently
@@ -136,6 +136,12 @@ function getSlowADC(daq::DAQRedPitayaScpiNew, channel)
 end
 
 function getFrameTiming(daq::DAQRedPitayaScpiNew)
+  #seqStart = start(daq.acqSeq)
+  #seqLength = length(daq.acqSeq)
+  #sampPerPer = samplesPerPeriod(daq.rpc)
+  #perPerFrame = periodsPerFrame(daq.rpc)
+  #sampPerStep = daq.samplesPerStep
+  #@show seqStart seqLength sampPerPer perPerFrame sampPerStep
   startSample = start(daq.acqSeq) * daq.samplesPerStep
   startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
   endFrame = div((length(daq.acqSeq) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
@@ -146,7 +152,11 @@ function prepareSequence(daq::DAQRedPitayaScpiNew)
   startFrame = 0
   endFrame = 0
   if !isnothing(daq.acqSeq)
-    RedPitayaDAQServer.prepareSequence(daq.rpc)
+    @info "Preparing sequence"
+    success = RedPitayaDAQServer.prepareSequence(daq.rpc)
+    if !success
+      @warn "Failed to prepare sequence"
+    end
     startFrame, endFrame = getFrameTiming(daq)
   end
   return startFrame, endFrame
@@ -214,7 +224,7 @@ end
 function endSequence(daq::DAQRedPitayaScpiNew, endFrame)
   currFr =  currentFrame(daq)
   # Wait for sequence to finish
-  while currFr < endFrame  
+  while currFr <= endFrame  
     currFr = currentFrame(daq)
   end
   stopTx(daq)
