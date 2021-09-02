@@ -62,7 +62,15 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   samplesPerPeriod(daq.rpc, daq.params.rxNumSamplingPoints * daq.params.acqNumAverages)
 
   periodsPerFrame(daq.rpc, daq.params.acqNumPeriodsPerFrame)
-  # Previously slowDACStepsPerFrame
+
+  setSequenceParams(daq)
+
+  numSlowADCChan(daq.rpc, 4)
+
+  return nothing
+end
+
+function setSequenceParams(daq)
   stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
   samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
   daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
@@ -88,11 +96,6 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     numSlowDACChan(master(daq.rpc), 0)
     daq.acqSeq = nothing
   end
-
-
-  numSlowADCChan(daq.rpc, 4)
-
-  return nothing
 end
 
 function startTx(daq::DAQRedPitayaScpiNew)

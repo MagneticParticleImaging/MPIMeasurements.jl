@@ -321,7 +321,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
               if (calib.currPos == 1) || 
                (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
               daq.params.acqNumFrames = calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1
-              setACQParams(daq)
+              setSequenceParams(daq)
               end end
             timeSeq = @elapsed prepareSequence(daq)
             timeTx = @elapsed prepareTx(daq, allowControlLoop = allowControlLoop)
