@@ -284,6 +284,7 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
   timeRobotMoved = 0.0
 
+  #connect(daq)
   enableACPower(su, calib.scanner)
   stopTx(daq)
 
@@ -302,22 +303,31 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
         
         timeMove = 0
         timePrepDAQ = 0
+        timeFinalizer = 0
+        timeFrameChange = 0
+        timeSeq = 0
+        timeTx = 0
+        timeConsumer = 0
         timePreparing = @elapsed @sync begin
+          
           # Prepare Robot/Sample
           @async timeMove = @elapsed moveAbsUnsafe(robot, pos) 
+          
           # Prepare DAQ
           @async timePrepDAQ = @elapsed begin
             allowControlLoop = mod1(calib.currPos, 11) == 1  
-            waitTask(calib.producerFinalizer)
-            if (calib.currPos == 1) || 
+            timeFinalizer = @elapsed waitTask(calib.producerFinalizer)
+            timeFrameChange = @elapsed begin 
+              if (calib.currPos == 1) || 
                (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
               daq.params.acqNumFrames = calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1
               setACQParams(daq)
-            end
-            prepareSequence(daq)
-            prepareTx(daq, allowControlLoop = allowControlLoop)
-            waitTask(calib.consumer)
+              end end
+            timeSeq = @elapsed prepareSequence(daq)
+            timeTx = @elapsed prepareTx(daq, allowControlLoop = allowControlLoop)
           end
+
+          @async timeConsumer = @elapsed waitTask(calib.consumer)
         end
 
         diffTime = calib.waitTime - timePreparing
@@ -329,7 +339,8 @@ function performCalibrationInner(calib::SystemMatrixRobotMeas)
 
         timePostMove = @elapsed postMoveAction(calib, pos, calib.currPos)
 
-        @info "############### Preparing Time: $(timePreparing), Prep DAQ time $timePrepDAQ, Move robot $timeMove, meas time: $(timePostMove)"
+        @info "############### Preparing Time: $(timePreparing), Prep DAQ time $timePrepDAQ, Finalizer $timeFinalizer, Frame $timeFrameChange, Seq $timeSeq, Tx $timeTx, Consumer $timeConsumer" 
+        @info "Move robot $timeMove, meas time: $(timePostMove)"
 
         setEnabled(robot, true)
         calib.currPos +=1

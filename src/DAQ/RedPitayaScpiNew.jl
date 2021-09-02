@@ -23,7 +23,7 @@ function DAQRedPitayaScpiNew(params)
 end
 
 function updateParams!(daq::DAQRedPitayaScpiNew, params_::Dict)
-  connect(daq.rpc)
+  RedPitayaDAQServer.connect(daq.rpc)
   
   daq.params = DAQParams(params_)
   
@@ -79,7 +79,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
     #TODO Distribute sequence on multiple redpitayas, not all the same
     daq.acqSeq = ArbitrarySequence(lut, enable, stepsPerRepetition,
     daq.params.acqNumFrames*daq.params.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
-    appendSequence(daq.rpc, daq.acqSeq)
+    appendSequence(master(daq.rpc), daq.acqSeq)
     # No enable should be equivalent to just full ones, alternatively implement constant function for enableLUT too
     #else # We might want to solve this differently
     #  enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
@@ -119,6 +119,11 @@ function stopTx(daq::DAQRedPitayaScpiNew)
   stopADC(daq.rpc)
   #RedPitayaDAQServer.disconnect(daq.rpc)
   @info "Stopped tx"
+end
+
+
+function connect(daq::DAQRedPitayaScpiNew) 
+  RedPitayaDAQServer.connect(daq.rpc)
 end
 
 function disconnect(daq::DAQRedPitayaScpiNew)
@@ -222,11 +227,18 @@ function frameAverageBufferSize(daq::DAQRedPitayaScpiNew, frameAverages)
 end
 
 function endSequence(daq::DAQRedPitayaScpiNew, endFrame)
-  currFr =  currentFrame(daq)
+  sampPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  endSample = (endFrame + 1) * sampPerFrame
+  wp = currentWP(daq.rpc)
   # Wait for sequence to finish
-  while currFr <= endFrame  
-    currFr = currentFrame(daq)
-  end
+  numQueries = 0
+    while wp < endSample
+      sampleDiff = endSample - wp
+      waitTime = (sampleDiff / (125e6/daq.params.decimation))
+      sleep(waitTime) # Queries are expensive, try to sleep to minimize amount of queries
+      numQueries += 1
+      wp = currentWP(daq.rpc)
+  end 
   stopTx(daq)
 end
 function endSequence(daq::DAQRedPitayaScpiNew)
