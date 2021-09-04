@@ -2,7 +2,8 @@ import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
-       name, configDir, generalParams, getDevice, getDevices, getGUIMode
+       name, configDir, generalParams, getDevice, getDevices, getGUIMode,
+       getSequenceList
 
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
@@ -174,3 +175,20 @@ scannerManufacturer(scanner::MPIScanner) = scanner.generalParams.manufacturer
 scannerName(scanner::MPIScanner) = scanner.generalParams.name
 scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
+
+function getSequenceList(scanner::MPIScanner)
+  path = joinpath(configDir(scanner), "Sequences")
+  if isdir(path)
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(path))] 
+  else
+    return String[]
+  end
+end
+
+function MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString)
+  path = joinpath(configDir(scanner), "Sequences", name*".toml")
+  if !isfile(path)
+    error("Sequence $(path) not available!")
+  end
+  return sequenceFromTOML(path)
+end

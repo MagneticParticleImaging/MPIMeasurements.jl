@@ -2,7 +2,7 @@
 boreSize = "70mm" # Note: This is later parsed with Unitful
 facility = "My awesome institute"
 manufacturer = "Me, Myself and I"
-name = "MostAwesomeScanner"
+name = "DummyScanner"
 topology = "FFL" # Of course ;)
 gradient = "42T/m" # Note: This is later parsed with Unitful
 

@@ -1,0 +1,71 @@
+[General]
+name = "ElectricalSequence"
+description = "Precise description."
+targetScanner = "HeadScanner"
+baseFrequency = "125.0MHz"
+triggered = false
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.df.chanx]
+offset = "0.0mT"
+
+[Fields.df.chanx.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chanx.c2]
+divider = 4864
+amplitude = ["0.01T"]
+
+[Fields.df.chany]
+offset = "0.0mT"
+
+[Fields.df.chany.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chany.c2]
+divider = 4864
+amplitude = ["0.01T"]
+
+[Fields.ff]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.ff.ffx]
+stepsPerCycle = 10
+amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+
+[Fields.ff.ffy]
+stepsPerCycle = 10
+amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+
+[Acquisition]
+channels = ["rx_channel_id"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+
+[Acquisition.Foreground]
+numFrames = 20
+numAverages = 1
+numFrameAverages = 1
+
+[Acquisition.Background]
+numFrames = 2
+numAverages = 5
+numFrameAverages = 3
