@@ -48,12 +48,20 @@ control = true
 decouple = true
 
 [Fields.ff.ffx]
-stepsPerCycle = 10
-amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+divider = 18240000
+values = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
 
 [Fields.ff.ffy]
-stepsPerCycle = 10
-amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+divider = 18240000
+values = ["-5.0V", "-6.0V", "-7.0V", "-8.0V", "-9.0V"]
+
+[Fields.ff.ffz]
+dividerSteps = 3648000
+divider = 18240000
+amplitude = "5.0V"
+offset = "5.0V"
+phase = "0.0rad"
+waveform = "sine"
 
 [Acquisition]
 channels = ["rx_channel_id"]

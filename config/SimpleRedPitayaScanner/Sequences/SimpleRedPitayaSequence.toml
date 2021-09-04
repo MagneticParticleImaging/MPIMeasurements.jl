@@ -31,12 +31,28 @@ control = true
 decouple = true
 
 [Fields.ff.ffx]
-stepsPerCycle = 40
-amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "0.0rad"
+waveform = "sine"
 
 [Fields.ff.ffy]
-stepsPerCycle = 40
-amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "0.0rad"
+waveform = "square"
+
+[Fields.ff.ffz]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "3.141rad"
+waveform = "triangle"
 
 [Acquisition]
 channels = ["rx_main"]
