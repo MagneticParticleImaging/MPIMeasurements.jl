@@ -6,6 +6,7 @@ name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
 datasetStore = "/opt/data/HeadScanner"
+defaultSequence = "ElectricalSequence"
 
 [Devices]
 initializationOrder = [

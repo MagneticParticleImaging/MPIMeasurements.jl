@@ -100,6 +100,7 @@ Base.@kwdef struct MPIScannerGeneral
   topology::String
   gradient::typeof(1u"T/m")
   datasetStore::String
+  defaultSequence::String=""
 end
 
 """
@@ -113,6 +114,7 @@ mutable struct MPIScanner
   generalParams::MPIScannerGeneral
   devices::Dict{AbstractString, Device}
   guiMode::Bool
+  currentSequence::Union{Sequence,Nothing}
 
   function MPIScanner(name::AbstractString; guimode=false)
     # Search for scanner configurations of the given name in all known configuration directories
@@ -138,7 +140,10 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
-    return new(name, configDir, generalParams, devices, guimode)
+    currentSequence = generalParams.defaultSequence != "" ? 
+      Sequence(configDir, generalParams.defaultSequence) : nothing
+
+    return new(name, configDir, generalParams, devices, guimode, currentSequence)
   end
 end
 
@@ -186,10 +191,12 @@ function getSequenceList(scanner::MPIScanner)
   end
 end
 
-function MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString)
-  path = joinpath(configDir(scanner), "Sequences", name*".toml")
+function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
+  path = joinpath(configdir, "Sequences", name*".toml")
   if !isfile(path)
     error("Sequence $(path) not available!")
   end
   return sequenceFromTOML(path)
 end
+
+MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner),name)

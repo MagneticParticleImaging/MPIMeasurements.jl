@@ -19,7 +19,7 @@ offset = "0.0mT"
 
 [Fields.df.tx_main.main_component]
 divider = 4800
-amplitude = ["0.02T"]
+amplitude = ["0.027T"]
 phase = ["0.0rad"]
 
 
@@ -31,11 +31,11 @@ control = true
 decouple = true
 
 [Fields.ff.ffx]
-stepsPerCycle = 10
+stepsPerCycle = 40
 amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
 
 [Fields.ff.ffy]
-stepsPerCycle = 10
+stepsPerCycle = 40
 amplitude = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
 
 [Acquisition]
