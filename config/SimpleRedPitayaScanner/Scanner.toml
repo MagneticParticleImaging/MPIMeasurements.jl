@@ -5,12 +5,21 @@ manufacturer = "Me, Myself and I"
 name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
+datasetStore = "/opt/data/HeadScanner"
 
 [Devices]
 initializationOrder = [
   "rp_cluster",
-  "sequence_controller"
+  "sequence_controller",
+  "dummy_robot",
+  "dummy_surveillance"
 ]
+
+[Devices.dummy_robot]
+deviceType = "DummyRobot"
+
+[Devices.dummy_surveillance]
+deviceType = "DummySurveillanceUnit"
 
 [Devices.rp_cluster]
 deviceType = "RedPitayaDAQ"

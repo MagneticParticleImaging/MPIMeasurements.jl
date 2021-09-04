@@ -99,6 +99,7 @@ Base.@kwdef struct MPIScannerGeneral
   name::String
   topology::String
   gradient::typeof(1u"T/m")
+  datasetStore::String
 end
 
 """

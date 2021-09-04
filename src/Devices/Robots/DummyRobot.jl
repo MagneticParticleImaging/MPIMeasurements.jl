@@ -2,15 +2,24 @@ export DummyRobot, DummyRobotParams
 
 Base.@kwdef struct DummyRobotParams <: DeviceParams
 end
+DummyRobotParams(dict::Dict) = params_from_dict(DummyRobotParams, dict)
 
-mutable struct DummyRobot <: Robot
+Base.@kwdef mutable struct DummyRobot <: Robot
     deviceID::String
     params::DummyRobotParams
-    state::RobotState
-    referenced::Bool
-    function DummyRobot(deviceID::String, params::DummyRobotParams)
-        return new(deviceID, params, INIT, false)
-    end
+    "Vector of dependencies for this device."
+    dependencies::Dict{String, Union{Device, Missing}}
+    state::RobotState=INIT
+    referenced::Bool=true
+    #function DummyRobot(deviceID::String, params::DummyRobotParams)
+    #    return new(deviceID, params, INIT, false)
+    #end
+end
+
+checkDependencies(daq::DummyRobot) = true
+
+function init(gauss::DummyRobot)
+    @info "Initializing dummy robot with ID `$(gauss.deviceID)`."
 end
 
 _isReferenced(rob::DummyRobot) = rob.referenced
