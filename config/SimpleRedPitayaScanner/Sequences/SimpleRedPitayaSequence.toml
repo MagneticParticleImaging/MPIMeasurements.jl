@@ -1,0 +1,70 @@
+[General]
+name = "SimpleRedPitayaSequence"
+description = "Precise description."
+targetScanner = "TestRedPitayaScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.my_df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.df.tx_main]
+waveform = "sine"
+offset = "0.0mT"
+
+[Fields.df.tx_main.main_component]
+divider = 4800
+amplitude = ["0.027T"]
+phase = ["0.0rad"]
+
+
+[Fields.ff]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.ff.ffx]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "0.0rad"
+waveform = "sine"
+
+[Fields.ff.ffy]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "0.0rad"
+waveform = "square"
+
+[Fields.ff.ffz]
+dividerSteps = 4800
+divider = 18240000
+amplitude = "0.02T"
+offset = "0.02T"
+phase = "3.141rad"
+waveform = "triangle"
+
+[Acquisition]
+channels = ["rx_main"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+
+[Acquisition.Foreground]
+numFrames = 20
+numAverages = 1
+numFrameAverages = 1
+
+[Acquisition.Background]
+numFrames = 2
+numAverages = 5
+numFrameAverages = 3

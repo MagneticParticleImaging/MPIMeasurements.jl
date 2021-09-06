@@ -122,7 +122,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     # In the Red Pitaya, the signal type can only be set per channel
     waveform_ = unique([waveform(component) for component in components(channel)])
     if length(waveform_) == 1
-      if !isWaveformAllowed(daq, id(channel), waveform_)
+      if !isWaveformAllowed(daq, id(channel), waveform_[1])
         throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
                                        "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
       end

@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions
+export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobots, getRobot
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -28,6 +28,19 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
+
+getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
+function getRobot(scanner::MPIScanner)
+  robots = getRobots(scanner)
+  if length(robots) == 0
+    error("The scanner has no robot.")
+  elseif length(robots) > 1
+    error("The scanner has more than one robot. Therefore, a single surveillance unit cannot be retrieved unambiguously.")
+  else
+    return robots[1]
+  end
+end
+
 
 include("RobotExceptions.jl")
 include("DummyRobot.jl")

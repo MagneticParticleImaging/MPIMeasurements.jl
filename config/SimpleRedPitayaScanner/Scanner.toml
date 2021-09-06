@@ -1,0 +1,58 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "SimpleRedPitayaScanner"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "/opt/data/HeadScanner"
+defaultSequence = "ElectricalSequence"
+
+[Devices]
+initializationOrder = [
+  "rp_cluster",
+  "sequence_controller",
+  "dummy_robot",
+  "dummy_surveillance"
+]
+
+[Devices.dummy_robot]
+deviceType = "DummyRobot"
+
+[Devices.dummy_surveillance]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+#ips = ["192.168.2.16"] #, "192.168.2.17"]
+ips = ["192.168.178.52"] #, "192.168.178.53"]
+
+[Devices.rp_cluster.tx_main]
+type = "tx"
+channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
+
+[Devices.rp_cluster.rx_main]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+
+[Devices.rp_cluster.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.sequence_controller]
+deviceType = "SequenceController"
+dependencies = [
+  "rp_cluster"
+]
+saveInterval = "0.5s"
+maxControlSteps = 5
+
