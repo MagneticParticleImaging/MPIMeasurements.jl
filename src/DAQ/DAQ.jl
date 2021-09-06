@@ -7,6 +7,8 @@ export startTx, stopTx, setTxParams, controlPhaseDone, currentFrame, readData,
       readDataPeriod, currentPeriod
 
 @compat abstract type AbstractDAQ end
+abstract type AsyncBuffer end
+
 
 include("Control.jl")
 #include("Plotting.jl")
@@ -19,15 +21,21 @@ include("Parameters.jl")
 @mustimplement readData(daq::AbstractDAQ, startFrame, numFrames)
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
 @mustimplement refToField(daq::AbstractDAQ, d::Int64)
-@mustimplement prepareTx(daq::AbstractDAQ)
-@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; allowControlLoop)
-@mustimplement channelType(daq::AbstractDAQ)
+
+@mustimplement setSequenceParams(daq::AbstractDAQ) # Needs to be able to update seqeuence parameters
+@mustimplement prepareSequence(daq::AbstractDAQ) # Sequence can be prepared before started
+@mustimplement endSequence(daq::AbstractDAQ) # Sequence can be ended outside of producer
+@mustimplement prepareTx(daq::AbstractDAQ; allowControlLoop = true) # Tx can be set outside of producer
+# Producer prepares a proper sequence if allowed too, then starts it and writes the resulting chunks to the channel
+@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true) 
+@mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
+@mustimplement AsyncBuffer(daq::AbstractDAQ) # Buffer structure that contains channel elements
+@mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
+@mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
 
 
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
-
-abstract type AsyncBuffer end
 
 include("RedPitayaScpiNew.jl")
 include("DummyDAQ.jl")

@@ -87,6 +87,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{F
 end
 
 ### high level: This stores as MDF
+#=
 function measurement(daq::AbstractDAQ, params_::Dict, filename::String;
                      bgdata=nothing, auxData=nothing, kargs...)
 
@@ -104,6 +105,7 @@ function measurement(daq::AbstractDAQ, params::Dict, store::DatasetStore;
    saveasMDF(store, daq, data, params; bgdata=bgdata, auxData=auxData)
    return nothing
 end
+=#
 
 ####  Async version  ####
 abstract type AsyncMeasTyp end
@@ -170,16 +172,28 @@ function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4}
   return result
 end
 
-MeasState() = MeasState(nothing, nothing, 0, 0, 1, false, nothing, DummyAsyncBuffer(), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
+MeasState() = MeasState(nothing, nothing, 0, 0, 1, false, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
 
 function cancel(calibState::MeasState)
-  close(calibState.channe)
+  close(calibState.channel)
   measState.cancelled = true
   measState.consumed = true
 end
 
 function asyncMeasurement(scanner::MPIScanner, params_::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
   daq = getDAQ(scanner)
+  measState = prepareAsyncMeasurement(daq, params_)
+  startAsyncMeasurement(measState, scanner, daq.params.acqNumFrames, daq.params.acqNumFrameAverages, params, bgdata, store = store)
+  return measState
+end
+
+function asyncMeasurement(daq::AbstractDAQ, params_::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
+  measState, params = prepareAsyncMeasurement(daq, params_)
+  startAsyncMeasurement(measState, daq, daq.params.acqNumFrames, daq.params.acqNumFrameAverages, params, bgdata, store = store)
+  return measState
+end
+
+function prepareAsyncMeasurement(daq::AbstractDAQ, params_::Dict)
   params = copy(params_)
   updateParams!(daq, params_)
   params["dfCycle"] = daq.params.dfCycle # pretty bad hack
@@ -197,14 +211,16 @@ function asyncMeasurement(scanner::MPIScanner, params_::Dict, bgdata=nothing; st
   end
   channel = Channel{channelType(daq)}(32)
 
-  # Start Producer, consumer tasks
+  # Prepare measState
   measState = MeasState(nothing, nothing, numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0))
   measState.channel = channel
-  measState.producer = @tspawnat 2 asyncProducer(measState.channel, scanner, numFrames * daq.params.acqNumFrameAverages)
-  bind(measState.channel, measState.producer)
-  measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, scanner, params, bgdata, store = store)
+  return measState, params
+end
 
-  return measState
+function startAsyncMeasurement(measState::MeasState, obj::Union{MPIScanner, AbstractDAQ}, numFrames, numFrameAverages, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
+  measState.producer = @tspawnat 2 asyncProducer(measState.channel, obj, numFrames * numFrameAverages)
+  bind(measState.channel, measState.producer)
+  measState.consumer = @tspawnat 3 asyncConsumer(measState.channel, measState, obj, params, bgdata, store = store)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, numFrames)
@@ -224,27 +240,42 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, numFrames)
 end
 
 function asyncConsumer(channel::Channel, measState::MeasState, scanner::MPIScanner, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
-  # Consumer must not invoke SCPI commands as the server is busy with pipeline
-  @info "Consumer start"
-  while isopen(channel) || isready(channel)
-    while isready(channel)
-      chunk = take!(channel)
-      updateAsyncBuffer!(measState.asyncBuffer, chunk)
-      updateFrameBuffer!(measState, getDAQ(scanner))
-    end
-    sleep(0.001)
-  end
-  @info "Consumer end"
+  daq = getDAQ(scanner)
+  innerAsyncConsumer(channel, measState, daq)
 
+  # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
   if length(measState.temperatures) > 0
     params["calibTemperatures"] = measState.temperatures
   end
 
   if !isnothing(store)
     @info "Storing result"
-    measState.filename = saveasMDF(store, getDAQ(scanner), measState.buffer, params, bgdata=bgdata)
+    measState.filename = saveasMDF(store, daq, measState.buffer, params, bgdata=bgdata)
   end
 end
+
+function asyncConsumer(channel::Channel, measState::MeasState, daq::AbstractDAQ, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
+  innerAsyncConsumer(channel, measState, daq)
+  if !isnothing(store)
+    @info "Storing result"
+    measState.filename = saveasMDF(store, daq, measState.buffer, params, bgdata=bgdata)
+  end
+end
+
+function innerAsyncConsumer(channel::Channel, measState::MeasState, daq::AbstractDAQ)
+  # Consumer must not invoke SCPI commands as the server is busy with pipeline
+  @info "Consumer start"
+  while isopen(channel) || isready(channel)
+    while isready(channel)
+      chunk = take!(channel)
+      updateAsyncBuffer!(measState.asyncBuffer, chunk)
+      updateFrameBuffer!(measState, daq)
+    end
+    sleep(0.001)
+  end
+  @info "Consumer end"
+end
+
 
 function updateFrameBuffer!(measState::MeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
@@ -298,8 +329,8 @@ end
 
 
 #### Sync version ####
-function measurement(scanner::MPIScanner, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing} = nothing)
-  measState = asyncMeasurement(scanner, params, bgdata, store = store)
+function measurement(obj::Union{MPIScanner, AbstractDAQ}, params::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing} = nothing)
+  measState = asyncMeasurement(obj, params, bgdata, store = store)
   result = nothing
   try
     wait(measState.consumer)
