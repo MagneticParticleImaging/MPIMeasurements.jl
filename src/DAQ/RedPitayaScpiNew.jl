@@ -70,7 +70,7 @@ function setACQParams(daq::DAQRedPitayaScpiNew)
   return nothing
 end
 
-function setSequenceParams(daq)
+function setSequenceParams(daq::DAQRedPitayaScpiNew)
   stepsPerRepetition = div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch)
   samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
   daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)

@@ -182,7 +182,7 @@ end
 
 function asyncMeasurement(scanner::MPIScanner, params_::Dict, bgdata=nothing; store::Union{String, DatasetStore, Nothing}=nothing)
   daq = getDAQ(scanner)
-  measState = prepareAsyncMeasurement(daq, params_)
+  measState, params = prepareAsyncMeasurement(daq, params_)
   startAsyncMeasurement(measState, scanner, daq.params.acqNumFrames, daq.params.acqNumFrameAverages, params, bgdata, store = store)
   return measState
 end
