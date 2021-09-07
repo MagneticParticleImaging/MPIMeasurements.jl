@@ -1,5 +1,5 @@
 r_params = SimulatedRobotParams()
-rob = SimulatedRobot("simRob", r_params)
+rob = SimulatedRobot(deviceID="simRob", params=r_params, dependencies=Dict{String, Union{Device, Missing}}())
 @test state(rob)==:INIT
 @test getPosition(rob)==[0,0,0]u"mm"
 @test dof(rob)==3

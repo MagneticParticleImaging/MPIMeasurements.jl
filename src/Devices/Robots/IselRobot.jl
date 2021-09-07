@@ -40,7 +40,7 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
   stepsPermm::Float64 = 100
 
-  serial_port::String = "COM7"
+  serial_port::String = "/dev/ttyUSB0"
   pause_ms::Int = 200
   timeout_ms::Int = 10000
   delim_read::String = "\r"
@@ -87,15 +87,21 @@ function _setup(rob::IselRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
 
-  # TODO: find a way to identify the controller version (either by testing specific commands or reading out the version from the memory), then the correct functions can be called
-  # maybe @0I is an option... 
+  # TODO: verify the way to identify the controller version 
+  if queryIsel(rob, "@0Id 1600,1600,1600,1600") == "5"
+    rob.controllerVersion = 1
+  else
+    rob.controllerVersion = 2
+  end
 
   if rob.controllerVersion > 2
     invertAxes(rob, rob.params.invertAxes) # only with newer version of controller
   end
 
   initAxes(rob, 3)
-  setRefVelocity(rob, rob.params.defaultRefVel)
+  if rob.controllerVersion > 2
+    setRefVelocity(rob, rob.params.defaultRefVel)
+  end
   _setMotorCurrent(rob, false)
 end
 
@@ -149,36 +155,44 @@ end
 
 
 function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  # for z-axis two steps and velocities are needed compare documentation
+  # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
   steps = mm2steps.(pos, rob.params.stepsPermm)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
   vel = mm2steps.(speed, rob.params.stepsPermm)
-
-  cmd = string("@0M", " ", steps[1], ",", vel[1], ",", steps[2], ",", vel[2], ",", steps[3], ",", vel[3], ",", 0, ",", 30)
-  ret = queryIsel(rob, cmd)
-  checkIselError(ret)
+  if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
+    cmd = string("@0M", " ", steps[1], ",", vel[1], ",", steps[2], ",", vel[2], ",", steps[3], ",", vel[3], ",", 0, ",", 30)
+    ret = queryIsel(rob, cmd)
+    checkIselError(ret)
+  else
+    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+  end
 end
 
 function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  # for z-axis two steps and velocities are needed compare documentation
+  # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
   steps = mm2steps.(dist, rob.params.stepsPermm)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
   vel = mm2steps.(speed, rob.params.stepsPermm)
-  cmd = string("@0A"," ",steps[1],",",vel[1], ",",steps[2],",",vel[2], ",",steps[3],",",vel[3], ",",0,",",30)
-  ret = queryIsel(rob, cmd)
-  checkIselError(ret)
+
+  if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
+    cmd = string("@0A"," ",steps[1],",",vel[1], ",",steps[2],",",vel[2], ",",steps[3],",",vel[3], ",",0,",",30)
+    ret = queryIsel(rob, cmd)
+    checkIselError(ret)
+  else
+    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+  end
 end
 
 macro minimumISELversion(version::Int)
   return esc(quote 
-    if robot.controllerVersion < $version
-        @error "The desired function $(var"#self#") is not available for ISEL version $(robot.controllerVersion), the minimum version is $($version)"
+    if rob.controllerVersion < $version
+        @error "The desired function $(var"#self#") is not available for ISEL version $(rob.controllerVersion), the minimum version is $($version)"
         return nothing
     end
   end)
@@ -217,7 +231,7 @@ function setRefVelocity(rob::IselRobot, vel::Vector{<:Unitful.Velocity})
   minVel = rob.params.minMaxVel[1]
   maxVel = rob.params.minMaxVel[2]
 
-  if minVel <= vel[1] && vel[1] <= maxVel && minVel <= vel[2] && vel[2] <= maxVel && minVel <= vel[3] && vel[3] <= maxVel
+  if all(minVel .<= vel .<= maxVel)
     if rob.controllerVersion < 2
       cmd = string("@0d", vel[1], ",", vel[2], ",", vel[3], ",", vel[3])
     else

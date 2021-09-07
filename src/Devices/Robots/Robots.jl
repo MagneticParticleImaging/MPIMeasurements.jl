@@ -148,7 +148,7 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
     end
 end
 
-movePark(rob::Robot) = moveAbs(rob, [0, 0, 0]u"m")
+movePark(rob::Robot) = moveAbs(rob, zeros(dof(rob)) * u"m")
 
 function enable(rob::Robot)
     if state(rob) == READY

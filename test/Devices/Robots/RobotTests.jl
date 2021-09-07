@@ -3,7 +3,7 @@ using InteractiveUtils: subtypes
 @testset "test $rob_type interface" for rob_type in subtypes(Robot)
     par_type = eval(Symbol(string(rob_type)*"Params"))
     params = par_type()
-    rob = rob_type("test",params)
+    rob = rob_type(deviceID="test", params=params, dependencies=Dict{String, Union{Device, Missing}}())
     
     degrees = dof(rob)
     @test degrees isa Int

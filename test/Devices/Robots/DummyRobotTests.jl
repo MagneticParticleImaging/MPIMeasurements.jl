@@ -1,5 +1,5 @@
 params = DummyRobotParams()
-rob = DummyRobot("dummy",params)
+rob = DummyRobot(deviceID="dummy", params=params, dependencies=Dict{String, Union{Device, Missing}}())
 @test state(rob)==:INIT
 @test getPosition(rob)==[1.0,0,0]u"mm"
 @test dof(rob)==3

@@ -47,14 +47,14 @@ Base.showerror(io::IO, ex::RobotAxisRangeError) = (print(io, "RobotAxisRangeErro
 
 Base.showerror(io::IO, ex::RobotDOFError) = print(io, "RobotDOFError: coordinates included $(ex.dof) axes, but robot '$(deviceID(ex.robot))' has $(dof(ex.robot)) degrees-of-freedom")
 
-Base.showerror(io::IO, ex::RobotReferenceError) = print(io, "RobotReferenceError: robot '$(deviceID(ex.robot)) has to be referenced to perform this action")
+Base.showerror(io::IO, ex::RobotReferenceError) = print(io, "RobotReferenceError: robot '$(deviceID(ex.robot))' has to be referenced to perform this action")
 
 Base.showerror(io::IO, ex::RobotDeviceError) = (println(io, "RobotDeviceError: during the communication with robot '$(deviceID(ex.robot))' the following error occured:"); showerror(io, ex.exc))
 
 function Base.showerror(io::IO, ex::RobotTeachError)
     if haskey(namedPositions(ex.robot), ex.pos_name)
-        print(io, "RobotTeachError: the desired position name $(ex.pos_name) is already defined for robot '$(deviceID(ex.robot)), to override the current value pass override=true")   
+        print(io, "RobotTeachError: the desired position name $(ex.pos_name) is already defined for robot '$(deviceID(ex.robot))', to override the current value pass override=true")   
     else
-        print(io, "RobotTeachError: the desired position $(ex.pos_name) is not defined for robot '$(deviceID(ex.robot)), use one of $(keys(namedPositions(ex.robot)))")
+        print(io, "RobotTeachError: the desired position $(ex.pos_name) is not defined for robot '$(deviceID(ex.robot))', use one of $(keys(namedPositions(ex.robot)))")
     end
 end
