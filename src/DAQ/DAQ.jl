@@ -25,14 +25,12 @@ include("Parameters.jl")
 @mustimplement setSequenceParams(daq::AbstractDAQ) # Needs to be able to update seqeuence parameters
 @mustimplement prepareSequence(daq::AbstractDAQ) # Sequence can be prepared before started
 @mustimplement endSequence(daq::AbstractDAQ) # Sequence can be ended outside of producer
-@mustimplement prepareTx(daq::AbstractDAQ; allowControlLoop = true) # Tx can be set outside of producer
-# Producer prepares a proper sequence if allowed too, then starts it and writes the resulting chunks to the channel
-@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true) 
+@mustimplement prepareTx(daq::AbstractDAQ; allowControlLoop = true) # Tx can be set outside of producer 
+@mustimplement startProducer(channel::Channel, daq::AbstractDAQ, numFrames)
 @mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
 @mustimplement AsyncBuffer(daq::AbstractDAQ) # Buffer structure that contains channel elements
 @mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
 @mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
-
 
 numTxChannels(daq::AbstractDAQ) = length(daq.params.dfDivider)
 numRxChannels(daq::AbstractDAQ) = length(daq.params.rxChanIdx)
@@ -73,6 +71,22 @@ end
 function readDataControlled(daq::AbstractDAQ, numFrames)
   controlLoop(daq)
   readData(daq, numFrames, currentFrame(daq))
+end
+
+function asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true)
+  if prepTx
+      prepareTx(daq)
+  end
+  if prepSeq
+      setSequenceParams(daq)
+      prepareSequence(daq)
+  end
+  
+  startProducer(channel, daq, numFrames)
+
+  if endSeq
+      endSequence(daq, endFrame)
+  end
 end
 
 include("TransferFunction.jl")

@@ -121,16 +121,8 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
     return uMeas, uRef
 end
 
-function asyncProducer(channel::Channel, daq::DummyDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true)
-    if prepTx
-        prepareTx(daq)
-    end
-    if prepSeq
-        setSequenceParams(daq)
-        prepareSequence(daq)
-    end
-    startTx(daq)
-    
+function startProducer(channel::Channel, daq::DummyDAQ)
+    startTx(daq)    
     startFrame = 1
     endFrame = numFrames + 1
     currentFrame = startFrame
@@ -144,10 +136,6 @@ function asyncProducer(channel::Channel, daq::DummyDAQ, numFrames; prepTx = true
         end
     catch e
         @error e
-    end
-
-    if endSeq
-        endSequence(daq, endFrame)
     end
 end
 

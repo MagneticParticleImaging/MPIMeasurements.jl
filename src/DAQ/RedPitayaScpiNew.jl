@@ -170,18 +170,6 @@ function prepareSequence(daq::DAQRedPitayaScpiNew)
   return startFrame, endFrame
 end
 
-function enableSequence(daq::DAQRedPitayaScpiNew; prepareSeq = true)
-  startFrame = 0
-  endFrame = 0
-  if prepareSeq 
-    startFrame, endFrame = prepareSequence(daq)
-  else 
-    startFrame, endFrame = getFrameTiming(daq)
-  end
-  startTx(daq)
-  return startFrame, endFrame
-end
-
 function setTxParams(daq::DAQRedPitayaScpiNew, Γ)
   if any( abs.(daq.params.currTx) .>= daq.params.txLimitVolt )
     error("This should never happen!!! \n Tx voltage is above the limit")
@@ -249,12 +237,10 @@ function endSequence(daq::DAQRedPitayaScpiNew)
   endSequence(daq, endFrame)
 end
 
-function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; prepTx = true, prepSeq = true, endSeq = true)
-  if prepTx
-    prepareTx(daq)
-  end
-  startFrame, endFrame = enableSequence(daq, prepareSeq = prepSeq)
-  
+function startProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames)
+  startFrame, endFrame = getFrameTiming(daq)
+  startTx(daq)
+    
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   startSample = startFrame * samplesPerFrame
   samplesToRead = samplesPerFrame * numFrames
@@ -269,9 +255,6 @@ function asyncProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames; pr
   end
   @info "Pipeline finished"
 
-  if endSeq
-    endSequence(daq, endFrame)
-  end
 end
 
 function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpiNew)
