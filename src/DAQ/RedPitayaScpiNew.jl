@@ -254,7 +254,7 @@ function startProducer(channel::Channel, daq::DAQRedPitayaScpiNew, numFrames)
     @error e 
   end
   @info "Pipeline finished"
-
+  return endFrame
 end
 
 function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpiNew)

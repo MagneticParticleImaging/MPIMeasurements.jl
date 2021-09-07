@@ -137,6 +137,7 @@ function startProducer(channel::Channel, daq::DummyDAQ)
     catch e
         @error e
     end
+    return endFrame
 end
 
 function prepareTx(daq::DummyDAQ; allowControlLoop = true)

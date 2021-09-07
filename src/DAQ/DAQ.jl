@@ -82,7 +82,7 @@ function asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = t
       prepareSequence(daq)
   end
   
-  startProducer(channel, daq, numFrames)
+  endFrame = startProducer(channel, daq, numFrames)
 
   if endSeq
       endSequence(daq, endFrame)
