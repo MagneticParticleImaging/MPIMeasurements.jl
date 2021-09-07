@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions
+export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobots, getRobot
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -46,6 +46,19 @@ state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
 
+getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
+function getRobot(scanner::MPIScanner)
+  robots = getRobots(scanner)
+  if length(robots) == 0
+    error("The scanner has no robot.")
+  elseif length(robots) > 1
+    error("The scanner has more than one robot. Therefore, a single surveillance unit cannot be retrieved unambiguously.")
+  else
+    return robots[1]
+  end
+end
+
+
 include("RobotExceptions.jl")
 include("DummyRobot.jl")
 include("SimulatedRobot.jl")
@@ -62,7 +75,7 @@ function gotoPos(rob::Robot, pos_name::AbstractString, args...)
     else
         throw(RobotTeachError(rob, pos_name))
     end
-    
+
 end
 
 function teachPos(rob::Robot, pos_name::AbstractString; override=false)
@@ -92,7 +105,7 @@ function saveTeachedPos(rob::Robot)
     end
     println()
 end
-    
+
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
@@ -104,7 +117,7 @@ function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{
     state(rob) == READY || throw(RobotStateError(rob, READY))
     isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
-    
+
     #TODO: perform safety check of coordinates
 
     setstate!(rob, MOVING)
@@ -126,7 +139,7 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
 
     length(dist) == dof(rob) || throw(RobotDOFError(rob, length(dist)))
     state(rob) == READY || throw(RobotStateError(rob, READY))
-    
+
     if isReferenced(rob)
         pos = getPosition(rob) + dist
         checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
@@ -134,17 +147,17 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
         checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
         @warn "Performing relative movement in unreferenced state, cannot validate coordinates! Please proceed carefully and perform only movements which are safe!"
     end
-    
+
     #TODO: perform safety check of coordinates
-    
+
     setstate!(rob, MOVING)
-    
+
     try
         _moveRel(rob, dist, speed)
         setstate!(rob, READY)
     catch exc
         setstate!(rob, ERROR)
-        throw(RobotDeviceError(rob, exc))        
+        throw(RobotDeviceError(rob, exc))
     end
 end
 
@@ -255,6 +268,3 @@ end
 
 Base.convert(t::Type{RobotState}, x::Union{Symbol,Int}) = t(x)
 Base.:(==)(x::RobotState, y::Union{Symbol,Int}) = try x == RobotState(y) catch _ return false end
-
-
-
