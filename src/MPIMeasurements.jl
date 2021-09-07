@@ -6,6 +6,8 @@ module MPIMeasurements
 #using Pkg
 
 #using Compat
+using Mmap: settings
+using Base: Integer
 using Reexport
 @reexport using MPIFiles
 using Unitful

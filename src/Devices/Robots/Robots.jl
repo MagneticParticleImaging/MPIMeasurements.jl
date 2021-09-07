@@ -1,8 +1,8 @@
 using Graphics: @mustimplement
 using Unitful
 
-export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobots, getRobot
+export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
+export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobot, getRobots
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -24,6 +24,13 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _isReferenced(rob::Robot)
 @mustimplement _getPosition(rob::Robot)
 
+function init(rob::Robot)
+  @info "Initializing robot with ID `$(rob.deviceID)`."
+  setup(rob)
+end
+
+checkDependencies(rob::Robot) = true
+
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
@@ -35,7 +42,7 @@ function getRobot(scanner::MPIScanner)
   if length(robots) == 0
     error("The scanner has no robot.")
   elseif length(robots) > 1
-    error("The scanner has more than one robot. Therefore, a single surveillance unit cannot be retrieved unambiguously.")
+    error("The scanner has more than one robot. Therefore, a robot cannot be retrieved unambiguously.")
   else
     return robots[1]
   end
@@ -105,7 +112,7 @@ function moveAbs(rob::Robot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{
 
     setstate!(rob, MOVING)
     try
-        @debug "Started absolute robot movement to $pos with $speed."
+        @debug "Started absolute robot movement to [$(join([string(x) for x in pos], ", "))] with speed $(isnothing(speed) ? speed : "["*join([string(x) for x in speed], ", ")*"]")."
         _moveAbs(rob, pos, speed)
         setstate!(rob, READY)
     catch exc
@@ -143,6 +150,8 @@ function moveRel(rob::Robot, dist::Vector{<:Unitful.Length}, speed::Union{Vector
         throw(RobotDeviceError(rob, exc))        
     end
 end
+
+movePark(rob::Robot) = moveAbs(rob, [0, 0, 0]u"m")
 
 function enable(rob::Robot)
     if state(rob) == READY

@@ -38,11 +38,13 @@ function Protocol(protocolDict::Dict{String, Any}, scanner::MPIScanner)
     throw(ProtocolConfigurationError("There is no protocol type given in the configuration."))
   end
 
-  params = params_from_dict(getConcreteType(ProtocolParams, protocolType*"Params"), protocolDict)
+  paramsType = getConcreteType(ProtocolParams, protocolType*"Params")
+  params = paramsType(protocolDict)
   ProtocolImpl = getConcreteType(Protocol, protocolType)
 
   return ProtocolImpl(name=name, description=description, scanner=scanner, params=params)
 end
+
 function Protocol(protocolName::AbstractString, scanner::MPIScanner)
   configDir_ = configDir(scanner)
   filename = joinpath(configDir_, "Protocols", "$protocolName.toml")
@@ -64,6 +66,7 @@ function Protocol(protocolName::AbstractString, scanner::MPIScanner)
 
   return Protocol(protocolDict, scanner)
 end
+
 Protocol(protocolName::AbstractString, scannerName::AbstractString) = Protocol(protocolName, MPIScanner(scannerName))
 Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protocol(protocolDict, MPIScanner(scannerName))
 
@@ -87,7 +90,6 @@ end
 @mustimplement execute(protocol::Protocol)
 @mustimplement cleanup(protocol::Protocol)
 
-
-#include("RobotBasedProtocol.jl")
 include("DAQMeasurementProtocol.jl")
+include("RobotBasedProtocol.jl")
 #include("TransferFunctionProtocol.jl")

@@ -1,7 +1,8 @@
+using Core: Vector
 export getXYZValues
 export setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
-export setUnitToTesla,setStandardSettings, getFieldError
+export setUnitToTesla,setStandardSettings, getFieldError, calculateFieldError
 
 include("LakeShoreLowLevel.jl")
 
@@ -72,7 +73,7 @@ function setAllRange(gauss::LakeShoreGaussMeter, range::Char)
 	return nothing
 end
 
-function getFieldError(range::Int)
+function getFieldError(gauss::LakeShoreGaussMeter, range::Int)
     if range == 0
         return 150Unitful.μT
     elseif range == 1
@@ -82,6 +83,13 @@ function getFieldError(range::Int)
     elseif range == 3
         return 0.15Unitful.μT
     end
+end
+
+function calculateFieldError(gauss::LakeShoreGaussMeter, magneticField::Vector{<:Unitful.BField})
+	magneticFieldError = zeros(typeof(1.0u"T"),3,2)
+	magneticFieldError[:,1] = abs.(magneticField)*1e-3
+	magneticFieldError[:,2] .= getFieldError(gauss, range)
+	return sum(magneticFieldError, dims=2)
 end
 
 """

@@ -9,6 +9,8 @@ gradient = "42T/m"
 [Devices]
 initializationOrder = [
   "my_daq_id",
+  "simulated_gaussmeter",
+  "simulated_robot",
   "sequence_controller",
   "simulation_controller"
 ]
@@ -43,6 +45,12 @@ limitPeak = "1V"
 type = "rx"
 channel = 2
 limitPeak = "1V"
+
+[Devices.simulated_gaussmeter]
+deviceType = "SimulatedGaussMeter"
+
+[Devices.simulated_robot]
+deviceType = "SimulatedRobot"
 
 [Devices.sequence_controller]
 deviceType = "SequenceController"

@@ -1,6 +1,6 @@
 import Base: setindex!, getindex
 
-export AbstractDAQ, DAQParams, SinkImpedance, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
+export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxChannelSettings, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
        createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
        numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
        DAQ, readDataPeriod, currentPeriod, getDAQ, getDAQs,
@@ -14,6 +14,37 @@ abstract type DAQParams <: DeviceParams end
   SINK_FIFTY_OHM
   SINK_HIGH
 end
+
+struct DAQTxChannelSettings
+  "Applied channel voltage. Dimensions are (components, channels, periods)."
+  amplitudes::Array{typeof(1.0u"V"), 3}
+  "Applied channel phase. Dimensions are (components, channels, periods)."
+  phases::Array{typeof(1.0u"rad"), 3}
+  "Minimum time for changing phase and amplitude to the given settings"
+  changeTime::typeof(1.0u"s")
+  "Channel mapping from ID to index."
+  mapping::Dict{String, Integer}
+
+  function DAQTxChannelSettings(amplitudes, phases, changeTime, mapping)
+    if size(amplitudes) != size(phases) || size(amplitudes, 2) != length(mapping)
+      error("The sizes of `phases` and `amplitudes` as well as the number of channels have to match.")
+    end
+
+    if changeTime < 0.0u"s"
+      error("The change time can only be positive.")
+    end
+
+    return new(amplitudes, phases, changeTime, mapping)
+  end
+end
+
+numChannels(settings::DAQTxChannelSettings) = size(settings.amplitudes, 2)
+channelIDs(settings::DAQTxChannelSettings) = keys(settings.mapping)
+amplitudes(settings::DAQTxChannelSettings) = settings.amplitudes
+amplitudes(settings::DAQTxChannelSettings, channelID::String) = settings.amplitudes[:, mapping[channelID], :]
+phases(settings::DAQTxChannelSettings) = settings.phases
+phases(settings::DAQTxChannelSettings, channelID::String) = settings.phases[:, mapping[channelID], :]
+changeTime(settings::DAQTxChannelSettings) = settings.changeTime
 
 abstract type DAQChannelParams end
 

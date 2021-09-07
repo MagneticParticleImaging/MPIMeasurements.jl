@@ -1,10 +1,11 @@
 using Graphics: @mustimplement
 
-export GaussMeter, getGaussMeters, getGaussMeter,  getXValue, getYValue, getZValue, getXYZValues
+export GaussMeter, getGaussMeters, getGaussMeter,  getXValue, getYValue, getZValue, getXYZValues, getTemperature, getFrequency
 
 abstract type GaussMeter <: Device end
 
 include("DummyGaussMeter.jl")
+include("SimulatedGaussMeter.jl")
 #include("LakeShore.jl")
 
 Base.close(gauss::GaussMeter) = nothing
@@ -12,6 +13,9 @@ Base.close(gauss::GaussMeter) = nothing
 @mustimplement getXValue(gauss::GaussMeter)
 @mustimplement getYValue(gauss::GaussMeter)
 @mustimplement getZValue(gauss::GaussMeter)
+@mustimplement getTemperature(gauss::GaussMeter)
+@mustimplement getFrequency(gauss::GaussMeter)
+@mustimplement calculateFieldError(gauss::GaussMeter, magneticField::Vector{<:Unitful.BField})
 
 getGaussMeters(scanner::MPIScanner) = getDevices(scanner, GaussMeter)
 function getGaussMeter(scanner::MPIScanner)
@@ -24,10 +28,9 @@ function getGaussMeter(scanner::MPIScanner)
 end
 
 """
-Returns x,y, and z values and apply a coordinate transformation
+Returns x,y, and z values and applies a coordinate transformation
 """
 function getXYZValues(gauss::GaussMeter)
-  gauss.params.coordinateTransformation*[getXValue(gauss),
-  getYValue(gauss),
-  getZValue(gauss)]
+  values = [getXValue(gauss), getYValue(gauss), getZValue(gauss)]
+  return gauss.params.coordinateTransformation*values
 end
