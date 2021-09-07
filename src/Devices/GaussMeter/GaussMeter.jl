@@ -7,6 +7,7 @@ abstract type GaussMeter <: Device end
 include("DummyGaussMeter.jl")
 include("SimulatedGaussMeter.jl")
 #include("LakeShore.jl")
+include("LakeShoreF71.jl")
 
 Base.close(gauss::GaussMeter) = nothing
 
