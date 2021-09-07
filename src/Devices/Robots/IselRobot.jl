@@ -48,12 +48,17 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
 end
 
-mutable struct IselRobot <: Robot
+IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
+
+Base.@kwdef mutable struct IselRobot <: Robot
+  "Unique device ID for this device as defined in the configuration."
   deviceID::String
+  "Parameter struct for this devices read from the configuration."
   params::IselRobotParams
-  state::RobotState
-  sd::Union{SerialDevice,Nothing}
-  IselRobot(deviceID::String, params::IselRobotParams)= new(deviceID, params, INIT, nothing)
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  state::RobotState = INIT
+  sd::Union{SerialDevice,Nothing} = nothing
 end
 
 Base.close(rob::IselRobot) = close(rob.sd.sp)

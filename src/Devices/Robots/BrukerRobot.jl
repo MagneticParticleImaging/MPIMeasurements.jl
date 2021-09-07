@@ -6,26 +6,29 @@ export moveCenter, movePark
 
 
 Base.@kwdef struct BrukerRobotParams <: DeviceParams
-    connectionName::String = "RobotServer"
-    axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[-85.0,225.0], [-Inf, Inf], [-Inf, Inf]]u"mm"
-    namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
+  connectionName::String = "RobotServer"
+  axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[-85.0,225.0], [-Inf, Inf], [-Inf, Inf]]u"mm"
+  namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
 end
 
-mutable struct BrukerRobot <: Robot
-    deviceID::String
-    params::BrukerRobotParams
-    state::RobotState
-    function BrukerRobot(deviceID::String, params::BrukerRobotParams)
-        return new(deviceID, params, INIT)
-    end
+BrukerRobotParams(dict::Dict) = params_from_dict(BrukerRobotParams, dict)
+
+Base.@kwdef mutable struct BrukerRobot <: Robot
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::BrukerRobotParams
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  state::RobotState = INIT
 end
 
 """ `BrukerCommand(command::String)` """
 struct BrukerCommand
-    command::String
+  command::String
 end
 
-# Usefull links
+# Useful links
 # http://unix.stackexchange.com/questions/87831/how-to-send-keystrokes-f5-from-terminal-to-a-process
 # 
 # https://github.com/JuliaLang/julia/pull/6948

@@ -33,31 +33,34 @@ const MODES = Dict(
 "HOMING" => 6)
 
 Base.@kwdef struct IgusRobotParams <: DeviceParams
-    defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10.0u"mm/s"]
-    axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500.0]]u"mm"
-    ip::IPv4 = ip"192.168.1.3"
-    port::Int = 1111
-    keepSocketOpen::Bool = true
-    stepsPermm::Int = 100
-    feed::typeof(1.0u"mm") = 2.0u"mm"
-    shaftRev::Int = 1
-    homVelSwitch::typeof(1.0u"mm/s") = 10.0u"mm/s"
-    homVelZero::typeof(1.0u"mm/s") = 2u"mm/s"
-    homAcc::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
-    movAcc::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
-    movDec::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
-    timeout::typeof(1.0u"s") = 10u"s"
-    namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0]u"mm")
+  defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10.0u"mm/s"]
+  axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500.0]]u"mm"
+  ip::IPv4 = ip"192.168.1.3"
+  port::Int = 1111
+  keepSocketOpen::Bool = true
+  stepsPermm::Int = 100
+  feed::typeof(1.0u"mm") = 2.0u"mm"
+  shaftRev::Int = 1
+  homVelSwitch::typeof(1.0u"mm/s") = 10.0u"mm/s"
+  homVelZero::typeof(1.0u"mm/s") = 2u"mm/s"
+  homAcc::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
+  movAcc::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
+  movDec::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
+  timeout::typeof(1.0u"s") = 10u"s"
+  namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0]u"mm")
 end
 
-mutable struct IgusRobot <: Robot
-    deviceID::String
-    params::IgusRobotParams
-    state::RobotState
-    socket::Union{TCPSocket,Nothing}
-    function IgusRobot(deviceID::String, params::IgusRobotParams)
-        return new(deviceID, params, INIT, nothing)
-    end
+IgusRobotParams(dict::Dict) = params_from_dict(IgusRobotParams, dict)
+
+Base.@kwdef mutable struct IgusRobot <: Robot
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::IgusRobotParams
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  state::RobotState = INIT
+  socket::Union{TCPSocket,Nothing} = nothing
 end
 
 dof(rob::IgusRobot) = 1

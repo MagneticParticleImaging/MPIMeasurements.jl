@@ -3,6 +3,7 @@ export DAQMeasurementProtocol, DAQMeasurementProtocolParams, sequenceName, seque
 Base.@kwdef struct DAQMeasurementProtocolParams <: ProtocolParams
   sequenceName::AbstractString
 end
+DAQMeasurementProtocolParams(dict::Dict) = params_from_dict(DAQMeasurementProtocolParams, dict)
 
 Base.@kwdef mutable struct DAQMeasurementProtocol <: Protocol
   name::AbstractString
