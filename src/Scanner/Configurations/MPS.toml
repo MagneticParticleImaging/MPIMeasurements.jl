@@ -31,12 +31,13 @@ controlLoopPhaseAccuracy = 0.1
 controlLoopAmplitudeAccuracy = 0.01 
 #0.001# 0.01
 txLimitVolt = [0.7]
+txOffsetVolt = [0.0, 0.0]
 rxChanIdx = [1]
 #,2]#,3,4]
 refChanIdx = [2]
 dfChanIdx = [1]
 rpModulus = [4800,4864,4800,4800]
-ffRampUpTime = 0.0
+ffRampUpTime = 0.1
 ffRampUpFraction = 1.0
 controlPhase = true
 jumpSharpness = 0.1
