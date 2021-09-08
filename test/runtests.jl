@@ -2,14 +2,22 @@ using MPIMeasurements
 using Test
 using Unitful
 
-include("config.jl")
+# Add test configurations to path
+testConfigDir = normpath(string(@__DIR__), "TestConfigs")
+addConfigurationPath(testConfigDir)
 
-imgdir = joinpath(@__DIR__(), "images")
-mkpath(imgdir)
+include("Devices/DeviceTests.jl")
+include("Scanner/ScannerTests.jl")
 
 
-scanner = MPIScanner(conf)
-
-include("Safety/tests.jl")
-include("Robots/tests.jl")
-include("DAQ/tests.jl")
+# include("config.jl")
+#
+# imgdir = joinpath(@__DIR__(), "images")
+# mkpath(imgdir)
+#
+#
+# scanner = MPIScanner(conf)
+#
+# include("Safety/tests.jl")
+# include("Robots/tests.jl")
+# include("DAQ/tests.jl")

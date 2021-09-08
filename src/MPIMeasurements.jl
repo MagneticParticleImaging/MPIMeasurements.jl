@@ -1,71 +1,62 @@
 module MPIMeasurements
 
-using Pkg
+#using MPIFiles: calibration
+#using Dates: include
+#using Reexport: include
+#using Pkg
 
-using Compat
+#using Compat
+using Mmap: settings
+using Base: Integer
 using Reexport
-#using IniFile
 @reexport using MPIFiles
-#@reexport using Redpitaya
-@reexport using RedPitayaDAQServer
-@reexport using Unitful
-@reexport using Unitful.DefaultSymbols
-@reexport using Pkg.TOML
-@reexport using ThreadPools
-using HDF5
-using ProgressMeter
-using Sockets
-using DelimitedFiles
-using LinearAlgebra
-using Statistics
+using Unitful
+using TOML
+#using ThreadPools
+#using HDF5
+#using ProgressMeter
+#using Sockets
+#using DelimitedFiles
+#using LinearAlgebra
+#using Statistics
 using Dates
+using InteractiveUtils
+using Graphics: @mustimplement
+using Scratch
+using Mmap
 
-#using MPISimulations
+# TODO: This is a workaround for CI with GTK since precompilation fails with headless systems
+# Remove after https://github.com/JuliaGraphics/Gtk.jl/issues/346 is resolved
+try
+  using Gtk
+  @info "This session is interactive and thus we loaded Gtk.jl"
+catch e
+  if e isa InitError
+    @warn "This session is NOT interactive and thus we won't load Gtk.jl. This might lead to errors when calling certain functions."
+  end
+end
 
-import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC, enableSlowDAC
 import Base.write
-#import PyPlot.disconnect
 
-# abstract supertype for all possible serial devices
-abstract type Device end
-abstract type Robot end
-abstract type GaussMeter end
-abstract type SurveillanceUnit end
-abstract type TemperatureSensor end
+export addConfigurationPath
 
-# abstract supertype for all measObj etc.
-abstract type MeasObj end
-export Device, Robot, GaussMeter, MeasObj
+const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
 
-include("DAQ/DAQ.jl")
-#include("TransferFunction/TransferFunction.jl") #Moved to MPIFiles
-include("Safety/RobotSafety.jl")
-include("Safety/KnownSetups.jl")
+# circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
+abstract type Protocol end
 
-# LibSerialPort currently only supports linux and julia versions above 0.6
-# TODO work this part out under julia-1.0.0
-if Sys.isunix() && VERSION >= v"0.6"
-  using LibSerialPort
-  include("SerialDevices/SerialDevices.jl")
+include("Devices/Device.jl")
+include("Utils/Utils.jl")
+include("Scanner.jl")
+include("Devices/Devices.jl")
+include("Protocols/Protocol.jl")
+
+function __init__()
+  defaultScannerConfigurationPath = joinpath(homedir(),".mpi")
+  if isdir(defaultScannerConfigurationPath)
+    addConfigurationPath(defaultScannerConfigurationPath)
+  end
 end
-
-#include("Robots/Robots.jl")
-include("Scanner/Scanner.jl")
-include("Robots/Robots.jl")
-include("Sequences/Sequences.jl")
-
-if Sys.isunix() && VERSION >= v"0.6"
-  include("GaussMeter/GaussMeter.jl")
-  include("TemperatureSensor/TemperatureSensor.jl")
-  include("Measurements/Measurements.jl")
-  include("SurveillanceUnit/SurveillanceUnit.jl")
-end
-
-
-#function __init__()
-#    Unitful.register(MPIMeasurements)
-#end
-
 
 end # module
