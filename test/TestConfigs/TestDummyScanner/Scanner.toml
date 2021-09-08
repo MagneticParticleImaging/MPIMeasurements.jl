@@ -5,6 +5,8 @@ manufacturer = "Me, Myself and I"
 name = "TestDummyScanner"
 topology = "FFL"
 gradient = "42T/m"
+datasetStore = "./tmp/TestDummyScannerStore"
+defaultSequence = ""
 
 [Devices]
 initializationOrder = [

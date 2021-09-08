@@ -43,10 +43,10 @@
     @testset "GaussMeter" begin
       gaussMeter = getDevice(scanner, "my_gauss_id")
       @test gaussMeter isa DummyGaussMeter
-      @test getXValue(gaussMeter) == 1.0
-      @test getYValue(gaussMeter) == 2.0
-      @test getZValue(gaussMeter) == 3.0
-      @test getXYZValues(gaussMeter) == [1.0, 2.0, 3.0]
+      @test getXValue(gaussMeter) == 1.0u"mT"
+      @test getYValue(gaussMeter) == 2.0u"mT"
+      @test getZValue(gaussMeter) == 3.0u"mT"
+      @test getXYZValues(gaussMeter) == [1.0, 2.0, 3.0]u"mT"
 
       gaussMeters = getDevices(scanner, GaussMeter)
       @test gaussMeters[1] == gaussMeter
