@@ -1,0 +1,6 @@
+name = "RobotBasedSystemMatrixCalibration"
+type = "RobotBasedSystemMatrixProtocol"
+description = "An acquisition with the Red Pitaya"
+targetScanner = "SimpleRedPitayaScanner"
+
+sequenceName = "SimpleRedPitayaSequence"

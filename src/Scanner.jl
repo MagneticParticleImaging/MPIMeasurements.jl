@@ -101,6 +101,7 @@ Base.@kwdef struct MPIScannerGeneral
   gradient::typeof(1u"T/m")
   datasetStore::String
   defaultSequence::String=""
+  defaultProtocol::String=""
 end
 
 """
@@ -115,6 +116,7 @@ mutable struct MPIScanner
   devices::Dict{AbstractString, Device}
   guiMode::Bool
   currentSequence::Union{Sequence,Nothing}
+  currentProtocol::Union{Protocol,Nothing}
 
   function MPIScanner(name::AbstractString; guimode=false)
     # Search for scanner configurations of the given name in all known configuration directories
@@ -143,7 +145,12 @@ mutable struct MPIScanner
     currentSequence = generalParams.defaultSequence != "" ? 
       Sequence(configDir, generalParams.defaultSequence) : nothing
 
-    return new(name, configDir, generalParams, devices, guimode, currentSequence)
+    scanner = new(name, configDir, generalParams, devices, guimode, currentSequence, nothing)
+
+    scanner.currentProtocol = generalParams.defaultProtocol != "" ? 
+      Protocol(generalParams.defaultProtocol, scanner) : nothing
+
+    return scanner
   end
 end
 
@@ -200,3 +207,4 @@ function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
 end
 
 MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner),name)
+

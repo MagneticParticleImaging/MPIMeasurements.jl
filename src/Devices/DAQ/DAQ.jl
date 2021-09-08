@@ -9,6 +9,7 @@ export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxCh
 
 abstract type AbstractDAQ <: Device end
 abstract type DAQParams <: DeviceParams end
+abstract type AsyncBuffer end
 
 @enum SinkImpedance begin
   SINK_FIFTY_OHM
