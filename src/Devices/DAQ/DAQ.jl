@@ -145,14 +145,25 @@ end
 #include("Plotting.jl")
 #include("Parameters.jl")
 
-@mustimplement setup(daq::AbstractDAQ, sequence::Sequence)
 @mustimplement startTx(daq::AbstractDAQ)
 @mustimplement stopTx(daq::AbstractDAQ)
-@mustimplement setTxParams(daq::AbstractDAQ, correctionAmp, correctionPhase; convoluted=true)
-#@mustimplement trigger(daq::AbstractDAQ)
+@mustimplement setTxParams(daq::AbstractDAQ, sequence::Sequence)
 @mustimplement currentFrame(daq::AbstractDAQ)
-@mustimplement readData(daq::AbstractDAQ, startFrame, numFrames, numBlockAverages)
+@mustimplement readData(daq::AbstractDAQ, startFrame, numFrames)
 @mustimplement readDataPeriods(daq::AbstractDAQ, startPeriod, numPeriods)
+@mustimplement refToField(daq::AbstractDAQ, d::Int64)
+
+@mustimplement setSequenceParams(daq::AbstractDAQ, sequence::Sequence) # Needs to be able to update seqeuence parameters
+@mustimplement prepareSequence(daq::AbstractDAQ, sequence::Sequence) # Sequence can be prepared before started
+@mustimplement endSequence(daq::AbstractDAQ) # Sequence can be ended outside of producer
+@mustimplement prepareTx(daq::AbstractDAQ, sequence::Sequence; allowControlLoop = true) # Tx can be set outside of producer
+# Producer prepares a proper sequence if allowed too, then starts it and writes the resulting chunks to the channel
+@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true) 
+@mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
+@mustimplement AsyncBuffer(daq::AbstractDAQ) # Buffer structure that contains channel elements
+@mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
+@mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
+
 @mustimplement numTxChannelsTotal(daq::AbstractDAQ)
 @mustimplement numRxChannelsTotal(daq::AbstractDAQ)
 @mustimplement numTxChannelsActive(daq::AbstractDAQ)
@@ -195,3 +206,19 @@ calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelI
 include("RedPitayaDAQ.jl")
 include("DummyDAQ.jl")
 include("SimpleSimulatedDAQ.jl")
+
+function asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true)
+  if prepTx
+      prepareTx(daq)
+  end
+  if prepSeq
+      setSequenceParams(daq)
+      prepareSequence(daq)
+  end
+  
+  endFrame = startProducer(channel, daq, numFrames)
+
+  if endSeq
+      endSequence(daq, endFrame)
+  end
+end
