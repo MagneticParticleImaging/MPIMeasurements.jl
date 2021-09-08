@@ -22,6 +22,7 @@ using InteractiveUtils
 using Graphics: @mustimplement
 using Scratch
 using Mmap
+using DocStringExtensions
 
 # TODO: This is a workaround for CI with GTK since precompilation fails with headless systems
 # Remove after https://github.com/JuliaGraphics/Gtk.jl/issues/346 is resolved
@@ -47,8 +48,13 @@ include("Scanner.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
 
+"""
+    $(SIGNATURES)
+
+Initialize configuration paths with the package.
+"""
 function __init__()
-  defaultScannerConfigurationPath = joinpath(homedir(),".mpi")
+  defaultScannerConfigurationPath = joinpath(homedir(), ".mpi")
   if isdir(defaultScannerConfigurationPath)
     addConfigurationPath(defaultScannerConfigurationPath)
   end

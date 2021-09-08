@@ -22,7 +22,6 @@ makedocs(
                 sort(readdir(normpath(@__DIR__, "src/lib/internals")))
             ),
         ],
-        "contributing.md",
     ],
 )
 

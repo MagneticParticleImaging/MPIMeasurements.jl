@@ -5,7 +5,11 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        name, configDir, generalParams, getDevice, getDevices, getGUIMode,
        getSequenceList
 
-"""Recursively find all concrete types"""
+"""
+    $(SIGNATURES)
+
+Recursively find all concrete types of the given type.
+"""
 function deepsubtypes(type::DataType)
   subtypes_ = subtypes(type)
   allSubtypes = subtypes_
@@ -17,7 +21,9 @@ function deepsubtypes(type::DataType)
 end
 
 """
-Retrieve the concrete type of a given supertype corresponding to a given string
+    $(SIGNATURES)
+
+Retrieve the concrete type of a given supertype corresponding to a given string.
 """
 function getConcreteType(supertype_::DataType, type::String)
   knownTypes = deepsubtypes(supertype_)
@@ -36,7 +42,9 @@ function getConcreteType(supertype_::DataType, type::String)
 end
 
 """
-Initiate devices from the given configuration dictionary
+    $(SIGNATURES)
+
+Initiate devices from the given configuration dictionary.
 
 The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
@@ -88,34 +96,55 @@ function initiateDevices(devicesParams::Dict{String, Any})
 end
 
 """
-General description of the scanner
+    $(SIGNATURES)
+
+General description of the scanner.
 
 Note: The fields correspond to the root section of an MDF file.
 """
 Base.@kwdef struct MPIScannerGeneral
+  "Bore size of the scanner."
   boreSize::typeof(1u"mm")
+  "Facility where the scanner is located."
   facility::String
+  "Manufacturer of the scanner."
   manufacturer::String
+  "Name of the scanner"
   name::String
+  "Topology of the scanner, e.g. FFL or FFP."
   topology::String
+  "Gradient of the scanners selection field."
   gradient::typeof(1u"T/m")
+  "Path of the dataset store."
   datasetStore::String
+  "Default sequence of the scanner."
   defaultSequence::String=""
 end
 
 """
-Central part for setting up a scanner.
+    $(SIGNATURES)
 
-TODO: Add more details on instantiation
+Basic description of a scanner.
 """
 mutable struct MPIScanner
-  name::AbstractString
-  configDir::AbstractString
+  "Name of the scanner"
+  name::String
+  "Path to the used configuration directory."
+  configDir::String
+  "General parameters of the scanner like its bore size or gradient."
   generalParams::MPIScannerGeneral
+  "Device instances instantiated by the scanner from its configuration."
   devices::Dict{AbstractString, Device}
+  "Flag determining if the scanner is used from within a GUI or not."
   guiMode::Bool
+  "Currently selected sequence for performing measurements."
   currentSequence::Union{Sequence,Nothing}
 
+  """
+    $(SIGNATURES)
+
+  Initialize a scanner by its name.
+  """
   function MPIScanner(name::AbstractString; guimode=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
@@ -147,17 +176,38 @@ mutable struct MPIScanner
   end
 end
 
+"""
+    $(SIGNATURES)
+
+Close the devices when closing the scanner.
+"""
 function Base.close(scanner::MPIScanner)
   for device in getDevices(Device)
     close(device)
   end
 end
 
-name(scanner::MPIScanner) = scanner.name #TODO: Duplication with scanner name
+"Name of the scanner"
+name(scanner::MPIScanner) = scanner.name
+
+"Path to the used configuration directory."
 configDir(scanner::MPIScanner) = scanner.configDir
+
+"General parameters of the scanner like its bore size or gradient."
 generalParams(scanner::MPIScanner) = scanner.generalParams
+
+"""
+    $(SIGNATURES)
+
+Retrieve a device by its `deviceID`.
+"""
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 
+"""
+    $(SIGNATURES)
+
+Retrieve all devices of a specific `deviceType`.
+"""
 function getDevices(scanner::MPIScanner, deviceType::DataType)
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
@@ -173,15 +223,32 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   return getDevices(scanner, deviceTypeSearched)
 end
 
+"Flag determining if the scanner is used from within a GUI or not."
 getGUIMode(scanner::MPIScanner) = scanner.guiMode
 
+"Bore size of the scanner."
 scannerBoreSize(scanner::MPIScanner) = scanner.generalParams.boreSize
+
+"Facility where the scanner is located."
 scannerFacility(scanner::MPIScanner) = scanner.generalParams.facility
+
+"Manufacturer of the scanner."
 scannerManufacturer(scanner::MPIScanner) = scanner.generalParams.manufacturer
+
+"Name of the scanner"
 scannerName(scanner::MPIScanner) = scanner.generalParams.name
+
+"Topology of the scanner, e.g. FFL or FFP."
 scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
+
+"Gradient of the scanners selection field."
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
 
+"""
+    $(SIGNATURES)
+
+Retrieve a list of all sequences available for the scanner.
+"""
 function getSequenceList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "Sequences")
   if isdir(path)
@@ -191,6 +258,11 @@ function getSequenceList(scanner::MPIScanner)
   end
 end
 
+"""
+    $(SIGNATURES)
+
+Constructor for a sequence of `name` from `configDir`.
+"""
 function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "Sequences", name*".toml")
   if !isfile(path)
@@ -199,4 +271,9 @@ function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
   return sequenceFromTOML(path)
 end
 
-MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner),name)
+"""
+    $(SIGNATURES)
+
+Constructor for a sequence of `name` from the configuration directory specified for the scanner.
+"""
+MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
