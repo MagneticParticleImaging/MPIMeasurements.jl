@@ -11,7 +11,7 @@ function controlLoop(daq::AbstractDAQ)
 
   controlPhaseDone = false
   i = 1
-  maxControlSteps = 2
+  maxControlSteps = 20
   while !controlPhaseDone && i <= maxControlSteps
     @info "### CONTROL STEP $i ###"
     period = currentPeriod(daq)
