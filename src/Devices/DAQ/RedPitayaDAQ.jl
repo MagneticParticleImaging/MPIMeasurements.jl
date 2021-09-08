@@ -20,6 +20,9 @@ Base.@kwdef struct RedPitayaDAQParams <: DAQParams
   triggerMode::RPTriggerMode = EXTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
+  calibFFCurrentToVolt::Vector{Float32} = [0.0]
+  ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
+  ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -36,10 +39,20 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   dependencies::Dict{String, Union{Device, Missing}}
 
   "Reference to the Red Pitaya cluster"
-  rpc::Union{RedPitayaCluster, Missing} = missing
+  rpc::Union{RedPitayaCluster, Nothing} = nothing
 
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
+  acqSeq::Union{AbstractSequence, Nothing} = nothing
+  samplesPerStep::Int32 = 0
+  decimation::Int32 = 64
+  passPDMToFastDAC::Vector{Bool} = []
+  samplingPoints::Int = 1
+  sampleAverages::Int = 1
+  acqPeriodsPerFrame::Int = 1
+  acqPeriodsPerPatch::Int = 1
+  acqNumFrames::Int = 1
+  acqNumFrameAverages::Int = 1
 end
 
 function init(daq::RedPitayaDAQ)
@@ -75,6 +88,126 @@ function init(daq::RedPitayaDAQ)
 end
 
 checkDependencies(daq::RedPitayaDAQ) = true
+
+
+#### Sequence ####
+function setSequenceParams(daq::RedPitayaDAQ, lut, enableLUT = nothing)
+  stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqNumPeriodsPerPatch)
+  samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
+  daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
+  clearSequence(daq.rpc)
+
+  if !isnothing(lut) 
+    numSlowDACChan(master(daq.rpc), size(lut, 1))
+    lut = lut.*daq.params.calibFFCurrentToVolt
+    #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
+    #TODO Distribute sequence on multiple redpitayas, not all the same
+    daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
+    daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+    appendSequence(master(daq.rpc), daq.acqSeq)
+  else
+    numSlowDACChan(master(daq.rpc), 0)
+    daq.acqSeq = nothing
+  end
+end
+function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
+  lut = nothing
+  channels = acyclicElectricalTxChannels(sequence)
+  temp = [values(channel) for channel in channels]
+  if length(temp) > 0
+    if length(temp) == 1
+      lut = [ustrip(u"V", x) for x in temp[1]]
+    else if length(temp) == 2
+      lut1 = [ustrip(u"V", x) for x in temp[1]]
+      lut2 = [ustrip(u"V", x) for x in temp[2]]
+      lut = collect(cat(lut1,lut2,dims=2))
+    end
+    lut = lut .* daq.params.calibFFCurrentToVolt
+  end
+  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+  setSequenceParams(daq, lut, nothing)
+end
+
+function prepareSequence(daq::RedPitayaDAQ, sequence::Sequence)
+  if !isnothing(daq.acqSeq)
+    @info "Preparing sequence"
+    success = RedPitayaDAQServer.prepareSequence(daq.rpc)
+    if !success
+      @warn "Failed to prepare sequence"
+    end
+end
+
+function endSequence(daq::RedPitayaDAQ, endFrame)
+  sampPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  endSample = (endFrame + 1) * sampPerFrame
+  wp = currentWP(daq.rpc)
+  # Wait for sequence to finish
+  numQueries = 0
+    while wp < endSample
+      sampleDiff = endSample - wp
+      waitTime = (sampleDiff / (125e6/daq.params.decimation))
+      sleep(waitTime) # Queries are expensive, try to sleep to minimize amount of queries
+      numQueries += 1
+      wp = currentWP(daq.rpc)
+  end 
+  stopTx(daq)
+end
+
+function getFrameTiming(daq::RedPitayaDAQ)
+  startSample = start(daq.acqSeq) * daq.samplesPerStep
+  startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  endFrame = div((length(daq.acqSeq) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  return startFrame, endFrame
+end
+
+#### Producer/Consumer ####
+mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
+  samples::Union{Matrix{Int16}, Nothing}
+  performance::Vector{Vector{PerformanceData}}
+end
+AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
+
+channelType(daq::RedPitayaDAQ) = SampleChunk
+
+function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+  samples = chunk.samples
+  perfs = chunk.performance
+  push!(buffer.performance, perfs)
+  if !isnothing(buffer.samples)
+    buffer.samples = hcat(buffer.samples, samples)
+  else 
+    buffer.samples = samples
+  end
+  for (i, p) in enumerate(perfs)
+    if p.status.overwritten || p.status.corrupted
+        @warn "RedPitaya $i lost data"
+    end
+end
+end
+
+function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages) 
+  return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
+end
+
+function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
+  startFrame, endFrame = getFrameTiming(daq)
+  startTx(daq)
+    
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  startSample = startFrame * samplesPerFrame
+  samplesToRead = samplesPerFrame * numFrames
+  chunkSize = Int(ceil(0.1 * (125e6/daq.decimation)))
+
+  # Start pipeline
+  @info "Pipeline started"
+  try 
+    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
+  catch e
+    @error e 
+  end
+  @info "Pipeline finished"
+  return endFrame
+end
 
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
   setupTx(daq, sequence)

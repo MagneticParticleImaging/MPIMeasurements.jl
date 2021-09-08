@@ -1,6 +1,7 @@
 export DummyDAQ, DummyDAQParams
 
 Base.@kwdef mutable struct DummyDAQParams <: DeviceParams
+  # Here "only" for user/toml parameter
   samplesPerPeriod::Int
   amplitude::Float32 = 1.0
   frequency::Float32 = 1.0
@@ -14,6 +15,9 @@ Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
   params::DummyDAQParams
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+
+  # Here for any other internal parameters
+  state::int
 end
 
 function init(daq::DummyDAQ)
@@ -27,9 +31,13 @@ end
 function stopTx(daq::DummyDAQ)
 end
 
+# Version 1
+# Parameter list can grow very large, but all are "known" in function signature
 function setTxParams(daq::DummyDAQ, amplitude, frequency)
-  daq.params.amplitude = amplitude
+  daq.params.amplitude = amplitude # Only set them if they need to be remembered/used obvs
   daq.params.frequency = frequency
+  doSomething(daq.params.amplitude)
+  doSomething(daq.params.amplitude)
 end
 function setTxParams(daq::DummyDAQ, sequence::Sequence)
   temp = electricalTxChannels(sequence)
@@ -37,6 +45,30 @@ function setTxParams(daq::DummyDAQ, sequence::Sequence)
   component = components(channels[1])
   setTxParams(daq, amplitude(component), divider(component))
 end
+
+# Version 2
+# Paraemter list is hidden, but if someone wants to call function directly they need to know which parameters to set
+function setTxParams(daq::DummyDAQ, sequence::Sequence)
+  temp = electricalTxChannels(sequence)
+  channels = [channel for channel in temp if channel isa periodicElectricalTxChannels]
+  component = components(channels[1])
+  daq.params.amplitude = amplitude(component)
+  daq.params.frequency = divider(component)
+  daq.state = 1
+  setTxParams(daq) 
+end
+function setTxParams(daq::DummyDAQ)
+  doSomething(daq.params.amplitude)
+  doSomething(daq.params.amplitude)
+end
+# Or maybe an additional helper function, could also be used in f(daq, seq) then
+function setTxParams(daq::DummyDAQ, amplitude, frequency)
+  daq.params.amplitude = amplitude
+  daq.params.frequency = frequency
+  setTxParams(daq)
+end
+
+
 
 function currentFrame(daq::DummyDAQ)
     return 1;

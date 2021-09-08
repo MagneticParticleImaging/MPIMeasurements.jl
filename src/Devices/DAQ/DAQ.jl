@@ -159,7 +159,7 @@ end
 @mustimplement endSequence(daq::AbstractDAQ) # Sequence can be ended outside of producer
 @mustimplement prepareTx(daq::AbstractDAQ, sequence::Sequence; allowControlLoop = true) # Tx can be set outside of producer
 # Producer prepares a proper sequence if allowed too, then starts it and writes the resulting chunks to the channel
-@mustimplement asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true) 
+@mustimplement startProducer(channel::Channel, daq::AbstractDAQ, numFrames)
 @mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
 @mustimplement AsyncBuffer(daq::AbstractDAQ) # Buffer structure that contains channel elements
 @mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
