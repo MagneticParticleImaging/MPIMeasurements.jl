@@ -1,4 +1,9 @@
 
+@testset "SimulatedGaussMeter" begin
+  include("SimulatedGaussMeterTest.jl")
+end
+
+
 if "lakeshore" in ARGS
   @testset "LakeShore" begin
     include("LakeShoreTest.jl")

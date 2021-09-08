@@ -118,7 +118,7 @@ Base.@kwdef struct MPIScannerGeneral
   "Path of the dataset store."
   datasetStore::String
   "Default sequence of the scanner."
-  defaultSequence::String=""
+  defaultSequence::String = ""
 end
 
 """
