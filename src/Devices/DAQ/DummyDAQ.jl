@@ -1,7 +1,7 @@
 export DummyDAQ, DummyDAQParams
 
 Base.@kwdef mutable struct DummyDAQParams <: DeviceParams
-  samplesPerPeriod::Int
+  samplesPerPeriod::Int # Note: The following parameters should come from the sequence
   amplitude::Float32 = 1.0
   frequency::Float32 = 1.0
 end
@@ -21,6 +21,7 @@ function init(daq::DummyDAQ)
 end
 
 checkDependencies(daq::DummyDAQ) = true
+
 function startTx(daq::DummyDAQ)
 end
 
@@ -39,11 +40,11 @@ function setTxParams(daq::DummyDAQ, sequence::Sequence)
 end
 
 function currentFrame(daq::DummyDAQ)
-    return 1;
+  return 1;
 end
 
 function currentPeriod(daq::DummyDAQ)
-    return 1;
+	return 1;
 end
 
 function disconnect(daq::DummyDAQ)

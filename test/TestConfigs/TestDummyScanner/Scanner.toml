@@ -19,7 +19,7 @@ initializationOrder = [
 [Devices.my_daq_id]
 deviceType = "DummyDAQ"
 samplesPerPeriod = 1000
-sendFrequency = "25kHz"
+frequency = "25kHz"
 
 [Devices.my_gauss_id]
 deviceType = "DummyGaussMeter"
