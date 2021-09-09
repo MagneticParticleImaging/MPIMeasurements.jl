@@ -208,6 +208,7 @@ include("RedPitayaDAQ.jl")
 include("DummyDAQ.jl")
 include("SimpleSimulatedDAQ.jl")
 
+
 function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true, endSeq = true)
   if prepTx
       prepareTx(daq, sequence)
