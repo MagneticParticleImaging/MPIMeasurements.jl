@@ -81,7 +81,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
     for dependencyID in keys(dependencies(device))
       device.dependencies[dependencyID] = devices[dependencyID]
     end
-    
+
     if !checkDependencies(device)
       throw(ScannerConfigurationError("Unspecified dependency error in device with ID `$(deviceID(device))`."))
     end
@@ -119,6 +119,8 @@ Base.@kwdef struct MPIScannerGeneral
   datasetStore::String
   "Default sequence of the scanner."
   defaultSequence::String = ""
+  "Default protocol of the scanner."
+  defaultProtocol::String = ""
 end
 
 """
@@ -139,6 +141,7 @@ mutable struct MPIScanner
   guiMode::Bool
   "Currently selected sequence for performing measurements."
   currentSequence::Union{Sequence,Nothing}
+  currentProtocol::Union{Protocol,Nothing}
 
   """
     $(SIGNATURES)
@@ -169,10 +172,15 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
-    currentSequence = generalParams.defaultSequence != "" ? 
+    currentSequence = generalParams.defaultSequence != "" ?
       Sequence(configDir, generalParams.defaultSequence) : nothing
 
-    return new(name, configDir, generalParams, devices, guimode, currentSequence)
+    scanner = new(name, configDir, generalParams, devices, guimode, currentSequence, nothing)
+
+    scanner.currentProtocol = generalParams.defaultProtocol != "" ?
+      Protocol(generalParams.defaultProtocol, scanner) : nothing
+
+    return scanner
   end
 end
 
@@ -252,7 +260,7 @@ Retrieve a list of all sequences available for the scanner.
 function getSequenceList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "Sequences")
   if isdir(path)
-    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(path))] 
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(path))]
   else
     return String[]
   end

@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobots, getRobot
+export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobot, getRobots
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -24,16 +24,6 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _isReferenced(rob::Robot)
 @mustimplement _getPosition(rob::Robot)
 
-getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
-function getRobot(scanner::MPIScanner)
-  robots = getRobots(scanner)
-  if length(robots) > 1
-    error("The scanner has more than one robot device. Therefore, a single robot cannot be retrieved unambiguously.")
-  else
-    return robots[1]
-  end
-end
-
 function init(rob::Robot)
   @info "Initializing robot with ID `$(rob.deviceID)`."
   setup(rob)
@@ -52,7 +42,7 @@ function getRobot(scanner::MPIScanner)
   if length(robots) == 0
     error("The scanner has no robot.")
   elseif length(robots) > 1
-    error("The scanner has more than one robot. Therefore, a single surveillance unit cannot be retrieved unambiguously.")
+    error("The scanner has more than one robot. Therefore, a robot cannot be retrieved unambiguously.")
   else
     return robots[1]
   end

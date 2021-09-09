@@ -1,7 +1,5 @@
 export Protocol, ProtocolParams, name, description, scanner, params, runProtocol, init, execute, cleanup
 
-
-abstract type Protocol end
 abstract type ProtocolParams end
 
 name(protocol::Protocol)::AbstractString = protocol.name
@@ -92,4 +90,5 @@ end
 
 include("DAQMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
+include("RobotBasedSystemMatrixProtocol.jl")
 #include("TransferFunctionProtocol.jl")
