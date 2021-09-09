@@ -208,15 +208,16 @@ include("RedPitayaDAQ.jl")
 include("DummyDAQ.jl")
 include("SimpleSimulatedDAQ.jl")
 
-function asyncProducer(channel::Channel, daq::AbstractDAQ, numFrames; prepTx = true, prepSeq = true, endSeq = true)
+function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true, endSeq = true)
   if prepTx
-      prepareTx(daq)
+      prepareTx(daq, sequence)
   end
   if prepSeq
-      setSequenceParams(daq)
-      prepareSequence(daq)
+      setSequenceParams(daq, sequence)
+      prepareSequence(daq, sequence)
   end
   
+  numFrames = acqNumFrames(sequence) * acqNumFrameAverages(sequence)
   endFrame = startProducer(channel, daq, numFrames)
 
   if endSeq
