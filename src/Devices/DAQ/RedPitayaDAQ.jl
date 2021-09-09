@@ -262,13 +262,7 @@ function setup(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
-  channels = electricalTxChannels(sequence)
-  periodicChannels = [channel for channel in channels if channel isa PeriodicElectricalChannel]
-  stepwiseChannels = [channel for channel in channels if channel isa StepwiseElectricalTxChannel]
-
-  if !isempty(stepwiseChannels)
-    @warn "The Red Pitaya DAQ can only process periodic channels. Other channels are ignored."
-  end
+  periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
@@ -302,23 +296,9 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 
-  #TODO: Should be derived from sequence when I have understood how the passing works
-  #passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)  
-  #slowDACStepsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
- 
-  # if !isempty(daq.params.acqFFValues) 
-  #   numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
-  #   setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
-  #   if !isempty(daq.params.acqEnableSequence)
-  #     enableDACLUT(master(daq.rpc), daq.params.acqEnableSequence)
-  #   else # We might want to solve this differently
-  #     enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
-  #   end
-  # else
-  #   numSlowDACChan(master(daq.rpc), 0)
-  # end
-
-  # numSlowADCChan(daq.rpc, 4)
+  passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)
+  
+  setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
 
   return nothing
 end
@@ -327,6 +307,7 @@ function setupRx(daq::RedPitayaDAQ)
   decimation(daq.rpc, daq.decimation)
   samplesPerPeriod(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.acqPeriodsPerFrame)
+  numSlowADCChan(daq.rpc, 4) # Not used as far as I know 
 end
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
@@ -381,28 +362,16 @@ end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
 function startTx(daq::RedPitayaDAQ)
-  masterTrigger(daq.rpc, false)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
-
-  sleepTime = 0.1
-  breakTime = 2.0
-  loopCounter = 0
-  while RedPitayaDAQServer.currentPeriod(daq.rpc) < 1
-    sleep(sleepTime)
-    loopCounter += 1
-    if loopCounter*sleepTime > breakTime
-      @error "The current period did not increase within $breakTime. Something is wrong with the trigger setup."
-      break
-    end
-  end
-  return nothing
+  @info "Started tx"
 end
 
 function stopTx(daq::RedPitayaDAQ)
   #setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
   masterTrigger(daq.rpc, false)
+  @info "Stopped tx"
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
@@ -431,23 +400,13 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
   
   for (channelID, components_) in phases
     for (componentIdx, phase_) in components_
-      phaseDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"rad", phase_))
+      phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"rad", phase_))
     end
   end
 
   for (channelID, components_) in amplitudes
     for (componentIdx, amplitude_) in components_
-
-      #if postpone
-      # The following is a very bad and dangerous hack. Right now postponing the activation of 
-      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
-      # directly
-      # Note: The Red Pitaya does not allow for convoltution of the signal. Falls back to postponing.
-      if convolute && channelIdx(channelID) <= 2   
-        amplitudeDACNext(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_)) 
-      else
-        amplitudeDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_))
-      end
+        amplitudeDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"V", amplitude_))
     end
   end
 end
