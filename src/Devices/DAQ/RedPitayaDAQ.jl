@@ -256,6 +256,7 @@ function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::DAQRedPitayaScpi
   return uMeas, uRef
 end
 
+#### Tx and Rx
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
   setupTx(daq, sequence)
   setupRx(daq, sequence)
@@ -373,6 +374,18 @@ function stopTx(daq::RedPitayaDAQ)
   masterTrigger(daq.rpc, false)
   @info "Stopped tx"
   #RedPitayaDAQServer.disconnect(daq.rpc)
+end
+
+function prepareTx(daq::RedPitayaDAQ, sequence::Sequence, allowControlLoop = false)
+  stopTx(daq)
+
+  if needsControl(sequence) && allowControlLoop && false # False for now
+    controlLoop(daq)
+  else 
+    # TODO setTxParams
+    #tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+    #setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)))
+  end
 end
 
 """
