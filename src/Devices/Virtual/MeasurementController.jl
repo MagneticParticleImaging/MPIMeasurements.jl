@@ -4,7 +4,7 @@ abstract type AsyncMeasTyp end
 struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
 struct RegularAsyncMeas <: AsyncMeasTyp end
 # TODO Update
-asyncMeasTyp(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
+asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
 mutable struct FrameAverageBuffer
   buffer::Array{Float32, 4}
@@ -24,6 +24,7 @@ mutable struct MeasState
   consumed::Bool
   filename::String
   temperatures::Matrix{Float64}
+  type::AsyncMeasTyp
 end
 
 
@@ -98,7 +99,7 @@ function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4}
   return result
 end
 
-MeasState() = MeasState(0, 0, 1, false, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
+MeasState() = MeasState(0, 0, 1, false, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0), RegularAsyncMeas())
 
 function cancel(calibState::MeasState)
   close(calibState.channel)
@@ -135,7 +136,7 @@ function prepareAsyncMeasurement(daq::AbstractDAQ, sequence::Sequence)
   channel = Channel{channelType(daq)}(32)
 
   # Prepare measState
-  measState = MeasState(numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0))
+  measState = MeasState(numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0), asyncMeasType(sequence))
   measState.channel = channel
   return measState
 end
@@ -198,7 +199,7 @@ end
 function updateFrameBuffer!(measState::MeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
-    isNewFrameAvailable, fr = handleNewFrame(asyncMeasTyp(daq), measState, uMeas)
+    isNewFrameAvailable, fr = handleNewFrame(measState.type, measState, uMeas)
     if isNewFrameAvailable && fr > 0
       measState.currFrame = fr 
       measState.consumed = false
@@ -250,12 +251,17 @@ end
 function measurement(measController::MeasurementController, sequence::Sequence)
   producer, consumer, measState = asyncMeasurement(measController, sequence)
   result = nothing
+
   try
-    wait(consumer)
+    @info "Waiting on consumer"
+    Base.wait(consumer)
   catch e
     if isa(e, TaskFailedException)
       @error e.task.exception
       result = nothing
+    else 
+      @error "Unexpected error"
+      @error e
     end
   end
 

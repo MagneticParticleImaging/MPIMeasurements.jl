@@ -10,7 +10,7 @@ using RedPitayaDAQServer
   EXTERNAL
 end
 
-Base.@kwdef struct RedPitayaDAQParams <: DAQParams
+Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
 
@@ -21,7 +21,7 @@ Base.@kwdef struct RedPitayaDAQParams <: DAQParams
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   calibFFCurrentToVolt::Vector{Float32}
-  calibIntToVolt::Vector{Float32}
+  calibIntToVolt::Array{Float32}
   ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
   ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
   passPDMToFastDAC = false # TODO do properly
@@ -80,6 +80,12 @@ function init(daq::RedPitayaDAQ)
              "unit for resetting it. Please check closely if this should be the case."
       rethrow()
     end
+  end
+
+  try 
+    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, : , 2)
+  catch e
+    @error e
   end
 
   #setACQParams(daq)
@@ -225,7 +231,7 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
   
   if framesInBuffer > 0
       samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
-      frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.params.acqNumAverages, 1)
+      frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
       
 
       c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?

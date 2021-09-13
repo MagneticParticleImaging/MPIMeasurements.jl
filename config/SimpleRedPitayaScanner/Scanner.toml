@@ -12,7 +12,7 @@ defaultProtocol = "RobotBasedSystemMatrixCalibration"
 [Devices]
 initializationOrder = [
   "rp_cluster",
-  "sequence_controller",
+  "measurement_controller",
   "dummy_robot",
   "dummy_surveillance"
 ]
@@ -27,7 +27,11 @@ deviceType = "DummySurveillanceUnit"
 deviceType = "RedPitayaDAQ"
 dependencies = []
 #ips = ["192.168.2.16"] #, "192.168.2.17"]
-ips = ["192.168.178.52"] #, "192.168.178.53"]
+#ips = ["192.168.178.52"] #, "192.168.178.53"]
+ips = ["192.168.1.100"] #, "192.168.1.101"]
+calibFFCurrentToVolt = [0.7, 0.7]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+#passPDMToFastDAC = [true, false]
 
 [Devices.rp_cluster.tx_main]
 type = "tx"
@@ -42,6 +46,7 @@ feedback.calibration = "10mT/V"
 [Devices.rp_cluster.rx_main]
 type = "rx"
 channel = 1
+mapping = "chanx"
 limitPeak = "1V"
 
 [Devices.rp_cluster.feedback_main]
@@ -49,11 +54,11 @@ type = "rx"
 channel = 2
 limitPeak = "1V"
 
-[Devices.sequence_controller]
-deviceType = "SequenceController"
+[Devices.measurement_controller]
+deviceType = "MeasurementController"
 dependencies = [
   "rp_cluster"
 ]
-saveInterval = "0.5s"
-maxControlSteps = 5
+producerThreadID = 2
+consumerThreadID = 3
 
