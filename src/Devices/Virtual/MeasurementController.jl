@@ -266,8 +266,17 @@ function measurement(measController::MeasurementController, sequence::Sequence)
   end
 
   # Check tasks
-  if Base.istaskfailed(producer) || Base.istaskfailed(consumer)
-    @warn "Inner async measurement failed"
+  if Base.istaskfailed(producer)
+    @error "Producer failed"
+    stack = Base.catch_stack(producer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
+    result = nothing
+  elseif  Base.istaskfailed(consumer)
+    @error "Consumer failed"
+    stack = Base.catch_stack(consumer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
     result = nothing
   else
     result = measState.buffer

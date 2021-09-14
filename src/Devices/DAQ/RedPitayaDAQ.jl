@@ -156,7 +156,7 @@ function endSequence(daq::RedPitayaDAQ, endFrame)
   numQueries = 0
     while wp < endSample
       sampleDiff = endSample - wp
-      waitTime = (sampleDiff / (125e6/daq.params.decimation))
+      waitTime = (sampleDiff / (125e6/daq.decimation))
       sleep(waitTime) # Queries are expensive, try to sleep to minimize amount of queries
       numQueries += 1
       wp = currentWP(daq.rpc)
@@ -214,7 +214,8 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   try 
     readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
   catch e
-    @error e 
+    @error e
+    # TODO disconnect and reconnect to recover from open pipeline
   end
   @info "Pipeline finished"
   return endFrame
