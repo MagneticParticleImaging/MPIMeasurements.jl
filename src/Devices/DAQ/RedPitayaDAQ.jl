@@ -260,9 +260,10 @@ function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
   uMeas = nothing
   uRef = nothing
   if !isnothing(frames)
-    uMeas = frames[:, [1], :, :]
+    #uMeas = frames[:, [1], :, :]
     # TODO implement properly once channel work
-    #uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:]
+    uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:] # TODO might need to sort
+    # TODO uRef
     #uRef = frames[:,daq.params.refChanIdx,:,:] # TODO implement once refChanIdx is defined
   end
   return uMeas, uRef
@@ -347,7 +348,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   
   daq.rxChanIDs = []
   # TODO properly fill
-  #=for channel in rxChannels(sequence)
+  for channel in rxChannels(sequence)
     try
       push!(daq.rxChanIDs, id(channel))
     catch e
@@ -361,7 +362,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
         rethrow()
       end
     end
-  end=#
+  end
   #TODO ref channel
 
   setupRx(daq)

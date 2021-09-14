@@ -5,7 +5,7 @@ manufacturer = "Me, Myself and I"
 name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
-datasetStore = "/opt/data/HeadScanner"
+datasetStore = "~/Documents/DatasetStores/store1"
 defaultSequence = "ElectricalSequence"
 defaultProtocol = "RobotBasedSystemMatrixCalibration"
 
