@@ -31,11 +31,22 @@ dependencies = []
 ips = ["192.168.1.100"] #, "192.168.1.101"]
 calibFFCurrentToVolt = [0.7, 0.7]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibFieldToVolt = [20, 20]
 #passPDMToFastDAC = [true, false]
 
-[Devices.rp_cluster.tx_main]
+[Devices.rp_cluster.chanx]
 type = "tx"
 channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
+
+[Devices.rp_cluster.chany]
+type = "tx"
+channel = 2
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
@@ -46,7 +57,6 @@ feedback.calibration = "10mT/V"
 [Devices.rp_cluster.rx_main]
 type = "rx"
 channel = 1
-mapping = "chanx"
 limitPeak = "1V"
 
 [Devices.rp_cluster.feedback_main]

@@ -21,6 +21,7 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   calibFFCurrentToVolt::Vector{Float32}
+  calibFieldToVolt::Vector{Float32}
   calibIntToVolt::Array{Float32}
   ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
   ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
@@ -406,10 +407,10 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence, allowControlLoop = fal
       for comp in components(channel)
         # Lengths check == 1 happens in setupTx already
         amp = amplitude(comp)
-        if dimension(amp) != dimension(1.0u"V")
-          # TODO calibrate
+        if dimension(amp) == dimension(1.0u"T")
           tmp = ustrip(u"T", amp)
-          #amp = tmp * calibFieldToVolt + some uconvert(u"V", ... stuff)
+          # TODO move calib to channel
+          amp = (tmp * daq.params.calibFieldToVolt[channelIdx(daq, name)]) * 1u"V"
         end
         push!(amps, amp)
         push!(phases, phase(comp))
