@@ -234,7 +234,7 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
       samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
       frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
       
-
+      # TODO move this to ref and meas conversion and get the params from the channels
       c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?
       for d = 1:size(frames, 2)
         frames[:, d, :, :] .*= c[1,d]
@@ -282,7 +282,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   end
 
   # Iterate over sequence(!) channels
-  #=for channel in periodicChannels
+  for channel in periodicChannels
     channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
 
     offsetVolts = offset(channel)*calibration(daq, id(channel))
@@ -290,7 +290,8 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     #jumpSharpnessDAC(daq.rpc, channelIdx_, daq.params.jumpSharpness) # TODO: Can we determine this somehow from the sequence?
 
     for (idx, component) in enumerate(components(channel))
-      frequencyDAC(daq.rpc, channelIdx_, idx, divider(component))
+      freq = div(ustrip(u"Hz", txBaseFrequency(sequence)), divider(component))
+      frequencyDAC(daq.rpc, channelIdx_, idx, freq)
     end
 
     # In the Red Pitaya, the signal type can only be set per channel
@@ -307,13 +308,12 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
                                        "defines different waveforms in its components. This is not supported "*
                                        "by the Red Pitaya."))
     end
-  end=#
+  end
 
+  # TODO get from redpitaya channel 
   passPDMToFastDAC(daq.rpc, [false for rp in daq.rpc])
   
   setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
-
-  return nothing
 end
 
 function setupRx(daq::RedPitayaDAQ)
@@ -397,6 +397,30 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence, allowControlLoop = fal
     controlLoop(daq)
   else 
     # TODO setTxParams
+    allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
+    allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
+    for channel in periodicElectricalTxChannels(sequence)
+      name = id(channel)
+      amps = []
+      phases = []
+      for comp in components(channel)
+        # Lengths check == 1 happens in setupTx already
+        amp = amplitude(comp)
+        if dimension(amp) != dimension(1.0u"V")
+          # TODO calibrate
+          tmp = ustrip(u"T", amp)
+          #amp = tmp * calibFieldToVolt + some uconvert(u"V", ... stuff)
+        end
+        push!(amps, amp)
+        push!(phases, phase(comp))
+      end
+      
+      allAmps[name] = amps
+      
+      allPhases[name] = phases
+    
+    end 
+    setTxParams(daq, allAmps, allPhases)
     #tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
     #setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)))
   end
@@ -415,24 +439,24 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
   # but I don't think this is necessary
   for (channelID, components_) in amplitudes
     channelVoltage = 0
-    for (componentIdx, amplitude_) in components_
-      channelVoltage += amplitude_
+    for amplitude_ in components_
+      channelVoltage += ustrip(u"V", amplitude_)
     end
       
-    if channelVoltage >= limitPeak(daq, channelID)
+    if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
       error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
     end
   end
     
   
   for (channelID, components_) in phases
-    for (componentIdx, phase_) in components_
+    for (componentIdx, phase_) in enumerate(components_)
       phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"rad", phase_))
     end
   end
 
   for (channelID, components_) in amplitudes
-    for (componentIdx, amplitude_) in components_
+    for (componentIdx, amplitude_) in enumerate(components_)
         amplitudeDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"V", amplitude_))
     end
   end

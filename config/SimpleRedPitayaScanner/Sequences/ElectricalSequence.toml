@@ -19,26 +19,26 @@ offset = "0.0mT"
 
 [Fields.df.chanx.c1]
 divider = 4800
-amplitude = ["0.02T"]
+amplitude = ["0.2V"]
 phase = ["0.0rad"]
 waveform = "sine"
 
 [Fields.df.chanx.c2]
 divider = 4864
-amplitude = ["0.01T"]
+amplitude = ["0.1V"]
 
 [Fields.df.chany]
 offset = "0.0mT"
 
 [Fields.df.chany.c1]
 divider = 4800
-amplitude = ["0.02T"]
+amplitude = ["0.2V"]
 phase = ["0.0rad"]
 waveform = "sine"
 
 [Fields.df.chany.c2]
 divider = 4864
-amplitude = ["0.01T"]
+amplitude = ["0.1V"]
 
 [Fields.ff]
 safeStartInterval = "0.5s"
