@@ -2,8 +2,8 @@ using Graphics: @mustimplement
 
 export Motor, StepperMotor, MotorDirection
 
-abstract type Motor <: Device 
-abstract type StepperMotor <: Motor
+abstract type Motor <: Device end
+abstract type StepperMotor <: Motor end
 
 @enum MotorDirection begin
   MOTOR_FORWARD

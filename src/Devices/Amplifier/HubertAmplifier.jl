@@ -23,6 +23,8 @@ end
 function init(amp::HubertAmplifier)
   @debug "Initializing Hubert amplifier unit with ID `$(amp.deviceID)`."
 
+	@warn "The code for the Hubert amplifier has not yet been tested within MPIMeasurements!"
+
 	amp.driver = SerialPort(port)
 	open(amp.driver)
 	set_speed(amp.driver, amp.params.baudrate)
