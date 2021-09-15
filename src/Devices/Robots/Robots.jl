@@ -25,7 +25,7 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _getPosition(rob::Robot)
 
 function init(rob::Robot)
-  @info "Initializing robot with ID `$(rob.deviceID)`."
+    @debug "Initializing robot with ID `$(rob.deviceID)`."
   setup(rob)
 end
 

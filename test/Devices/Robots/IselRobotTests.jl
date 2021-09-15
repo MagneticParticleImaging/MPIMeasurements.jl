@@ -1,5 +1,5 @@
 using Gtk
-params = IselRobotParams(stepsPermm=160, serial_port="/dev/ttyUSB0")
+params = IselRobotParams(stepsPermm=160, serial_port="COM3") #/dev/ttyUSB0
 rob = IselRobot(deviceID="iselRob", params=params, dependencies=Dict{String, Union{Device, Missing}}())
 
 if ask_dialog("You are trying to start the Isel robot hardware test. Please ensure that the robot is turned on, is able to reference itself and can move at least 50mm in all positive directions. Please continue only if the robot is safe to move!","Cancel","Start test")

@@ -31,7 +31,7 @@ end
 getSimulationController(scanner::MPIScanner) = getSimulationControllers(scanner)[1]
 
 function init(simCont::SimulationController)
-  @info "Initializing simulation controller with ID `$(simCont.deviceID)`."
+  @debug "Initializing simulation controller with ID `$(simCont.deviceID)`."
 
   if !isnothing(simCont.params.initialCoilTemperatures)
     simCont.coilTemperatures = simCont.params.initialCoilTemperatures

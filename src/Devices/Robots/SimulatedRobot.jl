@@ -28,47 +28,47 @@ _getPosition(rob::SimulatedRobot) = rob.position
 axisRange(rob::SimulatedRobot) = rob.params.axisRange
 
 function _moveAbs(rob::SimulatedRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  @info "SimulatedRobot: Moving to position $("["*join([string(x) for x in pos], ", ")*"]")."
+  @debug "SimulatedRobot: Moving to position $("["*join([string(x) for x in pos], ", ")*"]")."
   vel = speed!==nothing ? speed : rob.params.defaultVelocity
   projected_time = maximum(abs.(rob.position-pos)./vel)
   sleep(ustrip(u"s",projected_time))
   rob.position = pos
-  @info "SimulatedRobot: Movement completed"
+  @debug "SimulatedRobot: Movement completed"
 end
 
 function _moveRel(rob::SimulatedRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  @info "SimulatedRobot: Moving distance $("["*join([string(x) for x in dist], ", ")*"]")"
+  @debug "SimulatedRobot: Moving distance $("["*join([string(x) for x in dist], ", ")*"]")"
   vel = speed!==nothing ? speed : rob.params.defaultVelocity
   projected_time = maximum(abs.(dist)./vel)
   sleep(ustrip(u"s",projected_time))
   rob.position += dist
-  @info "SimulatedRobot: Movement completed"
+  @debug "SimulatedRobot: Movement completed"
 end
 
 function _enable(rob::SimulatedRobot)
-  @info "SimulatedRobot enabled"
+  @debug "SimulatedRobot enabled"
 end
 
 function _disable(rob::SimulatedRobot)
-  @info "SimulatedRobot disabled"
+  @debug "SimulatedRobot disabled"
 end
 
 function _reset(rob::SimulatedRobot)
-  @info "SimulatedRobot reset"
+  @debug "SimulatedRobot reset"
   rob.connected = false
 end
 
 function _setup(rob::SimulatedRobot)
-  @info "SimulatedRobot setup"
+  @debug "SimulatedRobot setup"
   rob.connected = true
   sleep(0.5)
-  @info "SimulatedRobot: Finished setup"
+  @debug "SimulatedRobot: Finished setup"
 end
 
 function _doReferenceDrive(rob::SimulatedRobot)
-  @info "SimulatedRobot: Doing reference drive"
+  @debug "SimulatedRobot: Doing reference drive"
   sleep(2)
-  @info "SimulatedRobot: Reference drive complete"
+  @debug "SimulatedRobot: Reference drive complete"
   rob.referenced = true
 end
 

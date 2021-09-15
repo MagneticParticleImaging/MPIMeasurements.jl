@@ -49,7 +49,7 @@ function getSequenceController(scanner::MPIScanner)
 end
 
 function init(seqCont::SequenceController)
-  @info "Initializing sequence controller with ID `$(seqCont.deviceID)`."
+  @debug "Initializing sequence controller with ID `$(seqCont.deviceID)`."
 end
 
 checkDependencies(seqCont::SequenceController) = true # TODO: Add daq

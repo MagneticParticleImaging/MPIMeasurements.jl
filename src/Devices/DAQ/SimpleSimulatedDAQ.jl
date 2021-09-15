@@ -57,7 +57,7 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
 end
 
 function init(daq::SimpleSimulatedDAQ)
-  @info "Initializing simple simulated DAQ with ID `$(daq.deviceID)`."
+  @debug "Initializing simple simulated DAQ with ID `$(daq.deviceID)`."
 end
 
 function checkDependencies(daq::SimpleSimulatedDAQ)

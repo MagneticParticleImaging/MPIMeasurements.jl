@@ -17,7 +17,7 @@ Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
 end
 
 function init(su::DummySurveillanceUnit)
-  @info "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
+  @debug "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
 end
 
 checkDependencies(su::DummySurveillanceUnit) = true

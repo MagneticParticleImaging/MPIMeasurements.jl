@@ -25,7 +25,7 @@ MPIMeasurements, but also from the outside.
   end
 
   function MPIMeasurements.init(daq::FlexibleDAQ)
-    @info "Initializing flexible DAQ with ID `$(daq.deviceID)`."
+    @debug "Initializing flexible DAQ with ID `$(daq.deviceID)`."
   end
   
   MPIMeasurements.checkDependencies(daq::FlexibleDAQ) = true

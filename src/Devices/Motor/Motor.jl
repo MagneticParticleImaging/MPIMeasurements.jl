@@ -1,31 +1,29 @@
 using Graphics: @mustimplement
 
-export GaussMeter, getGaussMeters, getGaussMeter,  getXValue, getYValue, getZValue, getXYZValues, getTemperature, getFrequency
+export Motor, StepperMotor, MotorDirection
 
-abstract type Motor <: Device end
+abstract type Motor <: Device 
+abstract type StepperMotor <: Motor
+
+@enum MotorDirection begin
+  MOTOR_FORWARD
+  MOTOR_BACKWARD
+  MOTOR_STILL
+end
+
+Base.close(motor::Motor) = nothing
+
+@mustimplement direction(motor::Motor)
+@mustimplement direction(motor::Motor, dir::MotorDirection)
 
 
-include("DummyGaussMeter.jl")
-include("SimulatedGaussMeter.jl")
-#include("LakeShore.jl")
-include("LakeShoreF71.jl")
-
-Base.close(gauss::GaussMeter) = nothing
-
-@mustimplement getXValue(gauss::GaussMeter)
-@mustimplement getYValue(gauss::GaussMeter)
-@mustimplement getZValue(gauss::GaussMeter)
-@mustimplement getTemperature(gauss::GaussMeter)
-@mustimplement getFrequency(gauss::GaussMeter)
-@mustimplement calculateFieldError(gauss::GaussMeter, magneticField::Vector{<:Unitful.BField})
-
-getGaussMeters(scanner::MPIScanner) = getDevices(scanner, GaussMeter)
-function getGaussMeter(scanner::MPIScanner)
-  gaussMeters = getGaussMeters(scanner)
-  if length(gaussMeters) > 1
-    error("The scanner has more than one gaussmeter device. Therefore, a single gaussmeter cannot be retrieved unambiguously.")
+getMotors(scanner::MPIScanner) = getDevices(scanner, Motor)
+function getMotor(scanner::MPIScanner)
+  motors = getMotors(scanner)
+  if length(motors) > 1
+    error("The scanner has more than one motor device. Therefore, a single motor cannot be retrieved unambiguously.")
   else
-    return gaussMeters[1]
+    return motors[1]
   end
 end
 
@@ -36,3 +34,6 @@ function getXYZValues(gauss::GaussMeter)
   values = [getXValue(gauss), getYValue(gauss), getZValue(gauss)]
   return gauss.params.coordinateTransformation*values
 end
+
+include("SimulatedMotor.jl")
+#include("TinkerforgeSilentStepper.jl")

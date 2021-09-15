@@ -1,4 +1,5 @@
 #include("SerialDevices/SerialDevices.jl")
+include("Amplifier/Amplifier.jl")
 include("DAQ/DAQ.jl")
 include("GaussMeter/GaussMeter.jl")
 include("Robots/Robots.jl")

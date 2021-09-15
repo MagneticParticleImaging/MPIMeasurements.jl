@@ -165,7 +165,7 @@ mutable struct MPIScanner
       throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
     end
 
-    @info "Instantiating scanner `$name` from configuration file at `$filename`."
+    @debug "Instantiating scanner `$name` from configuration file at `$filename`."
 
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])

@@ -15,7 +15,7 @@ Base.@kwdef mutable struct SimulatedGaussMeter <: GaussMeter
 end
 
 function init(gauss::SimulatedGaussMeter)
-  @info "Initializing simulated gaussmeter unit with ID `$(gauss.deviceID)`."
+  @debug "Initializing simulated gaussmeter unit with ID `$(gauss.deviceID)`."
 end
 
 checkDependencies(gauss::SimulatedGaussMeter) = true
