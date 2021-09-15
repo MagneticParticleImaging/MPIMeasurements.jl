@@ -5,14 +5,15 @@ manufacturer = "Me, Myself and I"
 name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
-datasetStore = "/opt/data/HeadScanner"
+#datasetStore = "/opt/data/HeadScanner"
+datasetStore = "~/Documents/DatasetStores/store1"
 defaultSequence = "ElectricalSequence"
 defaultProtocol = "RobotBasedSystemMatrixCalibration"
 
 [Devices]
 initializationOrder = [
   "rp_cluster",
-  "sequence_controller",
+  "measurement_controller",
   "dummy_robot",
   "dummy_surveillance"
 ]
@@ -27,9 +28,14 @@ deviceType = "DummySurveillanceUnit"
 deviceType = "RedPitayaDAQ"
 dependencies = []
 #ips = ["192.168.2.16"] #, "192.168.2.17"]
-ips = ["192.168.178.52"] #, "192.168.178.53"]
+#ips = ["192.168.178.52"] #, "192.168.178.53"]
+ips = ["192.168.1.100"] #, "192.168.1.101"]
+calibFFCurrentToVolt = [0.7, 0.7]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibFieldToVolt = [20, 20]
+#passPDMToFastDAC = [true, false]
 
-[Devices.rp_cluster.tx_main]
+[Devices.rp_cluster.chanx]
 type = "tx"
 channel = 1
 limitPeak = "1V"
@@ -39,9 +45,24 @@ calibration = "0.1V/mT"
 feedback.channelID = "feedback_main"
 feedback.calibration = "10mT/V"
 
+[Devices.rp_cluster.chany]
+type = "tx"
+channel = 2
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
+
 [Devices.rp_cluster.rx_main]
 type = "rx"
-channel = 1
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx_side]
+type = "rx"
+channel = 2
 limitPeak = "1V"
 
 [Devices.rp_cluster.feedback_main]
@@ -49,11 +70,11 @@ type = "rx"
 channel = 2
 limitPeak = "1V"
 
-[Devices.sequence_controller]
-deviceType = "SequenceController"
+[Devices.measurement_controller]
+deviceType = "MeasurementController"
 dependencies = [
   "rp_cluster"
 ]
-saveInterval = "0.5s"
-maxControlSteps = 5
+producerThreadID = 2
+consumerThreadID = 3
 

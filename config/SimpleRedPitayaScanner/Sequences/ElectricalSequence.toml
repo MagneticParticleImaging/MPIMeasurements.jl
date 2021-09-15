@@ -64,16 +64,9 @@ phase = "0.0rad"
 waveform = "sine"
 
 [Acquisition]
-channels = ["rx_channel_id"]
+channels = ["rx_main", "rx_side"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
-
-[Acquisition.Foreground]
 numFrames = 20
 numAverages = 1
 numFrameAverages = 1
-
-[Acquisition.Background]
-numFrames = 2
-numAverages = 5
-numFrameAverages = 3

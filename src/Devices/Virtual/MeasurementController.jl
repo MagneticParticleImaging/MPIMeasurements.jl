@@ -1,10 +1,10 @@
-export MeasurementController
+export MeasurementController, MeasurementControllerParams, measurement, MeasState, asyncMeasurement
 
 abstract type AsyncMeasTyp end
 struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
 struct RegularAsyncMeas <: AsyncMeasTyp end
 # TODO Update
-asyncMeasTyp(daq::AbstractDAQ) = daq.params.acqNumFrameAverages > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
+asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
 mutable struct FrameAverageBuffer
   buffer::Array{Float32, 4}
@@ -24,6 +24,7 @@ mutable struct MeasState
   consumed::Bool
   filename::String
   temperatures::Matrix{Float64}
+  type::AsyncMeasTyp
 end
 
 
@@ -33,7 +34,8 @@ Base.@kwdef mutable struct MeasurementControllerParams <: DeviceParams
     store::Union{String, DatasetStore, Nothing} = nothing
     bgdata::Union{Nothing} = nothing
 end
-  
+
+MeasurementControllerParams(dict::Dict) = params_from_dict(MeasurementControllerParams, dict)
 
 Base.@kwdef mutable struct MeasurementController <: VirtualDevice
     deviceID::String
@@ -43,6 +45,20 @@ Base.@kwdef mutable struct MeasurementController <: VirtualDevice
     measState::Union{MeasState, Nothing} = nothing 
     producer::Union{Task,Nothing} = nothing
     consumer::Union{Task, Nothing} = nothing
+end
+
+function checkDependencies(measCont::MeasurementController)
+  try 
+    dependency(measCont, AbstractDAQ)
+  catch e 
+    @error e
+    return false
+  end
+  return true
+end
+
+function init(measCont::MeasurementController)
+  @info "Initializing measurement controller with ID `$(measCont.deviceID)`."
 end
 
 ####  Async version  ####
@@ -83,7 +99,7 @@ function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4}
   return result
 end
 
-MeasState() = MeasState(0, 0, 1, false, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0))
+MeasState() = MeasState(0, 0, 1, false, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, false, "", zeros(Float64,0,0), RegularAsyncMeas())
 
 function cancel(calibState::MeasState)
   close(calibState.channel)
@@ -91,48 +107,45 @@ function cancel(calibState::MeasState)
   measState.consumed = true
 end
 
-function asyncMeasurement(measController::MeasurementController)
+function asyncMeasurement(measController::MeasurementController, sequence=Sequence)
   daq = dependency(measController, AbstractDAQ)
-  measController.measState = prepareAsyncMeasurement(daq)
+  measState = prepareAsyncMeasurement(daq, sequence)
   measController.measState = measState
-  startAsyncMeasurement(measController)
-  return measState
+  measController.producer = @tspawnat measController.params.producerThreadID asyncProducer(measState.channel, measController, sequence)  
+  bind(measState.channel, measController.producer)
+  measController.consumer = @tspawnat measController.params.consumerThreadID asyncConsumer(measState.channel, measController)
+  return measController.producer, measController.consumer, measState
 end
 
-function prepareAsyncMeasurement(daq::AbstractDAQ)
-  updateParams!(daq, params_) # TODO
-  params["dfCycle"] = daq.params.dfCycle # pretty bad hack
-
-  numFrames = daq.params.acqNumFrames
-  rxNumSamplingPoints = daq.params.rxNumSamplingPoints
-  numPeriods = daq.params.acqNumPeriodsPerFrame
+function prepareAsyncMeasurement(daq::AbstractDAQ, sequence::Sequence)
+  numFrames = acqNumFrames(sequence)
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence)
+  frameAverage = acqNumFrameAverages(sequence)
+  setup(daq, sequence)
 
   # Prepare buffering structures
   @info "Allocating buffer for $numFrames frames"
-  buffer = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,numFrames)
+  # TODO implement properly with only RxMeasurementChannels
+  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)
+  #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
   avgBuffer = nothing
-  if daq.params.acqNumFrameAverages > 1
-    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, daq.params.acqNumFrameAverages)), 1)
+  if frameAverage > 1
+    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, frameAverage)), 1)
   end
   channel = Channel{channelType(daq)}(32)
 
   # Prepare measState
-  measState = MeasState(numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0))
+  measState = MeasState(numFrames, 0, 1, false, nothing, AsyncBuffer(daq), buffer, avgBuffer, false, "", zeros(Float64,0,0), asyncMeasType(sequence))
   measState.channel = channel
   return measState
 end
 
-function startAsyncMeasurement(measController::MeasurementController)
-  measController.producer = @tspawnat measController.params.producerThreadID asyncProducer(measState.channel, measController, numFrames * numFrameAverages)
-  bind(measState.channel, measState.producer)
-  measState.consumer = @tspawnat measController.params.consumerThreadID asyncConsumer(measState.channel, measController)
-end
-
-function asyncProducer(channel::Channel, measController::MeasurementController, numFrames)
+function asyncProducer(channel::Channel, measController::MeasurementController, sequence::Sequence)
   su = nothing 
   if hasDependency(measController, SurveillanceUnit)
     su = dependency(measController, SurveillanceUnit)
-    enableACPower(su, ...) # TODO
+    #enableACPower(su, ...) # TODO
   end
   robot = nothing
   if hasDependency(measController, Robot)
@@ -141,11 +154,11 @@ function asyncProducer(channel::Channel, measController::MeasurementController, 
   end
 
   daq = dependency(measController, AbstractDAQ)
-  asyncProducer(channel, daq, numFrames)
-  disconnect(daq)
+  asyncProducer(channel, daq, sequence)
+  #disconnect(daq)
   
   if !isnothing(su)
-    disableACPower(su, scanner)
+    #disableACPower(su, scanner)
   end
   if !isnothing(robot)
     setEnabled(robot, true)
@@ -154,6 +167,7 @@ end
 
 function asyncConsumer(channel::Channel, measController::MeasurementController)
   daq = dependency(measController, AbstractDAQ)
+  measState = measController.measState
   innerAsyncConsumer(channel, measState, daq)
 
   # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
@@ -161,10 +175,10 @@ function asyncConsumer(channel::Channel, measController::MeasurementController)
   #  params["calibTemperatures"] = measState.temperatures
   #end
 
-  if !isnothing(measController.params.store)
-    @info "Storing result"
-    measState.filename = saveasMDF(measController.params.store, daq, measState.buffer, ..., bgdata=bgdata)
-  end
+  #if !isnothing(measController.params.store)
+  #  @info "Storing result"
+  #  measState.filename = saveasMDF(measController.params.store, daq, measState.buffer, ..., bgdata=bgdata)
+  #end
 end
 
 function innerAsyncConsumer(channel::Channel, measState::MeasState, daq::AbstractDAQ)
@@ -185,7 +199,7 @@ end
 function updateFrameBuffer!(measState::MeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
-    isNewFrameAvailable, fr = handleNewFrame(asyncMeasTyp(daq), measState, uMeas)
+    isNewFrameAvailable, fr = handleNewFrame(measState.type, measState, uMeas)
     if isNewFrameAvailable && fr > 0
       measState.currFrame = fr 
       measState.consumed = false
@@ -234,21 +248,40 @@ end
 
 
 #### Sync version ####
-function measurement(measController::MeasurementController)
-  measState = asyncMeasurement(measController)
+function measurement(measController::MeasurementController, sequence::Sequence)
+  producer, consumer, measState = asyncMeasurement(measController, sequence)
   result = nothing
+
+  try 
+    Base.wait(producer)
+  catch e 
+    if !isa(e, TaskFailedException) 
+      @error "Unexpected error"
+      @error e
+    end
+  end
+
   try
-    wait(measState.consumer)
+    Base.wait(producer)
   catch e
-    if isa(e, TaskFailedException)
-      @error e.task.exception
-      result = nothing
+    if !isa(e, TaskFailedException)
+      @error "Unexpected error"
+      @error e
     end
   end
 
   # Check tasks
-  if Base.istaskfailed(measState.producer) || Base.istaskfailed(measState.consumer)
-    @warn "Inner async measurement failed"
+  if Base.istaskfailed(producer)
+    @error "Producer failed"
+    stack = Base.catch_stack(producer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
+    result = nothing
+  elseif  Base.istaskfailed(consumer)
+    @error "Consumer failed"
+    stack = Base.catch_stack(consumer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
     result = nothing
   else
     result = measState.buffer

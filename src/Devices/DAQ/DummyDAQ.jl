@@ -1,7 +1,8 @@
 export DummyDAQ, DummyDAQParams
 
 Base.@kwdef mutable struct DummyDAQParams <: DeviceParams
-  samplesPerPeriod::Int # Note: The following parameters should come from the sequence
+  # Here "only" for user/toml parameter
+  samplesPerPeriod::Int
   amplitude::Float32 = 1.0
   frequency::Float32 = 1.0
 end
@@ -14,6 +15,8 @@ Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
   params::DummyDAQParams
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+
+  # Here for any other internal parameters
 end
 
 function init(daq::DummyDAQ)
@@ -28,16 +31,44 @@ end
 function stopTx(daq::DummyDAQ)
 end
 
-function setTxParams(daq::DummyDAQ, amplitude, frequency)
-  daq.params.amplitude = amplitude
+# Version 1
+# Parameter list can grow very large, but all are "known" in function signature
+#=function setTxParams(daq::DummyDAQ, amplitude, frequency)
+  daq.params.amplitude = amplitude # Only set them if they need to be remembered/used obvs
   daq.params.frequency = frequency
+  doSomething(daq.params.amplitude)
+  doSomething(daq.params.amplitude)
 end
 function setTxParams(daq::DummyDAQ, sequence::Sequence)
   temp = electricalTxChannels(sequence)
   channels = [channel for channel in temp if channel isa periodicElectricalTxChannels]
   component = components(channels[1])
   setTxParams(daq, amplitude(component), divider(component))
+end=#
+
+# Version 2
+# Paraemter list is hidden, but if someone wants to call function directly they need to know which parameters to set
+function setTxParams(daq::DummyDAQ, sequence::Sequence)
+  temp = electricalTxChannels(sequence)
+  channels = [channel for channel in temp if channel isa periodicElectricalTxChannels]
+  component = components(channels[1])
+  daq.params.amplitude = amplitude(component)
+  daq.params.frequency = divider(component)
+  daq.state = 1
+  setTxParams(daq)
 end
+function setTxParams(daq::DummyDAQ)
+  doSomething(daq.params.amplitude)
+  doSomething(daq.params.amplitude)
+end
+# Or maybe an additional helper function, could also be used in f(daq, seq) then
+function setTxParams(daq::DummyDAQ, amplitude, frequency)
+  daq.params.amplitude = amplitude
+  daq.params.frequency = frequency
+  setTxParams(daq)
+end
+
+
 
 function currentFrame(daq::DummyDAQ)
   return 1;
@@ -69,7 +100,7 @@ function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
 
     uMeas[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.samplesPerPeriod))
     uRef[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.samplesPerPeriod))
-    
+
     return uMeas, uRef
 end
 refToField(daq::DummyDAQ, d::Int64) = 0.0
@@ -86,7 +117,7 @@ function AsyncBuffer(daq::DummyDAQ)
     return DummyAsyncBuffer(nothing)
 end
 
-function frameAverageBufferSize(daq::DummyDAQ, frameAverages) 
+function frameAverageBufferSize(daq::DummyDAQ, frameAverages)
     # 1 Rx channel and 1 period per frame
     return daq.params.rxNumSamplingPoints, 1, 1, frameAverages
 end
@@ -106,24 +137,24 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
     frames = nothing
     samplesInBuffer = size(samples)[2]
     framesInBuffer = div(samplesInBuffer, daq.params.samplesPerPeriod)
-    
+
     if framesInBuffer > 0
         samplesToConvert = samples[:, 1:(daq.params.samplesPerPeriod * framesInBuffer)]
         temp = reshape(samplesToConvert, 2, daq.params.samplesPerPeriod, 1, 1)
         frames = zeros(Float32, daq.params.samplesPerPeriod, 2, 1, 1)
         frames[:, 1, :, :] = temp[1, :, :, :]
         frames[:, 2, :, :] = temp[2, :, :, :]
-        
+
         if (daq.params.samplesPerPeriod * framesInBuffer) + 1 <= samplesInBuffer
             unusedSamples = samples[:, (daq.params.samplesPerPeriod * framesInBuffer) + 1:samplesInBuffer]
-        else 
+        else
           unusedSamples = nothing
         end
-  
+
     end
 
     buffer.samples = unusedSamples
-    
+
     uMeas = nothing
     uRef = nothing
     if !isnothing(frames)
@@ -135,11 +166,11 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
 end
 
 function startProducer(channel::Channel, daq::DummyDAQ)
-    startTx(daq)    
+    startTx(daq)
     startFrame = 1
     endFrame = numFrames + 1
     currentFrame = startFrame
-    try 
+    try
         while currentFrame < endFrame
             samples = zeros(Float32, 2, daq.params.samplesPerPeriod)
             samples[1, :] = daq.params.amplitude * sin.(daq.params.frequency .* range(0,2*pi, length=daq.params.samplesPerPeriod))

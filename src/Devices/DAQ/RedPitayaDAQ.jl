@@ -10,7 +10,7 @@ using RedPitayaDAQServer
   EXTERNAL
 end
 
-Base.@kwdef struct RedPitayaDAQParams <: DAQParams
+Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
 
@@ -20,6 +20,12 @@ Base.@kwdef struct RedPitayaDAQParams <: DAQParams
   triggerMode::RPTriggerMode = EXTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
+  calibFFCurrentToVolt::Vector{Float32}
+  calibFieldToVolt::Vector{Float32}
+  calibIntToVolt::Array{Float32}
+  ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
+  ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
+  passPDMToFastDAC = false # TODO do properly
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -36,10 +42,21 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   dependencies::Dict{String, Union{Device, Missing}}
 
   "Reference to the Red Pitaya cluster"
-  rpc::Union{RedPitayaCluster, Missing} = missing
+  rpc::Union{RedPitayaCluster, Nothing} = nothing
 
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
+  acqSeq::Union{AbstractSequence, Nothing} = nothing
+  samplesPerStep::Int32 = 0
+  decimation::Int32 = 64
+  passPDMToFastDAC::Vector{Bool} = []
+  samplingPoints::Int = 1
+  sampleAverages::Int = 1
+  acqPeriodsPerFrame::Int = 1
+  acqPeriodsPerPatch::Int = 1
+  acqNumFrames::Int = 1
+  acqNumFrameAverages::Int = 1
+  acqNumAverages::Int = 1
 end
 
 function init(daq::RedPitayaDAQ)
@@ -66,6 +83,12 @@ function init(daq::RedPitayaDAQ)
     end
   end
 
+  try 
+    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, : , 2)
+  catch e
+    @error e
+  end
+
   #setACQParams(daq)
   masterTrigger(daq.rpc, false)
   triggerMode(daq.rpc, string(daq.params.triggerMode))
@@ -76,32 +99,185 @@ end
 
 checkDependencies(daq::RedPitayaDAQ) = true
 
+
+#### Sequence ####
+function setSequenceParams(daq::RedPitayaDAQ, lut, enableLUT = nothing)
+  @info "Set sequence params"
+  stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqPeriodsPerPatch)
+  samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
+  daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
+  clearSequence(daq.rpc)
+
+  if !isnothing(lut) 
+    numSlowDACChan(master(daq.rpc), size(lut, 1))
+    lut = lut.*daq.params.calibFFCurrentToVolt
+    #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
+    #TODO Distribute sequence on multiple redpitayas, not all the same
+    daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
+    daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+    appendSequence(master(daq.rpc), daq.acqSeq)
+  else
+    numSlowDACChan(master(daq.rpc), 0)
+    daq.acqSeq = nothing
+  end
+end
+function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
+  lut = nothing
+  channels = acyclicElectricalTxChannels(sequence)
+  temp = [MPIFiles.values(channel) for channel in channels]
+  if length(temp) > 0 # TODO Make this generic for at least the master
+    if length(temp) == 1
+      lut = [ustrip(u"V", x) for x in temp[1]]
+    else #if length(temp) == 2
+      lut1 = [ustrip(u"V", x) for x in temp[1]]
+      lut2 = [ustrip(u"V", x) for x in temp[2]]
+      lut = collect(cat(lut1,lut2,dims=2)')
+    end
+    #lut = lut .* daq.params.calibFFCurrentToVolt
+  end
+  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+  setSequenceParams(daq, lut, nothing)
+end
+
+function prepareSequence(daq::RedPitayaDAQ, sequence::Sequence)
+  if !isnothing(daq.acqSeq)
+    @info "Preparing sequence"
+    success = RedPitayaDAQServer.prepareSequence(daq.rpc)
+    if !success
+      @warn "Failed to prepare sequence"
+    end
+  end
+end
+
+function endSequence(daq::RedPitayaDAQ, endFrame)
+  sampPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  endSample = (endFrame + 1) * sampPerFrame
+  wp = currentWP(daq.rpc)
+  # Wait for sequence to finish
+  numQueries = 0
+    while wp < endSample
+      sampleDiff = endSample - wp
+      waitTime = (sampleDiff / (125e6/daq.decimation))
+      sleep(waitTime) # Queries are expensive, try to sleep to minimize amount of queries
+      numQueries += 1
+      wp = currentWP(daq.rpc)
+  end 
+  stopTx(daq)
+end
+
+function getFrameTiming(daq::RedPitayaDAQ)
+  startSample = RedPitayaDAQServer.start(daq.acqSeq) * daq.samplesPerStep
+  startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  endFrame = div((length(daq.acqSeq) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  return startFrame, endFrame
+end
+
+#### Producer/Consumer ####
+mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
+  samples::Union{Matrix{Int16}, Nothing}
+  performance::Vector{Vector{PerformanceData}}
+end
+AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
+
+channelType(daq::RedPitayaDAQ) = SampleChunk
+
+function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+  samples = chunk.samples
+  perfs = chunk.performance
+  push!(buffer.performance, perfs)
+  if !isnothing(buffer.samples)
+    buffer.samples = hcat(buffer.samples, samples)
+  else 
+    buffer.samples = samples
+  end
+  for (i, p) in enumerate(perfs)
+    if p.status.overwritten || p.status.corrupted
+        @warn "RedPitaya $i lost data"
+    end
+end
+end
+
+function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages) 
+  return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
+end
+
+function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
+  startFrame, endFrame = getFrameTiming(daq)
+  startTx(daq)
+    
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  startSample = startFrame * samplesPerFrame
+  samplesToRead = samplesPerFrame * numFrames
+  chunkSize = Int(ceil(0.1 * (125e6/daq.decimation)))
+
+  # Start pipeline
+  @info "Pipeline started"
+  try 
+    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize) 
+  catch e
+    @error e
+    # TODO disconnect and reconnect to recover from open pipeline
+    @info "Attempting reconnect to reset pipeline"
+    daq.rpc = RedPitayaCluster(daq.params.ips)
+  end
+  @info "Pipeline finished"
+  return endFrame
+end
+
+
+function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
+  unusedSamples = buffer.samples
+  samples = buffer.samples
+  frames = nothing
+  samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
+  samplesInBuffer = size(samples)[2]
+  framesInBuffer = div(samplesInBuffer, samplesPerFrame)
+  
+  if framesInBuffer > 0
+      samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
+      frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
+      
+      # TODO move this to ref and meas conversion and get the params from the channels
+      c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?
+      for d = 1:size(frames, 2)
+        frames[:, d, :, :] .*= c[1,d]
+        frames[:, d, :, :] .+= c[2,d]
+      end
+      
+      if (samplesPerFrame * framesInBuffer) + 1 <= samplesInBuffer
+          unusedSamples = samples[:, (samplesPerFrame * framesInBuffer) + 1:samplesInBuffer]
+      else 
+        unusedSamples = nothing
+      end
+
+  end
+
+  buffer.samples = unusedSamples
+  return frames
+
+end
+
+function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
+  frames = convertSamplesToFrames!(buffer, daq)
+  uMeas = nothing
+  uRef = nothing
+  if !isnothing(frames)
+    #uMeas = frames[:, [1], :, :]
+    uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:] 
+    uRef = frames[:, channelIdx(daq, daq.refChanIDs),:,:]
+  end
+  return uMeas, uRef
+end
+
+#### Tx and Rx
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
-  setupTx(daq, sequence)
   setupRx(daq, sequence)
+  setupTx(daq, sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
-  @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
-                                                   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
-  
-  # The decimation can only be a power of 2 beginning with 8
-  decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence)/2)
-  if decimation_ in [2^n for n in 3:8]
-    decimation(daq.rpc, decimation_)
-  else
-    throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
-                                    "the base frequency of $(txBaseFrequency(sequence)) has a value of $decimation_ "*
-                                    "but has to be a power of 2"))
-  end
-
-  channels = electricalTxChannels(sequence)
-  periodicChannels = [channel for channel in channels if channel isa PeriodicElectricalChannel]
-  stepwiseChannels = [channel for channel in channels if channel isa StepwiseElectricalTxChannel]
-
-  if !isempty(stepwiseChannels)
-    @warn "The Red Pitaya DAQ can only process periodic channels. Other channels are ignored."
-  end
+  @info "Setup tx"
+  periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
@@ -116,7 +292,8 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     #jumpSharpnessDAC(daq.rpc, channelIdx_, daq.params.jumpSharpness) # TODO: Can we determine this somehow from the sequence?
 
     for (idx, component) in enumerate(components(channel))
-      frequencyDAC(daq.rpc, channelIdx_, idx, divider(component))
+      freq = div(ustrip(u"Hz", txBaseFrequency(sequence)), divider(component))
+      frequencyDAC(daq.rpc, channelIdx_, idx, freq)
     end
 
     # In the Red Pitaya, the signal type can only be set per channel
@@ -135,35 +312,47 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 
-  #TODO: Should be derived from sequence when I have understood how the passing works
-  #passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)  
-  #slowDACStepsPerFrame(daq.rpc, div(daq.params.acqNumPeriodsPerFrame,daq.params.acqNumPeriodsPerPatch))
- 
-  # if !isempty(daq.params.acqFFValues) 
-  #   numSlowDACChan(master(daq.rpc), daq.params.acqNumFFChannels)
-  #   setSlowDACLUT(master(daq.rpc), daq.params.acqFFValues.*daq.params.calibFFCurrentToVolt)
-  #   if !isempty(daq.params.acqEnableSequence)
-  #     enableDACLUT(master(daq.rpc), daq.params.acqEnableSequence)
-  #   else # We might want to solve this differently
-  #     enableDACLUT(master(daq.rpc), ones(Bool, length(daq.params.acqFFValues)))
-  #   end
-  # else
-  #   numSlowDACChan(master(daq.rpc), 0)
-  # end
-
-  # numSlowADCChan(daq.rpc, 4)
-
-  return nothing
+  # TODO get from redpitaya channel 
+  passPDMToFastDAC(daq.rpc, [false for rp in daq.rpc])
+  
+  setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
 end
 
+function setupRx(daq::RedPitayaDAQ)
+  @info "Setup rx"
+  decimation(daq.rpc, daq.decimation)
+  samplesPerPeriod(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
+  periodsPerFrame(daq.rpc, daq.acqPeriodsPerFrame)
+  numSlowADCChan(daq.rpc, 4) # Not used as far as I know 
+end
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
-  samplesPerPeriod(daq.rpc, rxNumSamplesPerPeriod(sequence))
-  periodsPerFrame(daq.rpc, acqNumPeriodsPerFrame(sequence))
+  @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
+  "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
+
+  # The decimation can only be a power of 2 beginning with 8
+  decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence)/2)
+  if decimation_ in [2^n for n in 3:8]
+    daq.decimation = decimation_
+  else
+    throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
+      "the base frequency of $(txBaseFrequency(sequence)) has a value of $decimation_ "*
+      "but has to be a power of 2"))
+  end
+
+  # TODO differentiate between foreground and background
+  daq.acqNumFrames = acqNumFrames(sequence)
+  daq.acqNumFrameAverages = acqNumFrameAverages(sequence)
+  daq.acqNumAverages = acqNumAverages(sequence)
+  daq.samplingPoints = rxNumSamplesPerPeriod(sequence)
+  daq.acqPeriodsPerFrame = acqNumPeriodsPerFrame(sequence)
   
+  daq.rxChanIDs = []
   for channel in rxChannels(sequence)
     try
       push!(daq.rxChanIDs, id(channel))
     catch e
+      # I dont think this can be thrown here, only if we access the daq.params.channel with id
+      # which we could do as a sanity check but I'd rather do that in an init/validate function
       if e isa KeyError
         throw(ScannerConfigurationError("The given sequence `$(name(sequence))` requires a receive "*
                                         "channel with ID `$(channel.id)`, which is not defined by "*
@@ -173,33 +362,75 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
       end
     end
   end
+  
+  # TODO possibly move some of this into abstract daq
+  daq.refChanIDs = []
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
+  daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
+
+
+
+  setupRx(daq)
+end
+function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsPerFrame, numFrames; numFrameAverage=1, numAverages=1)
+  daq.decimation = decimation
+  daq.samplingPoints = numSamplesPerPeriod
+  daq.acqPeriodsPerFrame = numPeriodsPerFrame
+  daq.acqNumFrames = numFrames
+  daq.acqNumFrameAverages = numFrameAverage
+  daq.acqNumAverages = numAverages
+  setupRx(daq)
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
 function startTx(daq::RedPitayaDAQ)
-  masterTrigger(daq.rpc, false)
   startADC(daq.rpc)
   masterTrigger(daq.rpc, true)
-
-  sleepTime = 0.1
-  breakTime = 2.0
-  loopCounter = 0
-  while RedPitayaDAQServer.currentPeriod(daq.rpc) < 1
-    sleep(sleepTime)
-    loopCounter += 1
-    if loopCounter*sleepTime > breakTime
-      @error "The current period did not increase within $breakTime. Something is wrong with the trigger setup."
-      break
-    end
-  end
-  return nothing
+  @info "Started tx"
 end
 
 function stopTx(daq::RedPitayaDAQ)
   #setTxParams(daq, zeros(ComplexF64, numTxChannels(daq),numTxChannels(daq)))
   stopADC(daq.rpc)
   masterTrigger(daq.rpc, false)
+  @info "Stopped tx"
   #RedPitayaDAQServer.disconnect(daq.rpc)
+end
+
+function prepareTx(daq::RedPitayaDAQ, sequence::Sequence, allowControlLoop = false)
+  stopTx(daq)
+
+  if needsControl(sequence) && allowControlLoop && false # False for now
+    controlLoop(daq)
+  else 
+    # TODO setTxParams
+    allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
+    allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
+    for channel in periodicElectricalTxChannels(sequence)
+      name = id(channel)
+      amps = []
+      phases = []
+      for comp in components(channel)
+        # Lengths check == 1 happens in setupTx already
+        amp = amplitude(comp)
+        if dimension(amp) == dimension(1.0u"T")
+          tmp = ustrip(u"T", amp)
+          # TODO move calib to channel
+          amp = (tmp * daq.params.calibFieldToVolt[channelIdx(daq, name)]) * 1u"V"
+        end
+        push!(amps, amp)
+        push!(phases, phase(comp))
+      end
+      
+      allAmps[name] = amps
+      
+      allPhases[name] = phases
+    
+    end 
+    setTxParams(daq, allAmps, allPhases)
+    #tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
+    #setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)))
+  end
 end
 
 """
@@ -215,35 +446,25 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
   # but I don't think this is necessary
   for (channelID, components_) in amplitudes
     channelVoltage = 0
-    for (componentIdx, amplitude_) in components_
-      channelVoltage += amplitude_
+    for amplitude_ in components_
+      channelVoltage += ustrip(u"V", amplitude_)
     end
       
-    if channelVoltage >= limitPeak(daq, channelID)
+    if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
       error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
     end
   end
     
   
   for (channelID, components_) in phases
-    for (componentIdx, phase_) in components_
-      phaseDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"rad", phase_))
+    for (componentIdx, phase_) in enumerate(components_)
+      phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"rad", phase_))
     end
   end
 
   for (channelID, components_) in amplitudes
-    for (componentIdx, amplitude_) in components_
-
-      #if postpone
-      # The following is a very bad and dangerous hack. Right now postponing the activation of 
-      # fast Tx channels into the sequence does not work on slave RPs. For this reason we switch it on there
-      # directly
-      # Note: The Red Pitaya does not allow for convoltution of the signal. Falls back to postponing.
-      if convolute && channelIdx(channelID) <= 2   
-        amplitudeDACNext(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_)) 
-      else
-        amplitudeDAC(daq.rpc, channelIdx(channelID), componentIdx, ustrip(u"V", amplitude_))
-      end
+    for (componentIdx, amplitude_) in enumerate(components_)
+        amplitudeDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"V", amplitude_))
     end
   end
 end

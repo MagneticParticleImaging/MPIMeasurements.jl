@@ -58,13 +58,6 @@ waveform = "triangle"
 channels = ["rx_main"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
-
-[Acquisition.Foreground]
 numFrames = 20
 numAverages = 1
 numFrameAverages = 1
-
-[Acquisition.Background]
-numFrames = 2
-numAverages = 5
-numFrameAverages = 3
