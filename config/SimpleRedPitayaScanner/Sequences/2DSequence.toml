@@ -1,27 +1,44 @@
 [General]
-name = "SimpleRedPitayaSequence"
+name = "2DSequence"
 description = "Precise description."
-targetScanner = "TestRedPitayaScanner"
+targetScanner = "HeadScanner"
 baseFrequency = "125.0MHz"
+triggered = false
 
 [Fields]
 
-[Fields.my_df]
+[Fields.df]
 safeStartInterval = "0.5s"
 safeEndInterval = "0.5s"
 safeErrorInterval = "0.5s"
 control = true
 decouple = true
 
-[Fields.df.tx_main]
-waveform = "sine"
+[Fields.df.chanx]
 offset = "0.0mT"
 
-[Fields.df.tx_main.main_component]
+[Fields.df.chanx.c1]
 divider = 4800
-amplitude = ["0.027T"]
+amplitude = ["0.02T"]
 phase = ["0.0rad"]
+waveform = "sine"
 
+[Fields.df.chanx.c2]
+divider = 4864
+amplitude = ["0.01T"]
+
+[Fields.df.chany]
+offset = "0.0mT"
+
+[Fields.df.chany.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chany.c2]
+divider = 4864
+amplitude = ["0.01T"]
 
 [Fields.ff]
 safeStartInterval = "0.5s"
@@ -30,32 +47,17 @@ safeErrorInterval = "0.5s"
 control = true
 decouple = true
 
+
 [Fields.ff.ffx]
-dividerSteps = 4800
-divider = 18240000
-amplitude = "0.02T"
-offset = "0.02T"
+dividerSteps = 3648000
+divider = 182400000
+amplitude = "5.0V"
+offset = "5.0V"
 phase = "0.0rad"
 waveform = "sine"
 
-[Fields.ff.ffy]
-dividerSteps = 4800
-divider = 18240000
-amplitude = "0.02T"
-offset = "0.02T"
-phase = "0.0rad"
-waveform = "square"
-
-[Fields.ff.ffz]
-dividerSteps = 4800
-divider = 18240000
-amplitude = "0.02T"
-offset = "0.02T"
-phase = "3.141rad"
-waveform = "triangle"
-
 [Acquisition]
-channels = ["rx_main"]
+channels = ["rx_main", "rx_side"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
 numFrames = 20
