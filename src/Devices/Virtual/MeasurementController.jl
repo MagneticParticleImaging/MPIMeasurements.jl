@@ -252,14 +252,19 @@ function measurement(measController::MeasurementController, sequence::Sequence)
   producer, consumer, measState = asyncMeasurement(measController, sequence)
   result = nothing
 
+  try 
+    Base.wait(producer)
+  catch e 
+    if !isa(e, TaskFailedException) 
+      @error "Unexpected error"
+      @error e
+    end
+  end
+
   try
-    @info "Waiting on consumer"
-    Base.wait(consumer)
+    Base.wait(producer)
   catch e
-    if isa(e, TaskFailedException)
-      @error e.task.exception
-      result = nothing
-    else 
+    if !isa(e, TaskFailedException)
       @error "Unexpected error"
       @error e
     end

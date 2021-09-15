@@ -217,6 +217,8 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   catch e
     @error e
     # TODO disconnect and reconnect to recover from open pipeline
+    @info "Attempting reconnect to reset pipeline"
+    daq.rpc = RedPitayaCluster(daq.params.ips)
   end
   @info "Pipeline finished"
   return endFrame
@@ -261,10 +263,8 @@ function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
   uRef = nothing
   if !isnothing(frames)
     #uMeas = frames[:, [1], :, :]
-    # TODO implement properly once channel work
-    uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:] # TODO might need to sort
-    # TODO uRef
-    #uRef = frames[:,daq.params.refChanIdx,:,:] # TODO implement once refChanIdx is defined
+    uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:] 
+    uRef = frames[:, channelIdx(daq, daq.refChanIDs),:,:]
   end
   return uMeas, uRef
 end
@@ -347,7 +347,6 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   daq.acqPeriodsPerFrame = acqNumPeriodsPerFrame(sequence)
   
   daq.rxChanIDs = []
-  # TODO properly fill
   for channel in rxChannels(sequence)
     try
       push!(daq.rxChanIDs, id(channel))
@@ -363,7 +362,13 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
       end
     end
   end
-  #TODO ref channel
+  
+  # TODO possibly move some of this into abstract daq
+  daq.refChanIDs = []
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
+  daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
+
+
 
   setupRx(daq)
 end

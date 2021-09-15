@@ -64,7 +64,7 @@ phase = "0.0rad"
 waveform = "sine"
 
 [Acquisition]
-channels = ["rx_main"]
+channels = ["rx_main", "rx_side"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
 

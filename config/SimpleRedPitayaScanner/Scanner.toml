@@ -5,6 +5,7 @@ manufacturer = "Me, Myself and I"
 name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
+#datasetStore = "/opt/data/HeadScanner"
 datasetStore = "~/Documents/DatasetStores/store1"
 defaultSequence = "ElectricalSequence"
 defaultProtocol = "RobotBasedSystemMatrixCalibration"
@@ -56,7 +57,12 @@ feedback.calibration = "10mT/V"
 
 [Devices.rp_cluster.rx_main]
 type = "rx"
-channel = 1
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx_side]
+type = "rx"
+channel = 2
 limitPeak = "1V"
 
 [Devices.rp_cluster.feedback_main]
