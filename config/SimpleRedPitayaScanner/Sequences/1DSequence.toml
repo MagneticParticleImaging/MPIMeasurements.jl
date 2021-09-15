@@ -53,6 +53,6 @@ waveform = "sine"
 channels = ["rx_main", "rx_side"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
-numFrames = 20
+numFrames = 1
 numAverages = 1
 numFrameAverages = 1

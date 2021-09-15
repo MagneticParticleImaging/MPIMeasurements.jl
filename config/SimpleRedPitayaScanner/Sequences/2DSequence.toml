@@ -25,20 +25,24 @@ waveform = "sine"
 
 [Fields.df.chanx.c2]
 divider = 4864
-amplitude = ["0.01T"]
+phase = ["0.0rad"]
+amplitude = ["0.0T"]
+waveform = "sine"
 
 [Fields.df.chany]
 offset = "0.0mT"
 
 [Fields.df.chany.c1]
 divider = 4800
-amplitude = ["0.02T"]
+amplitude = ["0.0T"]
 phase = ["0.0rad"]
 waveform = "sine"
 
 [Fields.df.chany.c2]
 divider = 4864
-amplitude = ["0.01T"]
+phase = ["0.0rad"]
+amplitude = ["0.02T"]
+waveform = "sine"
 
 [Fields.ff]
 safeStartInterval = "0.5s"
@@ -69,6 +73,6 @@ waveform = "sine"
 channels = ["rx_main", "rx_side"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
-numFrames = 20
+numFrames = 1
 numAverages = 1
 numFrameAverages = 1
