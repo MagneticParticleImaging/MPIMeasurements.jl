@@ -8,17 +8,6 @@ automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
-"""
-Abstract type for all devices
-
-Every device has to implement its own device struct which identifies it.
-A concrete implementation should contain e.g. the handle to device ressources
-or internal variables.
-The device struct must at least have the fields `deviceID`, `params` and `dependencies` and
-all other fields should have default values.
-"""
-abstract type Device end
-
 "Retrieve the ID of a device."
 deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct for `$(typeof(device))` must have a field `deviceID`.")
 

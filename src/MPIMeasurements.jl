@@ -13,7 +13,7 @@ using TOML
 using ThreadPools
 #using HDF5
 #using ProgressMeter
-#using Sockets
+using Sockets
 #using DelimitedFiles
 #using LinearAlgebra
 #using Statistics
@@ -43,10 +43,31 @@ const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Pus
 addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
 
 # circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
+"""
+Abstract type for all protocols
+
+Every protocol has to implement its own protocol struct which identifies it.
+A concrete implementation should contain e.g. the handle to the datastore
+or internal variables.
+The device struct must at least have the fields `name`, `description`,
+`scanner` and `params` and all other fields should have default values.
+"""
 abstract type Protocol end
 
-include("Devices/Device.jl")
+# circular reference between Device.jl and Utils.jl. Thus we predefine the Device
+"""
+Abstract type for all devices
+
+Every device has to implement its own device struct which identifies it.
+A concrete implementation should contain e.g. the handle to device ressources
+or internal variables.
+The device struct must at least have the fields `deviceID`, `params` and `dependencies` and
+all other fields should have default values.
+"""
+abstract type Device end
+
 include("Utils/Utils.jl")
+include("Devices/Device.jl")
 include("Scanner.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")

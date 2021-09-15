@@ -1,6 +1,3 @@
-using Sockets
-using SCPIInstruments
-
 export LakeShoreF71GaussMeter, LakeShoreF71GaussMeterParams, LakeShoreF71GaussMeterConnectionModes,
        F71_CM_TCP, F71_CM_USB, F71_MM_AC, F71_MM_DC, F71_MM_HIFR
 
