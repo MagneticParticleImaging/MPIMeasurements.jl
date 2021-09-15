@@ -31,13 +31,23 @@ safeErrorInterval = "0.5s"
 control = true
 decouple = true
 
+
 [Fields.ff.ffx]
 dividerSteps = 3648000
-divider = 182400000
+divider = 18240000
 amplitude = "5.0V"
 offset = "5.0V"
 phase = "0.0rad"
 waveform = "sine"
+
+[Fields.ff.ffy]
+dividerSteps = 3648000
+divider = 18240000
+amplitude = "5.0V"
+offset = "5.0V"
+phase = "0.0rad"
+waveform = "sine"
+
 
 [Acquisition]
 channels = ["rx_main", "rx_side"]
