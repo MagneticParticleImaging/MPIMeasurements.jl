@@ -72,11 +72,11 @@ channel = 2
 limitPeak = "1V"
 
 [Devices.rp_cluster.ffx]
-type = "lut"
+type = "txSlow"
 channel = 1
 
 [Devices.rp_cluster.ffy]
-type = "lut"
+type = "txSlow"
 channel = 2
 
 [Devices.measurement_controller]

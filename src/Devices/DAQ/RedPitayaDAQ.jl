@@ -81,7 +81,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
       channels[key] = RedPitayaTxChannelParams(;splattingDict...)
     elseif value["type"] == "rx"
       channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
-    elseif value["type"] == "lut"
+    elseif value["type"] == "txSlow"
       channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"])
     end
   end
