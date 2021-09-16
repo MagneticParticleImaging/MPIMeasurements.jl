@@ -37,6 +37,10 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   passPDMToFastDAC::Bool = false
 end
 
+Base.@kwdef struct RedPitayaLUTChannelParams <: DAQChannelParams
+  channelIdx::Int64
+end
+
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function RedPitayaDAQParams(dict::Dict{String, Any})
   return createDAQParams(RedPitayaDAQParams, dict)
@@ -77,6 +81,8 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
       channels[key] = RedPitayaTxChannelParams(;splattingDict...)
     elseif value["type"] == "rx"
       channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
+    elseif value["type"] == "lut"
+      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"])
     end
   end
 
@@ -151,42 +157,69 @@ checkDependencies(daq::RedPitayaDAQ) = true
 
 
 #### Sequence ####
-function setSequenceParams(daq::RedPitayaDAQ, lut, enableLUT = nothing)
+function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{Float64}}}, enableLuts::Vector{Union{Nothing, Array{Bool}}})
+  if length(luts) != length(daq.rpc)
+    throw(DimensionMismatch("$(length(lut)) LUTs do not match $(length(daq.rpc)) RedPitayas"))
+  end
+  if length(enableLuts) != length(daq.rpc)
+    throw(DimensionMismatch("$(length(enableLuts)) enableLUTs do not match $(length(daq.rpc)) RedPitayas"))
+  end
   @info "Set sequence params"
+
   stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqPeriodsPerPatch)
   samplesPerSlowDACStep(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
   daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
   clearSequence(daq.rpc)
 
-  if !isnothing(lut) 
-    numSlowDACChan(master(daq.rpc), size(lut, 1))
-    lut = lut.*daq.params.calibFFCurrentToVolt
-    #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
-    #TODO Distribute sequence on multiple redpitayas, not all the same
-    daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
-    daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
-    appendSequence(master(daq.rpc), daq.acqSeq)
-  else
-    numSlowDACChan(master(daq.rpc), 0)
-    daq.acqSeq = nothing
+  for (i, rp) in enumerate(daq.rpc)
+    lut = luts[i]
+    enableLUT = enableLuts[i]
+    if !isnothing(lut) 
+      numSlowDACChan(rp, size(lut, 1))
+      lut = lut.*daq.params.calibFFCurrentToVolt
+      #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
+      #TODO Distribute sequence on multiple redpitayas, not all the same
+      daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
+      daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+      appendSequence(rp, daq.acqSeq)
+      # TODO enableLuts not yet implemented
+    else
+      numSlowDACChan(rp, 0)
+      daq.acqSeq = nothing
+    end
+
   end
 end
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
-  lut = nothing
+  luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
+  enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
   channels = acyclicElectricalTxChannels(sequence)
-  temp = [MPIFiles.values(channel) for channel in channels]
-  if length(temp) > 0 # TODO Make this generic for at least the master
-    if length(temp) == 1
-      lut = [ustrip(u"V", x) for x in temp[1]]
-    else #if length(temp) == 2
-      lut1 = [ustrip(u"V", x) for x in temp[1]]
-      lut2 = [ustrip(u"V", x) for x in temp[2]]
-      lut = collect(cat(lut1,lut2,dims=2)')
+  
+  for rp in 1:length(daq.rpc)
+    start = (rp - 1) * 4 + 1
+    currentPossibleChannels = collect(start:start+3)
+    currentChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams 
+                                                          && channel[2].channelIdx in currentPossibleChannels]
+    if !isempty(currentChannels)
+      # TODO reduce complexity by introducing functions
+      # TODO fill up empty channels with 0.0?
+      currentChannels = sort(currentChannels, by = x -> x[2].channelIdx)
+      lut = nothing
+      temp = []
+      for curr in currentChannels
+        index = findfirst(x -> id(x) == curr[1], channels)
+        if !isnothing(index)
+          channel = channels[index]
+          push!(temp, map(x-> ustrip(u"V", x), MPIFiles.values(channel)))
+        end
+      end
+      lut = collect(cat(temp..., dims=2)')
+      @show lut
+      luts[rp] = lut
     end
-    #lut = lut .* daq.params.calibFFCurrentToVolt
   end
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  setSequenceParams(daq, lut, nothing)
+  setSequenceParams(daq, luts, enableLuts)
 end
 
 function prepareSequence(daq::RedPitayaDAQ, sequence::Sequence)
@@ -396,7 +429,6 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
       "but has to be a power of 2"))
   end
 
-  # TODO differentiate between foreground and background
   daq.acqNumFrames = acqNumFrames(sequence)
   daq.acqNumFrameAverages = acqNumFrameAverages(sequence)
   daq.acqNumAverages = acqNumAverages(sequence)
