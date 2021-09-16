@@ -34,6 +34,8 @@ const iselErrorCodes = Dict(
 "="=>"von dieser Steuerung nicht benutzt"
 )
 
+const xMinIselRobot = 0.0Unitful.mm
+const xMaxIselRobot = 420.0Unitful.mm
 
 """
 `iselRobot(portAdress::AbstractString)` e.g. `iselRobot("/dev/ttyS0")`
@@ -428,5 +430,5 @@ function writeIOOutput(robot::IselRobot,output::Array{Bool,1})
 end
 
 function getMinMaxPosX(robot::IselRobot)
-    return [-robot.defCenterPos[1], robot.defParkPos[1]]
+    return [xMinIselRobot, xMaxIselRobot] .- robot.defCenterPos[1]
 end
