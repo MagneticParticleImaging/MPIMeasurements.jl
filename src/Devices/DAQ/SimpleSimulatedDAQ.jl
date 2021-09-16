@@ -1,8 +1,5 @@
 export SimpleSimulatedDAQ, SimpleSimulatedDAQParams, simulateLangevinInduced
 
-# TODO: Testing 
-using Plots
-
 Base.@kwdef struct SimpleSimulatedDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
