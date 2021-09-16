@@ -35,8 +35,6 @@ catch e
   end
 end
 
-import Base.write
-
 export addConfigurationPath
 
 const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
