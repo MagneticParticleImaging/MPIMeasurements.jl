@@ -362,8 +362,15 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 
-  # TODO get from redpitaya channel 
-  passPDMToFastDAC(daq.rpc, [false for rp in 1:length(daq.rpc)])
+  pass = [false for rp in 1:2*length(daq.rpc)]
+  # TODO move this to abstract DAQ
+  txChannel = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
+  # TODO might need to differentiate between fast and slowdac channel here?
+  for channel in txChannel
+    pass[channel.channelIdx] = channel.passPDMToFastDAC
+  end
+  @show pass
+  passPDMToFastDAC(daq.rpc, pass)
   
   setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
 end
@@ -398,19 +405,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   
   daq.rxChanIDs = []
   for channel in rxChannels(sequence)
-    try
-      push!(daq.rxChanIDs, id(channel))
-    catch e
-      # I dont think this can be thrown here, only if we access the daq.params.channel with id
-      # which we could do as a sanity check but I'd rather do that in an init/validate function
-      if e isa KeyError
-        throw(ScannerConfigurationError("The given sequence `$(name(sequence))` requires a receive "*
-                                        "channel with ID `$(channel.id)`, which is not defined by "*
-                                        "the scanner configuration."))
-      else
-        rethrow()
-      end
-    end
+    push!(daq.rxChanIDs, id(channel))
   end
   
   # TODO possibly move some of this into abstract daq
