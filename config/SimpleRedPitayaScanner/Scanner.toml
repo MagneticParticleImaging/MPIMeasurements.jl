@@ -7,7 +7,7 @@ topology = "FFL"
 gradient = "42T/m"
 #datasetStore = "/opt/data/HeadScanner"
 datasetStore = "~/Documents/DatasetStores/store1"
-defaultSequence = "ElectricalSequence"
+defaultSequence = "1DSequence"
 defaultProtocol = "RobotBasedSystemMatrixCalibration"
 
 [Devices]
@@ -30,7 +30,7 @@ dependencies = []
 #ips = ["192.168.2.16"] #, "192.168.2.17"]
 #ips = ["192.168.178.52"] #, "192.168.178.53"]
 ips = ["192.168.1.100"] #, "192.168.1.101"]
-calibFFCurrentToVolt = [0.7, 0.7]
+calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 calibFieldToVolt = [20, 20]
 #passPDMToFastDAC = [false] #, false]
@@ -58,7 +58,7 @@ feedback.calibration = "10mT/V"
 
 [Devices.rp_cluster.rx_main]
 type = "rx"
-channel = 2
+channel = 1
 limitPeak = "1V"
 
 [Devices.rp_cluster.rx_side]

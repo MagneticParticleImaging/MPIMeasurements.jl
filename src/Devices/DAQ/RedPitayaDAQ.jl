@@ -179,6 +179,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       lut = lut.*daq.params.calibFFCurrentToVolt
       #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
       #TODO Distribute sequence on multiple redpitayas, not all the same
+      @show lut
       daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
       daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
       appendSequence(rp, daq.acqSeq)
@@ -214,7 +215,6 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
         end
       end
       lut = collect(cat(temp..., dims=2)')
-      @show lut
       luts[rp] = lut
     end
   end
@@ -405,7 +405,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @show pass
   passPDMToFastDAC(daq.rpc, pass)
   
-  setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
+  #setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
 end
 
 function setupRx(daq::RedPitayaDAQ)
@@ -420,7 +420,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
   # The decimation can only be a power of 2 beginning with 8
-  decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence)/2)
+  decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence))
   if decimation_ in [2^n for n in 3:8]
     daq.decimation = decimation_
   else
