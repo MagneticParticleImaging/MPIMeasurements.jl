@@ -25,7 +25,7 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   calibIntToVolt::Array{Float32}
   ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
   ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
-  passPDMToFastDAC = false # TODO do properly
+  passPDMToFastDAC::Vector{Bool} # TODO do properly
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -49,7 +49,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqSeq::Union{AbstractSequence, Nothing} = nothing
   samplesPerStep::Int32 = 0
   decimation::Int32 = 64
-  passPDMToFastDAC::Vector{Bool} = []
+  #passPDMToFastDAC::Vector{Bool} = []
   samplingPoints::Int = 1
   sampleAverages::Int = 1
   acqPeriodsPerFrame::Int = 1
@@ -313,7 +313,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   end
 
   # TODO get from redpitaya channel 
-  passPDMToFastDAC(daq.rpc, [false for rp in daq.rpc])
+  passPDMToFastDAC(daq.rpc, daq.params.passPDMToFastDAC)
   
   setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
 end

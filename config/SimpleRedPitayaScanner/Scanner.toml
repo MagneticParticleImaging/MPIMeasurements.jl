@@ -33,7 +33,7 @@ ips = ["192.168.1.100"] #, "192.168.1.101"]
 calibFFCurrentToVolt = [0.7, 0.7]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 calibFieldToVolt = [20, 20]
-#passPDMToFastDAC = [true, false]
+passPDMToFastDAC = [false] #, false]
 
 [Devices.rp_cluster.chanx]
 type = "tx"
