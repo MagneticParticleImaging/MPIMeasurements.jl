@@ -447,9 +447,13 @@ function MPIFiles.saveasMDF(filename::String, measObj::SystemMatrixRobotMeas, pa
   params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
 
   #params["calibSNR"] TODO during conversion
-  params["calibFov"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
-  params["calibFovCenter"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
-  params["calibSize"] = shape(subgrid)
+  if !(typeof(subgrid) <: Union{SphericalTDesign,ArbitraryPositions})
+    # parameter for SphericalTDesign and ArbitraryPositions not defined  
+    params["calibFov"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+    params["calibFovCenter"] = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
+    params["calibSize"] = shape(subgrid)
+  end
+      
   params["calibOrder"] = "xyz"
   if haskey(params, "calibDeltaSampleSize")
     params["calibDeltaSampleSize"] =
