@@ -48,13 +48,15 @@ phases(settings::DAQTxChannelSettings, channelID::String) = settings.phases[:, m
 changeTime(settings::DAQTxChannelSettings) = settings.changeTime
 
 abstract type DAQChannelParams end
+abstract type TxChannelParams <: DAQChannelParams end
+abstract type RxChannelParams <: DAQChannelParams end
 
 Base.@kwdef struct DAQFeedback
   channelID::AbstractString
   calibration::Union{typeof(1.0u"T/V"), Nothing} = nothing
 end
 
-Base.@kwdef struct DAQTxChannelParams <: DAQChannelParams
+Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
   channelIdx::Int64
   limitPeak::typeof(1.0u"V")
   sinkImpedance::SinkImpedance = SINK_HIGH
@@ -63,7 +65,7 @@ Base.@kwdef struct DAQTxChannelParams <: DAQChannelParams
   calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
 end
 
-Base.@kwdef struct DAQRxChannelParams <: DAQChannelParams
+Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
   channelIdx::Int64
 end
 
@@ -104,6 +106,11 @@ function createDAQChannels(dict::Dict{String, Any})
   return channels
 end
 
+# Generic case
+function createDAQChannels(::Type{T}, dict::Dict{String, Any}) where {T <: DAQParams}
+  return createDAQChannels(dict)
+end
+
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function createDAQParams(DAQType::DataType, dict::Dict{String, Any})
   @assert DAQType <: DAQParams "The supplied type `$type` cannot be used for creating DAQ params, since it does not inherit from `DAQParams`."
@@ -123,7 +130,7 @@ function createDAQParams(DAQType::DataType, dict::Dict{String, Any})
   end
 
   splattingDict = dict_to_splatting(dict)
-  splattingDict[:channels] = createDAQChannels(channelDict)
+  splattingDict[:channels] = createDAQChannels(DAQType, channelDict)
 
   try
     return DAQType(;splattingDict...)
