@@ -1,4 +1,4 @@
-export MeasurementController, MeasurementControllerParams, measurement, MeasState, asyncMeasurement
+export MeasurementController, MeasurementControllerParams, measurement, MeasState, asyncMeasurement, getMeasurementController, getMeasurementControllers
 
 abstract type AsyncMeasTyp end
 struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
@@ -240,6 +240,18 @@ function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
     return fr
   end
   return -1 
+end
+
+getMeasurementControllers(scanner::MPIScanner) = getDevices(scanner, MeasurementController)
+function getMeasurementController(scanner::MPIScanner)
+  measContrs = getMeasurementControllers(scanner::MPIScanner)
+  if length(measContrs) > 1
+    error("The scanner has more than one measurement controller. Therefore, a single controller cannot be retrieved unambiguously.")
+  elseif length(measContrs) == 1
+    return measContrs[1]
+  else 
+    return nothing
+  end
 end
 
 function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
