@@ -375,7 +375,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     #jumpSharpnessDAC(daq.rpc, channelIdx_, daq.params.jumpSharpness) # TODO: Can we determine this somehow from the sequence?
 
     for (idx, component) in enumerate(components(channel))
-      freq = div(ustrip(u"Hz", txBaseFrequency(sequence)), divider(component))
+      freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
       frequencyDAC(daq.rpc, channelIdx_, idx, freq)
     end
 
