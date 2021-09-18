@@ -45,6 +45,8 @@ Base.@kwdef mutable struct MeasurementController <: VirtualDevice
     measState::Union{MeasState, Nothing} = nothing 
     producer::Union{Task,Nothing} = nothing
     consumer::Union{Task, Nothing} = nothing
+    
+    sequence::Union{Sequence,Nothing} = nothing
 end
 
 function checkDependencies(measCont::MeasurementController)
@@ -107,10 +109,11 @@ function cancel(calibState::MeasState)
   measState.consumed = true
 end
 
-function asyncMeasurement(measController::MeasurementController, sequence=Sequence)
+function asyncMeasurement(measController::MeasurementController, sequence::Sequence)
   daq = dependency(measController, AbstractDAQ)
   measState = prepareAsyncMeasurement(daq, sequence)
   measController.measState = measState
+  measController.sequence = sequence
   measController.producer = @tspawnat measController.params.producerThreadID asyncProducer(measState.channel, measController, sequence)  
   bind(measState.channel, measController.producer)
   measController.consumer = @tspawnat measController.params.consumerThreadID asyncConsumer(measState.channel, measController)
@@ -274,7 +277,7 @@ function measurement(measController::MeasurementController, sequence::Sequence)
   end
 
   try
-    Base.wait(producer)
+    Base.wait(consumer)
   catch e
     if !isa(e, TaskFailedException)
       @error "Unexpected error"
@@ -301,6 +304,144 @@ function measurement(measController::MeasurementController, sequence::Sequence)
   return result
 end
 
+
+
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, measController::MeasurementController, params::Dict)
+
+  name = params[:studyName]
+  date = params[:studyDate]
+  subject = ""
+
+  newStudy = Study(store, name; subject=subject, date=date)
+
+  if hasKeyAndValue(params,:studyUuid) # FIXME: This is never set!!!!!!
+    studyUuid = params[:studyUuid]
+  else
+    studyUuid = uuid4()
+  end
+
+  study = MDFv2Study(;
+       description = get(params,:studyDescription,"n.a."),
+       name = name,
+       number = get(params,:studyNumber,0), # FIXME: This is never set!!!!!!
+       time = Dates.unix2datetime(time()), # FIXME: This is completely wrong!!!!!
+       uuid = studyUuid)
+
+  expNum = getNewExperimentNum(newStudy)
+
+
+  experiment = MDFv2Experiment(;
+       description = get(params,:experimentDescription,"n.a."),
+       isSimulation = false,
+       name = get(params,:experimentName,"default"),
+       number = expNum,
+       subject = get(params,:experimentSubject,"n.a."),
+       uuid = uuid4())
+
+  tracer = MDFv2Tracer(;
+        batch = get(params,:tracerBatch,["n.a"]),
+        concentration = get(params,:tracerConcentration,[0.0]),
+        injectionTime = [t for t in get(params,:tracerInjectionTime, [Dates.unix2datetime(time())]) ],
+        name = get(params,:tracerName,["n.a"]),
+        solute = get(params,:tracerSolute,["Fe"]),
+        vendor = get(params,:tracerVendor,["n.a"]),
+        volume = get(params,:tracerVolume,[0.0]))
+
+  filename = joinpath(path(newStudy), string(expNum)*".mdf")
+
+  #saveasMDF(filename, daq, data, params; kargs... )
+  MPIFiles.saveasMDF(filename, scanner, measController, study, experiment,
+             tracer, get(params,:operator,"default"), get(params,:bgdata,nothing))
+
+  return filename
+end
+
+
+
+function MPIFiles.saveasMDF(filename::AbstractString, scanner::MPIScanner, measController::MeasurementController, 
+                            study::MDFv2Study, experiment::MDFv2Experiment, tracer::MDFv2Tracer, operator::AbstractString="anonymous",
+                            bgdata = nothing)
+  
+  sequence = measController.sequence
+  
+  mdf = MDFv2InMemory()
+  # / subgroup
+  mdf.root = defaultMDFv2Root()
+
+  # /study/ subgroup
+  mdf.study = study
+
+  # /experiment/ subgroup
+  mdf.experiment = experiment
+
+  # /tracer/ subgroup
+  mdf.tracer = tracer
+
+  # /scanner/ subgroup
+  mdf.scanner = MDFv2Scanner(
+    boreSize = ustrip(u"m", scannerBoreSize(scanner)),
+    facility = scannerFacility(scanner),
+    manufacturer = scannerManufacturer(scanner),
+    name = scannerName(scanner),
+    operator = operator,
+    topology = scannerTopology(scanner)
+  )
+
+  # /measurement/ subgroup
+  numFrames = acqNumFrames(sequence)
+  numPeriodsPerFrame_ = acqNumPeriodsPerFrame(sequence)
+  numRxChannels_ = rxNumChannels(sequence)
+  numSamplingPoints_ = rxNumSamplingPoints(sequence)
+
+  if bgdata == nothing
+    isBackgroundFrame = zeros(Bool, numFrames)
+    data = measController.measState.buffer
+  else
+    numBGFrames = size(bgdata,4)
+    data = cat(bgdata, measController.measState.buffer, dims=4) 
+    isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
+    numFrames = numFrames + numBGFrames
+  end
+
+  measData(mdf, data)
+  measIsBackgroundCorrected(mdf, false)
+  measIsBackgroundFrame(mdf, isBackgroundFrame)
+  measIsFastFrameAxis(mdf, false)
+  measIsFourierTransformed(mdf, false)
+  measIsFramePermutation(mdf, false)
+  measIsFrequencySelection(mdf, false)
+  measIsSparsityTransformed(mdf, false)
+  measIsSpectralLeakageCorrected(mdf, false)
+  measIsTransferFunctionCorrected(mdf, false)
+
+  # /acquisition/ subgroup
+  acqGradient(mdf, acqGradient(sequence))
+  acqNumAverages(mdf, acqNumAverages(sequence))
+  acqNumFrames(mdf, numFrames) # TODO: Calculate from data (triggered acquisition)
+  acqNumPeriodsPerFrame(mdf, numPeriodsPerFrame_)
+  acqOffsetField(mdf, acqOffsetField(sequence))
+  acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime)
+
+  # /acquisition/drivefield/ subgroup
+  dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
+  dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
+  dfDivider(mdf, dfDivider(sequence))
+  dfNumChannels(mdf, dfNumChannels(sequence))
+  dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
+  dfStrength(mdf, ustrip.(u"T", dfStrength(sequence)))
+  dfWaveform(mdf, fromWaveform.(dfWaveform(sequence)))
+
+  # /acquisition/receiver/ subgroup
+  rxBandwidth(mdf, ustrip(u"Hz", rxBandwidth(sequence)))
+  #dataConversionFactor TODO: Should we include it or convert the samples directly
+  #inductionFactor TODO: should be added from datastore!?
+  rxNumChannels(mdf, numRxChannels_)
+  rxNumSamplingPoints(mdf, numSamplingPoints_)
+  #transferFunction TODO: should be added from datastore!?
+  rxUnit(mdf, "V")
+
+  return saveasMDF(filename, mdf)
+end
 
 function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Float32,4},
                              params::Dict; bgdata=nothing, auxData=nothing )
@@ -363,25 +504,5 @@ function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Floa
   end
 
   MPIFiles.saveasMDF( filename, params )
-  return filename
-end
-
-function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{Float32,4},
-                             params::Dict; kargs...)
-
-  name = params["studyName"]
-  date = params["studyDate"]
-  subject = ""
-
-  newStudy = Study(store, name; subject=subject, date=date)
-  expNum = getNewExperimentNum(newStudy)
-
-  #daq["studyName"] = params["studyName"]
-  params["experimentNumber"] = expNum
-
-  filename = joinpath(path(newStudy), string(expNum)*".mdf")
-
-  saveasMDF(filename, daq, data, params; kargs... )
-
   return filename
 end

@@ -6,10 +6,12 @@ module MPIMeasurements
 #using Pkg
 
 #using Compat
+using UUIDs
 using Mmap: settings
 using Base: Integer
 using Reexport
 @reexport using MPIFiles
+import MPIFiles: hasKeyAndValue
 using Unitful
 using TOML
 using ThreadPools

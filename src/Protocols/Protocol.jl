@@ -89,6 +89,7 @@ end
 @mustimplement cleanup(protocol::Protocol)
 
 include("DAQMeasurementProtocol.jl")
+include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
 #include("TransferFunctionProtocol.jl")
