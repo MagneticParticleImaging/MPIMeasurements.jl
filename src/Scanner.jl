@@ -102,6 +102,7 @@ Base.@kwdef struct MPIScannerGeneral
   datasetStore::String
   defaultSequence::String=""
   defaultProtocol::String=""
+  transferFunction::String=""
 end
 
 """
@@ -164,6 +165,8 @@ name(scanner::MPIScanner) = scanner.name #TODO: Duplication with scanner name
 configDir(scanner::MPIScanner) = scanner.configDir
 generalParams(scanner::MPIScanner) = scanner.generalParams
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
+transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
+hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
 
 function getDevices(scanner::MPIScanner, deviceType::DataType)
   matchingDevices = Vector{Device}()
@@ -207,4 +210,24 @@ function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
 end
 
 MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner),name)
+
+
+function getTransferFunctionList(scanner::MPIScanner)
+  path = joinpath(configDir(scanner), "TransferFunctions")
+  if isdir(path)
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".h5"),readdir(path))] 
+  else
+    return String[]
+  end
+end
+
+function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractString)
+  path = joinpath(configdir, "TransferFunctions", name*".h5")
+  if !isfile(path)
+    error("TransferFunction $(path) not available!")
+  end
+  return TransferFunction(path)
+end
+
+MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
 

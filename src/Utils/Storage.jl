@@ -17,7 +17,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
   fillMDFTracer(mdf, params)
 
   fillMDFMeasurement(mdf, sequence, data, bgdata)
-  fillMDFAcquisition(mdf, sequence, params)
+  fillMDFAcquisition(mdf, scanner, sequence)
 
   filename = getNewExperimentPath(study)
 
@@ -109,7 +109,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 end
 
 
-function fillMDFAcquisition(mdf::MDFv2InMemory, sequence::Sequence, params::Dict)
+function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::Sequence)
   # Needs to be filled after(!) measurement group
   numPeriodsPerFrame_ = acqNumPeriodsPerFrame(sequence)
   numRxChannels_ = rxNumChannels(sequence)
@@ -142,10 +142,10 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, sequence::Sequence, params::Dict
   rxUnit(mdf, "V")
 
   # transferFunction
-  if haskey(params, "transferFunction") && params["transferFunction"] != ""
+  if hasTransferFunction(scanner)
     numFreq = div(numSamplingPoints_,2)+1
     freq = collect(0:(numFreq-1))./(numFreq-1).*rxBandwidth(sequence)
-    tf_ =  TransferFunction(params["transferFunction"])
+    tf_ =  TransferFunction(scanner)
     tf = tf_[freq,1:numRxChannels_]
     rxTransferFunction(mdf, tf)
     rxInductionFactor(mdf, tf_.inductionFactor)
