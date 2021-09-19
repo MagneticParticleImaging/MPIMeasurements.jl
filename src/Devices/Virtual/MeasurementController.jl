@@ -152,7 +152,7 @@ function asyncProducer(channel::Channel, measController::MeasurementController, 
   end
   robot = nothing
   if hasDependency(measController, Robot)
-    robot = dependeny(measController, Robot)
+    robot = dependency(measController, Robot)
     setEnabled(robot, false)
   end
 
@@ -256,11 +256,6 @@ function getMeasurementController(scanner::MPIScanner)
     return nothing
   end
 end
-
-function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
-  return saveasMDF(store, daq, data, params; bgdata=bgdata) # auxData?
-end
-
 
 #### Sync version ####
 function measurement(measController::MeasurementController, sequence::Sequence)
