@@ -49,8 +49,8 @@ addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
 abstract type Protocol end
 
 include("Devices/Device.jl")
-include("Utils/Utils.jl")
 include("Scanner.jl")
+include("Utils/Utils.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
 
