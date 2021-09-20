@@ -73,6 +73,7 @@ include("Devices/Device.jl")
 include("Scanner.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
+include("Utils/Storage.jl") # Depends on MPIScanner
 
 """
     $(SIGNATURES)

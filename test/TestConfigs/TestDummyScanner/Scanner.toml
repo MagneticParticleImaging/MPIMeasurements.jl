@@ -37,3 +37,6 @@ deviceType = "SimulatedRobot"
 
 [Devices.my_amplifier_id]
 deviceType = "SimulatedAmplifier"
+mode = "voltage"
+voltageMode = "low voltage"
+matchingNetwork = 1

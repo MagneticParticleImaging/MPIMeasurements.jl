@@ -10,9 +10,29 @@ export Amplifier, AmplifierMode, AMP_VOLTAGE_MODE, AMP_CURRENT_MODE, AmplifierVo
   AMP_CURRENT_MODE
 end
 
+function convert(::Type{AmplifierMode}, x::String)
+  if lowercase(x) == "voltage"
+    return AMP_VOLTAGE_MODE
+  elseif  lowercase(x) == "current"
+    return AMP_CURRENT_MODE
+  else
+    throw(ScannerConfigurationError("The given amplifier mode `$x` for is not valid. Please use `voltage` or `current`."))
+  end
+end
+
 @enum AmplifierVoltageMode begin
   AMP_HIGH_VOLTAGE_MODE
   AMP_LOW_VOLTAGE_MODE
+end
+
+function convert(::Type{AmplifierVoltageMode}, x::String)
+  if lowercase(x) == "low voltage"
+    return AMP_LOW_VOLTAGE_MODE
+  elseif  lowercase(x) == "high voltage"
+    return AMP_HIGH_VOLTAGE_MODE
+  else
+    throw(ScannerConfigurationError("The given amplifier mode `$x` for is not valid. Please use `low voltage` or `high voltage`."))
+  end
 end
 
 abstract type Amplifier <: Device end

@@ -143,6 +143,7 @@ mutable struct MPIScanner
   guiMode::Bool
   "Currently selected sequence for performing measurements."
   currentSequence::Union{Sequence,Nothing}
+  "Currently selected protocol for performing measurements."
   currentProtocol::Union{Protocol,Nothing}
 
   """

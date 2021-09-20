@@ -1,0 +1,26 @@
+[General]
+name = "MagneticFieldMeasurement"
+facility = "Fraunhofer IMTE"
+manufacturer = "Schumacher et al."
+topology = "FFL"
+gradient = "5T/m"
+boreSize = "40mm"
+datasetStore = "./tmp/TestDummyScannerStore"
+
+[Devices]
+initializationOrder = [
+    "gaussmeter",
+    "robot"
+]
+
+[Devices.gaussmeter]
+deviceType = "LakeShoreF71GaussMeter"
+comport = "COM4"
+baudrate = 115200
+measurementMode = "DC"
+
+[Devices.robot]
+deviceType = "IselRobot"
+stepsPermm = 160
+serial_port = "COM5"
+
