@@ -280,8 +280,8 @@ function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
 end
 end
 
-function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages) 
-  return samplesPerPeriod(daq.rpc), numRxChannels(daq), periodsPerFrame(daq.rpc), frameAverages
+function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
+  return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
 end
 
 function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
