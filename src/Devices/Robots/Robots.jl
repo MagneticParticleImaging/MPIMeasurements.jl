@@ -242,8 +242,8 @@ function checkAxisRange(rob::Robot, coords::Vector{<:Unitful.Length})
     inRange = true
     for i in 1:length(coords)
         inRange &= (axes[i][1] <= coords[i] <= axes[i][2])
-        return inRange
     end
+    return inRange
 end
 
 function RobotState(s::Symbol)
