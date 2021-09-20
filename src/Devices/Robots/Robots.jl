@@ -53,6 +53,9 @@ scannerCoordAxes(rob::Robot) = :scannerCoordAxes in fieldnames(typeof(params(rob
 # should return a vector of shape dof(rob)
 scannerCoordOrigin(rob::Robot) = :scannerCoordOrigin in fieldnames(typeof(params(rob))) ? params(rob).scannerCoordOrigin : zeros(dof(rob))*u"mm"
 
+#overwrite to enable a change in movement order, if overwritten should be a string of length dof(rob), containing the lowercase letters corresponding to the axes, e.g. "yx" or "xzy"
+movementOrder(rob::Robot) = "default"
+
 getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
 function getRobot(scanner::MPIScanner)
   robots = getRobots(scanner)
@@ -147,7 +150,16 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
   setstate!(rob, MOVING)
   try
     @debug "Started absolute robot movement to [$(join([string(x) for x in pos], ", "))] with speed $(isnothing(speed) ? speed : "["*join([string(x) for x in speed], ", ")*"]")."
-    _moveAbs(rob, pos.data, speed)
+    if movementOrder(rob) == "default"
+      _moveAbs(rob, pos.data, speed)
+    else
+      tmp_pos = getPosition(rob).data
+      for i in 1:dof(rob)
+        axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
+        tmp_pos[axis] = pos.data[axis]
+        _moveAbs(rob, tmp_pos, speed)
+      end
+    end
     setstate!(rob, READY)
   catch exc
     setstate!(rob, ERROR)
@@ -186,7 +198,16 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
   setstate!(rob, MOVING)
 
   try
-    _moveRel(rob, dist.data, speed)
+    if movementOrder(rob) == "default"
+      _moveRel(rob, dist.data, speed)
+    else
+      for i in 1:dof(rob)
+        tmp_dist = zeros(dof(rob)) * u"mm"
+        axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
+        tmp_dist[axis] = dist.data[axis]
+        _moveRel(rob, tmp_dist, speed)
+      end
+    end
     setstate!(rob, READY)
   catch exc
     setstate!(rob, ERROR)

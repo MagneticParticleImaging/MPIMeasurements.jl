@@ -50,6 +50,7 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
   scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
   referenceOrder::String = "zyx"
+  movementOrder::String = "zyx"
 end
 
 IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
@@ -77,6 +78,7 @@ Base.close(rob::IselRobot) = close(rob.sd.sp)
 dof(rob::IselRobot) = 3
 defaultVelocity(rob::IselRobot) = rob.params.defaultVel
 axisRange(rob::IselRobot) = rob.params.axisRange
+movementOrder(rob::IselRobot) = rob.params.movementOrder
 
 function _getPosition(robot::IselRobot)
   ret = queryIsel(robot, "@0P", 19)
@@ -267,11 +269,11 @@ function initAxes(robot::IselRobot, numAxes::Int=3)
 end
 
 function refAxis(robot::IselRobot, ax::Char)
-  if ax == "x"
+  if ax == 'x'
     cmd = "@0R1"
-  else if ax == "y"
+  elseif ax == 'y'
     cmd = "@0R2"
-  else if ax == "z"
+  elseif ax == 'z'
     cmd = "@0R4"
   else
     error("Invalid axis, has to be one of x,y,z")

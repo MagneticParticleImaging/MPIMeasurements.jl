@@ -6,6 +6,7 @@ Base.@kwdef struct SimulatedRobotParams <: DeviceParams
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
   scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
+  movementOrder::String = "default"
 end
 
 SimulatedRobotParams(dict::Dict) = params_from_dict(SimulatedRobotParams, dict)
@@ -28,6 +29,7 @@ _isReferenced(rob::SimulatedRobot) = rob.referenced
 dof(rob::SimulatedRobot) = 3
 _getPosition(rob::SimulatedRobot) = rob.position
 axisRange(rob::SimulatedRobot) = rob.params.axisRange
+movementOrder(rob::SimulatedRobot) = rob.params.movementOrder
 
 function _moveAbs(rob::SimulatedRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
   @debug "SimulatedRobot: Moving to position $("["*join([string(x) for x in pos], ", ")*"]")."
