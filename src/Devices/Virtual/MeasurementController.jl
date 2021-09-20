@@ -1,4 +1,4 @@
-export MeasurementController, MeasurementControllerParams, measurement, MeasState, asyncMeasurement
+export MeasurementController, MeasurementControllerParams, measurement, MeasState, asyncMeasurement, getMeasurementController, getMeasurementControllers
 
 abstract type AsyncMeasTyp end
 struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
@@ -45,6 +45,8 @@ Base.@kwdef mutable struct MeasurementController <: VirtualDevice
     measState::Union{MeasState, Nothing} = nothing 
     producer::Union{Task,Nothing} = nothing
     consumer::Union{Task, Nothing} = nothing
+    
+    sequence::Union{Sequence,Nothing} = nothing
 end
 
 function checkDependencies(measCont::MeasurementController)
@@ -107,10 +109,11 @@ function cancel(calibState::MeasState)
   measState.consumed = true
 end
 
-function asyncMeasurement(measController::MeasurementController, sequence=Sequence)
+function asyncMeasurement(measController::MeasurementController, sequence::Sequence)
   daq = dependency(measController, AbstractDAQ)
   measState = prepareAsyncMeasurement(daq, sequence)
   measController.measState = measState
+  measController.sequence = sequence
   measController.producer = @tspawnat measController.params.producerThreadID asyncProducer(measState.channel, measController, sequence)  
   bind(measState.channel, measController.producer)
   measController.consumer = @tspawnat measController.params.consumerThreadID asyncConsumer(measState.channel, measController)
@@ -149,7 +152,7 @@ function asyncProducer(channel::Channel, measController::MeasurementController, 
   end
   robot = nothing
   if hasDependency(measController, Robot)
-    robot = dependeny(measController, Robot)
+    robot = dependency(measController, Robot)
     setEnabled(robot, false)
   end
 
@@ -242,10 +245,17 @@ function addFramesFrom(measState::MeasState, frames::Array{Float32, 4})
   return -1 
 end
 
-function storeAsyncMeasurementResult(store, daq::AbstractDAQ, data, params; bgdata=nothing)
-  return saveasMDF(store, daq, data, params; bgdata=bgdata) # auxData?
+getMeasurementControllers(scanner::MPIScanner) = getDevices(scanner, MeasurementController)
+function getMeasurementController(scanner::MPIScanner)
+  measContrs = getMeasurementControllers(scanner::MPIScanner)
+  if length(measContrs) > 1
+    error("The scanner has more than one measurement controller. Therefore, a single controller cannot be retrieved unambiguously.")
+  elseif length(measContrs) == 1
+    return measContrs[1]
+  else 
+    return nothing
+  end
 end
-
 
 #### Sync version ####
 function measurement(measController::MeasurementController, sequence::Sequence)
@@ -262,7 +272,7 @@ function measurement(measController::MeasurementController, sequence::Sequence)
   end
 
   try
-    Base.wait(producer)
+    Base.wait(consumer)
   catch e
     if !isa(e, TaskFailedException)
       @error "Unexpected error"
@@ -290,86 +300,3 @@ function measurement(measController::MeasurementController, sequence::Sequence)
 end
 
 
-function MPIFiles.saveasMDF(filename::String, daq::AbstractDAQ, data::Array{Float32,4},
-                             params::Dict; bgdata=nothing, auxData=nothing )
-
-  # acquisition parameters
-  params["acqStartTime"] = Dates.unix2datetime(time())
-  params["acqGradient"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
-  params["acqOffsetField"] = addTrailingSingleton([0.0;0.0;0.0],2) #FIXME
-
-  # drivefield parameters
-  params["dfStrength"] = reshape(daq.params.dfStrength,1,length(daq.params.dfStrength),1)
-  params["dfPhase"] = reshape(daq.params.dfPhase,1,length(daq.params.dfPhase),1)
-  params["dfDivider"] = reshape(daq.params.dfDivider,1,length(daq.params.dfDivider))
-
-  # receiver parameters
-  params["rxNumSamplingPoints"] = daq.params.rxNumSamplingPoints
-  params["rxNumChannels"] = numRxChannels(daq)
-
-  # transferFunction
-  if haskey(params, "transferFunction") && params["transferFunction"] != ""
-    numFreq = div(params["rxNumSamplingPoints"],2)+1
-    freq = collect(0:(numFreq-1))./(numFreq-1).*daq.params.rxBandwidth
-    #tf = zeros(ComplexF64, numFreq, numRxChannels(daq) )
-    #tf_ = tf_receive_chain()
-    tf_ =  TransferFunction(params["transferFunction"])
-    #for d=1:numRxChannels(daq)
-    #  tf[:,d] = tf_[freq,d]
-    #end
-    tf = tf_[freq,1:numRxChannels(daq)]
-    params["rxTransferFunction"] = tf
-    params["rxInductionFactor"] = tf_.inductionFactor
-  end
-
-  # calibration params  (needs to be called after calibration params!)
-  calib = zeros(2,numRxChannels(daq))
-  calib[1,:] .= 1.0
-  params["rxDataConversionFactor"] = calib # calibIntToVoltRx(daq)
-
-  params["measIsFourierTransformed"] = false
-  params["measIsSpectralLeakageCorrected"] = false
-  params["measIsTFCorrected"] = false
-  params["measIsFrequencySelection"] = false
-  params["measIsBGCorrected"] = false
-  params["measIsFastFrameAxis"] = false
-  params["measIsFramePermutation"] = false
-
-  if bgdata == nothing
-    params["measIsBGFrame"] = zeros(Bool,params["acqNumFrames"])
-    params["measData"] = data
-    #params["acqNumFrames"] = params["acqNumFGFrames"]
-  else
-    numBGFrames = size(bgdata,4)
-    params["measData"] = cat(bgdata,data,dims=4)
-    params["measIsBGFrame"] = cat(ones(Bool,numBGFrames), zeros(Bool,params["acqNumFrames"]), dims=1)
-    params["acqNumFrames"] = params["acqNumFrames"] + numBGFrames
-  end
-
-  if auxData != nothing
-    params["auxiliaryData"] = auxData
-  end
-
-  MPIFiles.saveasMDF( filename, params )
-  return filename
-end
-
-function MPIFiles.saveasMDF(store::DatasetStore, daq::AbstractDAQ, data::Array{Float32,4},
-                             params::Dict; kargs...)
-
-  name = params["studyName"]
-  date = params["studyDate"]
-  subject = ""
-
-  newStudy = Study(store, name; subject=subject, date=date)
-  expNum = getNewExperimentNum(newStudy)
-
-  #daq["studyName"] = params["studyName"]
-  params["experimentNumber"] = expNum
-
-  filename = joinpath(path(newStudy), string(expNum)*".mdf")
-
-  saveasMDF(filename, daq, data, params; kargs... )
-
-  return filename
-end

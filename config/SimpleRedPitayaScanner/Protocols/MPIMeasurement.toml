@@ -1,5 +1,5 @@
-name = "RedPitayaDAQMeasurement"
-type = "DAQMeasurementProtocol"
+name = "MPIMeasurement"
+type = "MPIMeasurementProtocol"
 description = "An acquisition with the Red Pitaya"
 targetScanner = "SimpleRedPitayaScanner"
 

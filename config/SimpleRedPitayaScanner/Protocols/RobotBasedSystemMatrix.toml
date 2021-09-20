@@ -1,4 +1,4 @@
-name = "RobotBasedSystemMatrixCalibration"
+name = "RobotBasedSystemMatrix"
 type = "RobotBasedSystemMatrixProtocol"
 description = "An acquisition with the Red Pitaya"
 targetScanner = "SimpleRedPitayaScanner"

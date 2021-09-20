@@ -121,6 +121,8 @@ Base.@kwdef struct MPIScannerGeneral
   defaultSequence::String = ""
   "Default protocol of the scanner."
   defaultProtocol::String = ""
+  "Location of the scanner's transfer function."
+  transferFunction::String = ""
 end
 
 """
@@ -210,6 +212,8 @@ generalParams(scanner::MPIScanner) = scanner.generalParams
 Retrieve a device by its `deviceID`.
 """
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
+transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
+hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
 
 """
     $(SIGNATURES)
@@ -285,3 +289,22 @@ end
 Constructor for a sequence of `name` from the configuration directory specified for the scanner.
 """
 MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
+
+function getTransferFunctionList(scanner::MPIScanner)
+  path = joinpath(configDir(scanner), "TransferFunctions")
+  if isdir(path)
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".h5"),readdir(path))]
+  else
+    return String[]
+  end
+end
+
+function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractString)
+  path = joinpath(configdir, "TransferFunctions", name*".h5")
+  if !isfile(path)
+    error("TransferFunction $(path) not available!")
+  end
+  return TransferFunction(path)
+end
+
+MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
