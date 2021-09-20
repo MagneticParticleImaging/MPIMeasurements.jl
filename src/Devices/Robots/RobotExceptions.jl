@@ -1,4 +1,4 @@
-export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError
+export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError, RobotExplicitCoordinatesError
 
 abstract type RobotException <: Exception end
 
@@ -9,7 +9,7 @@ end
 
 struct RobotAxisRangeError <: RobotException
     robot::Robot
-    pos::Vector{<:Unitful.Length}
+    pos::AbstractVector{<:Unitful.Length}
 end
 
 struct RobotDOFError <: RobotException
@@ -31,6 +31,10 @@ struct RobotTeachError <: RobotException
     pos_name::String
 end
 
+struct RobotExplicitCoordinatesError <: RobotException
+    robot::Robot
+end
+
 function Base.showerror(io::IO, ex::RobotStateError)
     if ex.state === nothing
         print(io, "RobotStateError: robot '$(deviceID(ex.robot))' is in state $(state(ex.robot))")
@@ -41,7 +45,9 @@ end
 
 Base.showerror(io::IO, ex::RobotAxisRangeError) = (print(io, "RobotAxisRangeError: position ");
                                                show(IOContext(io, :typeinfo=>typeof(ex.pos)), ex.pos);
-                                               print(io, " is out of the axis range "); 
+                                               print(io, " (ScannerCoords: ");
+                                               show(IOContext(io, :typeinfo=>typeof(toScannerCoords(ex.robot,ex.pos))), toScannerCoords(ex.robot,ex.pos));
+                                               print(io, ") is out of the axis range "); 
                                                show(IOContext(io, :typeinfo=>typeof(axisRange(ex.robot))), axisRange(ex.robot));
                                                print(io, " of robot '$(deviceID(ex.robot))'"))
 
@@ -58,3 +64,5 @@ function Base.showerror(io::IO, ex::RobotTeachError)
         print(io, "RobotTeachError: the desired position $(ex.pos_name) is not defined for robot '$(deviceID(ex.robot))', use one of $(keys(namedPositions(ex.robot)))")
     end
 end
+
+Base.showerror(io::IO, ex::RobotExplicitCoordinatesError) = print(io, "RobotExplicitCoordinatesError: robot '$(deviceID(ex.robot))' has defined a coordinate transform and therefore needs explicit declaration of the used coordinate system. Please pass RobotCoords(pos) or ScannerCoords(pos).")

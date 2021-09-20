@@ -67,10 +67,10 @@ The device struct must at least have the fields `deviceID`, `params` and `depend
 all other fields should have default values.
 """
 abstract type Device end
-
+include("Scanner.jl")
 include("Utils/Utils.jl")
 include("Devices/Device.jl")
-include("Scanner.jl")
+
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
 

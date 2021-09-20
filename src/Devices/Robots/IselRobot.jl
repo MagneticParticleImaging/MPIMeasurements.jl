@@ -47,6 +47,8 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   delim_write::String = "\r"
   baudrate::Int = 19200
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
+  scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
+  scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
 end
 
 IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
