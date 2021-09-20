@@ -49,6 +49,7 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
   scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
+  referenceOrder::String = "zyx"
 end
 
 IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
@@ -118,11 +119,12 @@ function _disable(robot::IselRobot)
 end
 
 function _doReferenceDrive(rob::IselRobot)
-  # check sensor for reference
   tempTimeout = rob.sd.timeout_ms
   try
     rob.sd.timeout_ms = 180000
-    refZYX(rob)
+    refAxis(rob, params(rob).referenceOrder[1])
+    refAxis(rob, params(rob).referenceOrder[2])
+    refAxis(rob, params(rob).referenceOrder[3])
   finally
     rob.sd.timeout_ms = tempTimeout
   end
@@ -264,13 +266,17 @@ function initAxes(robot::IselRobot, numAxes::Int=3)
   checkIselError(ret)
 end
 
-""" References all axes in order Z,Y,X """
-function refZYX(robot::IselRobot)
-  ret = queryIsel(robot, "@0R1")
-  checkIselError(ret)
-  ret = queryIsel(robot, "@0R4")
-  checkIselError(ret)
-  ret = queryIsel(robot, "@0R2")
+function refAxis(robot::IselRobot, ax::Char)
+  if ax == "x"
+    cmd = "@0R1"
+  else if ax == "y"
+    cmd = "@0R2"
+  else if ax == "z"
+    cmd = "@0R4"
+  else
+    error("Invalid axis, has to be one of x,y,z")
+  end
+  ret = queryIsel(robot, cmd)
   checkIselError(ret)
 end
 
