@@ -176,4 +176,6 @@
       @test voltageMode(amp) == AMP_HIGH_VOLTAGE_MODE
     end
   end
+
+  close(scanner)
 end

@@ -96,4 +96,6 @@ MPIMeasurements, but also from the outside.
       @test daq.params.sendFrequency == 25u"kHz"
     end
   end
+
+  close(scanner)
 end

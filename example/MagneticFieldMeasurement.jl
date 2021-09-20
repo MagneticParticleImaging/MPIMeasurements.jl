@@ -21,3 +21,14 @@ protocol = Protocol(protocolName_, scannerName_)
 filename(protocol, filename_)
 runProtocol(protocol)
 
+measurement_ = MagneticFieldMeasurement(filename_)
+
+result = zeros(shape(measurement_.positions)...)
+for pos in measurement_.positions
+  idx = posToLinIdx(measurement_.positions, pos)
+  field = norm(measurement_.fields[idx])
+  result[posToIdx(measurement_.positions, pos)...] = ustrip(u"mT", field)
+end
+result = dropdims(result, dims=2)
+
+heatmap(result)

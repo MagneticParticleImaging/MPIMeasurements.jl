@@ -65,7 +65,7 @@ Base.@kwdef mutable struct LakeShoreF71GaussMeter <: GaussMeter
 end
 
 function init(gauss::LakeShoreF71GaussMeter)
-  @debug "Initializing LakShore F71 gaussmeter unit with ID `$(gauss.deviceID)`."
+  @debug "Initializing LakeShore F71 gaussmeter unit with ID `$(gauss.deviceID)`."
   if gauss.params.connectionMode == F71_CM_TCP
     gauss.driver = TCPSCPIInstrument(gauss.params.ip, gauss.params.port)
   elseif gauss.params.connectionMode == F71_CM_USB

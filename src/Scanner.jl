@@ -193,7 +193,7 @@ end
 Close the devices when closing the scanner.
 """
 function Base.close(scanner::MPIScanner)
-  for device in getDevices(Device)
+  for device in getDevices(scanner, Device)
     close(device)
   end
 end

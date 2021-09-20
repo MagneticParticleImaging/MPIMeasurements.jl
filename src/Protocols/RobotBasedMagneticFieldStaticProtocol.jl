@@ -48,4 +48,5 @@ end
 
 function cleanup(protocol::RobotBasedMagneticFieldStaticProtocol)
   saveMagneticFieldAsHDF5(measurement(protocol), filename(protocol))
+  close(protocol.scanner)
 end
