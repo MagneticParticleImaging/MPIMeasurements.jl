@@ -2,8 +2,8 @@ import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
-       name, configDir, generalParams, getDevice, getDevices, getGUIMode,
-       getSequenceList
+       name, configDir, generalParams, getDevice, getDevices, getSequenceList,
+       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement
 
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
@@ -103,7 +103,36 @@ Base.@kwdef struct MPIScannerGeneral
   defaultSequence::String=""
   defaultProtocol::String=""
   transferFunction::String=""
+  producerThreadID::Int32 = 2
+  consumerThreadID::Int32 = 3
 end
+
+abstract type AsyncBuffer end
+abstract type AsyncMeasTyp end
+struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
+struct RegularAsyncMeas <: AsyncMeasTyp end
+# TODO Update
+asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
+
+mutable struct FrameAverageBuffer
+  buffer::Array{Float32, 4}
+  setIndex::Int
+end
+FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
+
+mutable struct SequenceMeasState
+  numFrames::Int
+  nextFrame::Int
+  channel::Union{Channel, Nothing}
+  producer::Union{Task,Nothing}
+  consumer::Union{Task, Nothing}
+  asyncBuffer::AsyncBuffer
+  buffer::Array{Float32,4}
+  avgBuffer::Union{FrameAverageBuffer, Nothing}
+  #temperatures::Matrix{Float64} temps are not implemented atm
+  type::AsyncMeasTyp
+end
+
 
 """
 Central part for setting up a scanner.
@@ -115,11 +144,11 @@ mutable struct MPIScanner
   configDir::AbstractString
   generalParams::MPIScannerGeneral
   devices::Dict{AbstractString, Device}
-  guiMode::Bool
   currentSequence::Union{Sequence,Nothing}
   currentProtocol::Union{Protocol,Nothing}
+  seqMeasState::Union{SequenceMeasState, Nothing}
 
-  function MPIScanner(name::AbstractString; guimode=false)
+  function MPIScanner(name::AbstractString)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     filename = nothing
@@ -146,7 +175,7 @@ mutable struct MPIScanner
     currentSequence = generalParams.defaultSequence != "" ? 
       Sequence(configDir, generalParams.defaultSequence) : nothing
 
-    scanner = new(name, configDir, generalParams, devices, guimode, currentSequence, nothing)
+    scanner = new(name, configDir, generalParams, devices, currentSequence, nothing)
 
     scanner.currentProtocol = generalParams.defaultProtocol != "" ? 
       Protocol(generalParams.defaultProtocol, scanner) : nothing
@@ -183,8 +212,6 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   return getDevices(scanner, deviceTypeSearched)
 end
 
-getGUIMode(scanner::MPIScanner) = scanner.guiMode
-
 scannerBoreSize(scanner::MPIScanner) = scanner.generalParams.boreSize
 scannerFacility(scanner::MPIScanner) = scanner.generalParams.facility
 scannerManufacturer(scanner::MPIScanner) = scanner.generalParams.manufacturer
@@ -200,6 +227,8 @@ function getSequenceList(scanner::MPIScanner)
     return String[]
   end
 end
+
+# TODO getProtocolList
 
 function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "Sequences", name*".toml")
@@ -231,3 +260,135 @@ end
 
 MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
 
+#### Scanner Measurement Functions ####
+####  Async version  ####
+SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, RegularAsyncMeas())
+
+function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
+  scanner.currentSequence = sequence
+  asyncMeasurement(scanner)
+end
+function asyncMeasurement(scanner::MPIScanner)
+  prepareAsyncMeasurement(scanner)
+  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner)  
+  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
+  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
+  return scanner.seqMeasState
+end
+
+function prepareAsyncMeasurement(scanner::MPIScanner)
+  daq = getDAQ(scanner)
+  sequence = scanner.currentSequence
+  numFrames = acqNumFrames(sequence)
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence)
+  frameAverage = acqNumFrameAverages(sequence)
+  setup(daq, sequence)
+
+  # Prepare buffering structures
+  @info "Allocating buffer for $numFrames frames"
+  # TODO implement properly with only RxMeasurementChannels
+  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)
+  #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
+  avgBuffer = nothing
+  if frameAverage > 1
+    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, frameAverage)), 1)
+  end
+  channel = Channel{channelType(daq)}(32)
+
+  # Prepare measState
+  measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
+  measState.channel = channel
+
+  scanner.seqMeasState = measState
+end
+
+function asyncProducer(channel::Channel, scanner::MPIScanner)
+  su = nothing 
+  # TODO dependency does not work because MPIScanner is not a device
+  #if hasDependency(scanner, SurveillanceUnit)
+    #su = dependency(scanner, SurveillanceUnit)
+    #enableACPower(su, ...) # TODO
+  #end
+  robot = nothing
+  #if hasDependency(scanner, Robot)
+  #  robot = dependeny(scanner, Robot)
+  #  setEnabled(robot, false)
+  #end
+
+  daq = getDAQ(scanner)
+  asyncProducer(channel, daq, scanner.currentSequence)
+  #disconnect(daq)
+  
+  if !isnothing(su)
+    #disableACPower(su, scanner)
+  end
+  if !isnothing(robot)
+    #setEnabled(robot, true)
+  end
+end
+
+# Default Consumer
+function asyncConsumer(channel::Channel, scanner::MPIScanner)
+  daq = getDAQ(scanner)
+  measState = scanner.seqMeasState
+
+  @info "Consumer start"
+  while isopen(channel) || isready(channel)
+    while isready(channel)
+      chunk = take!(channel)
+      updateAsyncBuffer!(measState.asyncBuffer, chunk)
+      updateFrameBuffer!(measState, daq)
+    end
+    sleep(0.001)
+  end
+  @info "Consumer end"
+
+  # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
+  #if length(measState.temperatures) > 0
+  #  params["calibTemperatures"] = measState.temperatures
+  #end
+end
+
+function measurement(scanner::MPIScanner)
+  measState = asyncMeasurement(scanner)
+  producer = measState.producer
+  consumer = measState.consumer
+  result = nothing
+
+  try 
+    Base.wait(producer)
+  catch e 
+    if !isa(e, TaskFailedException) 
+      @error "Unexpected error"
+      @error e
+    end
+  end
+
+  try
+    Base.wait(producer)
+  catch e
+    if !isa(e, TaskFailedException)
+      @error "Unexpected error"
+      @error e
+    end
+  end
+
+  # Check tasks
+  if Base.istaskfailed(producer)
+    @error "Producer failed"
+    stack = Base.catch_stack(producer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
+    result = nothing
+  elseif  Base.istaskfailed(consumer)
+    @error "Consumer failed"
+    stack = Base.catch_stack(consumer)[1]
+    @error stack[1]
+    @error stacktrace(stack[2])
+    result = nothing
+  else
+    result = measState.buffer
+  end
+  return result
+end
