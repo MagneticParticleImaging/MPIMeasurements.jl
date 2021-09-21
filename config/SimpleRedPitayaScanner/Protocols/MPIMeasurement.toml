@@ -3,4 +3,4 @@ type = "MPIMeasurementProtocol"
 description = "An acquisition with the Red Pitaya"
 targetScanner = "SimpleRedPitayaScanner"
 
-sequenceName = "SimpleRedPitayaSequence"
+sequenceName = "1DSequence"
