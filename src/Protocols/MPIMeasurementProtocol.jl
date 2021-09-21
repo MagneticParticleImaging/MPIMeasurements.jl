@@ -1,7 +1,7 @@
 export MPIMeasurementProtocol, MPIMeasurementProtocolParams, sequenceName, sequence, mdf, prepareMDF
 
 Base.@kwdef struct MPIMeasurementProtocolParams <: ProtocolParams
-  sequenceName::AbstractString
+  #sequenceName::AbstractString
 end
 MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
 
@@ -11,47 +11,17 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   scanner::MPIScanner
   params::MPIMeasurementProtocolParams
   biChannel::BidirectionalChannel{ProtocolEvent}
-  
-  sequence::Union{Sequence, Nothing} = nothing
-  mdf::Union{MDFv2InMemory, Nothing} = nothing
-  filename::AbstractString = ""
   done::Bool = false
   cancelled::Bool = false
-end
-
-sequenceName(protocol::MPIMeasurementProtocol) = protocol.params.sequenceName
-sequence(protocol::MPIMeasurementProtocol) = protocol.sequence
-mdf(protocol::MPIMeasurementProtocol) = protocol.mdf
-
-#TODO: This has currently no link to an MDF store. How should we integrate it?
-function prepareMDF(protocol::MPIMeasurementProtocol, filename::AbstractString, study::MDFv2Study, experiment::MDFv2Experiment, operator::AbstractString="anonymous")
-  protocol.mdf = MDFv2InMemory()
-  protocol.mdf.root = defaultMDFv2Root()
-  protocol.mdf.study = study
-  protocol.mdf.experiment = experiment
-  protocol.mdf.scanner = MDFv2Scanner(
-    boreSize = ustrip(u"m", scannerBoreSize(protocol.scanner)),
-    facility = scannerFacility(protocol.scanner),
-    manufacturer = scannerManufacturer(protocol.scanner),
-    name = scannerName(protocol.scanner),
-    operator = operator,
-    topology = scannerTopology(protocol.scanner)
-  )
-
-  protocol.filename = filename
+  finishAcknowledged::Bool = false
 end
 
 function init(protocol::MPIMeasurementProtocol)
-  scanner_ = scanner(protocol)
-  configDir_ = configDir(scanner_)
-  sequenceName_ = sequenceName(protocol)
-  filename = joinpath(configDir_, "Sequences", "$sequenceName_.toml")
-  protocol.sequence = Sequence(filename)
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
 function execute(protocol::MPIMeasurementProtocol)
-  scanner_ = scanner(protocol)
+  @info "Measurement protocol started"
 
   handleEvents(protocol)
   if protocol.cancelled
@@ -59,8 +29,8 @@ function execute(protocol::MPIMeasurementProtocol)
     return
   end
   
-  if !isnothing(protocol.sequence)
-    uMeas = measurement(protocol)
+  if !isnothing(protocol.scanner.currentSequence)
+    measurement(protocol)
     protocol.done = true
   end
 
@@ -70,25 +40,23 @@ function execute(protocol::MPIMeasurementProtocol)
     return
   end
 
-  #if !isnothing(protocol.mdf)
-  @info "Asking now"
-  if askConfirmation(protocol, "Would you like to save the measurement result?")
-    @info "Sequence finished. Now saving to MDF."
-    #fillMDF(seqCont, protocol.mdf)
-    #saveasMDF(protocol.filename, protocol.mdf)
-    @info "Would save now"
-  else
-    @warn "No MDF defined and thus, no data is saved. If this is a mistake "*
-          "please run `prepareMDF` prior to calling `runProtocol`."
+
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  while !protocol.finishAcknowledged
+    handleEvents(protocol)
+    if protocol.cancelled
+      close(protocol.biChannel)
+      return
+    end
+    sleep(0.01)
   end
-  handleEvents(protocol)
+
   @info "Protocol finished."
   close(protocol.biChannel)
 end
 
 function measurement(protocol::MPIMeasurementProtocol)
   scanner = protocol.scanner
-  scanner.currentSequence = protocol.sequence
   measState = asyncMeasurement(scanner)
   producer = measState.producer
   consumer = measState.consumer
@@ -162,4 +130,5 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   put!(protocol.biChannel, ProgressQueryEvent(done, 1, event))
 end
 
+handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
 
