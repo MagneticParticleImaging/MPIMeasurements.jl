@@ -1,7 +1,7 @@
 export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
-        ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent
+        ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent
 
 
 abstract type ProtocolParams end
@@ -107,10 +107,12 @@ struct AnswerEvent <: ProtocolEvent
   question::DecisionEvent
 end
 
-# Mandatory Control flow events for all protocols
+# (Mandatory) Control flow events for all protocols
 struct StopEvent <: ProtocolEvent end
 struct ResumeEvent <: ProtocolEvent end
 struct CancelEvent <: ProtocolEvent end
+struct FinishedNotificationEvent <: ProtocolEvent end
+struct FinishedAckEvent <: ProtocolEvent end
 #Maybe a status (+ query) event and all Protocols have the states: UNKNOWN, INIT, EXECUTING, PAUSED, FINISHED
 
 # Display/Information Events
