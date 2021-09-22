@@ -15,7 +15,7 @@ ENV["JULIA_DEBUG"] = "all"
 scannerName_ = "MagneticFieldMeasurement"
 protocolName_ = "MagneticFieldMeasurement"
 operator = "Jonas"
-filename_ = joinpath("./field.h5")
+filename_ = joinpath("./field_$(Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")).h5")
 
 protocol = Protocol(protocolName_, scannerName_)
 filename(protocol, filename_)

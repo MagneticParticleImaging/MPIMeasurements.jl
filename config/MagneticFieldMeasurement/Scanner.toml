@@ -23,4 +23,8 @@ measurementMode = "DC"
 deviceType = "IselRobot"
 stepsPermm = 160
 serial_port = "COM5"
-
+#scannerCoordAxes = [[1,0,0] [0,1,0] [0,0,1]]
+#scannerCoordOrigin = ["0.0mm", "0.0mm", "0.0mm"]
+referenceOrder = "zxy"
+movementOrder = "zxy"
+namedPositions.park = ["0.0mm", "0.0mm", "50.0mm"]

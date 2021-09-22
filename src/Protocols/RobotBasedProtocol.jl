@@ -20,7 +20,11 @@ function execute(protocol::RobotBasedProtocol)
   switchBrakes_ = switchBrakes(protocol)
 
   enable(robot)
-  doReferenceDrive(robot)
+  if !isReferenced(robot)
+    moveRel(robot, RobotCoords([1.0u"mm", 1.0u"mm", 1.0u"mm"]))
+    doReferenceDrive(robot)
+  end
+  movePark(robot)
   
   for (index, pos) in enumerate(positions_)
     for coord in pos

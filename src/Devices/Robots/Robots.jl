@@ -215,7 +215,7 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
   end
 end
 
-movePark(rob::Robot) = moveAbs(rob, zeros(dof(rob)) * u"m")
+movePark(rob::Robot) = haskey(namedPositions(rob), "park") ? gotoPos(rob, "park") : moveAbs(rob, RobotCoords(zeros(dof(rob))*u"mm"))
 
 function enable(rob::Robot)
   if state(rob) == READY
