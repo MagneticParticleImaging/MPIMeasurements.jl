@@ -1,0 +1,6 @@
+name = "OnlineMeasurement"
+type = "OnlineMeasurementProtocol"
+description = "An asychronous measurement with the RedPitayaDAQ. Implements no storage, instead individual frames or all frames can be queried during the mesaurement. Uses current scanner sequence"
+targetScanner = "SimpleRedPitayaScanner"
+
+eventInterval = "0.01s"

@@ -1,4 +1,4 @@
-export MPIMeasurementProtocol, MPIMeasurementProtocolParams, sequenceName, sequence, mdf, prepareMDF
+export MPIMeasurementProtocol, MPIMeasurementProtocolParams
 
 Base.@kwdef struct MPIMeasurementProtocolParams <: ProtocolParams
   #sequenceName::AbstractString
@@ -127,7 +127,7 @@ end
 
 function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
   done = protocol.done ? 1 : 0
-  put!(protocol.biChannel, ProgressQueryEvent(done, 1, event))
+  put!(protocol.biChannel, ProgressEvent(done, 1, "Measurement", event))
 end
 
 handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
