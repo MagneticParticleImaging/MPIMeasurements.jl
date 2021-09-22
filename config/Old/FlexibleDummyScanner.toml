@@ -1,0 +1,42 @@
+[General]
+
+[DAQ]
+ip = ["192.168.1.20"]
+type = "FlexibleDummyDAQ"
+pinInterlockHubert = "DIO7_P"
+pinRSDSM1850 = "DIO6_P"
+acqNumFrames = 1
+acqNumFGFrames = 1
+acqNumBGFrames = 1
+acqNumAverages = 1
+decimation = 16
+triggerMode = "INTERNAL"
+dfStrength = [2e-3]
+dfPhase = [0.0] #[]-1.5707963267948966]
+dfBaseFrequency = 125e6
+dfDivider = [4800]
+dfWaveform = "SQUARE"
+rxNumChannels = 2
+controlPause = 0.8
+acqNumFFChannels = 2
+acqFFValues = [1.0]
+acqFFSequence = "None"
+acqNumPeriodsPerFrame = 1
+acqFFLinear = false
+controlLoopPhaseAccuracy = 0.1 #0.05    #0.1
+controlLoopAmplitudeAccuracy = 0.01 #0.001# 0.01
+txLimitVolt = [0.7] #ToDo: scheint nicht zu klappen
+rxChanIdx = [1,2]
+refChanIdx = [2]
+dfChanIdx = [1]
+rpModulus = [4800,4800,4800,4800]
+ffRampUpTime = 0.0
+ffRampUpFraction = 1.0
+controlPhase = false
+jumpSharpness = 0.1
+passPDMToFastDAC = [true]
+acqNumFrameAverages = 1
+calibFieldToVolt = [20.0]         #single int, influences DF Amplitude only
+calibRefToField = [0.01]		  #only for einpegeling?
+calibFFCurrentToVolt = [0.1, 0.0320543385]  #SlowDAC steps [XOffsetSTEP,YOffsetSTEP]	
+calibIntToVolt = [1.383636425E-4, 0.0135548877, 1.38609052412E-4, 0.000565413709090] #FastDac calib: [slope1,offset1,slop2,offset2,...]

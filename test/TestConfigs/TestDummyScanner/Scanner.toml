@@ -1,0 +1,42 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestDummyScanner"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "./tmp/TestDummyScannerStore"
+defaultSequence = ""
+
+[Devices]
+initializationOrder = [
+    #"my_daq_id", # Currently not working due  to changes in DummyDAQ
+    "my_gauss_id",
+    "my_surveillance_unit_id",
+    "my_temperature_sensor_id",
+    "my_robot_id",
+    "my_amplifier_id",
+]
+
+# [Devices.my_daq_id]
+# deviceType = "DummyDAQ"
+# samplesPerPeriod = 1000
+# frequency = "25kHz"
+
+[Devices.my_gauss_id]
+deviceType = "SimulatedGaussMeter"
+
+[Devices.my_surveillance_unit_id]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.my_temperature_sensor_id]
+deviceType = "DummyTemperatureSensor"
+
+[Devices.my_robot_id]
+deviceType = "SimulatedRobot"
+
+[Devices.my_amplifier_id]
+deviceType = "SimulatedAmplifier"
+mode = "voltage"
+voltageMode = "low voltage"
+matchingNetwork = 1
