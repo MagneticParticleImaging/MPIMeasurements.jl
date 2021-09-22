@@ -21,7 +21,6 @@ function execute(protocol::RobotBasedProtocol)
 
   enable(robot)
   if !isReferenced(robot)
-    moveRel(robot, RobotCoords([1.0u"mm", 1.0u"mm", 1.0u"mm"]))
     doReferenceDrive(robot)
   end
   movePark(robot)

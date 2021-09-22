@@ -4,8 +4,8 @@ description = "A magnetic field measurement."
 targetScanner = "MagneticFieldMeasurement"
 
 positions.type = "RegularGridPositions"
-positions.shape = [3, 1, 3]
-positions.fov = ["5.0mm", "5.0mm", "5.0mm"]
-positions.center = ["5.0mm", "50.0mm", "50.0mm"]
+positions.shape = [10, 5, 10]
+positions.fov = ["15.0mm", "15.0mm", "15.0mm"]
+positions.center = ["111.5mm", "316.0mm", "128.5mm"]
 
 postMoveWaitTime = "1.0s"

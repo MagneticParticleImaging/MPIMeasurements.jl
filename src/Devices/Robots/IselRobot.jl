@@ -42,10 +42,10 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
 
   serial_port::String = "/dev/ttyUSB0"
   pause_ms::Int = 200
-  timeout_ms::Int = 10000
+  timeout_ms::Int = 40000
   delim_read::String = "\r"
   delim_write::String = "\r"
-  baudrate::Int = 19200
+  baudrate::Int = 9600
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
   scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
@@ -126,12 +126,19 @@ function _disable(robot::IselRobot)
 end
 
 function _doReferenceDrive(rob::IselRobot)
+  # Minor shift for not hitting the limit switch
+  _moveRel(rob, [0.5u"mm", 0.5u"mm", 0.5u"mm"], nothing)
+  sleep(0.5)
+
   tempTimeout = rob.sd.timeout_ms
   try
     rob.sd.timeout_ms = 180000
     refAxis(rob, params(rob).referenceOrder[1])
+    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[2])
+    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[3])
+    sleep(0.5)
   finally
     rob.sd.timeout_ms = tempTimeout
   end
