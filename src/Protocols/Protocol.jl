@@ -1,4 +1,8 @@
-export Protocol, ProtocolParams, name, description, scanner, params, runProtocol, init, execute, cleanup
+export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
+        init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
+        InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
+        ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent
+
 
 abstract type ProtocolParams end
 
@@ -6,6 +10,7 @@ name(protocol::Protocol)::AbstractString = protocol.name
 description(protocol::Protocol)::AbstractString = protocol.description
 scanner(protocol::Protocol)::MPIScanner = protocol.scanner
 params(protocol::Protocol)::ProtocolParams = protocol.params
+biChannel(protocol::Protocol) = protocol.biChannel
 
 "General constructor for all concrete subtypes of Protocol."
 function Protocol(protocolDict::Dict{String, Any}, scanner::MPIScanner)
@@ -34,13 +39,15 @@ function Protocol(protocolDict::Dict{String, Any}, scanner::MPIScanner)
     protocolType = pop!(protocolDict, "type")
   else 
     throw(ProtocolConfigurationError("There is no protocol type given in the configuration."))
-  end
+  end 
 
   paramsType = getConcreteType(ProtocolParams, protocolType*"Params")
   params = paramsType(protocolDict)
   ProtocolImpl = getConcreteType(Protocol, protocolType)
 
-  return ProtocolImpl(name=name, description=description, scanner=scanner, params=params)
+  biChannel = BidirectionalChannel{ProtocolEvent}(32)
+
+  return ProtocolImpl(name=name, description=description, scanner=scanner, biChannel = biChannel, params=params)
 end
 
 function Protocol(protocolName::AbstractString, scanner::MPIScanner)
@@ -70,23 +77,94 @@ Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protoco
 
 function runProtocol(protocol::Protocol)
   # TODO: Error handling
-  init(protocol)
-  execute(protocol)
-  cleanup(protocol)
+  # TODO command line "handler"
+  in, out = init(protocol)
+  @async begin
+    execute(protocol)
+    cleanup(protocol)
+  end
+  return in, out
 end
 
-function askConfirmation(message::AbstractString)
-  if isdefined(MPIMeasurements, :Gtk)
-    return ask_dialog(message)
-  else
-    @warn "Gtk.jl failed to load and thus we cannot use it for user confirmation. `askConfirmation` therefore stupidly returns `true` for now."
-    return true
-  end
-end
+abstract type ProtocolEvent end
 
 @mustimplement init(protocol::Protocol)
 @mustimplement execute(protocol::Protocol)
 @mustimplement cleanup(protocol::Protocol)
+@mustimplement stop(protocol::Protocol)
+@mustimplement resume(protocol::Protocol)
+@mustimplement cancel(protocol::Protocol)
+
+struct UndefinedEvent <: ProtocolEvent
+  event::ProtocolEvent
+end
+# Interaction Events, only necessary for interactive protocolts
+struct DecisionEvent <: ProtocolEvent
+  message::AbstractString
+end
+struct AnswerEvent <: ProtocolEvent
+  answer::Bool
+  question::DecisionEvent
+end
+
+# (Mandatory) Control flow events for all protocols
+struct StopEvent <: ProtocolEvent end
+struct ResumeEvent <: ProtocolEvent end
+struct CancelEvent <: ProtocolEvent end
+struct FinishedNotificationEvent <: ProtocolEvent end
+struct FinishedAckEvent <: ProtocolEvent end
+#Maybe a status (+ query) event and all Protocols have the states: UNKNOWN, INIT, EXECUTING, PAUSED, FINISHED
+
+# Display/Information Events
+struct InfoQueryEvent <: ProtocolEvent
+  message::AbstractString # for example "TEMP" could return a value from temp sensor if it exists, protocol specific
+end
+struct InfoEvent <: ProtocolEvent
+  message::AbstractString
+  query::InfoQueryEvent
+end
+struct ProgressQueryEvent <: ProtocolEvent end
+struct ProgressEvent <: ProtocolEvent
+  done::Int
+  total::Int
+  query::ProgressQueryEvent
+end
+struct DataQueryEvent <: ProtocolEvent
+  message::AbstractString
+end
+struct DataAnswerEvent <: ProtocolEvent
+  data::Any
+  query::DataQueryEvent
+end
+
+function askConfirmation(protocol::Protocol, message::AbstractString)
+  channel = biChannel(protocol)
+  question = DecisionEvent(message)
+  put!(channel, question)
+  while isopen(channel) || isready(channel)
+    event = take!(channel)
+    # Note that for immutable objects the '==' does not guarantee that the reply is to the actual current question
+    if event isa AnswerEvent && event.question == question 
+      return event.answer
+    else 
+      handleEvent(protocol, event)
+    end
+    sleep(0.001)
+  end
+end
+
+handleEvent(protocol::Protocol, event::StopEvent) = stop(protocol)
+handleEvent(protocol::Protocol, event::ResumeEvent) = resume(protocol) 
+handleEvent(protocol::Protocol, event::CancelEvent) = cancel(protocol)
+handleEvent(protocol::Protocol, event::ProtocolEvent) = put!(biChannel(protocol), UndefinedEvent(event))
+#handleEvent(protocol::Protocol, event::InfoQueryEvent) = 
+
+function handleEvents(protocol::Protocol)
+  while isready(protocol.biChannel)
+    event = take!(protocol.biChannel)
+    handleEvent(protocol, event)
+  end
+end
 
 include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")

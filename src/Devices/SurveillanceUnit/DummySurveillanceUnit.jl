@@ -1,7 +1,7 @@
 export DummySurveillanceUnit, DummySurveillanceUnitParams
 
 Base.@kwdef struct DummySurveillanceUnitParams <: DeviceParams
-  
+
 end
 DummySurveillanceUnitParams(dict::Dict) = params_from_dict(DummySurveillanceUnitParams, dict)
 
@@ -30,7 +30,7 @@ checkDependencies(su::DummySurveillanceUnit) = true
 
 Base.close(su::DummySurveillanceUnit) = nothing
 
-getTemperatures(su::DummySurveillanceUnit) = 30.0u"°C"
+getTemperatures(su::DummySurveillanceUnit) = 30.0.*ones(4) .+ 1.0.*randn(4)
 getACStatus(su::DummySurveillanceUnit, scanner::MPIScanner) = su.acPowerEnabled
 
 function enableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)

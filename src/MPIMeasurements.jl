@@ -27,6 +27,7 @@ using Graphics: @mustimplement
 using Scratch
 using Mmap
 using DocStringExtensions
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close
 
 # TODO: This is a workaround for CI with GTK since precompilation fails with headless systems
 # Remove after https://github.com/JuliaGraphics/Gtk.jl/issues/346 is resolved
