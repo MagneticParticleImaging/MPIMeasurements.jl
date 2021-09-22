@@ -21,6 +21,10 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SimpleSimulatedDAQParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -55,6 +59,8 @@ end
 
 function init(daq::SimpleSimulatedDAQ)
   @debug "Initializing simple simulated DAQ with ID `$(daq.deviceID)`."
+
+  daq.present = true
 end
 
 function checkDependencies(daq::SimpleSimulatedDAQ)
@@ -75,6 +81,8 @@ function checkDependencies(daq::SimpleSimulatedDAQ)
     return true
   end                            
 end
+
+Base.close(daq::SimpleSimulatedDAQ) = nothing
 
 function setup(daq::SimpleSimulatedDAQ, sequence::Sequence)
   setupTx(daq, sequence)

@@ -18,9 +18,12 @@ Base.@kwdef mutable struct TinkerforgeSilentStepper <: StepperMotor
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SimulatedGaussMeterParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
-
 
   brick = missing
   stallSum = 0
@@ -48,9 +51,13 @@ function init(motor::TinkerforgeSilentStepper)
   motor.brick.set_speed_ramping(acceleration, deacceleration)  # steps per s^2, acceleration and deacceleration of the motor, 8000 steps per s in 10 s equals 800 steps per s^2
   motor.brick.set_motor_current(motorCurrent * 1000)  # /mA, sets the current to drive the motor.
   motor.brick.set_step_configuration(stepResolution, true)  # sets the defines stepResolution and activates Interpolation
+
+  motor.present = true
 end
 
 checkDependencies(motor::TinkerforgeSilentStepper) = true
+
+Base.close(motor::TinkerforgeSilentStepper) = nothing
 
 # Note: This is commented out because I am not sure how to handle the callback. Using a global variable would only work with one device.
 # function allDataCallback(current_velocity, current_position, remaining_step, stack_voltage, external_voltage,

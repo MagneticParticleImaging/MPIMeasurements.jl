@@ -58,6 +58,10 @@ Base.@kwdef mutable struct LakeShoreF71GaussMeter <: GaussMeter
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::LakeShoreF71GaussMeterParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -78,6 +82,8 @@ function init(gauss::LakeShoreF71GaussMeter)
 
   # Always use Tesla
   command(gauss.driver, "UNIT:FIELD TESLA")
+
+  gauss.present = true
 end
 
 Base.close(gauss::LakeShoreF71GaussMeter) = close(gauss.driver)

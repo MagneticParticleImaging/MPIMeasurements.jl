@@ -14,6 +14,12 @@ deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.devi
 "Retrieve the parameters of a device."
 params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct for `$(typeof(device))` must have a field `params`.")
 
+"Check whether the device is optional."
+isOptional(device::Device) = :optional in fieldnames(typeof(device)) ? device.optional : error("The device struct for `$(typeof(device))` must have a field `optional`.")
+
+"Check whether the device is present."
+isPresent(device::Device) = :present in fieldnames(typeof(device)) ? device.present : error("The device struct for `$(typeof(device))` must have a field `present`.")
+
 "Retrieve the dependencies of a device."
 dependencies(device::Device) = :dependencies in fieldnames(typeof(device)) ? device.dependencies : error("The device struct for `$(typeof(device))` must have a field `dependencies`.")
 

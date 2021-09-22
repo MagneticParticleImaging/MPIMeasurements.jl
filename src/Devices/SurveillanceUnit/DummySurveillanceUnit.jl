@@ -10,6 +10,10 @@ Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::DummySurveillanceUnitParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -18,9 +22,13 @@ end
 
 function init(su::DummySurveillanceUnit)
   @debug "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
+
+  su.present = true
 end
 
 checkDependencies(su::DummySurveillanceUnit) = true
+
+Base.close(su::DummySurveillanceUnit) = nothing
 
 getTemperatures(su::DummySurveillanceUnit) = 30.0u"°C"
 getACStatus(su::DummySurveillanceUnit, scanner::MPIScanner) = su.acPowerEnabled

@@ -94,6 +94,10 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::RedPitayaDAQParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -151,9 +155,13 @@ function init(daq::RedPitayaDAQ)
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
   #masterTrigger(daq.rpc, true)
+
+  daq.present = true
 end
 
 checkDependencies(daq::RedPitayaDAQ) = true
+
+Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 
 #### Sequence ####

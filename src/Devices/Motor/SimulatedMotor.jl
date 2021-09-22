@@ -10,6 +10,10 @@ Base.@kwdef mutable struct SimulatedMotor <: Motor
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SimulatedGaussMeterParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -19,7 +23,11 @@ end
 
 function init(motor::SimulatedMotor)
   @debug "Initializing simulated motor unit with ID `$(motor.deviceID)`."
+
+  motor.present = true
 end
 
 checkDependencies(motor::SimulatedMotor) = true
+
+Base.close(motor::SimulatedMotor) = nothing
 

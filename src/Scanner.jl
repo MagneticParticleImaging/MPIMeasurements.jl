@@ -90,6 +90,9 @@ function initiateDevices(devicesParams::Dict{String, Any})
   # Initiate all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     init(devices[deviceID])
+    if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+      @error "The device with ID `$deviceID` should be present but isn't."
+    end
   end
 
   return devices
@@ -207,14 +210,18 @@ configDir(scanner::MPIScanner) = scanner.configDir
 "General parameters of the scanner like its bore size or gradient."
 generalParams(scanner::MPIScanner) = scanner.generalParams
 
+"Location of the scanner's transfer function."
+transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
+
+"Check, whether the scanner has a transfer function defined."
+hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
+
 """
     $(SIGNATURES)
 
 Retrieve a device by its `deviceID`.
 """
 getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
-transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
-hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
 
 """
     $(SIGNATURES)

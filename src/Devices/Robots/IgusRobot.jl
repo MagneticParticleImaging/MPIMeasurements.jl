@@ -59,11 +59,18 @@ Base.@kwdef mutable struct IgusRobot <: Robot
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::IgusRobotParams
+  "Flag if the device is optional."
+  optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+
   state::RobotState = INIT
   socket::Union{TCPSocket,Nothing} = nothing
 end
+
+Base.close(rob::IgusRobot) = close(rob.socket)
 
 dof(rob::IgusRobot) = 1
 _getPosition(rob::IgusRobot) = _isReferenced(rob) ? [getSdoObject(rob, POSITION_ACTUAL_VALUE) / rob.params.stepsPermm * u"mm"] : [NaN]u"mm"

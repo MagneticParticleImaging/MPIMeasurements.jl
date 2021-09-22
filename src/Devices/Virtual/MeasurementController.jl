@@ -38,15 +38,28 @@ end
 MeasurementControllerParams(dict::Dict) = params_from_dict(MeasurementControllerParams, dict)
 
 Base.@kwdef mutable struct MeasurementController <: VirtualDevice
-    deviceID::String
-    params::MeasurementControllerParams
-    dependencies::Dict{String, Union{Device, Missing}}
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::MeasurementControllerParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
 
-    measState::Union{MeasState, Nothing} = nothing 
-    producer::Union{Task,Nothing} = nothing
-    consumer::Union{Task, Nothing} = nothing
-    
-    sequence::Union{Sequence,Nothing} = nothing
+  measState::Union{MeasState, Nothing} = nothing 
+  producer::Union{Task,Nothing} = nothing
+  consumer::Union{Task, Nothing} = nothing
+  
+  sequence::Union{Sequence,Nothing} = nothing
+end
+
+function init(measCont::MeasurementController)
+  @info "Initializing measurement controller with ID `$(measCont.deviceID)`."
+
+  measCont.present = true
 end
 
 function checkDependencies(measCont::MeasurementController)
@@ -59,9 +72,9 @@ function checkDependencies(measCont::MeasurementController)
   return true
 end
 
-function init(measCont::MeasurementController)
-  @info "Initializing measurement controller with ID `$(measCont.deviceID)`."
-end
+Base.close(measCont::MeasurementController) = nothing
+
+
 
 ####  Async version  ####
 function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})

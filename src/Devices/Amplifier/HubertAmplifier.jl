@@ -14,6 +14,10 @@ Base.@kwdef mutable struct HubertAmplifier <: Amplifier
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::HubertAmplifierParams
+	"Flag if the device is optional."
+	optional::Bool = false
+	"Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -35,9 +39,13 @@ function init(amp::HubertAmplifier)
 	mode(amp, amp.params.mode)
 	voltageMode(amp, amp.params.voltageMode)
 	matchingNetwork(amp, amp.params.matchingNetwork)
+
+	amp.present = true
 end
 
 checkDependencies(amp::HubertAmplifier) = true
+
+Base.close(amp::HubertAmplifier) = close(amp.driver)
 
 # main communication function
 function _hubertSerial(sp::SerialPort, input::Array{UInt8}, ack::Array{UInt8})

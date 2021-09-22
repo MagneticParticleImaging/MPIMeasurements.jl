@@ -15,6 +15,10 @@ Base.@kwdef mutable struct SequenceController <: VirtualDevice
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SequenceControllerParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -50,9 +54,13 @@ end
 
 function init(seqCont::SequenceController)
   @debug "Initializing sequence controller with ID `$(seqCont.deviceID)`."
+
+  seqCont.present = true
 end
 
 checkDependencies(seqCont::SequenceController) = true # TODO: Add daq
+
+Base.close(seqCont::SequenceController) = nothing
 
 function setupControlLoop(seqCont::SequenceController, sequence::Sequence)
 

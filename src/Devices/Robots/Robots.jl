@@ -40,6 +40,7 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 function init(rob::Robot)
   @debug "Initializing robot with ID `$(rob.deviceID)`."
   setup(rob)
+  rob.present = true
 end
 
 checkDependencies(rob::Robot) = true

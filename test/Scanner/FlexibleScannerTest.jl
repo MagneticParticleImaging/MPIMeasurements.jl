@@ -20,15 +20,23 @@ MPIMeasurements, but also from the outside.
     deviceID::String
     "Parameter struct for this devices read from the configuration."
     params::FlexibleDAQParams
+    "Flag if the device is optional."
+	  optional::Bool = false
+    "Flag if the device is present."
+	  present::Bool = false
     "Vector of dependencies for this device."
     dependencies::Dict{String, Union{Device, Missing}}
   end
 
   function MPIMeasurements.init(daq::FlexibleDAQ)
     @debug "Initializing flexible DAQ with ID `$(daq.deviceID)`."
+
+    daq.present = true
   end
   
   MPIMeasurements.checkDependencies(daq::FlexibleDAQ) = true
+
+  Base.close(daq::FlexibleDAQ) = nothing
 
   function MPIMeasurements.startTx(daq::FlexibleDAQ)
   end

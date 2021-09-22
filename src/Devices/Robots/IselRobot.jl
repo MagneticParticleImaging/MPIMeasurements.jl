@@ -60,8 +60,13 @@ Base.@kwdef mutable struct IselRobot <: Robot
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::IselRobotParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+
   "Current state of the robot"
   state::RobotState = INIT
   "SerialDevice for communication with the robot"
