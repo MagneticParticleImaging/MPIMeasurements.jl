@@ -30,7 +30,7 @@ const iselErrorCodes = Dict(
 )
 
 Base.@kwdef struct IselRobotParams <: DeviceParams
-  axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500],[0,500],[0,500]]u"mm"
+  axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
   defaultRefVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
   invertAxes::Vector{Bool} = [false, false, false]
