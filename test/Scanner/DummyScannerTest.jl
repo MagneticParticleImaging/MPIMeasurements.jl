@@ -5,7 +5,6 @@
   @testset "Meta" begin
     @test name(scanner) == scannerName_
     @test configDir(scanner) == joinpath(testConfigDir, scannerName_)
-    @test getGUIMode(scanner::MPIScanner) == false
   end
 
   @testset "General" begin
@@ -100,7 +99,8 @@
     @testset "SurveillanceUnit" begin
       surveillanceUnit = getDevice(scanner, "my_surveillance_unit_id")
       @test surveillanceUnit isa DummySurveillanceUnit
-      @test getTemperatures(surveillanceUnit) == 30.0u"°C"
+      temps = getTemperatures(surveillanceUnit)
+      @test all((27.0.*ones(4)) .≤ temps .≤ (33.0.*ones(4)))
       @test getACStatus(surveillanceUnit, scanner) == false # AC should be off in the beginning
       enableACPower(surveillanceUnit, scanner)
       @test getACStatus(surveillanceUnit, scanner) == true

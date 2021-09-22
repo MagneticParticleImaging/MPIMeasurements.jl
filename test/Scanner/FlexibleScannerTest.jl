@@ -75,7 +75,6 @@ MPIMeasurements, but also from the outside.
   @testset "Meta" begin
     @test name(scanner) == scannerName_
     @test configDir(scanner) == joinpath(testConfigDir, scannerName_)
-    @test getGUIMode(scanner::MPIScanner) == false
   end
 
   @testset "General" begin
