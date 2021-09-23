@@ -1,6 +1,6 @@
 export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 
-Base.@kwdef struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
+Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   waitTime::Float64
   bgFrames::Int64
   positions::Union{GridPositions, Nothing} = nothing
@@ -52,18 +52,19 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState = SystemMatrixRobotMeas()
 
   #Prepare Positions
-  measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(positions) : zeros(Bool,length(positions))
+  measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(protocol.params.positions) : zeros(Bool,length(protocol.params.positions))
   numBGPos = sum(measIsBGPos)
   numFGPos = length(measIsBGPos) - numBGPos
-  numTotalFrames = numFGPos + protocol.params.numBGFrames*numBGPos
+  numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
   # The following looks like a secrete line but it makes sense
-  posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (protocol.params.numBGFrames - 1) .+ 1)
+  posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (protocol.params.bgFrames - 1) .+ 1)
   measIsBGFrame = zeros(Bool, numTotalFrames)
 
   protocol.systemMeasState.measIsBGPos = measIsBGPos
   protocol.systemMeasState.posToIdx = posToIdx
   protocol.systemMeasState.measIsBGFrame = measIsBGFrame
   protocol.systemMeasState.currPos = 1
+  protocol.systemMeasState.positions = protocol.params.positions # TODO remove redundancy
   
   #Prepare Signals
   seq = protocol.scanner.currentSequence
@@ -76,7 +77,7 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   signals[:] .= 0.0 # Does this not erase our stored .bin in recovery case?
   protocol.systemMeasState.signals = signals
   
-  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels(daq),numPeriods,1)
+  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,1)
   
   # TODO implement properly
   protocol.systemMeasState.temperatures = zeros(0, 0)
@@ -387,4 +388,8 @@ handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::ResumeEvent) = prot
 
 function handleEvent(protocl::RobotBasedSystemMatrixProtocol, event::ProgressQueryEvent)
   put!(protocl.biChannel, ProgressEvent(protocl.systemMeasState.currPos, length(protocl.systemMeasState.positions), "Position", event))
+end
+
+function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
+  put!(protocol.biChannel, DataAnswerEvent(protocol.systemMeasState.currentSignal, event))
 end
