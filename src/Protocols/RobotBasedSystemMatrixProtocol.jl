@@ -13,7 +13,6 @@ mutable struct SystemMatrixRobotMeas
   consumer::Union{Task, Nothing}
   producerFinalizer::Union{Task, Nothing}
   #store::DatasetStore # Do we need this?
-  params::Dict # Probably dont need this
   positions::GridPositions
   currPos::Int
   signals::Array{Float32,4}
@@ -43,7 +42,6 @@ function SystemMatrixRobotMeas()
     nothing, 
     nothing,
     #store,
-    Dict{String,Any}(),
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
@@ -230,14 +228,13 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
         if (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          # TODO set current sequence parameters
-          daq.params.acqNumFrames = calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1
-          setSequenceParams(daq)
+          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1)
+          setSequenceParams(daq, protocol.scanner.currentSequence)
         end 
       end
-      timeSeq = @elapsed prepareSequence(daq)
+      timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
       # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed prepareTx(daq, allowControlLoop = allowControlLoop)
+      timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = allowControlLoop)
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
@@ -259,20 +256,21 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     channel = Channel{channelType(daq)}(32)
   end
 
-  # TODO get from sequence itself
-  numFrames = calib.measIsBGPos[index] ? daq.params.acqNumBGFrames : 1
-
   @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
-    actualFrames = daq.params.acqNumFrameAverages*numFrames
-    # TODO use threadIDs and wait (or answer events?)
-    calib.consumer = @tspawnat 3 asyncConsumer(channel, calib, index, numFrames)
-    asyncProducer(channel, daq, actualFrames, prepTx = false, prepSeq = false, endSeq = false)
+    # TODO Wait or answerEvents here?
+    calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
+    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.scanner.currentSequence, prepTx = false, prepSeq = false, endSeq = false)
+    while !istaskdone(producer)
+      handleEvents(protocol)
+      sleep(0.05)
+    end
   end
   close(channel)
 
   @show timeEnableSlowDAC
-  calib.producerFinalizer = @async endSequence(daq)
+  start, endFrame = getFrameTiming(daq) 
+  calib.producerFinalizer = @async endSequence(daq, endFrame)
 end
 
 function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtocol)
@@ -282,7 +280,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   daq = getDAQ(protocol.scanner)
   tempSensor = getTemperatureSensor(protocol.scanner)
   asyncBuffer = AsyncBuffer(daq)
-  numFrames = # TODO from sequence
+  numFrames = acqNumFrames(protocol.scanner.currentSequence)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
