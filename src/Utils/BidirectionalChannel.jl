@@ -32,3 +32,5 @@ function close(biChannel::BidirectionalChannel)
 end
 
 eltype(::Type{BidirectionalChannel{T}}) where {T} = T
+
+wait(biChannel::BidirectionalChannel{T}) where {T} = wait(inChannel(biChannel))

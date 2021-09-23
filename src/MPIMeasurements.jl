@@ -27,7 +27,7 @@ using Graphics: @mustimplement
 using Scratch
 using Mmap
 
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
 
 export addConfigurationPath
 
