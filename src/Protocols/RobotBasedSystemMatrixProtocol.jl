@@ -86,11 +86,11 @@ end
 
 function execute(protocol::RobotBasedSystemMatrixProtocol)
   @info "Start System Matrix Protocol"
-  if !isReferenced(getRobot(protocol.scanner))
-    put!(protocol.biChannel, ExceptionEvent("Robot not referenced! Cannot proceed!"))
-    close(protocol.biChannel)
-    return
-  end
+  #if !isReferenced(getRobot(protocol.scanner))
+  #  put!(protocol.biChannel, ExceptionEvent("Robot not referenced! Cannot proceed!"))
+  #  close(protocol.biChannel)
+  #  return
+  #end
   
   finished = false
   started = false
@@ -190,6 +190,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   
   catch ex
     @warn "Exception" ex stacktrace(catch_backtrace())
+    return true
   end
   @info "Exit calibration loop"
   return finished
@@ -199,6 +200,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
 
+  _enable(robot)
   timePreparing = @elapsed prepareMeasurement(protocol, pos) # TODO params
 
   diffTime = calib.waitTime - timePreparing
@@ -206,13 +208,12 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
     sleep(diffTime)
   end
 
-  setEnabled(robot, false)
+  _disable(robot)
 
   timeMeasuring = @elapsed measurement(protocol, pos)
 
   @info "Preptime $timePreparing, meas time: $(timeMeasuring)"
 
-  setEnabled(robot, true)
 end
 
 function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
@@ -221,7 +222,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   daq = getDAQ(protocol.scanner)
   @sync begin
     # Prepare Robot/Sample
-    @async timeMove = @elapsed moveAbsUnsafe(robot, pos) 
+    @async timeMove = @elapsed moveAbs(robot, pos) 
     
     # Prepare DAQ
     @async timePrepDAQ = @elapsed begin
