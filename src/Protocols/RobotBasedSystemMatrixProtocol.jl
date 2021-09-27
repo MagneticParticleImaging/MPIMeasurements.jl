@@ -91,6 +91,11 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
   #  close(protocol.biChannel)
   #  return
   #end
+  # TODO THIS SHOULD HAPPEN EXTERNALLY
+  robot = getRobot(protocol.scanner)
+  enable(robot)
+  doReferenceDrive(robot)
+  @info "After reference drive 'check'"
   
   finished = false
   started = false
@@ -178,8 +183,9 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
         disableACPower(su, protocol.scanner)
         disconnect(daq)
 
+        enable(robot)
         movePark(robot)
-
+        disable(robot)
         #saveasMDF(calib)
 
         finished = true
@@ -200,17 +206,17 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
 
-  _enable(robot)
+  enable(robot)
   timePreparing = @elapsed prepareMeasurement(protocol, pos) # TODO params
 
-  diffTime = calib.waitTime - timePreparing
+  diffTime = protocol.params.waitTime - timePreparing
   if diffTime > 0.0
     sleep(diffTime)
   end
 
-  _disable(robot)
+  disable(robot)
 
-  timeMeasuring = @elapsed measurement(protocol, pos)
+  timeMeasuring = @elapsed measurement(protocol)
 
   @info "Preptime $timePreparing, meas time: $(timeMeasuring)"
 
@@ -220,6 +226,12 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
+  timePrepDAQ = 0
+  timeFinalizer = 0
+  timeFrameChange = 0
+  timeSeq = 0
+  timeTx = 0
+  timeConsumer = 0
   @sync begin
     # Prepare Robot/Sample
     @async timeMove = @elapsed moveAbs(robot, pos) 
@@ -231,12 +243,13 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFrameChange = @elapsed begin 
         if (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
           acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1)
+          setup(daq, protocol.scanner.currentSequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
           setSequenceParams(daq, protocol.scanner.currentSequence)
         end 
       end
       timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
       # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = allowControlLoop)
+      timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = false)
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
@@ -250,11 +263,12 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   @info "Measurement" index length(calib.positions)
 
   timeGetThings = @elapsed begin
-    safety = getSafety(protocol.scanner)
+    # TODO getSafety and getTempSensor if necessary
+    #safety = getSafety(protocol.scanner)
     su = getSurveillanceUnit(protocol.scanner)
     daq = getDAQ(protocol.scanner)
     robot = getRobot(protocol.scanner)
-    tempSensor = getTemperatureSensor(protocol.scanner)
+    #tempSensor = getTemperatureSensor(protocol.scanner)
     channel = Channel{channelType(daq)}(32)
   end
 
@@ -280,7 +294,8 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   calib = protocol.systemMeasState
   @info "readData"
   daq = getDAQ(protocol.scanner)
-  tempSensor = getTemperatureSensor(protocol.scanner)
+  #tempSensor = getTemperatureSensor(protocol.scanner)
+  tempSensor = nothing
   asyncBuffer = AsyncBuffer(daq)
   numFrames = acqNumFrames(protocol.scanner.currentSequence)
   while isopen(channel) || isready(channel)
