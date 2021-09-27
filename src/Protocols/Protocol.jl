@@ -1,8 +1,8 @@
 export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
-        ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent
-
+        ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
+        ExceptionEvent
 
 abstract type ProtocolParams end
 
@@ -111,6 +111,10 @@ end
 struct StopEvent <: ProtocolEvent end
 struct ResumeEvent <: ProtocolEvent end
 struct CancelEvent <: ProtocolEvent end
+struct OperationNotSupportedEvent <: ProtocolEvent end
+struct ExceptionEvent <: ProtocolEvent 
+  message::AbstractString
+end
 struct FinishedNotificationEvent <: ProtocolEvent end
 struct FinishedAckEvent <: ProtocolEvent end
 #Maybe a status (+ query) event and all Protocols have the states: UNKNOWN, INIT, EXECUTING, PAUSED, FINISHED
@@ -127,6 +131,7 @@ struct ProgressQueryEvent <: ProtocolEvent end
 struct ProgressEvent <: ProtocolEvent
   done::Int
   total::Int
+  unit::AbstractString
   query::ProgressQueryEvent
 end
 struct DataQueryEvent <: ProtocolEvent
@@ -134,6 +139,9 @@ struct DataQueryEvent <: ProtocolEvent
 end
 struct DataAnswerEvent <: ProtocolEvent
   data::Any
+  query::DataQueryEvent
+end
+struct UnknownDataQueryEvent <: ProtocolEvent
   query::DataQueryEvent
 end
 
@@ -170,4 +178,5 @@ include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
+include("OnlineMeasurementProtocol.jl")
 #include("TransferFunctionProtocol.jl")

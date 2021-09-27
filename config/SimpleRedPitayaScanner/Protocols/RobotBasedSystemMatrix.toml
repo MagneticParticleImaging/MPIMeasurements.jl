@@ -3,4 +3,5 @@ type = "RobotBasedSystemMatrixProtocol"
 description = "An acquisition with the Red Pitaya"
 targetScanner = "SimpleRedPitayaScanner"
 
-sequenceName = "SimpleRedPitayaSequence"
+waitTime = 0.5
+bgFrames = 4
