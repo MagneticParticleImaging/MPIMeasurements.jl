@@ -30,6 +30,5 @@ for pos in measurement_.positions
   field = norm(measurement_.fields[idx, :])
   result[posToIdx(measurement_.positions, pos)...] = ustrip(u"mT", field)
 end
-result = dropdims(result, dims=2)
 
-heatmap(result)
+heatmap(result[:,3,:])
