@@ -2,7 +2,7 @@ export  Protocol, ProtocolParams, name, description, scanner, params, runProtoco
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
-        ExceptionEvent, IllegaleStateEvent
+        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent
 
 abstract type ProtocolParams end
 
@@ -142,13 +142,6 @@ struct FinishedAckEvent <: ProtocolEvent end
 #Maybe a status (+ query) event and all Protocols have the states: UNKNOWN, INIT, EXECUTING, PAUSED, FINISHED
 
 # Display/Information Events
-struct InfoQueryEvent <: ProtocolEvent
-  message::AbstractString # for example "TEMP" could return a value from temp sensor if it exists, protocol specific
-end
-struct InfoEvent <: ProtocolEvent
-  message::AbstractString
-  query::InfoQueryEvent
-end
 struct ProgressQueryEvent <: ProtocolEvent end
 struct ProgressEvent <: ProtocolEvent
   done::Int
@@ -166,6 +159,13 @@ end
 struct UnknownDataQueryEvent <: ProtocolEvent
   query::DataQueryEvent
 end
+
+abstract type StorageRequestEvent <: ProtocolEvent end
+struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
+  datastore::DatasetStore
+  params::Dict
+end
+struct StorageSuccessEvent <: ProtocolEvent end
 
 function askConfirmation(protocol::Protocol, message::AbstractString)
   channel = biChannel(protocol)

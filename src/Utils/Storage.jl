@@ -69,8 +69,8 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Di
   # TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
   # params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
 
-  fieldOfView = nothing = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
-  fieldOfViewCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
+  fov = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+  fovCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
   size = shape(subgrid)
   
   method = "robot"
@@ -81,8 +81,8 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Di
 
   mdf.calibration = MDFv2Calibration(;
       deltaSampleSize = deltaSampleSize,
-      fieldOfView = fieldOfView,
-      fieldOfViewCenter = fieldOfViewCenter,
+      fieldOfView = fov,
+      fieldOfViewCenter = fovCenter,
       method = method,
       offsetFields = offsetFields,
       order = order,

@@ -136,6 +136,7 @@ function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   #filenameSignals = "/tmp/sysObj.bin"
   #rm(filename, force=true)
   #rm(filenameSignals, force=true)
+  removeTempFiles(protocol)
 end
 
 function removeTempFiles(protocol::RobotBasedSystemMatrixProtocol)
@@ -158,7 +159,8 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
 
   positions = calib.positions
   numPos = length(calib.positions)
-  
+  @info "Store SF"
+
   enableACPower(su, protocol.scanner)
   stopTx(daq)
   while true
@@ -182,14 +184,13 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
     if calib.currPos > numPos
       wait(calib.consumer)
       wait(calib.producerFinalizer)
-      @info "Store SF"
       stopTx(daq)
       disableACPower(su, protocol.scanner)
       enable(robot)
       movePark(robot)
       disable(robot)
       #saveasMDF(calib) # TODO implement saving
-      removeTempFiles(protocol)
+      #removeTempFiles(protocol)
       
       finished = true
       break
@@ -424,3 +425,20 @@ end
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
   put!(protocol.biChannel, DataAnswerEvent(protocol.systemMeasState.currentSignal, event))
 end
+
+function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
+  if false 
+    put!(protocol.biChannel, IllegaleStateEvent("Calibration measurement is not done yet. Cannot save!"))
+  else
+    store = event.datastore
+    scanner = protocol.scanner
+    params = event.params
+    data = protocol.systemMeasState.signals
+    positions = protocol.systemMeasState.positions
+    isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
+    saveasMDF(store, scanner, data, positions, isBackgroundFrame, params)
+    put!(protocol.biChannel, StorageSuccessEvent())
+  end
+end
+
+handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
