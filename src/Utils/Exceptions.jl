@@ -55,3 +55,9 @@ function Base.show(io::IO, ex::DeviceException)
     print(io, "$(typeof(ex)) in device with ID `$(ex.device.deviceID)`: $(ex.message)")
   end
 end
+
+abstract type ProtocolException end
+struct CancelException <: ProtocolException end
+struct IllegalStateException <: ProtocolException 
+  message::AbstractString
+end

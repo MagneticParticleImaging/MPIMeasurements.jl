@@ -1,26 +1,27 @@
-export OnlineMeasurementProtocol, OnlineMeasurementProtocolParams
+export AsyncMeasurementProtocol, AsyncMeasurementProtocolParams
 
-Base.@kwdef struct OnlineMeasurementProtocolParams <: ProtocolParams
+Base.@kwdef struct AsyncMeasurementProtocolParams <: ProtocolParams
   eventInterval::typeof(1.0u"s")
 end
-OnlineMeasurementProtocolParams(dict::Dict) = params_from_dict(OnlineMeasurementProtocolParams, dict)
+AsyncMeasurementProtocolParams(dict::Dict) = params_from_dict(AsyncMeasurementProtocolParams, dict)
 
-Base.@kwdef mutable struct OnlineMeasurementProtocol <: Protocol
+Base.@kwdef mutable struct AsyncMeasurementProtocol <: Protocol
   name::AbstractString
   description::AbstractString
   scanner::MPIScanner
-  params::OnlineMeasurementProtocolParams
+  params::AsyncMeasurementProtocolParams
   biChannel::BidirectionalChannel{ProtocolEvent}
+  executeTask::Union{Task, Nothing} = nothing
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
 end
 
-function init(protocol::OnlineMeasurementProtocol)
+function init(protocol::AsyncMeasurementProtocol)
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
-function execute(protocol::OnlineMeasurementProtocol)
+function _execute(protocol::AsyncMeasurementProtocol)
   @info "Measurement protocol started"
   
   if !isnothing(protocol.scanner.currentSequence)
@@ -29,11 +30,8 @@ function execute(protocol::OnlineMeasurementProtocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
   while !protocol.finishAcknowledged
-    handleEvents(protocol)
-    if protocol.cancelled
-      close(protocol.biChannel)
-      return
-    end
+    handleEvents(protocol) 
+    protocol.cancelled && throw(CancelException())
     sleep(0.01)
   end
 
@@ -41,7 +39,7 @@ function execute(protocol::OnlineMeasurementProtocol)
   close(protocol.biChannel)
 end
 
-function measurement(protocol::OnlineMeasurementProtocol)
+function measurement(protocol::AsyncMeasurementProtocol)
   # Start async measurement
   scanner = protocol.scanner
   measState = asyncMeasurement(scanner)
@@ -51,6 +49,7 @@ function measurement(protocol::OnlineMeasurementProtocol)
   # Handle events
   while !istaskdone(consumer)
     handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
     sleep(ustrip(u"s", protocol.params.eventInterval))
   end
 
@@ -70,24 +69,24 @@ function measurement(protocol::OnlineMeasurementProtocol)
 end
 
 
-function cleanup(protocol::OnlineMeasurementProtocol)
+function cleanup(protocol::AsyncMeasurementProtocol)
   # NOP
 end
 
-function stop(protocol::OnlineMeasurementProtocol)
+function stop(protocol::AsyncMeasurementProtocol)
   put!(protocol.biChannel, OperationNotSupportedEvent())
 end
 
-function resume(protocol::OnlineMeasurementProtocol)
+function resume(protocol::AsyncMeasurementProtocol)
    put!(protocol.biChannel, OperationNotSupportedEvent())
 end
 
-function cancel(protocol::OnlineMeasurementProtocol)
+function cancel(protocol::AsyncMeasurementProtocol)
   protocol.cancelled = true
   # TODO stopTx and reconnect for pipeline and so on
 end
 
-function handleEvent(protocol::OnlineMeasurementProtocol, event::DataQueryEvent)
+function handleEvent(protocol::AsyncMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
     data = max(protocol.scanner.seqMeasState.nextFrame - 1, 0)
@@ -106,12 +105,12 @@ function handleEvent(protocol::OnlineMeasurementProtocol, event::DataQueryEvent)
 end
 
 
-function handleEvent(protocol::OnlineMeasurementProtocol, event::ProgressQueryEvent)
+function handleEvent(protocol::AsyncMeasurementProtocol, event::ProgressQueryEvent)
   framesTotal = protocol.scanner.seqMeasState.numFrames
   framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
   put!(protocol.biChannel, ProgressEvent(framesDone, framesTotal, "Frames", event))
 end
 
-handleEvent(protocol::OnlineMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+handleEvent(protocol::AsyncMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
 
-#function handleEvent(protocol::OnlineMeasurementProtocol, event::StopEvent) 
+#function handleEvent(protocol::AsyncMeasurementProtocol, event::StopEvent) 

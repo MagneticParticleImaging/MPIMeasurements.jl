@@ -3,7 +3,8 @@ import Base: convert
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
-       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement
+       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
+       getProtocolList, setProtocol
 
 """Recursively find all concrete types"""
 function deepsubtypes(type::DataType)
@@ -105,6 +106,7 @@ Base.@kwdef struct MPIScannerGeneral
   transferFunction::String=""
   producerThreadID::Int32 = 2
   consumerThreadID::Int32 = 3
+  protocolThreadID::Int32 = 4
 end
 
 abstract type AsyncBuffer end
@@ -348,4 +350,24 @@ function asyncConsumer(channel::Channel, scanner::MPIScanner)
   #if length(measState.temperatures) > 0
   #  params["calibTemperatures"] = measState.temperatures
   #end
+end
+
+#### Protocol ####
+function getProtocolList(scanner::MPIScanner)
+  path = joinpath(configDir(scanner), "Protocols/")
+  if isdir(path)
+    return String[ splitext(proto)[1] for proto in filter(a->contains(a,".toml"),readdir(path))] 
+  else
+    return String[]
+  end
+end
+
+function setProtocol(scanner::MPIScanner, protoName::AbstractString)
+  protocol = Protocol(protoName, scanner)
+  scanner.currentProtocol = protocol
+  return protocol
+end
+
+function execute(scanner::MPIScanner)
+  @tspawnat scanner.generalParams.protocolThreadID execute(scanner.currentProtocol)
 end

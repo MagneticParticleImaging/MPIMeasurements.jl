@@ -37,13 +37,14 @@ mutable struct SystemMatrixRobotMeas
   temperatures::Matrix{Float64}
 end
 
-Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
+Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
   name::AbstractString
   description::AbstractString
   scanner::MPIScanner
   params::RobotBasedSystemMatrixProtocolParams
   biChannel::BidirectionalChannel{ProtocolEvent}
   
+  executeTask::Union{Task, Nothing} = nothing
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
@@ -99,12 +100,10 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
-function execute(protocol::RobotBasedSystemMatrixProtocol)
+function _execute(protocol::RobotBasedSystemMatrixProtocol)
   @info "Start System Matrix Protocol"
   #if !isReferenced(getRobot(protocol.scanner))
-  #  put!(protocol.biChannel, ExceptionEvent("Robot not referenced! Cannot proceed!"))
-  #  close(protocol.biChannel)
-  #  return
+  #  throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
   #end
   # TODO THIS SHOULD HAPPEN EXTERNALLY
   robot = getRobot(protocol.scanner)
@@ -127,14 +126,10 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
     finished = performCalibration(protocol)
     started = true
 
-    while protocol.stopped && !protocol.cancelled
+    while protocol.stopped
       handleEvents(protocol)
+      protocol.cancelled && throw(CancelException()) 
       sleep(0.05)
-    end
-
-    if protocol.cancelled
-      close(protocol.biChannel)
-      return
     end
   end
 
@@ -142,10 +137,7 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
   put!(protocol.biChannel, FinishedNotificationEvent())
   while !protocol.finishAcknowledged
     handleEvents(protocol)
-    if protocol.cancelled
-      close(protocol.biChannel)
-      return
-    end
+    protocol.cancelled && throw(CancelException())
     sleep(0.01)
   end
   @info "Protocol finished."
@@ -170,61 +162,55 @@ end
 function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   @info "Enter calibration loop"
   finished = false
-  try
-    calib = protocol.systemMeasState
-    su = getSurveillanceUnit(protocol.scanner)
-    daq = getDAQ(protocol.scanner)
-    robot = getRobot(protocol.scanner)
-    #safety = getSafety(protocol.scanner) #TODO fix 
-    #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
+  calib = protocol.systemMeasState
+  su = getSurveillanceUnit(protocol.scanner)
+  daq = getDAQ(protocol.scanner)
+  robot = getRobot(protocol.scanner)
+  #safety = getSafety(protocol.scanner) #TODO fix 
+  #safety = getSafety(protocol.scanner) #TODO fix 
+  #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
+
+  positions = calib.positions
+  numPos = length(calib.positions)
   
-    positions = calib.positions
-    numPos = length(calib.positions)
+  enableACPower(su, protocol.scanner)
+  stopTx(daq)
+  while true
+    @info "Curr Pos in performCalibrationInner $(calib.currPos)"
+    handleEvents(protocol)
     
-    enableACPower(su, protocol.scanner)
-    stopTx(daq)
-    while true
-      @info "Curr Pos in performCalibrationInner $(calib.currPos)"
-      handleEvents(protocol)
-      if protocol.stopped
-        wait(calib.consumer)
-        wait(calib.producerFinalizer)
-        @info "Stop calibration loop"
-        finished = false
-        break
-      end
-
-      if calib.currPos <= numPos
-        pos = uconvert.(Unitful.mm, positions[calib.currPos])
-        performCalibration(protocol, pos)
-        calib.currPos +=1
-      end
-
-      if calib.currPos > numPos
-        wait(calib.consumer)
-        wait(calib.producerFinalizer)
-        @info "Store SF"
-        stopTx(daq)
-        disableACPower(su, protocol.scanner)
-
-        enable(robot)
-        movePark(robot)
-        disable(robot)
-        #saveasMDF(calib) # TODO implement saving
-        removeTempFiles(protocol)
-        
-
-        finished = true
-        break
-      end
-      
+    if protocol.stopped
+      wait(calib.consumer)
+      wait(calib.producerFinalizer)
+      @info "Stop calibration loop"
+      finished = false
+      break
     end
-  
-  catch ex
-    @warn "Exception" ex stacktrace(catch_backtrace())
-    return true
+
+    if calib.currPos <= numPos
+      pos = uconvert.(Unitful.mm, positions[calib.currPos])
+      performCalibration(protocol, pos)
+      calib.currPos +=1
+    end
+
+    if calib.currPos > numPos
+      wait(calib.consumer)
+      wait(calib.producerFinalizer)
+      @info "Store SF"
+      stopTx(daq)
+      disableACPower(su, protocol.scanner)
+      enable(robot)
+      movePark(robot)
+      disable(robot)
+      #saveasMDF(calib) # TODO implement saving
+      removeTempFiles(protocol)
+      
+      finished = true
+      break
+    end
+    
   end
-  @info "Exit calibration loop"
+    @info "Exit calibration loop"
   return finished
 end
 
@@ -306,6 +292,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.scanner.currentSequence, prepTx = false, prepSeq = false, endSeq = false)
     while !istaskdone(producer)
       handleEvents(protocol)
+      # Dont want to throw cancel here
       sleep(0.05)
     end
   end
@@ -439,8 +426,8 @@ function resume(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 function cancel(protocol::RobotBasedSystemMatrixProtocol)
-  protocol.cancelled = true
-  protocol.stopped = true
+  protocol.cancelled = true # Set cancel s.t. exception can be thrown we appropiate
+  protocol.stopped = true # Set stop to reach a known/save state
 end
 
 

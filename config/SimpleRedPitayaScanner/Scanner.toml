@@ -11,6 +11,7 @@ defaultSequence = "1DSequence"
 defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
 consumerThreadID = 3
+protocolThreadID = 4
 
 [Devices]
 initializationOrder = [
