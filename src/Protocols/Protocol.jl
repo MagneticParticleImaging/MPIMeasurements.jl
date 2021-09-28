@@ -2,7 +2,7 @@ export  Protocol, ProtocolParams, name, description, scanner, params, runProtoco
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
-        ExceptionEvent
+        ExceptionEvent, IllegaleStateEvent
 
 abstract type ProtocolParams end
 
@@ -89,11 +89,30 @@ end
 abstract type ProtocolEvent end
 
 @mustimplement init(protocol::Protocol)
-@mustimplement execute(protocol::Protocol)
+@mustimplement _execute(protocol::Protocol)
 @mustimplement cleanup(protocol::Protocol)
 @mustimplement stop(protocol::Protocol)
 @mustimplement resume(protocol::Protocol)
 @mustimplement cancel(protocol::Protocol)
+
+function execute(protocol::Protocol)
+  protocol.executeTask = current_task()
+  try
+    _execute(protocol)
+  catch ex
+    if ex isa CancelException
+      close(protocol.biChannel)
+    elseif ex isa IllegalStateException
+      put!(protocol.biChannel, IllegaleStateEvent(ex.message))
+      close(protocol.biChannel)
+    else
+      # Let task fail
+      put!(protocol.biChannel, ExceptionEvent(ex))
+      close(protocol.biChannel)
+      throw(ex)
+    end
+  end
+end
 
 struct UndefinedEvent <: ProtocolEvent
   event::ProtocolEvent
@@ -112,8 +131,11 @@ struct StopEvent <: ProtocolEvent end
 struct ResumeEvent <: ProtocolEvent end
 struct CancelEvent <: ProtocolEvent end
 struct OperationNotSupportedEvent <: ProtocolEvent end
-struct ExceptionEvent <: ProtocolEvent 
+struct IllegaleStateEvent <: ProtocolEvent
   message::AbstractString
+end
+struct ExceptionEvent <: ProtocolEvent 
+  exception::Exception
 end
 struct FinishedNotificationEvent <: ProtocolEvent end
 struct FinishedAckEvent <: ProtocolEvent end
@@ -178,5 +200,5 @@ include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
-include("OnlineMeasurementProtocol.jl")
+include("AsyncMeasurementProtocol.jl")
 #include("TransferFunctionProtocol.jl")
