@@ -1,0 +1,112 @@
+[GaussMeter]
+type="Dummy"
+
+[General]
+#transferFunction = "PreinstalledUH"
+measIsTransposed = false
+measIsFramePermutation = false
+tracerVendor = ["n.a."]
+scannerOperator = "default"
+measIsFrequencySelection = false
+studyIsSimulation = false
+studySubject = "MNP sample"
+measIsFourierTransformed = false
+scannerName = "MPS1"
+tracerVolume = [0.0]
+studyExperiment = 0
+studyIsCalibration = false
+rxDataConversionFactor = [1.0, 0.0]
+tracerConcentration = [0.0]
+tracerSolute = ["Fe"]
+measIsTFCorrected = false
+tracerName = ["n.a."]
+studyDescription = "n.a."
+tracerBatch = ["n.a."]
+scannerTopology = "MPS"
+measIsBGCorrected = false
+studyName = "default"
+datasetStore = "~/Documents/DatasetStores/store1"
+rpGainSetting = [0, 1]
+scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
+rxUnit = "V"
+scannerManufacturer = "IBI"
+measIsSpectralLeakageCorrected = false
+dfWaveform = "sine"
+calibGridShape = [3,2,1]
+calibGridFOV = [0.10,0.10,0.10]
+calibGridCenter = [0.0,0.0,0.0]
+calibNumBGMeasurements = 2
+maxTemperature = 55.0
+pauseTime = 0.0
+
+
+[SurveillanceUnit]
+type = "Dummy"
+#type = "Arduino"
+#connection = "/dev/ttyACM0"
+
+[Robot]
+type="Dummy"
+pauseTime=0.0
+
+#[Robot]
+#pauseTime = 1.0
+#stepsPerTurn = 5000
+#gearSlope = 5
+#minMaxFreq = [20, 4000]
+#defaultVel = [40000, 40000, 40000]
+#defSampleCenterPos = [0.01, 0.0, 0.0]
+#minMaxVel = [30, 40000]
+#minMaxAcc = [1, 4000]
+#defCenterPos = [0.099, 0.128, 0.043000000000000003]
+#type = "Isel"
+#connection = "/dev/ttyUSB0"
+
+[Safety]
+receiveCoil = "headCoil"
+robotMount = "deltaSample"
+clearance = "clearance"
+setupName = "deltaSampleheadCoil"
+
+[DAQ]
+daq = "RedPitayaScpiNew"
+controlLoopPhaseAccuracy = 1.0
+ip = ["192.168.1.100", "192.168.1.101"]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibFieldToVolt = [20]
+acqNumBGFrames = 200
+acqNumFGFrames = 200
+rxNumChannels = 1
+triggerMode = "EXTERNAL"
+#"INTERNAL"
+controlPause = 0.05
+controlPhase = false
+# true
+decimation = 32
+acqNumFrames = 1
+dfDivider = [4864, 4864]
+dfStrength = [0.005]
+txLimitVolt = [0.8, 1.0, 1.0, 1.0]
+controlLoopAmplitudeAccuracy = 0.04
+dfPhase = [0.0]
+calibRefToField = [0.05, 0.05]
+dfBaseFrequency = 1.25e8
+acqNumPeriodsPerFrame = 1
+#acqNumFFChannels = 1
+#acqFFValues = []
+acqFFSequence = "None"
+acqFFLinear = false
+acqNumAverages = 1
+acqNumFrameAverages = 1
+#rxChanIdx = [1]
+rxChanIdx = [1,2,3,4]
+refChanIdx = [2]
+dfChanIdx = [1, 2]
+rpModulus = [4800,4864,4800,4800]
+calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
+#ffRampUpTime = 0.01
+#ffRampUpFraction = 0.8
+ffRampUpFraction = 0.6
+ffRampUpTime = 0.2
+jumpSharpness = 0.1
+passPDMToFastDAC = [true, false]

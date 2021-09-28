@@ -1,0 +1,114 @@
+[General]
+datasetStore = "~/Documents/DatasetStores/store1"
+measIsTransposed = false
+measIsFramePermutation = false
+tracerVendor = ["n.a."]
+scannerOperator = "default"
+measIsFrequencySelection = false
+studyIsSimulation = false
+studySubject = "MNP sample"
+measIsFourierTransformed = false
+scannerName = "MPS1"
+tracerVolume = [0.0]
+studyExperiment = 0
+studyIsCalibration = false
+rxDataConversionFactor = [1.0, 0.0]
+tracerConcentration = [0.0]
+tracerSolute = ["Fe"]
+measIsTFCorrected = false
+tracerName = ["n.a."]
+studyDescription = "n.a."
+tracerBatch = ["n.a."]
+scannerTopology = "MPS"
+measIsBGCorrected = false
+studyName = "default"
+rpGainSetting = [0, 1]
+scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
+rxUnit = "V"
+scannerManufacturer = "IBI"
+measIsSpectralLeakageCorrected = false
+dfWaveform = "sine"
+calibGridShape = [3,2,1]
+calibGridFOV = [0.10,0.10,0.10]
+calibGridCenter = [0.0,0.0,0.0]
+calibNumBGMeasurements = 2
+maxTemperature = 55.0
+pauseTime = 0.0
+
+
+[DAQ]
+#ip = ["192.168.1.100"]
+ip = ["rp-f07083.local"]
+daq = "RedPitayaScpiNew"
+acqNumFGFrames = 200
+acqNumBGFrames = 200
+acqNumAverages = 1
+decimation = 64
+calibFieldToVolt = [23.0]
+#calibRefToField = [0.05]
+calibRefToField = [0.02884]
+studyName = "default"
+studyExperiment = 0
+studyDescription = "n.a."
+studySubject = "MNP sample"
+tracerName = ["n.a."]
+tracerBatch = ["n.a."]
+tracerVendor = ["n.a."]
+tracerVolume = [0.0]
+tracerConcentration = [0.0]
+tracerSolute = ["Fe"]
+txLimitVolt = [0.8, 0.8]
+acqNumFrames = 1
+calibIntToVolt = [0.00012957305, 0.015548877]
+rxChanIdx = [1]
+refChanIdx = [1]
+dfChanIdx = [1]
+triggerMode = "EXTERNAL"
+jumpSharpness = 0.1
+scannerFacility = "Universitätsklinikum Hamburg-Eppendorf"
+scannerOperator = "default"
+scannerManufacturer = "IBI"
+scannerName = "MPS1"
+scannerTopology = "MPS"
+dfStrength = [20e-3]
+dfPhase = [0.0]
+dfBaseFrequency = 125e6
+dfDivider = [4800]
+rxNumChannels = 1
+controlPause = 0.8
+acqNumFFChannels = 1
+acqFFValues = [1.0]
+acqNumPeriodsPerFrame = 1
+acqFFLinear = false
+controlLoopPhaseAccuracy = 1
+controlLoopAmplitudeAccuracy = 0.04
+rpGainSetting = [0,1]
+transferFunction = "PreinstalledUH"
+dfWaveform = "SINE"
+rxUnit = "V"
+rxDataConversionFactor = [1.0, 0.0]
+measIsTransposed = false
+measIsBGCorrected = false
+measIsTFCorrected = false
+measIsFramePermutation = false
+measIsFrequencySelection = false
+measIsFourierTransformed = false
+measIsSpectralLeakageCorrected = false
+studyIsSimulation = false
+studyIsCalibration = false
+
+[Robot]
+type="Dummy"
+pauseTime=1.0
+
+[GaussMeter]
+type="Dummy"
+
+[Safety]
+receiveCoil = "headCoil"
+robotMount = "deltaSample3D"
+clearance = "clearance"
+setupName = "deltaSampleheadCoil"
+
+[SurveillanceUnit]
+type = "Dummy"
