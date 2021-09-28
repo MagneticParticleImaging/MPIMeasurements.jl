@@ -33,6 +33,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
+  restored::Bool = false
   finishAcknowledged::Bool = false
 end
 
@@ -81,7 +82,7 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   
   # TODO implement properly
   protocol.systemMeasState.temperatures = zeros(0, 0)
-    return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
 function execute(protocol::RobotBasedSystemMatrixProtocol)
@@ -101,21 +102,25 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
   started = false
   while !finished
     if !started
-      #prepareCalibration/init somehow
       if isfile("/tmp/sysObj.toml")
         message = """Found existing calibration file! \n
         Should it be resumed?"""
         if askConfirmation(protocol, message)
-          #restore(...) # TODO
+          restore(protocol)
         end
       end
     end
     finished = performCalibration(protocol)
     started = true
 
-    while protocol.stopped
-      handleEvents(protocol) # TODO cancel case
+    while protocol.stopped && !protocol.cancelled
+      handleEvents(protocol)
       sleep(0.05)
+    end
+
+    if protocol.cancelled
+      close(protocol.biChannel)
+      return
     end
   end
 
@@ -141,6 +146,13 @@ function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   #rm(filenameSignals, force=true)
 end
 
+function removeTempFiles(protocol::RobotBasedSystemMatrixProtocol)
+  filename = "/tmp/sysObj.toml"
+  filenameSignals = "/tmp/sysObj.bin"
+  rm(filename, force=true)
+  rm(filenameSignals, force=true)
+end
+
 function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   @info "Enter calibration loop"
   finished = false
@@ -155,7 +167,6 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
     positions = calib.positions
     numPos = length(calib.positions)
     
-    #connect(daq)
     enableACPower(su, protocol.scanner)
     stopTx(daq)
     while true
@@ -181,12 +192,13 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
         @info "Store SF"
         stopTx(daq)
         disableACPower(su, protocol.scanner)
-        disconnect(daq)
 
         enable(robot)
         movePark(robot)
         disable(robot)
-        #saveasMDF(calib)
+        #saveasMDF(calib) # TODO implement saving
+        removeTempFiles(protocol)
+        
 
         finished = true
         break
@@ -241,10 +253,11 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       allowControlLoop = mod1(calib.currPos, 11) == 1  
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
-        if (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
+        if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
           acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1)
           setup(daq, protocol.scanner.currentSequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
           setSequenceParams(daq, protocol.scanner.currentSequence)
+          protocol.restored = false
         end 
       end
       timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
@@ -346,7 +359,7 @@ function store(protocol::RobotBasedSystemMatrixProtocol)
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
   params["currPos"] = sysObj.currPos
-  params["stopped"] = protocol.stopped
+  #params["stopped"] = protocol.stopped
   #params["currentSignal"] = sysObj.currentSignal
   params["waitTime"] = protocol.params.waitTime
   params["measIsBGPos"] = sysObj.measIsBGPos
@@ -371,7 +384,8 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
   if isfile(filename)
     params = TOML.parsefile(filename)
     sysObj.currPos = params["currPos"]
-    protocol.stopped = params["stopped"]
+    protocol.stopped = false
+    #params["stopped"]
     #sysObj.currentSignal = params["currentSignal"]
     protocol.params.waitTime = params["waitTime"]
     sysObj.measIsBGPos = params["measIsBGPos"]
@@ -396,11 +410,25 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     io = open(filenameSignals, "r+");
     sysObj.signals = Mmap.mmap(io, Array{Float32,4},
           (rxNumSamplingPoints,numRxChannels, numPeriods, numTotalFrames));
+    protocol.restored = true
+    @info "Restored system matrix measurement"
   end
 end
 
-handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::StopEvent) = protocol.stopped = true
-handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::ResumeEvent) = protocol.stopped = false
+
+function stop(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.stopped = true
+end
+
+function resume(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.stopped = false
+end
+
+function cancel(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.cancelled = true
+  protocol.stopped = true
+end
+
 
 function handleEvent(protocl::RobotBasedSystemMatrixProtocol, event::ProgressQueryEvent)
   put!(protocl.biChannel, ProgressEvent(protocl.systemMeasState.currPos, length(protocl.systemMeasState.positions), "Position", event))
