@@ -5,7 +5,21 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   bgFrames::Int64
   positions::Union{GridPositions, Nothing} = nothing
 end
-RobotBasedSystemMatrixProtocolParams(dict::Dict) = params_from_dict(RobotBasedSystemMatrixProtocolParams, dict)
+function RobotBasedSystemMatrixProtocolParams(dict::Dict)
+  if haskey(dict, "Positions")
+    posDict = dict["Positions"]
+
+    positions = Positions(posDict)
+    delete!(dict, "Positions")
+  else 
+    positions = nothing
+  end
+  
+  params = params_from_dict(RobotBasedSystemMatrixProtocolParams, dict)
+  params.positions = positions
+  return params
+end
+
 
 # Based on https://github.com/MagneticParticleImaging/MPIMeasurements.jl/tree/cde1c72b820a72b3c3dfa4235b2b37bd506b0109
 mutable struct SystemMatrixRobotMeas
