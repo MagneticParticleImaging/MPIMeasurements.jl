@@ -24,6 +24,77 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
   return saveasMDF(filename, mdf)
 end
 
+
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Array{Float32,4}, 
+  positions::Positions, isBackgroundFrame::Vector{Bool}, params::Dict)
+
+  mdf = MDFv2InMemory()
+  # / subgroup
+  mdf.root = defaultMDFv2Root()
+
+  if params["storeAsSystemMatrix"]
+    study = MPIFiles.getCalibStudy(store)
+  else
+    name = params["studyName"]
+    date = params["studyDate"]
+    study = Study(store, name; date=date)
+  end
+  sequence = scanner.currentSequence
+
+  fillMDFStudy(mdf, study)
+  fillMDFExperiment(mdf, study, params)
+  fillMDFScanner(mdf, scanner, params)
+  fillMDFTracer(mdf, params)
+
+  fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame)
+  fillMDFAcquisition(mdf, scanner, sequence)
+  fillMDFCalibration(mdf, positions, params)
+
+  filename = getNewExperimentPath(study)
+
+  return saveasMDF(filename, mdf)
+end
+
+
+
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Dict)
+
+  # /calibration/ subgroup
+
+  deltaSampleSize = haskey(params, "calibDeltaSampleSize") ?
+       Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"]))) : nothing
+
+  subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
+  
+  # TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
+  # params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
+
+  fieldOfView = nothing = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+  fieldOfViewCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
+  size = shape(subgrid)
+  
+  method = "robot"
+  offsetFields = nothing
+  order = "xyz"
+  positions = nothing
+  snr = nothing
+
+  mdf.calibration = MDFv2Calibration(;
+      deltaSampleSize = deltaSampleSize,
+      fieldOfView = fieldOfView,
+      fieldOfViewCenter = fieldOfViewCenter,
+      method = method,
+      offsetFields = offsetFields,
+      order = order,
+      positions = positions,
+      size = size,
+      snr = snr)
+
+  return
+end
+
+
+
 function fillMDFScanner(mdf::MDFv2InMemory, scanner::MPIScanner, params::Dict)
   # /scanner/ subgroup
   mdf.scanner = MDFv2Scanner(
@@ -95,7 +166,17 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
     numFrames = numFrames + numBGFrames
   end
 
-  measData(mdf, data_)
+  return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame)
+end
+
+
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4}, 
+  isBackgroundFrame::Vector{Bool})
+
+  # /measurement/ subgroup
+  numFrames = size(data,4)
+
+  measData(mdf, data)
   measIsBackgroundCorrected(mdf, false)
   measIsBackgroundFrame(mdf, isBackgroundFrame)
   measIsFastFrameAxis(mdf, false)
