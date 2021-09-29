@@ -1,5 +1,5 @@
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Array{Float32,4}, 
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
                             params::Dict; bgdata::Union{Array{Float32,4},Nothing}=nothing)
 
   mdf = MDFv2InMemory()
@@ -9,7 +9,6 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
   name = params["studyName"]
   date = params["studyDate"]
   study = Study(store, name; date=date)
-  sequence = scanner.currentSequence
 
   fillMDFStudy(mdf, study)
   fillMDFExperiment(mdf, study, params)
@@ -25,7 +24,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
 end
 
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Array{Float32,4}, 
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
   positions::Positions, isBackgroundFrame::Vector{Bool}, params::Dict)
 
   mdf = MDFv2InMemory()
@@ -39,7 +38,6 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
     date = params["studyDate"]
     study = Study(store, name; date=date)
   end
-  sequence = scanner.currentSequence
 
   fillMDFStudy(mdf, study)
   fillMDFExperiment(mdf, study, params)

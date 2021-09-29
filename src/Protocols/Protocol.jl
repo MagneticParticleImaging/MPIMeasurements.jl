@@ -42,7 +42,7 @@ function Protocol(protocolDict::Dict{String, Any}, scanner::MPIScanner)
   end 
 
   paramsType = getConcreteType(ProtocolParams, protocolType*"Params")
-  params = paramsType(protocolDict)
+  params = paramsType(protocolDict, scanner)
   ProtocolImpl = getConcreteType(Protocol, protocolType)
 
   biChannel = BidirectionalChannel{ProtocolEvent}(32)

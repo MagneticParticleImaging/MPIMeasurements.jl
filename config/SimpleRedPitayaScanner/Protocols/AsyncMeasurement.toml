@@ -4,3 +4,4 @@ description = "An asychronous measurement with the RedPitayaDAQ. Implements no s
 targetScanner = "SimpleRedPitayaScanner"
 
 eventInterval = "0.01s"
+sequence = "1DSequence"

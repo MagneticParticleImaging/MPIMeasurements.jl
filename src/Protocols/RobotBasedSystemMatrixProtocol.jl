@@ -4,9 +4,10 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   waitTime::Float64
   bgFrames::Int64
   fgFrameAverages::Int64
+  sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
 end
-function RobotBasedSystemMatrixProtocolParams(dict::Dict)
+function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   if haskey(dict, "Positions")
     posDict = dict["Positions"]
 
@@ -15,9 +16,17 @@ function RobotBasedSystemMatrixProtocolParams(dict::Dict)
   else 
     positions = nothing
   end
+
+  sequence = nothing
+  if haskey(dict, "sequence")
+    sequence = Sequence(scanner, dict["sequence"])
+    dict["sequence"] = sequence
+    delete!(dict, "sequence")
+  end
   
   params = params_from_dict(RobotBasedSystemMatrixProtocolParams, dict)
   params.positions = positions
+  params.sequence = sequence
   return params
 end
 
@@ -66,6 +75,9 @@ function SystemMatrixRobotMeas()
 end
 
 function init(protocol::RobotBasedSystemMatrixProtocol)
+  if isnothing(protocol.params.sequence)
+    throw(IllegalStateException("Protocol requires a sequence"))
+  end
   protocol.systemMeasState = SystemMatrixRobotMeas()
 
   #Prepare Positions
@@ -84,10 +96,9 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.positions = protocol.params.positions # TODO remove redundancy
   
   #Prepare Signals
-  seq = protocol.scanner.currentSequence
-  numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
-  rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
-  numPeriods = acqNumPeriodsPerFrame(seq)  
+  numRxChannels = length(rxChannels(protocol.params.sequence)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequence)
+  numPeriods = acqNumPeriodsPerFrame(protocol.params.sequence)  
   filenameSignals = "/tmp/sysObj.bin"
   io = open(filenameSignals, "w+");
   signals = Mmap.mmap(io, Array{Float32,4}, (rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames));
@@ -110,7 +121,6 @@ function _execute(protocol::RobotBasedSystemMatrixProtocol)
   robot = getRobot(protocol.scanner)
   enable(robot)
   doReferenceDrive(robot)
-  @info "After reference drive 'check'"
   
   finished = false
   started = false
@@ -147,10 +157,6 @@ end
 
 function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   # TODO should cleanup remove temp files? Would require a handler to differentiate between successful and unsuccesful "end"
-  #filename = "/tmp/sysObj.toml"
-  #filenameSignals = "/tmp/sysObj.bin"
-  #rm(filename, force=true)
-  #rm(filenameSignals, force=true)
   removeTempFiles(protocol)
 end
 
@@ -257,17 +263,17 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
-          acqNumFrameAverages(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
-          setup(daq, protocol.scanner.currentSequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
-          setSequenceParams(daq, protocol.scanner.currentSequence)
+          acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
+          acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+          setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
+          setSequenceParams(daq, protocol.params.sequence)
           protocol.restored = false
         end 
       end
 
-      timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
+      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
       # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = false)
+      timeTx = @elapsed prepareTx(daq, protocol.params.sequence, allowControlLoop = false)
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
@@ -294,7 +300,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   timeEnableSlowDAC = @elapsed begin
     # TODO Wait or answerEvents here?
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
-    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.scanner.currentSequence, prepTx = false, prepSeq = false, endSeq = false)
+    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
     while !istaskdone(producer)
       handleEvents(protocol)
       # Dont want to throw cancel here
@@ -316,7 +322,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   #tempSensor = getTemperatureSensor(protocol.scanner)
   tempSensor = nothing
   asyncBuffer = AsyncBuffer(daq)
-  numFrames = acqNumFrames(protocol.scanner.currentSequence)
+  numFrames = acqNumFrames(protocol.params.sequence)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
@@ -406,7 +412,7 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     numFGPos = length(sysObj.measIsBGPos) - numBGPos
 
     numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
-    seq = protocol.scanner.currentSequence
+    seq = protocol.params.sequence
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)  
@@ -452,7 +458,7 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     data = protocol.systemMeasState.signals
     positions = protocol.systemMeasState.positions
     isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    saveasMDF(store, scanner, data, positions, isBackgroundFrame, params)
+    saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
     put!(protocol.biChannel, StorageSuccessEvent())
   end
 end

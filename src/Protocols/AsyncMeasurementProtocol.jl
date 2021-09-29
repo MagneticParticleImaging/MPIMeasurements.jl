@@ -1,10 +1,20 @@
 export AsyncMeasurementProtocol, AsyncMeasurementProtocolParams
 
-Base.@kwdef struct AsyncMeasurementProtocolParams <: ProtocolParams
+Base.@kwdef mutable struct AsyncMeasurementProtocolParams <: ProtocolParams
   eventInterval::typeof(1.0u"s")
+  sequence::Union{Sequence, Nothing} = nothing
 end
-AsyncMeasurementProtocolParams(dict::Dict) = params_from_dict(AsyncMeasurementProtocolParams, dict)
-
+function AsyncMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+  sequence = nothing
+  if haskey(dict, "sequence")
+    sequence = Sequence(scanner, dict["sequence"])
+    dict["sequence"] = sequence
+    delete!(dict, "sequence")
+  end
+  params = params_from_dict(AsyncMeasurementProtocolParams, dict)
+  params.sequence = sequence
+  return params
+end
 Base.@kwdef mutable struct AsyncMeasurementProtocol <: Protocol
   name::AbstractString
   description::AbstractString
@@ -18,13 +28,16 @@ Base.@kwdef mutable struct AsyncMeasurementProtocol <: Protocol
 end
 
 function init(protocol::AsyncMeasurementProtocol)
+  if isnothing(protocol.params.sequence)
+    throw(IllegalStateException("Protocol requires a sequence"))
+  end
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
 function _execute(protocol::AsyncMeasurementProtocol)
   @info "Measurement protocol started"
   
-  if !isnothing(protocol.scanner.currentSequence)
+  if !isnothing(protocol.params.sequence)
     measurement(protocol)
   end
 
@@ -42,7 +55,7 @@ end
 function measurement(protocol::AsyncMeasurementProtocol)
   # Start async measurement
   scanner = protocol.scanner
-  measState = asyncMeasurement(scanner)
+  measState = asyncMeasurement(scanner, protocol.params.sequence)
   producer = measState.producer
   consumer = measState.consumer
   
