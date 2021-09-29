@@ -333,7 +333,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 
   if calib.measIsBGPos[index]
     uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
-        daq.params.acqNumFrameAverages, numFrames)
+        acqNumFrameAverages(protocol.scanner.currentSequence), numFrames)
     calib.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
   else
     calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
