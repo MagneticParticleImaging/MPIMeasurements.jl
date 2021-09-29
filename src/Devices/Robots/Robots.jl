@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobot, getRobots
+export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -35,6 +35,7 @@ checkDependencies(rob::Robot) = true
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
+namedPosition(rob::Robot, pos::AbstractString) = params(rob).namedPositions[pos]
 
 getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
 function getRobot(scanner::MPIScanner)

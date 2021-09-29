@@ -4,7 +4,8 @@ description = "An acquisition with the Red Pitaya"
 targetScanner = "SimpleRedPitayaScanner"
 
 waitTime = 0.5
-bgFrames = 4
+bgFrames = 1
+bgFrameAverages = 1
 
 [Positions]
 positionsType = "RegularGridPositions"

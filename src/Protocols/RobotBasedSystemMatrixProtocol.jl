@@ -3,6 +3,7 @@ export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   waitTime::Float64
   bgFrames::Int64
+  bgFrameAverages::Int64
   positions::Union{GridPositions, Nothing} = nothing
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict)
@@ -245,6 +246,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   timeSeq = 0
   timeTx = 0
   timeConsumer = 0
+
   @sync begin
     # Prepare Robot/Sample
     @async timeMove = @elapsed moveAbs(robot, pos) 
@@ -255,12 +257,13 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1)
+          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrameAverages : 1)
           setup(daq, protocol.scanner.currentSequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
           setSequenceParams(daq, protocol.scanner.currentSequence)
           protocol.restored = false
         end 
       end
+
       timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
       # TODO check again if controlLoop can be run while robot is active
       timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = false)

@@ -62,6 +62,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+      
       paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else

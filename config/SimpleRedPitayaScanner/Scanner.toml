@@ -5,8 +5,8 @@ manufacturer = "Me, Myself and I"
 name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
-#datasetStore = "/opt/data/HeadScanner"
-datasetStore = "~/Documents/DatasetStores/store1"
+datasetStore = "/opt/data/HeadScanner"
+#datasetStore = "~/Documents/DatasetStores/store1"
 defaultSequence = "1DSequence"
 defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
@@ -23,6 +23,11 @@ initializationOrder = [
 [Devices.dummy_robot]
 deviceType = "DummyRobot"
 
+[Devices.dummy_robot.namedPositions]
+origin = ["0mm","0mm","0mm"]
+park = ["3mm","0mm","0mm"]
+
+
 [Devices.dummy_surveillance]
 deviceType = "DummySurveillanceUnit"
 
@@ -30,8 +35,8 @@ deviceType = "DummySurveillanceUnit"
 deviceType = "RedPitayaDAQ"
 dependencies = []
 #ips = ["192.168.2.16"] #, "192.168.2.17"]
-#ips = ["192.168.178.52"] #, "192.168.178.53"]
-ips = ["192.168.1.100"] #, "192.168.1.101"]
+ips = ["192.168.178.52"] #, "192.168.178.53"]
+#ips = ["192.168.1.100"] #, "192.168.1.101"]
 calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 calibFieldToVolt = [5, 5]
