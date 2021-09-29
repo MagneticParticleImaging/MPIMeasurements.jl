@@ -147,7 +147,6 @@ mutable struct MPIScanner
   configDir::AbstractString
   generalParams::MPIScannerGeneral
   devices::Dict{AbstractString, Device}
-  currentProtocol::Union{Protocol,Nothing}
   seqMeasState::Union{SequenceMeasState, Nothing}
 
   function MPIScanner(name::AbstractString)
@@ -175,9 +174,6 @@ mutable struct MPIScanner
     devices = initiateDevices(params["Devices"])
 
     scanner = new(name, configDir, generalParams, devices, nothing)
-
-    scanner.currentProtocol = generalParams.defaultProtocol != "" ? 
-      Protocol(generalParams.defaultProtocol, scanner) : nothing
 
     return scanner
   end
@@ -263,9 +259,6 @@ MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scan
 ####  Async version  ####
 SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, RegularAsyncMeas())
 
-function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  asyncMeasurement(scanner, sequence)
-end
 function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
   prepareAsyncMeasurement(scanner, sequence)
   scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)  
@@ -358,12 +351,6 @@ function getProtocolList(scanner::MPIScanner)
   end
 end
 
-function setProtocol(scanner::MPIScanner, protoName::AbstractString)
-  protocol = Protocol(protoName, scanner)
-  scanner.currentProtocol = protocol
-  return protocol
-end
-
-function execute(scanner::MPIScanner)
-  @tspawnat scanner.generalParams.protocolThreadID execute(scanner.currentProtocol)
+function execute(scanner::MPIScanner, protocol::Protocol)
+  @tspawnat scanner.generalParams.protocolThreadID execute(protocol)
 end
