@@ -3,7 +3,7 @@ export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   waitTime::Float64
   bgFrames::Int64
-  bgFrameAverages::Int64
+  fgFrameAverages::Int64
   positions::Union{GridPositions, Nothing} = nothing
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict)
@@ -257,7 +257,8 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrameAverages : 1)
+          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
+          acqNumFrameAverages(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
           setup(daq, protocol.scanner.currentSequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
           setSequenceParams(daq, protocol.scanner.currentSequence)
           protocol.restored = false
@@ -332,9 +333,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   stopIdx = calib.posToIdx[index] + numFrames - 1
 
   if calib.measIsBGPos[index]
-    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
-        acqNumFrameAverages(protocol.scanner.currentSequence), numFrames)
-    calib.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
+    calib.signals[:,:,:,startIdx:stopIdx] = uMeas
   else
     calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
   end

@@ -5,7 +5,7 @@ targetScanner = "SimpleRedPitayaScanner"
 
 waitTime = 0.5
 bgFrames = 1
-bgFrameAverages = 1
+fgFrameAverages = 1
 
 [Positions]
 positionsType = "RegularGridPositions"
