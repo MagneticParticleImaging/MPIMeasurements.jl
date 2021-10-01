@@ -482,7 +482,7 @@ function stopTx(daq::RedPitayaDAQ)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function prepareTx(daq::RedPitayaDAQ, sequence::Sequence, allowControlLoop = false)
+function prepareTx(daq::RedPitayaDAQ, sequence::Sequence; allowControlLoop = false)
   stopTx(daq)
 
   if needsControl(sequence) && allowControlLoop && false # False for now

@@ -8,9 +8,10 @@ gradient = "42T/m"
 #datasetStore = "/opt/data/HeadScanner"
 datasetStore = "~/Documents/DatasetStores/store1"
 defaultSequence = "1DSequence"
-defaultProtocol = "MPIMeasurement"
+defaultProtocol = "AsyncMeasurement"
 producerThreadID = 2
 consumerThreadID = 3
+protocolThreadID = 4
 
 [Devices]
 initializationOrder = [
@@ -21,6 +22,11 @@ initializationOrder = [
 
 [Devices.dummy_robot]
 deviceType = "DummyRobot"
+
+[Devices.dummy_robot.namedPositions]
+origin = ["0mm","0mm","0mm"]
+park = ["3mm","0mm","0mm"]
+
 
 [Devices.dummy_surveillance]
 deviceType = "DummySurveillanceUnit"

@@ -3,7 +3,8 @@ import Base: convert
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
-       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement
+       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
+       getProtocolList, setProtocol
 
 """
     $(SIGNATURES)
@@ -69,6 +70,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+
       paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
@@ -130,6 +132,7 @@ Base.@kwdef struct MPIScannerGeneral
   producerThreadID::Int32 = 2
   "Thread ID of the consumer thread."
   consumerThreadID::Int32 = 3
+  protocolThreadID::Int32 = 4
 end
 
 abstract type AsyncBuffer end
@@ -173,10 +176,6 @@ mutable struct MPIScanner
   generalParams::MPIScannerGeneral
   "Device instances instantiated by the scanner from its configuration."
   devices::Dict{AbstractString, Device}
-  "Currently selected sequence for performing measurements."
-  currentSequence::Union{Sequence,Nothing}
-  "Currently selected protocol for performing measurements."
-  currentProtocol::Union{Protocol,Nothing}
   seqMeasState::Union{SequenceMeasState, Nothing}
 
   """
@@ -208,13 +207,7 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
-    currentSequence = generalParams.defaultSequence != "" ?
-      Sequence(configDir, generalParams.defaultSequence) : nothing
-
-    scanner = new(name, configDir, generalParams, devices, currentSequence, nothing)
-
-    scanner.currentProtocol = generalParams.defaultProtocol != "" ?
-      Protocol(generalParams.defaultProtocol, scanner) : nothing
+    scanner = new(name, configDir, generalParams, devices, nothing)
 
     return scanner
   end
@@ -351,20 +344,15 @@ MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scan
 SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, RegularAsyncMeas())
 
 function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  scanner.currentSequence = sequence
-  asyncMeasurement(scanner)
-end
-function asyncMeasurement(scanner::MPIScanner)
-  prepareAsyncMeasurement(scanner)
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner)
+  prepareAsyncMeasurement(scanner, sequence)
+  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)
   bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
   scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
   return scanner.seqMeasState
 end
 
-function prepareAsyncMeasurement(scanner::MPIScanner)
+function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
   daq = getDAQ(scanner)
-  sequence = scanner.currentSequence
   numFrames = acqNumFrames(sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
@@ -389,12 +377,13 @@ function prepareAsyncMeasurement(scanner::MPIScanner)
   scanner.seqMeasState = measState
 end
 
-function asyncProducer(channel::Channel, scanner::MPIScanner)
+function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence)
   su = nothing
   # TODO dependency does not work because MPIScanner is not a device
   #if hasDependency(scanner, SurveillanceUnit)
     #su = dependency(scanner, SurveillanceUnit)
     #enableACPower(su, ...) # TODO
+    # TODO Send expected enable time to SU
   #end
   robot = nothing
   #if hasDependency(scanner, Robot)
@@ -403,7 +392,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner)
   #end
 
   daq = getDAQ(scanner)
-  asyncProducer(channel, daq, scanner.currentSequence)
+  asyncProducer(channel, daq, sequence)
   #disconnect(daq)
 
   if !isnothing(su)
@@ -434,4 +423,18 @@ function asyncConsumer(channel::Channel, scanner::MPIScanner)
   #if length(measState.temperatures) > 0
   #  params["calibTemperatures"] = measState.temperatures
   #end
+end
+
+#### Protocol ####
+function getProtocolList(scanner::MPIScanner)
+  path = joinpath(configDir(scanner), "Protocols/")
+  if isdir(path)
+    return String[ splitext(proto)[1] for proto in filter(a->contains(a,".toml"),readdir(path))]
+  else
+    return String[]
+  end
+end
+
+function execute(scanner::MPIScanner, protocol::Protocol)
+  @tspawnat scanner.generalParams.protocolThreadID execute(protocol)
 end

@@ -1,5 +1,5 @@
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Array{Float32,4}, 
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
                             params::Dict; bgdata::Union{Array{Float32,4},Nothing}=nothing)
 
   mdf = MDFv2InMemory()
@@ -9,7 +9,6 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
   name = params["studyName"]
   date = params["studyDate"]
   study = Study(store, name; date=date)
-  sequence = scanner.currentSequence
 
   fillMDFStudy(mdf, study)
   fillMDFExperiment(mdf, study, params)
@@ -23,6 +22,76 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, data::Arra
 
   return saveasMDF(filename, mdf)
 end
+
+
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
+  positions::Positions, isBackgroundFrame::Vector{Bool}, params::Dict)
+
+  mdf = MDFv2InMemory()
+  # / subgroup
+  mdf.root = defaultMDFv2Root()
+
+  if params["storeAsSystemMatrix"]
+    study = MPIFiles.getCalibStudy(store)
+  else
+    name = params["studyName"]
+    date = params["studyDate"]
+    study = Study(store, name; date=date)
+  end
+
+  fillMDFStudy(mdf, study)
+  fillMDFExperiment(mdf, study, params)
+  fillMDFScanner(mdf, scanner, params)
+  fillMDFTracer(mdf, params)
+
+  fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame)
+  fillMDFAcquisition(mdf, scanner, sequence)
+  fillMDFCalibration(mdf, positions, params)
+
+  filename = getNewExperimentPath(study)
+
+  return saveasMDF(filename, mdf)
+end
+
+
+
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Dict)
+
+  # /calibration/ subgroup
+
+  deltaSampleSize = haskey(params, "calibDeltaSampleSize") ?
+       Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"]))) : nothing
+
+  subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
+  
+  # TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
+  # params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
+
+  fov = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
+  fovCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
+  size = shape(subgrid)
+  
+  method = "robot"
+  offsetFields = nothing
+  order = "xyz"
+  positions = nothing
+  snr = nothing
+
+  mdf.calibration = MDFv2Calibration(;
+      deltaSampleSize = deltaSampleSize,
+      fieldOfView = fov,
+      fieldOfViewCenter = fovCenter,
+      method = method,
+      offsetFields = offsetFields,
+      order = order,
+      positions = positions,
+      size = size,
+      snr = snr)
+
+  return
+end
+
+
 
 function fillMDFScanner(mdf::MDFv2InMemory, scanner::MPIScanner, params::Dict)
   # /scanner/ subgroup
@@ -95,7 +164,17 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
     numFrames = numFrames + numBGFrames
   end
 
-  measData(mdf, data_)
+  return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame)
+end
+
+
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4}, 
+  isBackgroundFrame::Vector{Bool})
+
+  # /measurement/ subgroup
+  numFrames = size(data,4)
+
+  measData(mdf, data)
   measIsBackgroundCorrected(mdf, false)
   measIsBackgroundFrame(mdf, isBackgroundFrame)
   measIsFastFrameAxis(mdf, false)

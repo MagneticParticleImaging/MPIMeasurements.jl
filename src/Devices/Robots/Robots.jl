@@ -2,18 +2,18 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, getRobot, getRobots
+export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots
 export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
 abstract type Robot <: Device end
 
-struct ScannerCoords{T<:Unitful.Length} <: AbstractVector{T} 
+struct ScannerCoords{T<:Unitful.Length} <: AbstractVector{T}
   data::Vector{T}
 end
 
-struct RobotCoords{T<:Unitful.Length} <: AbstractVector{T} 
+struct RobotCoords{T<:Unitful.Length} <: AbstractVector{T}
   data::Vector{T}
 end
 
@@ -49,6 +49,8 @@ checkDependencies(rob::Robot) = true
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
+namedPosition(rob::Robot, pos::AbstractString) = params(rob).namedPositions[pos]
+
 # should return a matrix of shape dof(rob)×dof(rob)
 scannerCoordAxes(rob::Robot) = :scannerCoordAxes in fieldnames(typeof(params(rob))) ? params(rob).scannerCoordAxes : Matrix(1.0LinearAlgebra.I, dof(rob), dof(rob))
 # should return a vector of shape dof(rob)

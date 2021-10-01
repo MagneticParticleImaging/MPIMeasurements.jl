@@ -3,9 +3,33 @@ export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   waitTime::Float64
   bgFrames::Int64
+  fgFrameAverages::Int64
+  sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
 end
-RobotBasedSystemMatrixProtocolParams(dict::Dict) = params_from_dict(RobotBasedSystemMatrixProtocolParams, dict)
+function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
+  if haskey(dict, "Positions")
+    posDict = dict["Positions"]
+
+    positions = Positions(posDict)
+    delete!(dict, "Positions")
+  else 
+    positions = nothing
+  end
+
+  sequence = nothing
+  if haskey(dict, "sequence")
+    sequence = Sequence(scanner, dict["sequence"])
+    dict["sequence"] = sequence
+    delete!(dict, "sequence")
+  end
+  
+  params = params_from_dict(RobotBasedSystemMatrixProtocolParams, dict)
+  params.positions = positions
+  params.sequence = sequence
+  return params
+end
+
 
 # Based on https://github.com/MagneticParticleImaging/MPIMeasurements.jl/tree/cde1c72b820a72b3c3dfa4235b2b37bd506b0109
 mutable struct SystemMatrixRobotMeas
@@ -23,16 +47,18 @@ mutable struct SystemMatrixRobotMeas
   temperatures::Matrix{Float64}
 end
 
-Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
+Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
   name::AbstractString
   description::AbstractString
   scanner::MPIScanner
   params::RobotBasedSystemMatrixProtocolParams
   biChannel::BidirectionalChannel{ProtocolEvent}
   
+  executeTask::Union{Task, Nothing} = nothing
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
+  restored::Bool = false
   finishAcknowledged::Bool = false
 end
 
@@ -49,6 +75,9 @@ function SystemMatrixRobotMeas()
 end
 
 function init(protocol::RobotBasedSystemMatrixProtocol)
+  if isnothing(protocol.params.sequence)
+    throw(IllegalStateException("Protocol requires a sequence"))
+  end
   protocol.systemMeasState = SystemMatrixRobotMeas()
 
   #Prepare Positions
@@ -67,10 +96,9 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.positions = protocol.params.positions # TODO remove redundancy
   
   #Prepare Signals
-  seq = protocol.scanner.currentSequence
-  numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
-  rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
-  numPeriods = acqNumPeriodsPerFrame(seq)  
+  numRxChannels = length(rxChannels(protocol.params.sequence)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequence)
+  numPeriods = acqNumPeriodsPerFrame(protocol.params.sequence)  
   filenameSignals = "/tmp/sysObj.bin"
   io = open(filenameSignals, "w+");
   signals = Mmap.mmap(io, Array{Float32,4}, (rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames));
@@ -81,27 +109,28 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   
   # TODO implement properly
   protocol.systemMeasState.temperatures = zeros(0, 0)
-    return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
-function execute(protocol::RobotBasedSystemMatrixProtocol)
+function _execute(protocol::RobotBasedSystemMatrixProtocol)
   @info "Start System Matrix Protocol"
-  if !isReferenced(getRobot(protocol.scanner))
-    put!(protocol.biChannel, ExceptionEvent("Robot not referenced! Cannot proceed!"))
-    close(protocol.biChannel)
-    return
-  end
+  #if !isReferenced(getRobot(protocol.scanner))
+  #  throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
+  #end
+  # TODO THIS SHOULD HAPPEN EXTERNALLY
+  robot = getRobot(protocol.scanner)
+  enable(robot)
+  doReferenceDrive(robot)
   
   finished = false
   started = false
   while !finished
     if !started
-      #prepareCalibration/init somehow
       if isfile("/tmp/sysObj.toml")
         message = """Found existing calibration file! \n
         Should it be resumed?"""
         if askConfirmation(protocol, message)
-          #restore(...) # TODO
+          restore(protocol)
         end
       end
     end
@@ -109,7 +138,8 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
     started = true
 
     while protocol.stopped
-      handleEvents(protocol) # TODO cancel case
+      handleEvents(protocol)
+      protocol.cancelled && throw(CancelException()) 
       sleep(0.05)
     end
   end
@@ -118,10 +148,7 @@ function execute(protocol::RobotBasedSystemMatrixProtocol)
   put!(protocol.biChannel, FinishedNotificationEvent())
   while !protocol.finishAcknowledged
     handleEvents(protocol)
-    if protocol.cancelled
-      close(protocol.biChannel)
-      return
-    end
+    protocol.cancelled && throw(CancelException())
     sleep(0.01)
   end
   @info "Protocol finished."
@@ -130,68 +157,68 @@ end
 
 function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   # TODO should cleanup remove temp files? Would require a handler to differentiate between successful and unsuccesful "end"
-  #filename = "/tmp/sysObj.toml"
-  #filenameSignals = "/tmp/sysObj.bin"
-  #rm(filename, force=true)
-  #rm(filenameSignals, force=true)
+  removeTempFiles(protocol)
+end
+
+function removeTempFiles(protocol::RobotBasedSystemMatrixProtocol)
+  filename = "/tmp/sysObj.toml"
+  filenameSignals = "/tmp/sysObj.bin"
+  rm(filename, force=true)
+  rm(filenameSignals, force=true)
 end
 
 function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   @info "Enter calibration loop"
   finished = false
-  try
-    calib = protocol.systemMeasState
-    su = getSurveillanceUnit(protocol.scanner)
-    daq = getDAQ(protocol.scanner)
-    robot = getRobot(protocol.scanner)
-    #safety = getSafety(protocol.scanner) #TODO fix 
-    #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
-  
-    positions = calib.positions
-    numPos = length(calib.positions)
+  calib = protocol.systemMeasState
+  su = getSurveillanceUnit(protocol.scanner)
+  daq = getDAQ(protocol.scanner)
+  robot = getRobot(protocol.scanner)
+  #safety = getSafety(protocol.scanner) #TODO fix 
+  #safety = getSafety(protocol.scanner) #TODO fix 
+  #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
+
+  positions = calib.positions
+  numPos = length(calib.positions)
+  @info "Store SF"
+
+  enableACPower(su, protocol.scanner)
+  stopTx(daq)
+  while true
+    @info "Curr Pos in performCalibrationInner $(calib.currPos)"
+    handleEvents(protocol)
     
-    #connect(daq)
-    enableACPower(su, protocol.scanner)
-    stopTx(daq)
-    while true
-      @info "Curr Pos in performCalibrationInner $(calib.currPos)"
-      handleEvents(protocol)
-      if protocol.stopped
-        wait(calib.consumer)
-        wait(calib.producerFinalizer)
-        @info "Stop calibration loop"
-        finished = false
-        break
-      end
-
-      if calib.currPos <= numPos
-        pos = uconvert.(Unitful.mm, positions[calib.currPos])
-        performCalibration(protocol, pos)
-        calib.currPos +=1
-      end
-
-      if calib.currPos > numPos
-        wait(calib.consumer)
-        wait(calib.producerFinalizer)
-        @info "Store SF"
-        stopTx(daq)
-        disableACPower(su, protocol.scanner)
-        disconnect(daq)
-
-        movePark(robot)
-
-        #saveasMDF(calib)
-
-        finished = true
-        break
-      end
-      
+    if protocol.stopped
+      wait(calib.consumer)
+      wait(calib.producerFinalizer)
+      @info "Stop calibration loop"
+      finished = false
+      break
     end
-  
-  catch ex
-    @warn "Exception" ex stacktrace(catch_backtrace())
+
+    if calib.currPos <= numPos
+      pos = uconvert.(Unitful.mm, positions[calib.currPos])
+      performCalibration(protocol, pos)
+      calib.currPos +=1
+    end
+
+    if calib.currPos > numPos
+      wait(calib.consumer)
+      wait(calib.producerFinalizer)
+      stopTx(daq)
+      disableACPower(su, protocol.scanner)
+      enable(robot)
+      movePark(robot)
+      disable(robot)
+      #saveasMDF(calib) # TODO implement saving
+      #removeTempFiles(protocol)
+      
+      finished = true
+      break
+    end
+    
   end
-  @info "Exit calibration loop"
+    @info "Exit calibration loop"
   return finished
 end
 
@@ -199,43 +226,54 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
 
+  enable(robot)
   timePreparing = @elapsed prepareMeasurement(protocol, pos) # TODO params
 
-  diffTime = calib.waitTime - timePreparing
+  diffTime = protocol.params.waitTime - timePreparing
   if diffTime > 0.0
     sleep(diffTime)
   end
 
-  setEnabled(robot, false)
+  disable(robot)
 
-  timeMeasuring = @elapsed measurement(protocol, pos)
+  timeMeasuring = @elapsed measurement(protocol)
 
   @info "Preptime $timePreparing, meas time: $(timeMeasuring)"
 
-  setEnabled(robot, true)
 end
 
 function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
+  timePrepDAQ = 0
+  timeFinalizer = 0
+  timeFrameChange = 0
+  timeSeq = 0
+  timeTx = 0
+  timeConsumer = 0
+
   @sync begin
     # Prepare Robot/Sample
-    @async timeMove = @elapsed moveAbsUnsafe(robot, pos) 
+    @async timeMove = @elapsed moveAbs(robot, pos) 
     
     # Prepare DAQ
     @async timePrepDAQ = @elapsed begin
       allowControlLoop = mod1(calib.currPos, 11) == 1  
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       timeFrameChange = @elapsed begin 
-        if (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          acqNumFrames(protocol.scanner.currentSequence, calib.measIsBGPos[calib.currPos] ? daq.params.acqNumBGFrames : 1)
-          setSequenceParams(daq, protocol.scanner.currentSequence)
+        if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
+          acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
+          acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+          setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
+          setSequenceParams(daq, protocol.params.sequence)
+          protocol.restored = false
         end 
       end
-      timeSeq = @elapsed prepareSequence(daq, protocol.scanner.currentSequence)
+
+      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
       # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed prepareTx(daq, protocol.scanner.currentSequence, allowControlLoop = allowControlLoop)
+      timeTx = @elapsed prepareTx(daq, protocol.params.sequence, allowControlLoop = false)
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
@@ -249,11 +287,12 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   @info "Measurement" index length(calib.positions)
 
   timeGetThings = @elapsed begin
-    safety = getSafety(protocol.scanner)
+    # TODO getSafety and getTempSensor if necessary
+    #safety = getSafety(protocol.scanner)
     su = getSurveillanceUnit(protocol.scanner)
     daq = getDAQ(protocol.scanner)
     robot = getRobot(protocol.scanner)
-    tempSensor = getTemperatureSensor(protocol.scanner)
+    #tempSensor = getTemperatureSensor(protocol.scanner)
     channel = Channel{channelType(daq)}(32)
   end
 
@@ -261,9 +300,10 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   timeEnableSlowDAC = @elapsed begin
     # TODO Wait or answerEvents here?
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
-    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.scanner.currentSequence, prepTx = false, prepSeq = false, endSeq = false)
+    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
     while !istaskdone(producer)
       handleEvents(protocol)
+      # Dont want to throw cancel here
       sleep(0.05)
     end
   end
@@ -279,9 +319,10 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   calib = protocol.systemMeasState
   @info "readData"
   daq = getDAQ(protocol.scanner)
-  tempSensor = getTemperatureSensor(protocol.scanner)
+  #tempSensor = getTemperatureSensor(protocol.scanner)
+  tempSensor = nothing
   asyncBuffer = AsyncBuffer(daq)
-  numFrames = acqNumFrames(protocol.scanner.currentSequence)
+  numFrames = acqNumFrames(protocol.params.sequence)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
@@ -298,9 +339,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   stopIdx = calib.posToIdx[index] + numFrames - 1
 
   if calib.measIsBGPos[index]
-    uMeas_ = reshape(uMeas, size(uMeas,1), size(uMeas,2), size(uMeas,3),
-        daq.params.acqNumFrameAverages, numFrames)
-    calib.signals[:,:,:,startIdx:stopIdx] = mean(uMeas_,dims=4)[:,:,:,1,:]
+    calib.signals[:,:,:,startIdx:stopIdx] = uMeas
   else
     calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
   end
@@ -330,7 +369,7 @@ function store(protocol::RobotBasedSystemMatrixProtocol)
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
   params["currPos"] = sysObj.currPos
-  params["stopped"] = protocol.stopped
+  #params["stopped"] = protocol.stopped
   #params["currentSignal"] = sysObj.currentSignal
   params["waitTime"] = protocol.params.waitTime
   params["measIsBGPos"] = sysObj.measIsBGPos
@@ -355,7 +394,8 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
   if isfile(filename)
     params = TOML.parsefile(filename)
     sysObj.currPos = params["currPos"]
-    protocol.stopped = params["stopped"]
+    protocol.stopped = false
+    #params["stopped"]
     #sysObj.currentSignal = params["currentSignal"]
     protocol.params.waitTime = params["waitTime"]
     sysObj.measIsBGPos = params["measIsBGPos"]
@@ -372,7 +412,7 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     numFGPos = length(sysObj.measIsBGPos) - numBGPos
 
     numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
-    seq = protocol.scanner.currentSequence
+    seq = protocol.params.sequence
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)  
@@ -380,11 +420,25 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     io = open(filenameSignals, "r+");
     sysObj.signals = Mmap.mmap(io, Array{Float32,4},
           (rxNumSamplingPoints,numRxChannels, numPeriods, numTotalFrames));
+    protocol.restored = true
+    @info "Restored system matrix measurement"
   end
 end
 
-handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::StopEvent) = protocol.stopped = true
-handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::ResumeEvent) = protocol.stopped = false
+
+function stop(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.stopped = true
+end
+
+function resume(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.stopped = false
+end
+
+function cancel(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.cancelled = true # Set cancel s.t. exception can be thrown we appropiate
+  protocol.stopped = true # Set stop to reach a known/save state
+end
+
 
 function handleEvent(protocl::RobotBasedSystemMatrixProtocol, event::ProgressQueryEvent)
   put!(protocl.biChannel, ProgressEvent(protocl.systemMeasState.currPos, length(protocl.systemMeasState.positions), "Position", event))
@@ -393,3 +447,20 @@ end
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
   put!(protocol.biChannel, DataAnswerEvent(protocol.systemMeasState.currentSignal, event))
 end
+
+function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
+  if false 
+    put!(protocol.biChannel, IllegaleStateEvent("Calibration measurement is not done yet. Cannot save!"))
+  else
+    store = event.datastore
+    scanner = protocol.scanner
+    params = event.params
+    data = protocol.systemMeasState.signals
+    positions = protocol.systemMeasState.positions
+    isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
+    saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
+    put!(protocol.biChannel, StorageSuccessEvent())
+  end
+end
+
+handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
