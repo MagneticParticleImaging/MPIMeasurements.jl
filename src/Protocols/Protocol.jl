@@ -196,6 +196,12 @@ function handleEvents(protocol::Protocol)
   end
 end
 
+# Traits
+abstract type ProtocolInteractivity end
+struct NonInteractive <: ProtocolInteractivity end
+struct Interactive <: ProtocolInteractivity end
+@mustimplement protocolInteractivity(protocol::Protocol)
+
 include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")

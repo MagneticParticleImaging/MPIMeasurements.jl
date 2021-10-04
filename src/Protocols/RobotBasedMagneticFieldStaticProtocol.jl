@@ -34,6 +34,8 @@ function init(protocol::RobotBasedMagneticFieldStaticProtocol)
   MPIFiles.positions(measurement_, positions(protocol))
   measurement(protocol, measurement_)
   # For inner protocol communication
+  protocol.safetyChannel = Channel{ProtocolEvent}(32)
+  # I'd prefer to only start task during execution and also close it in cleanup
   protocol.safetyTask = @tspawnat protocol.scanner.generalParams.protocolThreadID watchTemperature(protocol.scanner, protocol.safetyChannel)
   # For user I/O
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
@@ -63,6 +65,7 @@ function cleanup(protocol::RobotBasedMagneticFieldStaticProtocol)
   saveMagneticFieldAsHDF5(measurement(protocol), filename(protocol))
 end
 
+# Here I'd like to also dispatch on protocol and not only scanner
 function watchTemperature(scanner::MPIScanner, channel::Channel)
   while isopen(channel)
     temp = getTemperature(scanner)

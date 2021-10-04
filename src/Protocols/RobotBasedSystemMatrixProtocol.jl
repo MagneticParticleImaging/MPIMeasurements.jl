@@ -464,3 +464,5 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
 end
 
 handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+
+protocolInteractivity(protocol::RobotBasedSystemMatrixProtocol) = Interactive()
