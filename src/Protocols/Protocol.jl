@@ -78,12 +78,12 @@ Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protoco
 function runProtocol(protocol::Protocol)
   # TODO: Error handling
   # TODO command line "handler"
-  in, out = init(protocol)
+  channel = init(protocol)
   @async begin
     execute(protocol)
     cleanup(protocol)
   end
-  return in, out
+  return channel
 end
 
 abstract type ProtocolEvent end

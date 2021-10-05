@@ -13,6 +13,10 @@ Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::DummyDAQParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -21,9 +25,14 @@ end
 
 function init(daq::DummyDAQ)
   @debug "Initializing dummy DAQ with ID `$(daq.deviceID)`."
+
+  daq.present = true
 end
 
 checkDependencies(daq::DummyDAQ) = true
+
+Base.close(daq::DummyDAQ) = nothing
+
 function startTx(daq::DummyDAQ)
 end
 
@@ -54,7 +63,7 @@ function setTxParams(daq::DummyDAQ, sequence::Sequence)
   daq.params.amplitude = amplitude(component)
   daq.params.frequency = divider(component)
   daq.state = 1
-  setTxParams(daq) 
+  setTxParams(daq)
 end
 function setTxParams(daq::DummyDAQ)
   doSomething(daq.params.amplitude)
@@ -70,11 +79,11 @@ end
 
 
 function currentFrame(daq::DummyDAQ)
-    return 1;
+  return 1;
 end
 
 function currentPeriod(daq::DummyDAQ)
-    return 1;
+	return 1;
 end
 
 function disconnect(daq::DummyDAQ)
@@ -99,7 +108,7 @@ function readDataPeriods(daq::DummyDAQ, startPeriod, numPeriods)
 
     uMeas[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.samplesPerPeriod))
     uRef[:,1,1,1] = sin.(range(0,2*pi, length=daq.params.samplesPerPeriod))
-    
+
     return uMeas, uRef
 end
 refToField(daq::DummyDAQ, d::Int64) = 0.0
@@ -116,7 +125,7 @@ function AsyncBuffer(daq::DummyDAQ)
     return DummyAsyncBuffer(nothing)
 end
 
-function frameAverageBufferSize(daq::DummyDAQ, frameAverages) 
+function frameAverageBufferSize(daq::DummyDAQ, frameAverages)
     # 1 Rx channel and 1 period per frame
     return daq.params.rxNumSamplingPoints, 1, 1, frameAverages
 end
@@ -136,24 +145,24 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
     frames = nothing
     samplesInBuffer = size(samples)[2]
     framesInBuffer = div(samplesInBuffer, daq.params.samplesPerPeriod)
-    
+
     if framesInBuffer > 0
         samplesToConvert = samples[:, 1:(daq.params.samplesPerPeriod * framesInBuffer)]
         temp = reshape(samplesToConvert, 2, daq.params.samplesPerPeriod, 1, 1)
         frames = zeros(Float32, daq.params.samplesPerPeriod, 2, 1, 1)
         frames[:, 1, :, :] = temp[1, :, :, :]
         frames[:, 2, :, :] = temp[2, :, :, :]
-        
+
         if (daq.params.samplesPerPeriod * framesInBuffer) + 1 <= samplesInBuffer
             unusedSamples = samples[:, (daq.params.samplesPerPeriod * framesInBuffer) + 1:samplesInBuffer]
-        else 
+        else
           unusedSamples = nothing
         end
-  
+
     end
 
     buffer.samples = unusedSamples
-    
+
     uMeas = nothing
     uRef = nothing
     if !isnothing(frames)
@@ -165,11 +174,11 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
 end
 
 function startProducer(channel::Channel, daq::DummyDAQ)
-    startTx(daq)    
+    startTx(daq)
     startFrame = 1
     endFrame = numFrames + 1
     currentFrame = startFrame
-    try 
+    try
         while currentFrame < endFrame
             samples = zeros(Float32, 2, daq.params.samplesPerPeriod)
             samples[1, :] = daq.params.amplitude * sin.(daq.params.frequency .* range(0,2*pi, length=daq.params.samplesPerPeriod))

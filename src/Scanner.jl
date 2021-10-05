@@ -6,7 +6,11 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
        getProtocolList, setProtocol
 
-"""Recursively find all concrete types"""
+"""
+    $(SIGNATURES)
+
+Recursively find all concrete types of the given type.
+"""
 function deepsubtypes(type::DataType)
   subtypes_ = subtypes(type)
   allSubtypes = subtypes_
@@ -18,7 +22,9 @@ function deepsubtypes(type::DataType)
 end
 
 """
-Retrieve the concrete type of a given supertype corresponding to a given string
+    $(SIGNATURES)
+
+Retrieve the concrete type of a given supertype corresponding to a given string.
 """
 function getConcreteType(supertype_::DataType, type::String)
   knownTypes = deepsubtypes(supertype_)
@@ -37,7 +43,9 @@ function getConcreteType(supertype_::DataType, type::String)
 end
 
 """
-Initiate devices from the given configuration dictionary
+    $(SIGNATURES)
+
+Initiate devices from the given configuration dictionary.
 
 The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
@@ -62,7 +70,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
       DeviceImpl = getConcreteType(Device, deviceType)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
-      
+
       paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
@@ -75,7 +83,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
     for dependencyID in keys(dependencies(device))
       device.dependencies[dependencyID] = devices[dependencyID]
     end
-    
+
     if !checkDependencies(device)
       throw(ScannerConfigurationError("Unspecified dependency error in device with ID `$(deviceID(device))`."))
     end
@@ -84,28 +92,45 @@ function initiateDevices(devicesParams::Dict{String, Any})
   # Initiate all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     init(devices[deviceID])
+    if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+      @error "The device with ID `$deviceID` should be present but isn't."
+    end
   end
 
   return devices
 end
 
 """
-General description of the scanner
+    $(SIGNATURES)
+
+General description of the scanner.
 
 Note: The fields correspond to the root section of an MDF file.
 """
 Base.@kwdef struct MPIScannerGeneral
+  "Bore size of the scanner."
   boreSize::typeof(1u"mm")
+  "Facility where the scanner is located."
   facility::String
+  "Manufacturer of the scanner."
   manufacturer::String
+  "Name of the scanner"
   name::String
+  "Topology of the scanner, e.g. FFL or FFP."
   topology::String
+  "Gradient of the scanners selection field."
   gradient::typeof(1u"T/m")
+  "Path of the dataset store."
   datasetStore::String
-  defaultSequence::String=""
-  defaultProtocol::String=""
-  transferFunction::String=""
+  "Default sequence of the scanner."
+  defaultSequence::String = ""
+  "Default protocol of the scanner."
+  defaultProtocol::String = ""
+  "Location of the scanner's transfer function."
+  transferFunction::String = ""
+  "Thread ID of the producer thread."
   producerThreadID::Int32 = 2
+  "Thread ID of the consumer thread."
   consumerThreadID::Int32 = 3
   protocolThreadID::Int32 = 4
 end
@@ -138,17 +163,26 @@ end
 
 
 """
-Central part for setting up a scanner.
+    $(SIGNATURES)
 
-TODO: Add more details on instantiation
+Basic description of a scanner.
 """
 mutable struct MPIScanner
-  name::AbstractString
-  configDir::AbstractString
+  "Name of the scanner"
+  name::String
+  "Path to the used configuration directory."
+  configDir::String
+  "General parameters of the scanner like its bore size or gradient."
   generalParams::MPIScannerGeneral
+  "Device instances instantiated by the scanner from its configuration."
   devices::Dict{AbstractString, Device}
   seqMeasState::Union{SequenceMeasState, Nothing}
 
+  """
+    $(SIGNATURES)
+
+  Initialize a scanner by its name.
+  """
   function MPIScanner(name::AbstractString)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
@@ -166,7 +200,7 @@ mutable struct MPIScanner
       throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
     end
 
-    @info "Instantiating scanner `$name` from configuration file at `$filename`."
+    @debug "Instantiating scanner `$name` from configuration file at `$filename`."
 
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
@@ -179,19 +213,44 @@ mutable struct MPIScanner
   end
 end
 
+"""
+    $(SIGNATURES)
+
+Close the devices when closing the scanner.
+"""
 function Base.close(scanner::MPIScanner)
-  for device in getDevices(Device)
+  for device in getDevices(scanner, Device)
     close(device)
   end
 end
 
-name(scanner::MPIScanner) = scanner.name #TODO: Duplication with scanner name
+"Name of the scanner"
+name(scanner::MPIScanner) = scanner.name
+
+"Path to the used configuration directory."
 configDir(scanner::MPIScanner) = scanner.configDir
+
+"General parameters of the scanner like its bore size or gradient."
 generalParams(scanner::MPIScanner) = scanner.generalParams
-getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
+
+"Location of the scanner's transfer function."
 transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
+
+"Check, whether the scanner has a transfer function defined."
 hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
 
+"""
+    $(SIGNATURES)
+
+Retrieve a device by its `deviceID`.
+"""
+getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
+
+"""
+    $(SIGNATURES)
+
+Retrieve all devices of a specific `deviceType`.
+"""
 function getDevices(scanner::MPIScanner, deviceType::DataType)
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
@@ -207,17 +266,33 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   return getDevices(scanner, deviceTypeSearched)
 end
 
+"Bore size of the scanner."
 scannerBoreSize(scanner::MPIScanner) = scanner.generalParams.boreSize
+
+"Facility where the scanner is located."
 scannerFacility(scanner::MPIScanner) = scanner.generalParams.facility
+
+"Manufacturer of the scanner."
 scannerManufacturer(scanner::MPIScanner) = scanner.generalParams.manufacturer
+
+"Name of the scanner"
 scannerName(scanner::MPIScanner) = scanner.generalParams.name
+
+"Topology of the scanner, e.g. FFL or FFP."
 scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
+
+"Gradient of the scanners selection field."
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
 
+"""
+    $(SIGNATURES)
+
+Retrieve a list of all sequences available for the scanner.
+"""
 function getSequenceList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "Sequences")
   if isdir(path)
-    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(path))] 
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".toml"),readdir(path))]
   else
     return String[]
   end
@@ -225,6 +300,11 @@ end
 
 # TODO getProtocolList
 
+"""
+    $(SIGNATURES)
+
+Constructor for a sequence of `name` from `configDir`.
+"""
 function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "Sequences", name*".toml")
   if !isfile(path)
@@ -233,13 +313,17 @@ function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
   return sequenceFromTOML(path)
 end
 
-MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner),name)
+"""
+    $(SIGNATURES)
 
+Constructor for a sequence of `name` from the configuration directory specified for the scanner.
+"""
+MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
 
 function getTransferFunctionList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "TransferFunctions")
   if isdir(path)
-    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".h5"),readdir(path))] 
+    return String[ splitext(seq)[1] for seq in filter(a->contains(a,".h5"),readdir(path))]
   else
     return String[]
   end
@@ -261,7 +345,7 @@ SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAs
 
 function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
   prepareAsyncMeasurement(scanner, sequence)
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)  
+  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)
   bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
   scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
   return scanner.seqMeasState
@@ -294,7 +378,7 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence)
-  su = nothing 
+  su = nothing
   # TODO dependency does not work because MPIScanner is not a device
   #if hasDependency(scanner, SurveillanceUnit)
     #su = dependency(scanner, SurveillanceUnit)
@@ -310,7 +394,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
   daq = getDAQ(scanner)
   asyncProducer(channel, daq, sequence)
   #disconnect(daq)
-  
+
   if !isnothing(su)
     #disableACPower(su, scanner)
   end
@@ -345,7 +429,7 @@ end
 function getProtocolList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "Protocols/")
   if isdir(path)
-    return String[ splitext(proto)[1] for proto in filter(a->contains(a,".toml"),readdir(path))] 
+    return String[ splitext(proto)[1] for proto in filter(a->contains(a,".toml"),readdir(path))]
   else
     return String[]
   end

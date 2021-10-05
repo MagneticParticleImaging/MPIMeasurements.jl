@@ -1,7 +1,7 @@
 export DummySurveillanceUnit, DummySurveillanceUnitParams
 
 Base.@kwdef struct DummySurveillanceUnitParams <: DeviceParams
-  
+
 end
 DummySurveillanceUnitParams(dict::Dict) = params_from_dict(DummySurveillanceUnitParams, dict)
 
@@ -10,6 +10,10 @@ Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::DummySurveillanceUnitParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -17,12 +21,16 @@ Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
 end
 
 function init(su::DummySurveillanceUnit)
-  @info "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
+  @debug "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
+
+  su.present = true
 end
 
 checkDependencies(su::DummySurveillanceUnit) = true
 
-getTemperatures(su::DummySurveillanceUnit) = 30.0.*ones(4) .+ 1.0.*randn(4) 
+Base.close(su::DummySurveillanceUnit) = nothing
+
+getTemperatures(su::DummySurveillanceUnit) = 30.0.*ones(4) .+ 1.0.*randn(4)
 getACStatus(su::DummySurveillanceUnit, scanner::MPIScanner) = su.acPowerEnabled
 
 function enableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)

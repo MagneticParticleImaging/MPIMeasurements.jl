@@ -7,4 +7,6 @@
   # setupSequence(scanner, sequence)
 
   # uMeas, uRef = readData(getDAQ(scanner), 1, 1)
+
+  close(scanner)
 end

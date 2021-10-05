@@ -1,10 +1,11 @@
 using InteractiveUtils: subtypes
 
-@testset "test $rob_type interface" for rob_type in subtypes(Robot)
+@testset "Robot" begin
+  @testset "test $rob_type interface" for rob_type in subtypes(Robot)
     par_type = eval(Symbol(string(rob_type)*"Params"))
     params = par_type()
-    rob = rob_type("test",params)
-    
+    rob = rob_type(deviceID="test", params=params, dependencies=Dict{String, Union{Device, Missing}}())
+
     degrees = dof(rob)
     @test degrees isa Int
 
@@ -13,38 +14,39 @@ using InteractiveUtils: subtypes
     @test length(axes) == degrees
     @test length(axes[1]) == 2
     for i in 1:degrees
-        @test axes[i][1]<=axes[i][2]
+      @test axes[i][1]<=axes[i][2]
     end
 
     def_vel = defaultVelocity(rob)
     @test def_vel isa Union{Vector{<:Unitful.Velocity},Nothing}
     if def_vel !== nothing
-        @test length(def_vel) == degrees
+      @test length(def_vel) == degrees
     end
-end
+  end
 
-@testset "DummyRobot" begin
-  include("DummyRobotTests.jl")
-end
+  @testset "DummyRobot" begin
+    include("DummyRobotTests.jl")
+  end
 
-@testset "SimulatedRobot" begin
-  include("SimulatedRobotTests.jl")
-end
+  @testset "SimulatedRobot" begin
+    include("SimulatedRobotTests.jl")
+  end
 
-if "igus" in ARGS
+  if "igus" in ARGS
     @testset "IgusRobot" begin
     include("IgusRobotTests.jl")
     end
-end
+  end
 
-if "isel" in ARGS
+  if "isel" in ARGS
     @testset "IselRobot" begin
     include("IselRobotTests.jl")
     end
-end
+  end
 
-if "brukerrobot" in ARGS
+  if "brukerrobot" in ARGS
     @testset "BrukerRobot" begin
     include("BrukerRobotTests.jl")
     end
+  end
 end

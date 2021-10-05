@@ -22,7 +22,7 @@ end
 function controlLoop(seqCont::SequenceController)
   daq = dependency(seqCont, AbstractDAQ)
 
-  # for 
+  # for
 
   # if canConvolute(daq)
   # # Init LUT
@@ -44,12 +44,13 @@ function controlLoop_(daq::AbstractDAQ)
   @info "Init control with Tx= " daq.params.currTx
   @info daq.params.correctCrossCoupling
 
-  setTxParams(daq, daq.params.currTx, postpone=false)
+  setTxParams(daq, daq.params.currTx)
+  startTx(daq)
   sleep(daq.params.controlPause)
 
   controlPhaseDone = false
   i = 1
-  maxControlSteps = 2
+  maxControlSteps = 20
   while !controlPhaseDone && i <= maxControlSteps
     @info "### CONTROL STEP $i ###"
     period = currentPeriod(daq)
@@ -64,8 +65,7 @@ function controlLoop_(daq::AbstractDAQ)
   # TODO: This is not generic!
   setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
   setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
-  
-  return 
+  return nothing
 end
 
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
@@ -89,10 +89,10 @@ function controlStepSuccessful(Γ::Matrix, Ω::Matrix, daq)
 
   if daq.params.correctCrossCoupling
     diff = Ω - Γ
-  else 
+  else
     diff = diagm(diag(Ω)) - diagm(diag(Γ))
   end
-  deviation = maximum(abs.(diff)) / maximum(abs.(Ω)) 
+  deviation = maximum(abs.(diff)) / maximum(abs.(Ω))
   #=@info "Ω = " Ω
   @info "Γ = " Γ
   @info "Ω - Γ = " diff=#
@@ -107,9 +107,9 @@ function newDFValues(Γ::Matrix, Ω::Matrix, daq)
   κ = daq.params.currTx
   if daq.params.correctCrossCoupling
     β = Γ*inv(κ)
-  else 
+  else
     @show size(Γ), size(κ)
-    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+    β = diagm(diag(Γ))*inv(diagm(diag(κ)))
   end
   newTx = inv(β)*Ω
 
@@ -125,7 +125,7 @@ end
 function checkDFValues(newTx, oldTx, Γ, daq)
 
   calibFieldToVoltEstimate = daq.params.calibFieldToVolt
-  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ)) 
+  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ))
 
   deviation = abs.( 1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate )
 
@@ -139,7 +139,7 @@ function doControlStep(daq::AbstractDAQ, uRef)
   Γ = calcFieldFromRef(daq,uRef)
   Ω = convert(Matrix{ComplexF64}, diagm(daq.params.dfStrength.*exp.(im*daq.params.dfPhase)))
 
-  amplitude = abs.(diag(Γ))  
+  amplitude = abs.(diag(Γ))
 
   @info "reference Γ=" Γ
 
@@ -149,12 +149,12 @@ function doControlStep(daq::AbstractDAQ, uRef)
   else
     newTx = newDFValues(Γ, Ω, daq)
     oldTx = daq.params.currTx
-    @info "oldTx=" oldTx 
+    @info "oldTx=" oldTx
     @info "newTx=" newTx
 
     if checkDFValues(newTx, oldTx, Γ, daq)
       daq.params.currTx[:] = newTx
-      setTxParams(daq, daq.params.currTx, postpone=false)
+      setTxParams(daq, daq.params.currTx)
     else
       @warn "New values are above voltage limits or are different than expected!"
     end

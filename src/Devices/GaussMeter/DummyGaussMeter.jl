@@ -10,15 +10,23 @@ Base.@kwdef mutable struct DummyGaussMeter <: GaussMeter
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::DummyGaussMeterParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 end
 
 function init(gauss::DummyGaussMeter)
-  @info "Initializing dummy gaussmeter unit with ID `$(gauss.deviceID)`."
+  @debug "Initializing dummy gaussmeter unit with ID `$(gauss.deviceID)`."
+
+  gauss.present = true
 end
 
 checkDependencies(gauss::DummyGaussMeter) = true
+
+Base.close(gauss::DummyGaussMeter) = nothing
 
 getXValue(gauss::DummyGaussMeter) = 1.0u"mT"
 getYValue(gauss::DummyGaussMeter) = 2.0u"mT"

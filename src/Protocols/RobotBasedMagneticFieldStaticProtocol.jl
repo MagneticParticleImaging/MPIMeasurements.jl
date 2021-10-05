@@ -14,8 +14,12 @@ Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocol <: RobotBasedPr
   description::AbstractString
   scanner::MPIScanner
   params::RobotBasedMagneticFieldStaticProtocolParams
+
   biChannel::BidirectionalChannel{ProtocolEvent}
-  
+  done::Bool = false
+  cancelled::Bool = false
+  finishAcknowledged::Bool = false
+
   executeTask::Union{Task, Nothing} = nothing
   measurement::Union{MagneticFieldMeasurement, Missing} = missing
   filename::Union{AbstractString, Missing} = missing
@@ -63,6 +67,7 @@ end
 
 function cleanup(protocol::RobotBasedMagneticFieldStaticProtocol)
   saveMagneticFieldAsHDF5(measurement(protocol), filename(protocol))
+  close(protocol.scanner)
 end
 
 # Here I'd like to also dispatch on protocol and not only scanner
@@ -78,5 +83,5 @@ end
 
 function handleEvent(protocol::RobotBasedMagneticFieldStaticProtocol, event::FinishedAckEvent)
   # End SafetyTask
-  close(protocol.safetyChannel) 
+  close(protocol.safetyChannel)
 end

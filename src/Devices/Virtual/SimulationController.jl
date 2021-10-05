@@ -13,6 +13,10 @@ Base.@kwdef mutable struct SimulationController <: VirtualDevice
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SimulationControllerParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
@@ -31,14 +35,18 @@ end
 getSimulationController(scanner::MPIScanner) = getSimulationControllers(scanner)[1]
 
 function init(simCont::SimulationController)
-  @info "Initializing simulation controller with ID `$(simCont.deviceID)`."
+  @debug "Initializing simulation controller with ID `$(simCont.deviceID)`."
 
   if !isnothing(simCont.params.initialCoilTemperatures)
     simCont.coilTemperatures = simCont.params.initialCoilTemperatures
   end
+
+  simCont.present = true
 end
 
 checkDependencies(simCont::SimulationController) = true
+
+Base.close(simCont::SimulationController) = nothing
 
 currentCoilTemperatures(simCont::SimulationController) = simCont.coilTemperatures
 currentCoilTemperatures(simCont::SimulationController, channelID::String) = simCont.coilTemperatures[channelID]

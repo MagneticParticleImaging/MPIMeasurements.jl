@@ -10,12 +10,17 @@ Base.@kwdef mutable struct SimulatedTemperatureSensor <: TemperatureSensor
   deviceID::String
   "Parameter struct for this devices read from the configuration."
   params::SimulatedTemperatureSensorParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 end
 
-init(sensor::SimulatedTemperatureSensor) = nothing
+init(sensor::SimulatedTemperatureSensor) = sensor.present = true
 checkDependencies(sensor::SimulatedTemperatureSensor) = true
+Base.close(sensor::SimulatedTemperatureSensor) = nothing
 
 numChannels(sensor::SimulatedTemperatureSensor) = 1
 getTemperature(sensor::SimulatedTemperatureSensor)::Vector{typeof(1u"°C")} = [42u"°C"]

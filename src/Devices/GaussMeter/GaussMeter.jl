@@ -4,10 +4,6 @@ export GaussMeter, getGaussMeters, getGaussMeter,  getXValue, getYValue, getZVal
 
 abstract type GaussMeter <: Device end
 
-include("DummyGaussMeter.jl")
-include("SimulatedGaussMeter.jl")
-#include("LakeShore.jl")
-
 Base.close(gauss::GaussMeter) = nothing
 
 @mustimplement getXValue(gauss::GaussMeter)
@@ -34,3 +30,8 @@ function getXYZValues(gauss::GaussMeter)
   values = [getXValue(gauss), getYValue(gauss), getZValue(gauss)]
   return gauss.params.coordinateTransformation*values
 end
+
+include("DummyGaussMeter.jl")
+include("SimulatedGaussMeter.jl")
+#include("LakeShore.jl")
+include("LakeShoreF71.jl")
