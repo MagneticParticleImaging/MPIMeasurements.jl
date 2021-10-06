@@ -2,7 +2,8 @@ export  Protocol, ProtocolParams, name, description, scanner, params, runProtoco
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
-        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent
+        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
+        OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent
 
 abstract type ProtocolParams end
 
@@ -88,12 +89,22 @@ end
 
 abstract type ProtocolEvent end
 
-@mustimplement init(protocol::Protocol)
+@mustimplement _init(protocol::Protocol)
 @mustimplement _execute(protocol::Protocol)
 @mustimplement cleanup(protocol::Protocol)
 @mustimplement stop(protocol::Protocol)
 @mustimplement resume(protocol::Protocol)
 @mustimplement cancel(protocol::Protocol)
+
+function init(protocol::Protocol)
+  # TODO check dependency/requirements
+  _init(protocol)
+  # Renew channel if it was closed
+  if !isopen(protocol.biChannel)
+    protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
+  end
+  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+end
 
 function execute(protocol::Protocol)
   protocol.executeTask = current_task()
@@ -130,7 +141,16 @@ end
 struct StopEvent <: ProtocolEvent end
 struct ResumeEvent <: ProtocolEvent end
 struct CancelEvent <: ProtocolEvent end
-struct OperationNotSupportedEvent <: ProtocolEvent end
+struct RestartEvent <: ProtocolEvent end
+struct OperationNotSupportedEvent <: ProtocolEvent
+  operation::ProtocolEvent
+end
+struct OperationSuccessfulEvent <: ProtocolEvent
+  operation::ProtocolEvent
+end
+struct OperationUnsuccessfulEvent <: ProtocolEvent
+  operation::ProtocolEvent
+end
 struct IllegaleStateEvent <: ProtocolEvent
   message::AbstractString
 end

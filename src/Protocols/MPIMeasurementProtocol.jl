@@ -1,6 +1,10 @@
 export MPIMeasurementProtocol, MPIMeasurementProtocolParams
 
 Base.@kwdef struct MPIMeasurementProtocolParams <: ProtocolParams
+  testParam::Float64
+  testParam2::Int64
+  testParam3::AbstractString
+  testParam4::Bool
   #sequenceName::AbstractString
 end
 MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)

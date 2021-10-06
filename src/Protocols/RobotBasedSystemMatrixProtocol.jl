@@ -1,11 +1,19 @@
 export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
-
+"""
+Parameters for the RobotBasedSystemMatrixProtocol
+"""
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
+  "Minimum wait time between robot movements"
   waitTime::Float64
+  "Number of background frames to measure for a background position"
   bgFrames::Int64
+  "Number of frames that are averaged for a foreground position"
   fgFrameAverages::Int64
+  "Sequence used for the calibration at each position"
   sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
+  "Flag if the calibration should be saved as a system matrix or not"
+  saveAsSystemMatrix::Bool = true
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   if haskey(dict, "Positions")
@@ -74,7 +82,7 @@ function SystemMatrixRobotMeas()
     Matrix{Float64}(undef,0,0))
 end
 
-function init(protocol::RobotBasedSystemMatrixProtocol)
+function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
@@ -109,7 +117,11 @@ function init(protocol::RobotBasedSystemMatrixProtocol)
   
   # TODO implement properly
   protocol.systemMeasState.temperatures = zeros(0, 0)
-  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  protocol.restored = false
 end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)

@@ -27,11 +27,13 @@ Base.@kwdef mutable struct AsyncMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
 end
 
-function init(protocol::AsyncMeasurementProtocol)
+function _init(protocol::AsyncMeasurementProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
-  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+  protocol.done = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
 end
 
 function _execute(protocol::AsyncMeasurementProtocol)
