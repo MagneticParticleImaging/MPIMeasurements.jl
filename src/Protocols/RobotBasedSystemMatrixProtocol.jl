@@ -148,6 +148,7 @@ function _execute(protocol::RobotBasedSystemMatrixProtocol)
   
   finished = false
   started = false
+  notifiedStop = false
   while !finished
     if !started
       if isfile("/tmp/sysObj.toml")
@@ -161,18 +162,35 @@ function _execute(protocol::RobotBasedSystemMatrixProtocol)
     finished = performCalibration(protocol)
     started = true
 
+    # Stopped 
+    notifiedStop = false
     while protocol.stopped
       handleEvents(protocol)
-      protocol.cancelled && throw(CancelException()) 
+      protocol.cancelled && throw(CancelException())
+      if !notifiedStop
+        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        notifiedStop = true
+      end
+      if !protocol.stopped
+        put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+      end
       sleep(0.05)
     end
   end
 
  
   put!(protocol.biChannel, FinishedNotificationEvent())
+  notifiedStop = false
   while !protocol.finishAcknowledged
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
+    if !notifiedStop
+      put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+      notifiedStop = true
+    end
+    if !protocol.stopped
+      put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+    end
     sleep(0.01)
   end
   @info "Protocol finished."
@@ -452,10 +470,12 @@ end
 
 function stop(protocol::RobotBasedSystemMatrixProtocol)
   protocol.stopped = true
+  # OperationSuccessfulEvent is put when it actually is in the stop loop
 end
 
 function resume(protocol::RobotBasedSystemMatrixProtocol)
   protocol.stopped = false
+  # OperationSuccessfulEvent is put when it actually leaves the stop loop
 end
 
 function cancel(protocol::RobotBasedSystemMatrixProtocol)
@@ -473,7 +493,8 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryE
 end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
-  if false 
+  if false
+    # TODO this should be some sort of storage failure event
     put!(protocol.biChannel, IllegaleStateEvent("Calibration measurement is not done yet. Cannot save!"))
   else
     store = event.datastore

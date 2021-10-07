@@ -112,6 +112,7 @@ function execute(protocol::Protocol)
     _execute(protocol)
   catch ex
     if ex isa CancelException
+      put!(protocol.biChannel, OperationSuccessfulEvent(CancelEvent()))
       close(protocol.biChannel)
     elseif ex isa IllegalStateException
       put!(protocol.biChannel, IllegaleStateEvent(ex.message))
