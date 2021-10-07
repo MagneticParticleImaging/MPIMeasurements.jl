@@ -9,11 +9,13 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   bgFrames::Int64
   "Number of frames that are averaged for a foreground position"
   fgFrameAverages::Int64
+  "Flag if the calibration should be saved as a system matrix or not"
+  saveAsSystemMatrix::Bool = true
+  "Number of background measurements to take"
+  bgMeas::Int64 = 0
   "Sequence used for the calibration at each position"
   sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
-  "Flag if the calibration should be saved as a system matrix or not"
-  saveAsSystemMatrix::Bool = true
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   if haskey(dict, "Positions")
@@ -89,6 +91,16 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState = SystemMatrixRobotMeas()
 
   #Prepare Positions
+  # Extend Positions to include background measurements
+  cartGrid = protocol.params.positions
+  if protocol.params.bgMeas == 0
+    positions = cartGrid
+  else
+    bgIdx = round.(Int64, range(1, stop=length(cartGrid)+protocol.params.bgMeas, length=protocol.params.bgMeas ) )
+    bgPos = namedPosition(getRobot(protocol.scanner),"park")
+    positions = BreakpointGridPositions(cartGrid, bgIdx, bgPos)
+  end
+  protocol.params.positions = positions
   measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(protocol.params.positions) : zeros(Bool,length(protocol.params.positions))
   numBGPos = sum(measIsBGPos)
   numFGPos = length(measIsBGPos) - numBGPos
