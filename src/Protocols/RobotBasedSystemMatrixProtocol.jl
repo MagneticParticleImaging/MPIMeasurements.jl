@@ -180,17 +180,9 @@ function _execute(protocol::RobotBasedSystemMatrixProtocol)
 
  
   put!(protocol.biChannel, FinishedNotificationEvent())
-  notifiedStop = false
   while !protocol.finishAcknowledged
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
-    if !notifiedStop
-      put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
-      notifiedStop = true
-    end
-    if !protocol.stopped
-      put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
-    end
     sleep(0.01)
   end
   @info "Protocol finished."
@@ -469,8 +461,14 @@ end
 
 
 function stop(protocol::RobotBasedSystemMatrixProtocol)
-  protocol.stopped = true
-  # OperationSuccessfulEvent is put when it actually is in the stop loop
+  calib = protocol.systemMeasState
+  if calib.currPos <= length(calib.positions)
+    # OperationSuccessfulEvent is put when it actually is in the stop loop
+    protocol.stopped = true
+  else 
+    # Stopped has no concept once all measurements are done
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+  end
 end
 
 function resume(protocol::RobotBasedSystemMatrixProtocol)
@@ -479,7 +477,7 @@ function resume(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 function cancel(protocol::RobotBasedSystemMatrixProtocol)
-  protocol.cancelled = true # Set cancel s.t. exception can be thrown we appropiate
+  protocol.cancelled = true # Set cancel s.t. exception can be thrown when appropiate
   protocol.stopped = true # Set stop to reach a known/save state
 end
 
@@ -503,7 +501,9 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     data = protocol.systemMeasState.signals
     positions = protocol.systemMeasState.positions
     isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
+    params["storeAsSystemMatrix"] = protocol.params.saveAsSystemMatrix
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
+    @show filename
     put!(protocol.biChannel, StorageSuccessEvent())
   end
 end
