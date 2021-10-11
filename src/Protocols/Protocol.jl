@@ -195,7 +195,9 @@ struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
   datastore::DatasetStore
   params::Dict
 end
-struct StorageSuccessEvent <: ProtocolEvent end
+struct StorageSuccessEvent <: ProtocolEvent
+  filename::AbstractString
+end
 
 function askConfirmation(protocol::Protocol, message::AbstractString)
   channel = biChannel(protocol)

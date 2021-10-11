@@ -188,5 +188,5 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   end
   filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
   @show filename
-  put!(protocol.biChannel, StorageSuccessEvent())
+  put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

@@ -504,7 +504,7 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     params["storeAsSystemMatrix"] = protocol.params.saveAsSystemMatrix
     filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
     @show filename
-    put!(protocol.biChannel, StorageSuccessEvent())
+    put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
 end
 
