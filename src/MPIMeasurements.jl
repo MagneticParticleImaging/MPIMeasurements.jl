@@ -43,7 +43,7 @@ end
 export addConfigurationPath
 
 const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
-addConfigurationPath(path::String) = push!(scannerConfigurationPath, path)
+addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? push!(scannerConfigurationPath, path) : nothing
 
 # circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
 """
