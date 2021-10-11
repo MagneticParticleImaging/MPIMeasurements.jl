@@ -1,14 +1,27 @@
 export MPIMeasurementProtocol, MPIMeasurementProtocolParams
-
-Base.@kwdef struct MPIMeasurementProtocolParams <: ProtocolParams
-  "Sequence to measure"
-  sequence::Union{Sequence, Nothing} = nothing
+"""
+Parameters for the MPIMeasurementProtocol
+"""
+Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
   fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
   bgFrames::Int64 = 1
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
+  "Sequence to measure"
+  sequence::Union{Sequence, Nothing} = nothing
+end
+function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+  sequence = nothing
+  if haskey(dict, "sequence")
+    sequence = Sequence(scanner, dict["sequence"])
+    dict["sequence"] = sequence
+    delete!(dict, "sequence")
+  end
+  params = params_from_dict(MPIMeasurementProtocolParams, dict)
+  params.sequence = sequence
+  return params
 end
 MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
 
@@ -25,6 +38,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   cancelled::Bool = false
   finishAcknowledged::Bool = false
   restart::Bool = false
+  measuring::Bool = false
 end
 
 function _init(protocol::MPIMeasurementProtocol)
@@ -66,6 +80,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
       acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
       measurement(protocol)
       protocol.bgMeas = protocol.scanner.seqMeasState.buffer
+      askChoices(protocol, "Press continue when foregrund measurement can be taken", ["Continue"])
     end
   end
 
@@ -76,6 +91,7 @@ end
 function measurement(protocol::MPIMeasurementProtocol)
   # Start async measurement
   scanner = protocol.scanner
+  protocol.measuring = true
   measState = asyncMeasurement(scanner, protocol.params.sequence)
   producer = measState.producer
   consumer = measState.consumer
@@ -86,6 +102,7 @@ function measurement(protocol::MPIMeasurementProtocol)
     protocol.cancelled && throw(CancelException())
     sleep(0.05)
   end
+  protocol.measuring = false
 
   # Check tasks
   if Base.istaskfailed(producer)
@@ -117,7 +134,7 @@ end
 
 function cancel(protocol::MPIMeasurementProtocol)
   protocol.cancelled = true
-  put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
+  #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
 end
 
@@ -145,9 +162,17 @@ end
 
 
 function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
-  framesTotal = protocol.scanner.seqMeasState.numFrames
-  framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
-  put!(protocol.biChannel, ProgressEvent(framesDone, framesTotal, "Frames", event))
+  reply = nothing
+  if length(protocol.bgMeas) > 0 && !protocol.measuring
+    reply = ProgressEvent(0, 1, "No bg meas", event)
+  elseif !isnothing(protocol.scanner.seqMeasState) 
+    framesTotal = protocol.scanner.seqMeasState.numFrames
+    framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
+    reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
+  else 
+    reply = ProgressEvent(0, 0, "N/A", event)  
+  end
+  put!(protocol.biChannel, reply)
 end
 
 handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true

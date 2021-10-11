@@ -1,9 +1,10 @@
 export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
         init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
-        InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, ProgressQueryEvent,
+        InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
-        OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent
+        OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
+
 
 abstract type ProtocolParams end
 
@@ -137,6 +138,14 @@ struct AnswerEvent <: ProtocolEvent
   answer::Bool
   question::DecisionEvent
 end
+struct MultipleChoiceEvent <: ProtocolEvent
+  message::AbstractString
+  choices::Vector{AbstractString}
+end
+struct ChoiceAnswerEvent <: ProtocolEvent
+  answer::Int64
+  question::MultipleChoiceEvent
+end
 
 # (Mandatory) Control flow events for all protocols
 struct StopEvent <: ProtocolEvent end
@@ -196,6 +205,22 @@ function askConfirmation(protocol::Protocol, message::AbstractString)
     event = take!(channel)
     # Note that for immutable objects the '==' does not guarantee that the reply is to the actual current question
     if event isa AnswerEvent && event.question == question 
+      return event.answer
+    else 
+      handleEvent(protocol, event)
+    end
+    sleep(0.001)
+  end
+end
+
+function askChoices(protocol::Protocol, message::AbstractString, choices::Vector{<:AbstractString})
+  channel = biChannel(protocol)
+  question = MultipleChoiceEvent(message, choices)
+  put!(channel, question)
+  while isopen(channel) || isready(channel)
+    event = take!(channel)
+    # Note that for immutable objects the '==' does not guarantee that the reply is to the actual current question
+    if event isa ChoiceAnswerEvent && event.question == question 
       return event.answer
     else 
       handleEvent(protocol, event)
