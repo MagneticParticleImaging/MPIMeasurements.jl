@@ -34,9 +34,6 @@ function convert(::Type{LakeShoreF71GaussMeterMeasurementModes}, x::String)
   end
 end
 
-# I only add this here until https://github.com/JuliaLang/julia/pull/42272 is decided.
-Base.convert(::Type{IPAddr}, str::AbstractString) = parse(IPAddr, str)
-
 Base.@kwdef struct LakeShoreF71GaussMeterParams <: DeviceParams
   connectionMode::LakeShoreF71GaussMeterConnectionModes = F71_CM_USB
   ip::IPAddr = ip"192.168.2.2"

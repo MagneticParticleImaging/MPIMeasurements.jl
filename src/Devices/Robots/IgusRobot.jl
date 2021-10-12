@@ -35,7 +35,7 @@ const MODES = Dict(
 Base.@kwdef struct IgusRobotParams <: DeviceParams
   defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10.0u"mm/s"]
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500.0]]u"mm"
-  ip::IPv4 = ip"192.168.1.3"
+  ip::IPAddr = ip"192.168.1.3"
   port::Int = 1111
   keepSocketOpen::Bool = true
   stepsPermm::Int = 100
