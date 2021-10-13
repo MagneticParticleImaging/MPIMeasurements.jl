@@ -41,6 +41,8 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   measuring::Bool = false
 end
 
+requiredDevices(protocol::MPIMeasurementProtocol) = [AbstractDAQ]
+
 function _init(protocol::MPIMeasurementProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))

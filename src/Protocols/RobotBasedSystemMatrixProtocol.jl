@@ -40,7 +40,6 @@ function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   return params
 end
 
-
 # Based on https://github.com/MagneticParticleImaging/MPIMeasurements.jl/tree/cde1c72b820a72b3c3dfa4235b2b37bd506b0109
 mutable struct SystemMatrixRobotMeas
   task::Union{Task,Nothing}
@@ -83,6 +82,8 @@ function SystemMatrixRobotMeas()
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
     Matrix{Float64}(undef,0,0))
 end
+
+requiredDevices(protocol::RobotBasedSystemMatrixProtocol) = [AbstractDAQ, Robot, SurveillanceUnit]
 
 function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
@@ -244,8 +245,6 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
       enable(robot)
       movePark(robot)
       disable(robot)
-      #saveasMDF(calib) # TODO implement saving
-      #removeTempFiles(protocol)
       
       finished = true
       break

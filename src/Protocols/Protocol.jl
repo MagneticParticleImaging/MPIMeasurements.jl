@@ -98,7 +98,7 @@ abstract type ProtocolEvent end
 @mustimplement cancel(protocol::Protocol)
 
 function init(protocol::Protocol)
-  # TODO check dependency/requirements
+  checkRequiredDevices(protocol)
   _init(protocol)
   # Renew channel if it was closed
   if !isopen(protocol.biChannel)
@@ -106,6 +106,22 @@ function init(protocol::Protocol)
   end
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
+
+function checkRequiredDevices(protocol::Protocol)
+  missingDevices = []
+  scanner = protocol.scanner
+  for device in requiredDevices(protocol)
+    if length(getDevices(scanner, device)) == 0
+      push!(missingDevices, device)
+    end
+  end
+  if length(missingDevices) > 0
+    message = "Protocol $(typeof(protocol)) is missing the following required devices: " * join(string.(missingDevices), ", ", " and ")
+    throw(IllegalStateException(message))
+  end
+end
+
+requiredDevices(protocol::Protocol) = []
 
 timeEstimate(protocol::Protocol) = "Unknown"
 
