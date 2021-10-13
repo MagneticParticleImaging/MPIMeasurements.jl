@@ -1,5 +1,5 @@
 export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
-        init, execute, cleanup, ProtocolEvent, InfoQueryEvent,
+        init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
@@ -106,6 +106,8 @@ function init(protocol::Protocol)
   end
   return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
+
+timeEstimate(protocol::Protocol) = "Unknown"
 
 function execute(protocol::Protocol)
   protocol.executeTask = current_task()

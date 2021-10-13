@@ -51,6 +51,21 @@ function _init(protocol::MPIMeasurementProtocol)
   protocol.bgMeas = zeros(Float32,0,0,0,0)
 end
 
+function timeEstimate(protocol::MPIMeasurementProtocol)
+  est = "Unknown"
+  if !isnothing(protocol.params.sequence)
+    params = protocol.params
+    seq = params.sequence
+    totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
+    samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
+    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxBandwidth(seq)))
+    time = totalTime * 1u"s"
+    est = string(time)
+    @show est
+  end
+  return est
+end
+
 function _execute(protocol::MPIMeasurementProtocol)
   @info "Measurement protocol started"
 
