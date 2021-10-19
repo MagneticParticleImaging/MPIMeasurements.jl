@@ -1,0 +1,61 @@
+[General]
+boreSize = "1111111111mm"
+facility = "Universitätsklinikum Hamburg-Eppendorf"
+manufacturer = "IBI"
+name = "MPS"
+topology = "MPS"
+gradient = "42T/m"
+#datasetStore = "/opt/data/MPS1"
+datasetStore = "/home/niklas/Documents/DatasetStores/store1"
+defaultProtocol = "MPSMeasurement"
+producerThreadID = 2
+consumerThreadID = 3
+protocolThreadID = 4
+
+[Devices]
+initializationOrder = [
+  "rp_cluster"
+  #, "txController"
+]
+
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+ips = ["192.168.1.100"]
+calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibFieldToVolt = [5, 5]
+ffRampUpTime = 0.1
+ffRampUpFraction = 1.0
+#passPDMToFastDAC = [false] #, false]
+
+[Devices.rp_cluster.chanx]
+type = "tx"
+channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+calibration = "20.79V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "0.017460815791201338mT/V"
+passPDMToFastDAC = true
+
+[Devices.rp_cluster.rx_main]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+
+[Devices.rp_cluster.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.ffx]
+type = "txSlow"
+channel = 1
+
+[Devices.txController]
+phaseAccuracy = 0.1
+amplitudeAccuracy = 0.1
+controlPause = 0.2
+maxControlSteps = 20
+

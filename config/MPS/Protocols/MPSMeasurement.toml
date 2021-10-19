@@ -1,0 +1,9 @@
+name = "MPSMeasurement"
+type = "MPIMeasurementProtocol"
+description = "Default measurement protocol for the MPS scanner. Acquires a background and forground measurement"
+targetScanner = "MPS"
+
+sequence = "MPSSequence"
+
+fgFrames = 1
+bgFrames = 1
