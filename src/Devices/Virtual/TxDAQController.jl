@@ -7,6 +7,12 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   maxControlSteps::Int64 = 20
   correctCrossCoupling::Bool = false
 end
+TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
+
+struct ControlledChannel
+  seqChannel::PeriodicElectricalChannel
+  daqChannel::TxChannelParams
+end
 
 Base.@kwdef mutable struct TxDAQController <: Device
   "Unique device ID for this device as defined in the configuration."
@@ -24,22 +30,27 @@ Base.@kwdef mutable struct TxDAQController <: Device
   desiredTx::Union{Matrix{ComplexF64}, Nothing} = nothing
   sinLUT::Union{Matrix{Float64}, Nothing} = nothing
   cosLUT::Union{Matrix{Float64}, Nothing} = nothing
-  controlledChannels::Vector{TxChannelParams} = []
+  controlledChannels::Vector{ControlledChannel} = []
 end
 
+checkDependencies(tx::TxDAQController) = true
+function init(tx::TxDAQController)
+  @info "Initializing TxDAQController with ID `$(tx.deviceID)`."
+  tx.present = true
+end
 
 function controlTx(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
-  controlledChannel = getControlledChannel(seq)
-  controlledIds = [id for id in id.(controlledChannel)]
+  seqControlledChannel = getControlledChannel(seq)
   missingControlDef = []
   txCont.controlledChannels = []
-  for id in controlledIds
-    chan = get(daq.params.channels, id, nothing)
-    if isnothing(chan) || isnothing(chan.feedback) || !in(chan.feedback.channelID, daq.refChanIDs)
-      push!(missingControlDef, id)
+  for seqChannel in seqControlledChannel
+    name = id(seqChannel)
+    daqChannel = get(daq.params.channels, name, nothing)
+    if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
+      push!(missingControlDef, name)
     else 
-      push!(txCont.controlledChannels, chan)
+      push!(txCont.controlledChannels, ControlledChannel(seqChannel, daqChannel))
     end
   end
   if length(missingControlDef) > 0
@@ -48,7 +59,7 @@ function controlTx(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, in
   end
 
   # Check that channels only have one component
-  if any(x -> length(x.components) > 1, controlledChannel)
+  if any(x -> length(x.components) > 1, seqControlledChannel)
     throw(IllegalStateException("Sequence has channel with more than one component. Such a channel cannot be controlled by this controller"))
   end
 
@@ -60,24 +71,29 @@ function controlTx(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, in
     end
   end
 
-  # Prepare init and LUT values
+  # Prepare values
   if isnothing(initTx)
-    txCont.currTx = convert(Matrix{ComplexF64}, diagm(ustrip.(u"V", [limitPeak(daq, id(channel))/10 for channel in controlled])))
+    txCont.currTx = convert(Matrix{ComplexF64}, diagm(ustrip.(u"V", [channel.daqChannel.limitPeak/10 for channel in txCont.controlledChannels])))
   else 
     txCont.currTx = initTx
   end
-  sinLUT, cosLUt = createLUTs(txCont, seq::Sequence)
+  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq::Sequence)
   txCont.sinLUT = sinLUT
   txCont.cosLUT = cosLUt
+  Ω = calcDesiredField(seqControlledChannel)
+
+  # Start Tx
+  setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+  startTx(daq)
 
   controlPhaseDone = false
   i = 1
   while !controlPhaseDone && i <= txCont.params.maxControlSteps
     @info "CONTROL STEP $i"
     period = currentPeriod(daq)
-    uMeas, uRef = readDataPeriods(daq, 1, period + 1)
+    uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    controlPhaseDone = doControlStep(txCont, daq, seq, uRef)
+    controlPhaseDone = doControlStep(txCont, daq, seq, uRef, Ω)
 
     sleep(txCont.params.controlPause)
     i += 1
@@ -99,23 +115,23 @@ function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
       push!(amps, abs(Γ[d, e]))
       push!(phs, angle(Γ[d, e]))
     end
-    amplitudes[channel] = amps
-    phases[channel] = phs
+    amplitudes[id(channel.seqChannel)] = amps
+    phases[id(channel.seqChannel)] = phs
   end
   return amplitudes, phases
 end
 
-function createLUTs(txCont::TxDAQController, seq::Sequence)
+function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence)
   N = rxNumSamplingPoints(seq)
-  D = length(txCont.controlledChannels)
-  dfCycle = ustrip(dfCycle(seq))
+  D = length(seqChannel)
+  cycle = ustrip(dfCycle(seq))
   base = ustrip(dfBaseFrequency(seq))
-  dfFreq = [base/x.components[1].divider for x in txCont.controlledChannels]
+  dfFreq = [base/x.components[1].divider for x in seqChannel]
   
   sinLUT = zeros(N,D)
   cosLUT = zeros(N,D)
   for d=1:D
-    Y = round(Int64, dfCycle*dfFreq[d] )
+    Y = round(Int64, cycle*dfFreq[d] )
     for n=1:N
       sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
       cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
@@ -124,23 +140,22 @@ function createLUTs(txCont::TxDAQController, seq::Sequence)
   return sinLUT, cosLUT
 end
 
-function doControlStep(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, uRef)
+function doControlStep(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, uRef, Ω::Matrix)
 
-  Γ = calcFieldFromRef(daq,uRef)
-  Ω = calcDesiredField(txCont, daq, seq)
+  Γ = calcFieldFromRef(txCont, daq,seq, uRef)
 
   @info "reference Γ=" Γ
 
-  if controlStepSuccessful(Γ, Ω, daq)
+  if controlStepSuccessful(Γ, Ω, txCont)
     @info "Could control"
     return true
   else
-    newTx = newDFValues(Γ, Ω, daq)
+    newTx = newDFValues(Γ, Ω, txCont)
     oldTx = txCont.currTx
     @info "oldTx=" oldTx 
     @info "newTx=" newTx
 
-    if checkDFValues(newTx, oldTx, Γ, daq)
+    if checkDFValues(newTx, oldTx, Γ,txCont, daq)
       txCont.currTx[:] = newTx
       setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
     else
@@ -158,7 +173,7 @@ function calcFieldFromRef(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Seque
 
   for d=1:len
     for e=1:len
-      c = ustrip(u"mT/V", txCont.controlledChannels[d].feedback.calibration)
+      c = ustrip(u"mT/V", txCont.controlledChannels[d].daqChannel.feedback.calibration)
 
       uVolt = float(uRef[1:rxNumSamplingPoints(seq),d,1])
 
@@ -171,8 +186,8 @@ function calcFieldFromRef(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Seque
   return Γ
 end
 
-function calcDesiredField(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence)
-  temp = [ustrip(ch.components[1].amplitude[1]) * exp(im*ustrip(ch.components[1].phase[1])) for ch in txCont.controlledChannels]
+function calcDesiredField(seqChannel::Vector{PeriodicElectricalChannel})
+  temp = [ustrip(ch.components[1].amplitude[1]) * exp(im*ustrip(ch.components[1].phase[1])) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
@@ -187,7 +202,7 @@ function controlStepSuccessful(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   @info "Ω = " Ω
   @info "Γ = " Γ
   @info "Ω - Γ = " diff
-  @info "deviation = $(deviation)   allowed= $(txCOnt.txCont.params.amplitudeAccuracy)"
+  @info "deviation = $(deviation)   allowed= $(txCont.txCont.params.amplitudeAccuracy)"
   return deviation < txCont.params.amplitudeAccuracy
 end
 
@@ -213,12 +228,12 @@ end
 
 function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController, daq::RedPitayaDAQ)
 
-  calibFieldToVoltEstimate = [ustrip(u"V/mT", daq.params.channels[id(ch)].calibration) for ch in txCont.controlledChannels]
+  calibFieldToVoltEstimate = [ustrip(u"V/mT", ch.daqChannel.calibration) for ch in txCont.controlledChannels]
   calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ)) 
 
   deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
 
   @info "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
 
-  return all( abs.(newTx) .<  ustrip.(u"V", [limitPeak(daq, id(channel)) for channel in controlled]) ) && maximum( deviation ) < 0.2
+  return all( abs.(newTx) .<  ustrip.(u"V", [channel.daqChannel.limitPeak for channel in txCont.controlledChannels]) ) && maximum( deviation ) < 0.2
 end

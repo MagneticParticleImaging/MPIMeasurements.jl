@@ -1,4 +1,4 @@
-function startTxAndControl(seqCont::SequenceController)
+#=function startTxAndControl(seqCont::SequenceController)
   daq = dependency(seqCont, AbstractDAQ)
 
   startTx(daq)
@@ -160,3 +160,4 @@ function doControlStep(daq::AbstractDAQ, uRef)
     return false
   end
 end
+=#

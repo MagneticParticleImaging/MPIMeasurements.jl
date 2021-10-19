@@ -14,13 +14,13 @@ protocolThreadID = 4
 
 [Devices]
 initializationOrder = [
+  "txController",
   "rp_cluster"
-  #, "txController"
 ]
 
 [Devices.rp_cluster]
 deviceType = "RedPitayaDAQ"
-dependencies = []
+dependencies = ["txController"]
 ips = ["192.168.1.100"]
 calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
@@ -54,8 +54,9 @@ type = "txSlow"
 channel = 1
 
 [Devices.txController]
+deviceType = "TxDAQController"
 phaseAccuracy = 0.1
 amplitudeAccuracy = 0.1
 controlPause = 0.2
 maxControlSteps = 20
-
+correctCrossCoupling = false

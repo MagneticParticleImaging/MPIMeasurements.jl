@@ -11,6 +11,8 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   measureBackground::Bool = true
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
+  "If set the tx amplitude and phase will be set with control steps"
+  controlTx::Bool = false
 end
 function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
   sequence = nothing
@@ -41,7 +43,13 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   measuring::Bool = false
 end
 
-requiredDevices(protocol::MPIMeasurementProtocol) = [AbstractDAQ]
+function requiredDevices(protocol::MPIMeasurementProtocol)
+  result = [AbstractDAQ]
+  if protocol.params.controlTx
+    push!(result, TxDAQController)
+  end
+  return result
+end
 
 function _init(protocol::MPIMeasurementProtocol)
   if isnothing(protocol.params.sequence)

@@ -482,11 +482,16 @@ function stopTx(daq::RedPitayaDAQ)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function prepareTx(daq::RedPitayaDAQ, sequence::Sequence; allowControlLoop = false)
+function prepareTx(daq::RedPitayaDAQ, sequence::Sequence; allowControlLoop::Bool = true)
   stopTx(daq)
 
-  if needsControl(sequence) && allowControlLoop && false # False for now
-    controlLoop(daq)
+  if needsControl(sequence) && allowControlLoop
+    if !hasDependency(daq, TxDAQController)
+      throw(IllegalStateException("Sequence preparation requires control but no TxDAQController was found"))
+    end
+    clearSequence(daq.rpc) # Make sure no sequence is loaded atm
+    txController = dependency(daq, TxDAQController)
+    controlTx(txController, daq, sequence, txController.currTx)
   else 
     # TODO setTxParams
     allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
@@ -525,6 +530,24 @@ Note: `amplitudes` and `phases` are defined as a dictionary of
 vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+  for (channelID, components_) in phases
+    for (componentIdx, phase_) in enumerate(components_)
+      if !isnothing(phase_)
+        phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, phase_)
+      end
+    end
+  end
+
+  for (channelID, components_) in amplitudes
+    for (componentIdx, amplitude_) in enumerate(components_)
+      if !isnothing(amplitude_) 
+        amplitudeDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, amplitude_)
+      end
+    end
+  end
+end
+
 function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
   # Determine the worst case voltage per channel 
   # Note: this would actually need a fourier synthesis with the given signal type,
@@ -581,11 +604,12 @@ function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, nu
   return uMeas, uRef
 end
 
-function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod)
-  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, daq.params.acqNumAverages)
+function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod, acqNumAverages)
+  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages)
 
   # TODO: Should be replaced when https://github.com/tknopp/RedPitayaDAQServer/pull/32 is resolved
-  c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
+  #c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
+  c = daq.params.calibIntToVolt
   for d=1:size(u,2)
     u[:,d,:,:] .*= c[1,d]
     u[:,d,:,:] .+= c[2,d]
