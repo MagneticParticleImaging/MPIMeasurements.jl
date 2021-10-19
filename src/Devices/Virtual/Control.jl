@@ -39,8 +39,6 @@ function controlLoop(seqCont::SequenceController)
 end
 
 function controlLoop_(daq::AbstractDAQ)
-  N = daq.params.numSampPerPeriod
-  numChannels = numTxChannels(daq)
   @info "Init control with Tx= " daq.params.currTx
   @info daq.params.correctCrossCoupling
 
@@ -61,11 +59,10 @@ function controlLoop_(daq::AbstractDAQ)
     sleep(daq.params.controlPause)
     i += 1
   end
-
-  # TODO: This is not generic!
-  setTxParams(daq, daq.params.currTx.*0.0, postpone=false) # disable tx for now
-  setTxParams(daq, daq.params.currTx, postpone=true) # set value for next true measurement
-  return nothing
+  stopTx(daq)
+  
+  setTxParams(daq, daq.params.currTx) # set value for next true measurement
+  return 
 end
 
 function calcFieldFromRef(daq::AbstractDAQ, uRef)
