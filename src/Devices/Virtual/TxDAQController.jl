@@ -202,7 +202,7 @@ function controlStepSuccessful(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   @info "Ω = " Ω
   @info "Γ = " Γ
   @info "Ω - Γ = " diff
-  @info "deviation = $(deviation)   allowed= $(txCont.txCont.params.amplitudeAccuracy)"
+  @info "deviation = $(deviation)   allowed= $(txCont.params.amplitudeAccuracy)"
   return deviation < txCont.params.amplitudeAccuracy
 end
 

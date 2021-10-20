@@ -531,6 +531,19 @@ vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
 function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+  for (channelID, components_) in amplitudes
+    channelVoltage = 0
+    for amplitude_ in components_
+      if !isnothing(amplitude_)
+        channelVoltage += amplitude_
+      end
+    end
+      
+    if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
+      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
+    end
+  end
+  
   for (channelID, components_) in phases
     for (componentIdx, phase_) in enumerate(components_)
       if !isnothing(phase_)
