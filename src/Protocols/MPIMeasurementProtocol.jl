@@ -130,18 +130,27 @@ function measurement(protocol::MPIMeasurementProtocol)
   protocol.measuring = false
 
   # Check tasks
+  ex = nothing
   if Base.istaskfailed(producer)
     @error "Producer failed"
     stack = Base.catch_stack(producer)[1]
     @error stack[1]
     @error stacktrace(stack[2])
+    ex = stack[1]
   end
   if  Base.istaskfailed(consumer)
     @error "Consumer failed"
     stack = Base.catch_stack(consumer)[1]
     @error stack[1]
     @error stacktrace(stack[2])
+    if isnothing(ex)
+      ex = stack[1]
+    end
   end
+  if !isnothing(ex)
+    throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
+  end
+
 end
 
 
