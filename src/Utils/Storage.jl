@@ -1,5 +1,5 @@
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
                             params::Dict; bgdata::Union{Array{Float32,4},Nothing}=nothing)
 
   mdf = MDFv2InMemory()
@@ -24,7 +24,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 end
 
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, 
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
   positions::Positions, isBackgroundFrame::Vector{Bool}, params::Dict)
 
   mdf = MDFv2InMemory()
@@ -63,14 +63,14 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Di
        Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"]))) : nothing
 
   subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
-  
+
   # TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
   # params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
 
   fov = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
   fovCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
   size = shape(subgrid)
-  
+
   method = "robot"
   offsetFields = nothing
   order = "xyz"
@@ -112,7 +112,7 @@ function fillMDFStudy(mdf::MDFv2InMemory, study::Study)
     description = "n.a.",
     name = study.name,
     number = 0, # FIXME: This is never set!!!!!!
-    time = study.date, 
+    time = study.date,
     uuid = study.uuid
   )
   return
@@ -148,7 +148,7 @@ function fillMDFTracer(mdf::MDFv2InMemory, params::Dict)
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4}, 
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
                             bgdata::Union{Array{Float32,4}, Nothing})
 
   # /measurement/ subgroup
@@ -159,7 +159,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
     data_ = data
   else
     numBGFrames = size(bgdata,4)
-    data_ = cat(bgdata, data, dims=4) 
+    data_ = cat(bgdata, data, dims=4)
     isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
     numFrames = numFrames + numBGFrames
   end
@@ -168,7 +168,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4}, 
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
   isBackgroundFrame::Vector{Bool})
 
   # /measurement/ subgroup
@@ -223,7 +223,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
   # transferFunction
   if hasTransferFunction(scanner)
     numFreq = div(numSamplingPoints_,2)+1
-    freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
+    freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence)/2)
     tf_ =  TransferFunction(scanner)
     tf = tf_[freq,1:numRxChannels_]
     rxTransferFunction(mdf, tf)
