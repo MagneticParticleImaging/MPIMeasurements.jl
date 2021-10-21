@@ -377,7 +377,7 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
   scanner.seqMeasState = measState
 end
 
-function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence)
+function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
   su = nothing
   # TODO dependency does not work because MPIScanner is not a device
   #if hasDependency(scanner, SurveillanceUnit)
@@ -392,7 +392,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
   #end
 
   daq = getDAQ(scanner)
-  asyncProducer(channel, daq, sequence)
+  asyncProducer(channel, daq, sequence, prepTx = prepTx)
   #disconnect(daq)
 
   if !isnothing(su)

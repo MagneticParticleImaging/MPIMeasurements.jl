@@ -33,14 +33,15 @@ Base.@kwdef mutable struct TxDAQController <: Device
   controlledChannels::Vector{ControlledChannel} = []
 end
 
-checkDependencies(tx::TxDAQController) = true
+checkDependencies(tx::TxDAQController) = hasDependency(tx, AbstractDAQ)
 function init(tx::TxDAQController)
   @info "Initializing TxDAQController with ID `$(tx.deviceID)`."
   tx.present = true
 end
 
-function controlTx(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
+function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
+  daq = dependency(txCont, AbstractDAQ)
   seqControlledChannel = getControlledChannel(seq)
   missingControlDef = []
   txCont.controlledChannels = []
@@ -93,7 +94,7 @@ function controlTx(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, in
     period = currentPeriod(daq)
     uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    controlPhaseDone = doControlStep(txCont, daq, seq, uRef, Ω)
+    controlPhaseDone = doControlStep(txCont, seq, uRef, Ω)
 
     sleep(txCont.params.controlPause)
     i += 1
@@ -140,9 +141,10 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   return sinLUT, cosLUT
 end
 
-function doControlStep(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, uRef, Ω::Matrix)
+function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
 
-  Γ = calcFieldFromRef(txCont, daq,seq, uRef)
+  Γ = calcFieldFromRef(txCont,seq, uRef)
+  daq = dependency(txCont, AbstractDAQ)
 
   @info "reference Γ=" Γ
 
@@ -155,7 +157,7 @@ function doControlStep(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence
     @info "oldTx=" oldTx 
     @info "newTx=" newTx
 
-    if checkDFValues(newTx, oldTx, Γ,txCont, daq)
+    if checkDFValues(newTx, oldTx, Γ,txCont)
       txCont.currTx[:] = newTx
       setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
     else
@@ -167,7 +169,7 @@ function doControlStep(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence
   end
 end
 
-function calcFieldFromRef(txCont::TxDAQController, daq::RedPitayaDAQ, seq::Sequence, uRef)
+function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
   len = length(txCont.controlledChannels)
   Γ = zeros(ComplexF64, len, len)
 
@@ -226,7 +228,7 @@ function newDFValues(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   return newTx
 end
 
-function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController, daq::RedPitayaDAQ)
+function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
 
   calibFieldToVoltEstimate = [ustrip(u"V/mT", ch.daqChannel.calibration) for ch in txCont.controlledChannels]
   calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ)) 

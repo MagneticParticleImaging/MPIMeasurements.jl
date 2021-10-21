@@ -482,45 +482,37 @@ function stopTx(daq::RedPitayaDAQ)
   #RedPitayaDAQServer.disconnect(daq.rpc)
 end
 
-function prepareTx(daq::RedPitayaDAQ, sequence::Sequence; allowControlLoop::Bool = true)
-  stopTx(daq)
+function prepareControl(daq::RedPitayaDAQ)
+  clearSequence(daq.rpc)
+end
 
-  if needsControl(sequence) && allowControlLoop
-    if !hasDependency(daq, TxDAQController)
-      throw(IllegalStateException("Sequence preparation requires control but no TxDAQController was found"))
-    end
-    clearSequence(daq.rpc) # Make sure no sequence is loaded atm
-    txController = dependency(daq, TxDAQController)
-    controlTx(txController, daq, sequence, txController.currTx)
-  else 
-    # TODO setTxParams
-    allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
-    allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
-    for channel in periodicElectricalTxChannels(sequence)
-      name = id(channel)
-      amps = []
-      phases = []
-      for comp in components(channel)
-        # Lengths check == 1 happens in setupTx already
-        amp = amplitude(comp)
-        if dimension(amp) == dimension(1.0u"T")
-          tmp = ustrip(u"T", amp)
-          # TODO move calib to channel
-          amp = (tmp * daq.params.calibFieldToVolt[channelIdx(daq, name)]) * 1u"V"
-        end
-        push!(amps, amp)
-        push!(phases, phase(comp))
+function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
+  stopTx(daq)
+  @info "Preparing amplitude and phase"
+  allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
+  allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
+  for channel in periodicElectricalTxChannels(sequence)
+    name = id(channel)
+    amps = []
+    phases = []
+    for comp in components(channel)
+      # Lengths check == 1 happens in setupTx already
+      amp = amplitude(comp)
+      if dimension(amp) == dimension(1.0u"T")
+        tmp = ustrip(u"T", amp)
+        # TODO move calib to channel
+        amp = (tmp * daq.params.calibFieldToVolt[channelIdx(daq, name)]) * 1u"V"
       end
-      
-      allAmps[name] = amps
-      
-      allPhases[name] = phases
+      push!(amps, amp)
+      push!(phases, phase(comp))
+    end
     
-    end 
-    setTxParams(daq, allAmps, allPhases)
-    #tx = daq.params.calibFieldToVolt.*daq.params.dfStrength.*exp.(im*daq.params.dfPhase)
-    #setTxParams(daq, convert(Matrix{ComplexF64}, diagm(tx)))
-  end
+    allAmps[name] = amps
+    
+    allPhases[name] = phases
+  
+  end 
+  setTxParams(daq, allAmps, allPhases)
 end
 
 """
@@ -575,7 +567,6 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
       error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
     end
   end
-    
   
   for (channelID, components_) in phases
     for (componentIdx, phase_) in enumerate(components_)

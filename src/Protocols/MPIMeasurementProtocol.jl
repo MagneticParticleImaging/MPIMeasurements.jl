@@ -7,12 +7,12 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
   bgFrames::Int64 = 1
+  "If set the tx amplitude and phase will be set with control steps"
+  controlTx::Bool = false
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
-  "If set the tx amplitude and phase will be set with control steps"
-  controlTx::Bool = false
 end
 function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
   sequence = nothing
@@ -41,6 +41,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
   restart::Bool = false
   measuring::Bool = false
+  txCont::Union{TxDAQController, Nothing} = nothing
 end
 
 function requiredDevices(protocol::MPIMeasurementProtocol)
@@ -58,6 +59,16 @@ function _init(protocol::MPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
+  if protocol.params.controlTx
+    controllers = getDevices(protocol.scanner, TxDAQController)
+    if length(controllers) > 1
+      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
+    end
+    protocol.txCont = controllers[1]
+    protocol.txCont.currTx = nothing
+  else
+    protocol.txCont = nothing
+  end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
 end
 
@@ -115,9 +126,8 @@ end
 
 function measurement(protocol::MPIMeasurementProtocol)
   # Start async measurement
-  scanner = protocol.scanner
   protocol.measuring = true
-  measState = asyncMeasurement(scanner, protocol.params.sequence)
+  measState = asyncMeasurement(protocol)
   producer = measState.producer
   consumer = measState.consumer
   
@@ -151,6 +161,19 @@ function measurement(protocol::MPIMeasurementProtocol)
     throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
   end
 
+end
+
+function asyncMeasurement(protocol::MPIMeasurementProtocol)
+  scanner = protocol.scanner
+  sequence = protocol.params.sequence
+  prepareAsyncMeasurement(scanner, sequence)
+  if protocol.params.controlTx
+    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+  end
+  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
+  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
+  return scanner.seqMeasState
 end
 
 
