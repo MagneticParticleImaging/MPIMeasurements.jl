@@ -4,7 +4,7 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
        asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
-       getProtocolList, setProtocol
+       getProtocolList, setProtocol, getTransferFunctionList
 
 """
     $(SIGNATURES)

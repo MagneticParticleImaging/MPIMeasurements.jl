@@ -7,6 +7,7 @@ topology = "MPS"
 gradient = "42T/m"
 datasetStore = "/opt/data/MPS1"
 #datasetStore = "/home/niklas/Documents/DatasetStores/store1"
+transferFunction = "TF200316_Tconnector"
 defaultProtocol = "MPSMeasurement"
 producerThreadID = 2
 consumerThreadID = 3
@@ -55,6 +56,7 @@ channel = 1
 
 [Devices.txController]
 deviceType = "TxDAQController"
+dependencies = ["rp_cluster"]
 phaseAccuracy = 0.1
 amplitudeAccuracy = 0.1
 controlPause = 0.2
