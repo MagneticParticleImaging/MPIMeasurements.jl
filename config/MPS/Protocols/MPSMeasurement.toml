@@ -4,6 +4,6 @@ description = "Default measurement protocol for the MPS scanner. Acquires a back
 targetScanner = "MPS"
 
 sequence = "MPSSequence"
-
-fgFrames = 1
-bgFrames = 1
+controlTx = true
+fgFrames = 10
+bgFrames = 10
