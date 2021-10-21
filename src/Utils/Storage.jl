@@ -223,7 +223,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
   # transferFunction
   if hasTransferFunction(scanner)
     numFreq = div(numSamplingPoints_,2)+1
-    freq = collect(0:(numFreq-1))./(numFreq-1).*rxBandwidth(sequence)
+    freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
     tf_ =  TransferFunction(scanner)
     tf = tf_[freq,1:numRxChannels_]
     rxTransferFunction(mdf, tf)
