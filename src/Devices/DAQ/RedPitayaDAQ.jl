@@ -428,7 +428,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
   # The decimation can only be a power of 2 beginning with 8
-  decimation_ = upreferred(txBaseFrequency(sequence)/rxBandwidth(sequence))
+  decimation_ = upreferred(txBaseFrequency(sequence)/rxSamplingRate(sequence))
   if decimation_ in [2^n for n in 3:8]
     daq.decimation = decimation_
   else
