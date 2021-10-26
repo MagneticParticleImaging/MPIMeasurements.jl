@@ -14,7 +14,7 @@ struct ControlledChannel
   daqChannel::TxChannelParams
 end
 
-Base.@kwdef mutable struct TxDAQController <: Device
+Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
   "Parameter struct for this devices read from the configuration."
@@ -189,7 +189,7 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
 end
 
 function calcDesiredField(seqChannel::Vector{PeriodicElectricalChannel})
-  temp = [ustrip(ch.components[1].amplitude[1]) * exp(im*ustrip(ch.components[1].phase[1])) for ch in seqChannel]
+  temp = [ustrip(amplitude(ch.components[1])) * exp(im*ustrip(phase(ch.components[1]))) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 

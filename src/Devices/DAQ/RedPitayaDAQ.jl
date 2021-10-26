@@ -499,9 +499,7 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
       # Lengths check == 1 happens in setupTx already
       amp = amplitude(comp)
       if dimension(amp) == dimension(1.0u"T")
-        tmp = ustrip(u"T", amp)
-        # TODO move calib to channel
-        amp = (tmp * daq.params.calibFieldToVolt[channelIdx(daq, name)]) * 1u"V"
+        amp = (amp * calibration(daq, name))
       end
       push!(amps, amp)
       push!(phases, phase(comp))
@@ -532,7 +530,7 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Fl
     end
       
     if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
-      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
+      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
     end
   end
   
@@ -564,7 +562,7 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
     end
       
     if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
-      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit.")
+      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
     end
   end
   
