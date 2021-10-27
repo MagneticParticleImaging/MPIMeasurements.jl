@@ -3,6 +3,7 @@ export DummyRobot, DummyRobotParams
 Base.@kwdef struct DummyRobotParams <: DeviceParams
   test::String = "" # WARNING: this is needed since otherwise the constructor cannot be called
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
+  coordinateSystem::RobotCoordinateSystem = RobotCoordinateSystem()
 end
 
 DummyRobotParams(dict::Dict) = params_from_dict(DummyRobotParams, dict)
