@@ -2,6 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
+export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots
 export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toScannerCoords, toRobotCoords
 export RobotCoordinateSystem, coordinateSystem
 
@@ -98,14 +99,13 @@ function getRobot(scanner::MPIScanner)
   end
 end
 
+include("CollisionModule/CollisionModule.jl")
 include("RobotExceptions.jl")
 include("DummyRobot.jl")
 include("SimulatedRobot.jl")
 include("IgusRobot.jl")
 include("IselRobot.jl")
 include("BrukerRobot.jl")
-include("Safety.jl")
-include("KnownSetups.jl")
 
 function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   if haskey(namedPositions(rob), pos_name)
@@ -116,8 +116,8 @@ function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   end
 end
 
-function teachPos(rob::Robot, pos_name::AbstractString; override=false)
-  pos = getPosition(rob)
+function teachNamedPosition(rob::Robot, pos_name::AbstractString; override=false)
+  pos = getPositionScannerCoords(rob)
   if haskey(namedPositions(rob), pos_name)
     if !override
       throw(RobotTeachError(rob, pos_name))
@@ -129,7 +129,7 @@ function teachPos(rob::Robot, pos_name::AbstractString; override=false)
   end
 end
 
-function saveTeachedPos(rob::Robot)
+function exportNamedPositions(rob::Robot)
   println("To save the positions, that have been tought in the current session copy and paste the following section into the config file: ")
   println()
   println("[Devices.$(deviceID(rob)).namedPositions]")

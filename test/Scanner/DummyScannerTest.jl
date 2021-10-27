@@ -82,11 +82,11 @@
       doReferenceDrive(rob)
       @test isReferenced(rob)
       moveAbs(rob, [1,1,1]u"mm")
-      teachPos(rob, "pos1")
+      teachNamedPosition(rob, "pos1")
       @test issetequal(keys(namedPositions(rob)), ["origin", "pos1"])
 
       moveAbs(rob, 2u"mm",2u"mm",2u"mm")
-      teachPos(rob, "pos2")
+      teachNamedPosition(rob, "pos2")
       gotoPos(rob, "pos1")
       @test getPosition(rob) == [1,1,1]u"mm"
 

@@ -44,10 +44,10 @@ if ask_dialog("You are trying to start the Isel robot hardware test. Please ensu
     @test ask_dialog("Did the robot move to [50mm,0mm,0mm]?")
     @test getPosition(rob)==[50,0,0]u"mm"
 
-    teachPos(rob, "pos1")
+    teachNamedPosition(rob, "pos1")
     @test issetequal(keys(namedPositions(rob)), ["origin", "pos1"])
     @test namedPositions(rob)["pos1"] == [50,0,0]u"mm"
-    @test_throws RobotTeachError teachPos(rob, "pos1")
+    @test_throws RobotTeachError teachNamedPosition(rob, "pos1")
 
     moveAbs(rob, [10,10,10]u"mm",20u"mm/s")
     @test ask_dialog("Did the robot move faster to [10mm,10mm,10mm]?")
