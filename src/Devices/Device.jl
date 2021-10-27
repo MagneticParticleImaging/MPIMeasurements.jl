@@ -1,5 +1,7 @@
 export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, checkDependencies
 
+abstract type VirtualDevice <: Device end
+
 """
 Abstract type for all device parameters
 
