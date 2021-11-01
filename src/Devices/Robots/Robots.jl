@@ -3,7 +3,7 @@ using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
 export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots, ScannerCoords, RobotCoords, toRobotCoords, toScannerCoords
-export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin
+export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, moveRobotOrigin, moveScannerOrigin
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -171,6 +171,14 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
     setstate!(rob, ERROR)
     throw(RobotDeviceError(rob, exc))
   end
+end
+
+function moveScannerOrigin(rob::Robot, speed::Union{Vector{<:Unitful.Velocity}, Unitful.Velocity, Nothing} = nothing)
+  moveAbs(rob, ScannerCoords(zeros(dof(rob)) * u"mm"), speed)
+end
+
+function moveRobotOrigin(rob::Robot, speed::Union{Vector{<:Unitful.Velocity}, Unitful.Velocity, Nothing} = nothing)
+  moveAbs(rob, RobotCoords(zeros(dof(rob)) * u"mm"), speed)
 end
 
 moveRel(rob::Robot, dist::Vararg{Unitful.Length,N}) where N = moveRel(rob, [dist...])
