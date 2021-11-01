@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots
+export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots, ScannerCoords, RobotCoords, toRobotCoords, toScannerCoords
 export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
@@ -49,7 +49,7 @@ checkDependencies(rob::Robot) = true
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
-namedPosition(rob::Robot, pos::AbstractString) = params(rob).namedPositions[pos]
+namedPosition(rob::Robot, pos::AbstractString) = RobotCoords(params(rob).namedPositions[pos])
 
 # should return a matrix of shape dof(rob)×dof(rob)
 scannerCoordAxes(rob::Robot) = :scannerCoordAxes in fieldnames(typeof(params(rob))) ? params(rob).scannerCoordAxes : Matrix(1.0LinearAlgebra.I, dof(rob), dof(rob))
@@ -123,11 +123,13 @@ function toRobotCoords(rob::Robot, coords::ScannerCoords)
   rotated = inv(scannerCoordAxes(rob)) * coords.data
   return RobotCoords(rotated + scannerCoordOrigin(rob))
 end
+toRobotCoords(rob::Robot, coords::RobotCoords) = coords
 
 function toScannerCoords(rob::Robot, coords::RobotCoords)
   shifted = coords.data - scannerCoordOrigin(rob)
   return ScannerCoords(scannerCoordAxes(rob) * shifted)
 end
+toScannerCoords(rob::Robot, coords::ScannerCoords) = coords
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::AbstractVector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
