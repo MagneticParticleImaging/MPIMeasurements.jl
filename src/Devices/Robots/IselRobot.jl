@@ -77,6 +77,13 @@ Base.@kwdef mutable struct IselRobot <: Robot
   controllerVersion::Int = 1
 end
 
+abstract type IselControllerVersion end
+struct IselC142 <: IselControllerVersion end
+struct IseliMCS8 <: IselControllerVersion end
+
+controllverVersion(rob::IselRobot) = rob.controllerVersion == 1 ? IselC142() : IseliMCS8()
+functionUnavailable(func::AbstractString, version::IselControllerVersion) =   @error "The $func function is not available for Isel Controller version $(string(typeof(version)))"
+
 Base.close(rob::IselRobot) = close(rob.sd.sp)
 
 # TODO: make Isel robots with less axes possible
@@ -217,7 +224,6 @@ macro minimumISELversion(version::Int)
 end
 
 function _setMotorCurrent(rob::IselRobot, power::Bool)
-  @minimumISELversion 1
   ret = queryIsel(rob, string("@0B65529,", Int(!power)))
   checkIselError(ret)
 end
@@ -302,18 +308,20 @@ function setZeroPoint(robot::IselRobot)
 end
 
 """ Simulates Reference Z,Y,X """
-function simRefZYX(robot::IselRobot)
-  @minimumISELversion 2
-
+simRefZYX(robot::IselRobot, version::IselControllerVersion) = functionUnavailable("simRefZYX", version)
+function simRefZYX(robot::IselRobot, version::IseliMCS8)
   ret = queryIsel(robot, "@0N7")
   checkIselError(ret)
   rob.isReferenced = true
 end
+function simRefZYX(robot::IselRobot)
+  simRefZYX(robot, controllverVersion(robot))
+end
 
 
 """ Sets Acceleration """
-function setAcceleration(robot::IselRobot, acceleration)
-  @minimumISELversion 2
+setAcceleration(robot::IselRobot, version::IselControllerVersion, acceleration) = functionUnavailable("setAcceleration", version)
+function setAcceleration(robot::IselRobot, version::IseliMCS8, acceleration)
   if robot.params.minMaxAcc[1] <= acceleration <= robot.params.minMaxAcc[2]
     ret = queryIsel(robot, string("@0J", acceleration))
     checkIselError(ret)
@@ -321,16 +329,22 @@ function setAcceleration(robot::IselRobot, acceleration)
     error("Acceleration set not in the range of $(robot.params.minMaxAcc), you are trying to set acc: $acceleration")
   end
 end
+function setAcceleration(robot::IselRobot, acceleration)
+  setAcceleration(robot, controllverVersion(robot), acceleration)
+end
 
 """ Sets StartStopFrequency"""
-function setStartStopFreq(robot::IselRobot, frequency)
-  @minimumISELversion 2
+setStartStopFreq(robot::IselRobot, version::IselControllerVersion, freqeuency) = functionUnavailable("setStartStopFreq", version)
+function setStartStopFreq(robot::IselRobot, version::IseliMCS8, frequency)
   if robot.params.minMaxFreq[1] <= frequency <= robot.params.minMaxFreq[2]
     ret = queryIsel(robot, string("@0j", frequency))
     checkIselError(ret)
   else
     error("Frequency set not in the range of $(robot.params.minMaxFreq), you are trying to set acc: $frequency")
-  end   
+  end
+end
+function setStartStopFreq(robot::IselRobot, frequency)
+  setStartStopFreq(robot, controllverVersion(robot), frequency)  
 end
 
 """ Sets brake, brake=false no current on brake , brake=true current on brake """
@@ -341,20 +355,26 @@ function setBrake(robot::IselRobot, brake::Bool)
 end
 
 """ Sets free, Freifahren axis, wenn Achse über den Referenzpunkt gefahren ist"""
-function setFree(robot::IselRobot, axis)
-  @minimumISELversion 2
+setFree(robot::IselRobot, version::IselControllerVersion, axis) = functionUnavailable("setFree", version)
+function setFree(robot::IselRobot, version::IseliMCS8, axis)
   ret = queryIsel(robot,  string("@0F", axis))
   checkIselError(ret)
 end
+function setFree(robot::IselRobot, axis)
+  setFree(robot, controllverVersion(robot), axis)
+end
 
-function invertAxes(robot::IselRobot, axes::Array{Bool})
-  @minimumISELversion 2
+invertAxes(robot::IselRobot, version::IselControllerVersion, axes) = functionUnavailable("invertAxes", version)
+function invertAxes(robot::IselRobot, version::IseliMCS8, axes::Array{Bool})
   num = 0
   for i in 1:dof(robot)
     num += axes[i] * 2^(i - 1)
   end
   ret = queryIsel(robot, string("@0ID", num))
   checkIselError(ret)
+end
+function invertAxes(robot::IselRobot, axes::Array{Bool})
+  invertAxes(robot, controllverVersion(robot), axes)
 end
 
 """ Inverts the axes for y,z """
