@@ -139,13 +139,9 @@ end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
   @info "Start System Matrix Protocol"
-  #if !isReferenced(getRobot(protocol.scanner))
-  #  throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
-  #end
-  # TODO THIS SHOULD HAPPEN EXTERNALLY
-  robot = getRobot(protocol.scanner)
-  enable(robot)
-  doReferenceDrive(robot)
+  if !isReferenced(getRobot(protocol.scanner))
+    throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
+  end
   
   finished = false
   started = false
@@ -232,7 +228,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
     end
 
     if calib.currPos <= numPos
-      pos = uconvert.(Unitful.mm, positions[calib.currPos])
+      pos = ScannerCoords(uconvert.(Unitful.mm, positions[calib.currPos]))
       performCalibration(protocol, pos)
       calib.currPos +=1
     end
@@ -260,7 +256,18 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
   robot = getRobot(protocol.scanner)
 
   enable(robot)
-  timePreparing = @elapsed prepareMeasurement(protocol, pos) # TODO params
+  timePreparing = 0
+  try 
+    timePreparing = @elapsed prepareMeasurement(protocol, pos) # TODO params
+  catch ex 
+    if ex isa CompositeException
+      @error "CompositeException while preparing measurement:"
+      for e in ex
+        @error e
+      end
+    end
+    rethrow(ex)
+  end
 
   diffTime = protocol.params.waitTime - timePreparing
   if diffTime > 0.0
@@ -288,7 +295,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
   @sync begin
     # Prepare Robot/Sample
-    @async timeMove = @elapsed moveAbs(robot, pos) 
+    timeMove = @elapsed moveAbs(robot, pos) 
     
     # Prepare DAQ
     @async timePrepDAQ = @elapsed begin
