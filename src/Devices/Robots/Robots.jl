@@ -175,7 +175,15 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
   isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
   checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-  #TODO: perform safety check of coordinates
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    if !checkCoords(cms, toScannerCoords(rob, pos), returnVerbose=false)
+      throw(RobotSafetyError(rob, pos.data))
+    end
+  else
+    # should this stop execution in some cases instead of warning?
+    @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+  end
 
   setstate!(rob, MOVING)
   try
@@ -219,12 +227,21 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
   if isReferenced(rob)
     pos = getPosition(rob) + dist
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+
+    if hasDependency(rob, AbstractCollisionModule)
+      cms = dependencies(rob, AbstractCollisionModule)
+      if !checkCoords(cms, toScannerCoords(rob, pos), returnVerbose=false)
+        throw(RobotSafetyError(rob, pos.data))
+      end
+    else
+      # should this stop execution in some cases instead of warning?
+      @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+    end
+
   else
     checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
     @warn "Performing relative movement in unreferenced state, cannot validate coordinates! Please proceed carefully and perform only movements which are safe!"
   end
-
-  #TODO: perform safety check of coordinates
 
   setstate!(rob, MOVING)
 
