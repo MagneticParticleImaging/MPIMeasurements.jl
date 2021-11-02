@@ -3,7 +3,7 @@ using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
 export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots
-export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toScannerCoords, toRobotCoords
+export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toScannerCoords, toRobotCoords, moveRobotOrigin, moveScannerOrigin
 export RobotCoordinateSystem, coordinateSystem
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
@@ -77,7 +77,7 @@ state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
 coordinateSystem(rob::Robot) = params(rob).coordinateSystem
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
-namedPosition(rob::Robot, pos::AbstractString) = params(rob).namedPositions[pos]
+namedPosition(rob::Robot, pos::AbstractString) = RobotCoords(params(rob).namedPositions[pos])
 
 # should return a matrix of shape dof(rob)×dof(rob) where the first column is the scanner x-axis in robot coordinates, second column is the scanner y-axis in robot coordinates
 scannerCoordAxes(rob::Robot) = !isnothing(coordinateSystem(rob).axes) ? coordinateSystem(rob).axes : Matrix(1.0LinearAlgebra.I, dof(rob), dof(rob))
@@ -150,11 +150,13 @@ function toRobotCoords(rob::Robot, coords::ScannerCoords)
   rotated = inv(scannerCoordAxes(rob)) * coords.data
   return RobotCoords(rotated + scannerCoordOrigin(rob))
 end
+toRobotCoords(rob::Robot, coords::RobotCoords) = coords
 
 function toScannerCoords(rob::Robot, coords::RobotCoords)
   shifted = coords.data - scannerCoordOrigin(rob)
   return ScannerCoords(scannerCoordAxes(rob) * shifted)
 end
+toScannerCoords(rob::Robot, coords::ScannerCoords) = coords
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::AbstractVector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
@@ -204,6 +206,14 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
     setstate!(rob, ERROR)
     throw(RobotDeviceError(rob, exc))
   end
+end
+
+function moveScannerOrigin(rob::Robot, speed::Union{Vector{<:Unitful.Velocity}, Unitful.Velocity, Nothing} = nothing)
+  moveAbs(rob, ScannerCoords(zeros(dof(rob)) * u"mm"), speed)
+end
+
+function moveRobotOrigin(rob::Robot, speed::Union{Vector{<:Unitful.Velocity}, Unitful.Velocity, Nothing} = nothing)
+  moveAbs(rob, RobotCoords(zeros(dof(rob)) * u"mm"), speed)
 end
 
 moveRel(rob::Robot, dist::Vararg{Unitful.Length,N}) where N = moveRel(rob, [dist...])

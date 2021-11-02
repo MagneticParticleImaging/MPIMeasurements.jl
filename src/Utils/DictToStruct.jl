@@ -51,3 +51,13 @@ function params_from_dict(type::DataType, dict::Dict)
     end
   end
 end
+
+function stringToEnum(value::AbstractString, enumType::Type{T}) where {T <: Enum}
+  stringInstances = string.(instances(enumType))
+  # If lowercase is not sufficient one could try Unicode.normalize with casefolding
+  index = findfirst(isequal(lowercase(value)), lowercase.(stringInstances))
+  if isnothing(index)
+    throw(ArgumentError("$value cannot be resolved to an instance of $(typeof(enumType)). Possible instances are: " * join(stringInstances, ", ", " and ")))
+  end
+  return instances(enumType)[index]
+end

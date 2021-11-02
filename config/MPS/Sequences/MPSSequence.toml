@@ -37,7 +37,7 @@ values = ["0.0V"]
 
 [Acquisition]
 channels = ["rx_main"]
-bandwidth = "7.8125MHz"
+bandwidth = "3.90625MHz"
 numPeriodsPerFrame = 1
 numFrames = 1
 numAverages = 1000
