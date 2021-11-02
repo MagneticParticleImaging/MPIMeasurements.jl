@@ -62,14 +62,7 @@ function Protocol(protocolName::AbstractString, scanner::MPIScanner)
     throw(ProtocolConfigurationError("Could not find a valid configuration for protocol with name `$protocolName` and the derived path `$filename`."))
   end
 
-  if haskey(protocolDict, "name")
-    name = protocolDict["name"]
-    if name != protocolName
-      throw(ProtocolConfigurationError("The protocol name given in the configuration (`$name`) does not match the name derived from the filename (``$protocolName`)."))
-    end
-  else 
-    throw(ProtocolConfigurationError("There is no protocol name given in the configuration."))
-  end
+  protocolDict["name"] = protocolName
 
   return Protocol(protocolDict, scanner)
 end

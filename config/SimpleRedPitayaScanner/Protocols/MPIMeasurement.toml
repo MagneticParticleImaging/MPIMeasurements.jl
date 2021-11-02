@@ -1,4 +1,3 @@
-name = "MPIMeasurement"
 type = "MPIMeasurementProtocol"
 description = "A sychronous acquisition with the Red Pitaya Scanner. Data can be queried after the finished notification. Uses current scanner sequence"
 targetScanner = "SimpleRedPitayaScanner"
