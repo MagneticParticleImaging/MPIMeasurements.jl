@@ -117,7 +117,7 @@ function gotoPos(rob::Robot, pos_name::AbstractString, args...)
 end
 
 function teachNamedPosition(rob::Robot, pos_name::AbstractString; override=false)
-  pos = getPositionScannerCoords(rob)
+  pos = getPosition(rob)
   if haskey(namedPositions(rob), pos_name)
     if !override
       throw(RobotTeachError(rob, pos_name))
