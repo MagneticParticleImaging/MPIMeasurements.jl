@@ -13,6 +13,8 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   saveAsSystemMatrix::Bool = true
   "Number of background measurements to take"
   bgMeas::Int64 = 0
+  "If set the tx amplitude and phase will be set with control steps"
+  controlTx::Bool = false
   "Sequence used for the calibration at each position"
   sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
@@ -65,6 +67,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
   
   executeTask::Union{Task, Nothing} = nothing
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
+  txCont::Union{TxDAQController, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
   restored::Bool = false
@@ -83,7 +86,13 @@ function SystemMatrixRobotMeas()
     Matrix{Float64}(undef,0,0))
 end
 
-requiredDevices(protocol::RobotBasedSystemMatrixProtocol) = [AbstractDAQ, Robot, SurveillanceUnit]
+function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
+  result = [AbstractDAQ, Robot, SurveillanceUnit]
+  if protocol.params.controlTx
+    push!(result, TxDAQController)
+  end
+  return result
+end
 
 function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
@@ -91,8 +100,8 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   end
   protocol.systemMeasState = SystemMatrixRobotMeas()
 
-  #Prepare Positions
-  # Extend Positions to include background measurements
+  # Prepare Positions
+  # Extend Positions to include background measurements, TODO behaviour if positions already includes background pos
   cartGrid = protocol.params.positions
   if protocol.params.bgMeas == 0
     positions = cartGrid
@@ -130,6 +139,18 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   
   # TODO implement properly
   protocol.systemMeasState.temperatures = zeros(0, 0)
+
+  # Init TxDAQController
+  if protocol.params.controlTx
+    controllers = getDevices(protocol.scanner, TxDAQController)
+    if length(controllers) > 1
+      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
+    end
+    protocol.txCont = controllers[1]
+    protocol.txCont.currTx = nothing
+  else
+    protocol.txCont = nothing
+  end
 
   protocol.stopped = false
   protocol.cancelled = false
@@ -313,7 +334,17 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
       timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
       # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed prepareTx(daq, protocol.params.sequence, allowControlLoop = false)
+      timeTx = @elapsed begin 
+        if protocol.params.controlTx
+          if allowControlLoop
+            controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
+          else
+            setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
+          end
+        else
+          prepareTx(daq, protocol.params.sequence)
+        end
+      end
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
