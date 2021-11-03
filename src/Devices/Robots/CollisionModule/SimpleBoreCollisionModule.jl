@@ -29,6 +29,8 @@ Base.@kwdef mutable struct SimpleBoreCollisionModule <: AbstractCollisionModule3
   dependencies::Dict{String,Union{Device,Missing}}
 end
 
+collisionModuleType(cm::SimpleBoreCollisionModule) = PositionCollisionType()
+
 function _checkCoordinate(cm::SimpleBoreCollisionModule, pos::AbstractVector{<:Unitful.Length}; returnVerbose=false)
   validStatus = Array{Symbol}(undef, 3)
   errorDiff = Array{typeof(1.0u"mm")}(undef, 3)
@@ -53,7 +55,7 @@ function _checkCoordsBoreAxis(cm::SimpleBoreCollisionModule, pos::AbstractVector
   end
 end
 
-_checkCoordsCrossSection(cm::SimpleBoreCollisionModule, pos::AbstractVector{<:Unitful.Length}) = checkCollisionYZ(cm.params.objGeometry, cm.params.scannerDiameter / 2, pos[2], pos[3], cm.params.clearance)
+_checkCoordsCrossSection(cm::SimpleBoreCollisionModule, pos::AbstractVector{<:Unitful.Length}) = checkCollisionYZCircle(cm.params.objGeometry, cm.params.scannerDiameter / 2, pos[2], pos[3], cm.params.clearance)
 
 
 function plotSafetyErrors(cm::SimpleBoreCollisionModule, errorIndices::Vector{Int}, coords::AbstractMatrix{<:Unitful.Length})

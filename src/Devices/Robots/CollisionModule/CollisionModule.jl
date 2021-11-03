@@ -4,6 +4,12 @@ export checkCoords, checkCoordTable
 abstract type AbstractCollisionModule <: VirtualDevice end
 abstract type AbstractCollisionModule3D <: AbstractCollisionModule end
 
+abstract type CollisionModuleType end
+struct PositionCollisionType <: CollisionModuleType end
+struct PathCollisionType <: CollisionModuleType end
+
+@mustimplement collisionModuleType(cm::AbstractCollisionModule)
+
 # Robot Constants
 const minClearance = 0.5Unitful.mm;
 

@@ -1,5 +1,5 @@
 export Geometry, Circle, Rectangle, Triangle
-export checkCollisionYZ
+export checkCollisionYZCircle
 abstract type Geometry end
 @mustimplement name(geometry::Geometry)
 
@@ -57,9 +57,9 @@ Geometry(dict::Dict) = params_from_dict(eval(Symbol(pop!(dict,"type"))), dict)
 convert(::Type{Geometry}, dict::Dict) = Geometry(dict)
 
 "Returns true, 0mm, 0mm if given geometry does not collide with the scanner radius based on  given position and clearance"
-@mustimplement checkCollisionYZ(geo::Geometry, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Clearance)
+@mustimplement checkCollisionYZCircle(geo::Geometry, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Clearance)
 
-function checkCollisionYZ(geo::Circle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
+function checkCollisionYZCircle(geo::Circle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
   r = sqrt(posY^2 + posZ^2)
 
   if scannerRad - clearance >= r + geo.diameter / 2
@@ -72,7 +72,7 @@ function checkCollisionYZ(geo::Circle, scannerRad::Unitful.Length, posY::Unitful
   end 
 end
 
-function checkCollisionYZ(geo::Rectangle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
+function checkCollisionYZCircle(geo::Rectangle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
   corners = [ [posY - geo.width / 2 posZ - geo.height / 2]
               [posY - geo.width / 2 posZ + geo.height / 2]
               [posY + geo.width / 2 posZ + geo.height / 2]
@@ -95,7 +95,7 @@ function checkCollisionYZ(geo::Rectangle, scannerRad::Unitful.Length, posY::Unit
   end
 end
 
-function checkCollisionYZ(geo::Triangle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
+function checkCollisionYZCircle(geo::Triangle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
   # following code only for symmetric triangles / center of gravity = center of plug adapter
 
   corners = [ [posY   posZ + 2/3 * geo.height]
