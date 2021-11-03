@@ -43,7 +43,8 @@ function init(rob::Robot)
   rob.present = true
 end
 
-checkDependencies(rob::Robot) = true
+neededDependencies(::Robot) = []
+optionalDependencies(::Robot) = []
 
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state

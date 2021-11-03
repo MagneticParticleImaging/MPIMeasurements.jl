@@ -63,24 +63,8 @@ function init(daq::SimpleSimulatedDAQ)
   daq.present = true
 end
 
-function checkDependencies(daq::SimpleSimulatedDAQ)
-  dependencies_ = dependencies(daq)
-  if length(dependencies_) > 1
-    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
-                                    "has more than one dependency assigned but "*
-                                    "it only needs one simulation controller."))
-  elseif length(dependencies_) == 0
-    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
-                                    "has no dependencies assigned but "*
-                                    "it needs one simulation controller."))
-  elseif !(collect(values(dependencies_))[1] isa SimulationController)
-    throw(ScannerConfigurationError("The simple simulated DAQ device with ID `$(deviceID(daq))` "*
-                                    "has a dependency assigned but it is not a simulation "*
-                                    "controller but a `$(typeof(values(dependencies_)[1]))`."))
-  else
-    return true
-  end                            
-end
+neededDependencies(::SimpleSimulatedDAQ) = [SimulationController]
+optionalDependencies(::SimpleSimulatedDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::SimpleSimulatedDAQ) = nothing
 

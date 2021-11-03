@@ -7,6 +7,9 @@ struct MPSSurveillanceUnit <: SurveillanceUnit
   delim::String
 end
 
+neededDependencies(::MPSSurveillanceUnit) = []
+optionalDependencies(::MPSSurveillanceUnit) = []
+
 Base.close(su::MPSSurveillanceUnit) = close(su.sd.sp)
 
 function MPSSurveillanceUnit(params::Dict)
