@@ -26,12 +26,13 @@ checkDependencies(cm::AbstractCollisionModule) = true
 Base.close(cm::AbstractCollisionModule) = nothing
 
 
+include("CollisionGeometries.jl")
 include("SimpleBoreCollisionModule.jl")
 
 function checkCoords(cm::AbstractCollisionModule, pos::AbstractVector{<:Unitful.Length}; returnVerbose=false)
   result_status, result_dist = _checkCoordinate(cm, pos)
   if !returnVerbose
-    return all(result_status .== :VALID)
+    return all(result_status)
   end
   return result_status, result_dist
 end
@@ -82,7 +83,7 @@ function checkCoordTable(cm::AbstractCollisionModule3D, positions::AbstractMatri
   # create final table
   coordTable = vcat(headline, table)
   
-  errorIndices = unique(getindex.(findall(x -> x == :INVALID, table[:,5:7]), 1)) # get row index of all coordinates where at least one dimension in invalid
+  errorIndices = unique(getindex.(findall(x -> x == false, table[:,5:7]), 1)) # get row index of all coordinates where at least one dimension in invalid
   
   if isempty(errorIndices)
     display("All coordinates are safe!");
