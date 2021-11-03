@@ -158,6 +158,22 @@ function toScannerCoords(rob::Robot, coords::RobotCoords)
 end
 toScannerCoords(rob::Robot, coords::ScannerCoords) = coords
 
+function checkPosition(rob::Robot, pos::ScannerCoords)
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    if !checkCoords(cms, pos, returnVerbose=false)
+      throw(RobotSafetyError(rob, pos.data))
+    end
+  else
+    # should this stop execution in some cases instead of warning?
+    @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+  end
+end
+
+function checkPosition(rob::Robot, pos::RobotCoords)
+  checkPosition(rob, toScannerCoords(rob, pos))
+end
+
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::AbstractVector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
 moveAbs(rob::Robot, pos::AbstractVector{<:Unitful.Length}, speed::Unitful.Velocity) = moveAbs(rob, pos, speed * ones(dof(rob)))
@@ -177,15 +193,7 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
   isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
   checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-  if hasDependency(rob, AbstractCollisionModule)
-    cms = dependencies(rob, AbstractCollisionModule)
-    if !checkCoords(cms, toScannerCoords(rob, pos), returnVerbose=false)
-      throw(RobotSafetyError(rob, pos.data))
-    end
-  else
-    # should this stop execution in some cases instead of warning?
-    @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
-  end
+  checkPosition(rob, pos)
 
   setstate!(rob, MOVING)
   try
@@ -238,15 +246,7 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
     pos = getPosition(rob) + dist
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-    if hasDependency(rob, AbstractCollisionModule)
-      cms = dependencies(rob, AbstractCollisionModule)
-      if !checkCoords(cms, toScannerCoords(rob, pos), returnVerbose=false)
-        throw(RobotSafetyError(rob, pos.data))
-      end
-    else
-      # should this stop execution in some cases instead of warning?
-      @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
-    end
+    checkPosition(rob, pos)
 
   else
     checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
