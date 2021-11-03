@@ -177,7 +177,7 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
 
   for d=1:len
     for e=1:len
-      c = ustrip(u"mT/V", txCont.controlledChannels[d].daqChannel.feedback.calibration)
+      c = ustrip(u"T/V", txCont.controlledChannels[d].daqChannel.feedback.calibration)
 
       uVolt = float(uRef[1:rxNumSamplingPoints(seq),d,1])
 
@@ -232,8 +232,10 @@ end
 
 function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
 
-  calibFieldToVoltEstimate = [ustrip(u"V/mT", ch.daqChannel.calibration) for ch in txCont.controlledChannels]
-  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ)) 
+  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.daqChannel.calibration) for ch in txCont.controlledChannels]
+  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ))
+
+  @info "" calibFieldToVoltEstimate[1] calibFieldToVoltMeasured[1]
 
   deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
 
