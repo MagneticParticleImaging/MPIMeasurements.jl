@@ -8,9 +8,9 @@ abstract type Geometry end
 
 Base.@kwdef struct SimpleBoreCollisionModuleParams <: DeviceParams
   "Diameter of scanner in the y-z plane"
-  scannerDiameter::typeof(1.0u"mm") = Inf * u"mm"
+  scannerDiameter::typeof(1.0u"mm")
   "Geometry of the probe, centered at (0,0,0) in scanner coordinates"
-  objGeometry::Union{Nothing,Geometry} = nothing
+  objGeometry::Union{Nothing,Geometry}
 
   clearance::Clearance = Clearance(1.0u"mm")
 
@@ -34,10 +34,6 @@ Base.@kwdef mutable struct SimpleBoreCollisionModule <: AbstractCollisionModule3
 end
 
 function _checkCoordinate(cm::SimpleBoreCollisionModule, pos::AbstractVector{<:Unitful.Length}; returnVerbose=false)
-  if cm.params.objGeometry === nothing || cm.params.scannerDiameter == Inf * u"mm"
-    error("Incomplete definition of SimpleBoreCollisionModule! Please check the definition of objGeometry and scannerDiameter.")
-  end
-
   errorStatus = Array{Symbol}(undef, 3)
   errorDiff = Array{typeof(1.0u"mm")}(undef, 3)
 
