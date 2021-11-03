@@ -6,7 +6,7 @@ Base.@kwdef struct SimpleBoreCollisionModuleParams <: DeviceParams
   "Diameter of scanner in the y-z plane"
   scannerDiameter::typeof(1.0u"mm")
   "Geometry of the probe, centered at (0,0,0) in scanner coordinates"
-  objGeometry::Union{Nothing,Geometry}
+  objGeometry::Geometry
 
   clearance::Clearance = Clearance(1.0u"mm")
 
