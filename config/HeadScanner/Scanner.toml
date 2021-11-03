@@ -1,0 +1,41 @@
+[General]
+boreSize = "1337mm"
+facility = "Universitätsklinikum Hamburg-Eppendorf"
+manufacturer = "IBI"
+name = "HeadScanner"
+topology = "FFP"
+gradient = "42T/m"
+#datasetStore = "/opt/data/HeadScanner"
+datasetStore = "/home/niklas/Documents/DatasetStores/store1"
+defaultSequence = "1DSequence"
+defaultProtocol = "MPIMeasurement"
+producerThreadID = 2
+consumerThreadID = 3
+protocolThreadID = 4
+
+[Devices]
+initializationOrder = [
+#  "rp_cluster",
+  "robot"
+]
+
+#[Devices.rp_cluster]
+#deviceType = "RedPitayaDAQ"
+#ips = ["192.168.1.103","192.168.1.104","192.168.1.105"]
+#ips = ["192.168.1.100"]
+#calibFFCurrentToVolt = [0.027061248, 0.026531]
+
+[Devices.robot]
+deviceType = "IselRobot"
+baudrate = 19200
+stepsPermm = 100
+serial_port = "/dev/ttyUSB0"
+scannerCoordOrigin = ["115.5mm", "125.5mm", "105.5mm"]
+defaultRefVel = ["400mm/s", "400mm/s", "400mm/s"]
+defaultVel = ["400mm/s", "400mm/s", "400mm/s"]
+invertAxes = [false, false, true]
+referenceOrder = "zyx"
+
+[Devices.robot.namedPositions]
+origin = ["0mm", "0mm", "0mm"]
+#park = ["420mm", "125.5mm", "105.5mm"]
