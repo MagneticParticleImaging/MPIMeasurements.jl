@@ -33,11 +33,13 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   controlledChannels::Vector{ControlledChannel} = []
 end
 
-checkDependencies(tx::TxDAQController) = hasDependency(tx, AbstractDAQ)
 function init(tx::TxDAQController)
   @info "Initializing TxDAQController with ID `$(tx.deviceID)`."
   tx.present = true
 end
+
+neededDependencies(::TxDAQController) = [AbstractDAQ]
+optionalDependencies(::TxDAQController) = []
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control

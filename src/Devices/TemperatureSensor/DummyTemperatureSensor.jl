@@ -19,7 +19,9 @@ Base.@kwdef mutable struct DummyTemperatureSensor <: TemperatureSensor
 end
 
 init(sensor::DummyTemperatureSensor) = sensor.present = true
-checkDependencies(sensor::DummyTemperatureSensor) = true
+
+neededDependencies(::DummyTemperatureSensor) = []
+optionalDependencies(::DummyTemperatureSensor) = []
 
 Base.close(sensor::DummyTemperatureSensor) = nothing
 

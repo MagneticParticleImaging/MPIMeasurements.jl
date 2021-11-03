@@ -44,7 +44,8 @@ function init(simCont::SimulationController)
   simCont.present = true
 end
 
-checkDependencies(simCont::SimulationController) = true
+neededDependencies(::SimulationController) = []
+optionalDependencies(::SimulationController) = []
 
 Base.close(simCont::SimulationController) = nothing
 

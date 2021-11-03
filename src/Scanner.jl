@@ -85,7 +85,9 @@ function initiateDevices(devicesParams::Dict{String, Any})
     end
 
     if !checkDependencies(device)
-      throw(ScannerConfigurationError("Unspecified dependency error in device with ID `$(deviceID(device))`."))
+      throw(ScannerConfigurationError("Unspecified dependency error in device with "
+                                     *"ID `$(deviceID(device))`. The device depends "
+                                     *"on the following device IDs: $(keys(device.dependencies))"))
     end
   end
 

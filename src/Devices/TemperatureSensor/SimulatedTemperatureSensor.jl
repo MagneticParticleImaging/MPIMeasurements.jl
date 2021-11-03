@@ -19,7 +19,8 @@ Base.@kwdef mutable struct SimulatedTemperatureSensor <: TemperatureSensor
 end
 
 init(sensor::SimulatedTemperatureSensor) = sensor.present = true
-checkDependencies(sensor::SimulatedTemperatureSensor) = true
+neededDependencies(::SimulatedTemperatureSensor) = []
+optionalDependencies(::SimulatedTemperatureSensor) = []
 Base.close(sensor::SimulatedTemperatureSensor) = nothing
 
 numChannels(sensor::SimulatedTemperatureSensor) = 1

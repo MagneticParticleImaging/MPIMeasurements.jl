@@ -83,11 +83,12 @@ function init(gauss::LakeShoreF71GaussMeter)
   gauss.present = true
 end
 
+neededDependencies(::LakeShoreF71GaussMeter) = []
+optionalDependencies(::LakeShoreF71GaussMeter) = []
+
 Base.close(gauss::LakeShoreF71GaussMeter) = close(gauss.driver)
 
 ipaddress(gauss::LakeShoreF71GaussMeter) = gauss.params.ip
-
-checkDependencies(gauss::LakeShoreF71GaussMeter) = true
 
 function setMeasurementMode(gauss::LakeShoreF71GaussMeter, mode::LakeShoreF71GaussMeterMeasurementModes)
   if mode == F71_MM_DC

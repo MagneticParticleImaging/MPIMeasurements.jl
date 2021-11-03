@@ -158,7 +158,8 @@ function init(daq::RedPitayaDAQ)
   daq.present = true
 end
 
-checkDependencies(daq::RedPitayaDAQ) = true
+neededDependencies(::RedPitayaDAQ) = []
+optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
 
