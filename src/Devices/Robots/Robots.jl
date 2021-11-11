@@ -164,7 +164,6 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
         axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
         tmp_pos[axis] = pos.data[axis]
         _moveAbs(rob, tmp_pos, speed)
-        sleep(0.2)
       end
     end
     setstate!(rob, READY)
@@ -221,7 +220,6 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
         axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
         tmp_dist[axis] = dist.data[axis]
         _moveRel(rob, tmp_dist, speed)
-        sleep(0.2)
       end
     end
     setstate!(rob, READY)

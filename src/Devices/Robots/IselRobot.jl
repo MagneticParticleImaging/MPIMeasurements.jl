@@ -160,11 +160,8 @@ function _doReferenceDrive(rob::IselRobot)
   try
     rob.sd.timeout_ms = 180000
     refAxis(rob, params(rob).referenceOrder[1])
-    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[2])
-    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[3])
-    sleep(0.5)
   finally
     rob.sd.timeout_ms = tempTimeout
   end
@@ -417,7 +414,6 @@ function queryIsel(rob::IselRobot, cmd::String, byteLength=1)
 
   flush(sd.sp)
   send(sd, cmd)
-  sleep(0.5)
   i, c = LibSerialPort.sp_blocking_read(sd.sp.ref, byteLength, sd.timeout_ms)
   if i != byteLength
     error("Isel Robot did not respond!")
