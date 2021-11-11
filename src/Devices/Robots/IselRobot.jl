@@ -49,10 +49,10 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
   movementOrder::String = "zyx"
-  coordinateSystem::RobotCoordinateSystem = RobotCoordinateSystem()
+  coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
 end
 
-IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
+IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, prepareRobotDict(dict))
 
 Base.@kwdef mutable struct IselRobot <: Robot
   "Unique device ID for this device as defined in the configuration."

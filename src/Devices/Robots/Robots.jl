@@ -4,7 +4,7 @@ using Unitful
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
 export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots
 export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toScannerCoords, toRobotCoords, moveRobotOrigin, moveScannerOrigin
-export RobotCoordinateSystem, coordinateSystem
+export ScannerCoordinateSystem, coordinateSystem
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
@@ -18,31 +18,52 @@ struct RobotCoords{T<:Unitful.Length} <: AbstractVector{T}
   data::Vector{T}
 end
 
-struct RobotCoordinateSystem
+struct ScannerCoordinateSystem
   """Matrix defining the axes of the scanner coordinate system, the first column is the scanner x axis in robot coordinates"""
-  axes::Union{Nothing,Matrix{Float64}}
+  axes::Matrix{Float64}
   """The origin should be set, so that the objGeometry is centered in the crosssection of the bore, the zero of the bore axis is not important, as the available boreAxis range is set by minMaxBoreAxis"""
-  origin::Union{Nothing,Vector{typeof(1.0u"mm")}}
-
-  function RobotCoordinateSystem(;axes::Union{AbstractString,AbstractVector{<:AbstractVector{<:Real}},Nothing}=nothing, origin::Union{Nothing,Vector{<:Unitful.Length}}=nothing)
-    if axes !== nothing
-      if axes isa AbstractString
-        axes_split = split(lowercase(axes),",")
-        cs_matrix = zeros(length(axes_split),length(axes_split))
-        for (i,ax) in enumerate(axes_split)
-          cs_matrix[i,ax[end]-'w'] = (ax[1]=='-' ? -1. : 1.)
-        end
-      else 
-        cs_matrix = Matrix{Float64}(hcat(axes...))
-      end
-    else
-      cs_matrix = nothing
-    end
-    return new(cs_matrix, origin)
+  origin::Vector{typeof(1.0u"mm")}
+  function ScannerCoordinateSystem(dof::Integer)
+    return new(Matrix(1.0LinearAlgebra.I, dof, dof), zeros(dof)*u"mm")
+  end
+  function ScannerCoordinateSystem(axes::Matrix{<:Real}, origin::Vector{<:Unitful.Length})
+    dim = length(origin)
+    @assert all(isequal(dim), size(axes))
+    return new(axes, origin)
   end
 end
 
-convert(::Type{RobotCoordinateSystem}, dict::Dict) = RobotCoordinateSystem(;dict_to_splatting(dict)...)
+Base.Broadcast.broadcastable(val::ScannerCoordinateSystem) = Ref(val) # Otherwise tryuparse.(val) returns [val]
+
+ScannerCoordinateSystem(axes::Matrix{<:Real}, origin::Nothing) = ScannerCoordinateSystem(axes, zeros(size(axes, 1))*u"mm")
+ScannerCoordinateSystem(axes::Nothing, origin::Vector{<:Unitful.Length}) = ScannerCoordinateSystem(Matrix(1.0LinearAlgebra.I, length(origin), length(origin)), origin)
+function ScannerCoordinateSystem(axes::AbstractString, origin)
+  axes_split = split(lowercase(axes),",")
+  cs_matrix = zeros(length(axes_split),length(axes_split))
+  for (i,ax) in enumerate(axes_split)
+    cs_matrix[i,ax[end]-'w'] = (ax[1]=='-' ? -1. : 1.)
+  end
+  return ScannerCoordinateSystem(cs_matrix, origin)
+end
+ScannerCoordinateSystem(axes::AbstractVector{<:AbstractVector{<:Real}}, origin) = ScannerCoordinateSystem(Matrix{Float64}(hcat(axes...)), origin)
+function prepareRobotDict(dict::Dict)
+  if haskey(dict, "coordinateSystem")
+    coordDict = dict_to_splatting(pop!(dict, "coordinateSystem"))
+    
+    origin = nothing
+    if haskey(coordDict, :origin)
+      origin = coordDict[:origin]
+    end
+    axes = nothing
+    if haskey(coordDict, :axes)
+      axes = coordDict[:axes]
+    end
+
+    coordSystem = ScannerCoordinateSystem(axes, origin)
+    dict["coordinateSystem"] = coordSystem
+  end
+  return dict
+end 
 
 Base.getindex(c::Union{ScannerCoords,RobotCoords}, i) = getindex(c.data, i)
 Base.size(c::Union{ScannerCoords,RobotCoords}) = size(c.data)
@@ -80,9 +101,8 @@ namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) 
 namedPosition(rob::Robot, pos::AbstractString) = RobotCoords(params(rob).namedPositions[pos])
 
 # should return a matrix of shape dof(rob)×dof(rob) where the first column is the scanner x-axis in robot coordinates, second column is the scanner y-axis in robot coordinates
-scannerCoordAxes(rob::Robot) = !isnothing(coordinateSystem(rob).axes) ? coordinateSystem(rob).axes : Matrix(1.0LinearAlgebra.I, dof(rob), dof(rob))
-# should return a vector of shape dof(rob)
-scannerCoordOrigin(rob::Robot) =  !isnothing(coordinateSystem(rob).origin) ? coordinateSystem(rob).origin : zeros(dof(rob))*u"mm"
+scannerCoordAxes(rob::Robot) = coordinateSystem(rob).axes
+scannerCoordOrigin(rob::Robot) = coordinateSystem(rob).origin
 
 #overwrite to enable a change in movement order, if overwritten should be a string of length dof(rob), containing the lowercase letters corresponding to the axes, e.g. "yx" or "xzy"
 movementOrder(rob::Robot) = "default"
@@ -146,17 +166,20 @@ end
 
 useExplicitCoordinates(rob::Robot) = ((scannerCoordAxes(rob) != LinearAlgebra.I) || (scannerCoordOrigin(rob) != zeros(dof(rob))*u"mm")) # if there is a non unit transform defined, use explicit coordinates
 
-function toRobotCoords(rob::Robot, coords::ScannerCoords)
-  rotated = inv(scannerCoordAxes(rob)) * coords.data
-  return RobotCoords(rotated + scannerCoordOrigin(rob))
-end
-toRobotCoords(rob::Robot, coords::RobotCoords) = coords
 
-function toScannerCoords(rob::Robot, coords::RobotCoords)
-  shifted = coords.data - scannerCoordOrigin(rob)
-  return ScannerCoords(scannerCoordAxes(rob) * shifted)
+toRobotCoords(rob::Robot, coords::Union{RobotCoords, ScannerCoords}) = toRobotCoords(coordinateSystem(rob), coords)
+function toRobotCoords(sys::ScannerCoordinateSystem, coords::ScannerCoords)
+  rotated = inv(sys.axes) * coords.data
+  return RobotCoords(rotated + sys.origin)
 end
-toScannerCoords(rob::Robot, coords::ScannerCoords) = coords
+toRobotCoords(sys::ScannerCoordinateSystem, coords::RobotCoords) = coords
+
+toScannerCoords(rob::Robot, coords::Union{RobotCoords, ScannerCoords}) = toScannerCoords(coordinateSystem(rob), coords)
+function toScannerCoords(sys::ScannerCoordinateSystem, coords::RobotCoords)
+  shifted = coords.data - sys.origin
+  return ScannerCoords(sys.axes * shifted)
+end
+toScannerCoords(sys::ScannerCoordinateSystem, coords::ScannerCoords) = coords
 
 function checkPosition(rob::Robot, pos::ScannerCoords)
   if hasDependency(rob, AbstractCollisionModule)

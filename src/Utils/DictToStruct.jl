@@ -9,6 +9,14 @@ function tryuparse(val::Any)
   end
 end
 
+function tryuparse(val::Vector{T}) where {T}
+  try
+    return tryuparse.(val)
+  catch e
+    return val
+  end
+end
+
 function dict_to_splatting(dict::Dict)
   splattingDict = Dict{Symbol, Any}()
   for (key, value) in dict
