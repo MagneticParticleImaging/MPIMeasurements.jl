@@ -60,7 +60,7 @@ function init(rob::Robot)
 end
 
 neededDependencies(::Robot) = []
-optionalDependencies(::Robot) = []
+optionalDependencies(::Robot) = [AbstractCollisionModule]
 
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state

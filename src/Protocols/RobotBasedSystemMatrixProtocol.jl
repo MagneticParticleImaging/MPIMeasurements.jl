@@ -124,6 +124,10 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.measIsBGFrame = measIsBGFrame
   protocol.systemMeasState.currPos = 1
   protocol.systemMeasState.positions = protocol.params.positions # TODO remove redundancy
+
+  if !checkPositions(protocol)
+    throw(IllegalStateException("Protocol has illegal positions"))
+  end
   
   #Prepare Signals
   numRxChannels = length(rxChannels(protocol.params.sequence)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
@@ -156,6 +160,21 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.restored = false
+end
+
+function checkPositions(protocol::RobotBasedSystemMatrixProtocol)
+  rob = getRobot(protocol.scanner)
+  valid = true
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    for cm in cms
+      valid &= all(checkCoords(cm, protocol.params.positions))
+    end
+  end
+  for pos in protocol.params.positions
+    valid &= checkAxisRange(rob, toRobotCoords(rob, ScannerCoords(pos)))
+  end
+  return valid
 end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
@@ -226,9 +245,6 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   su = getSurveillanceUnit(protocol.scanner)
   daq = getDAQ(protocol.scanner)
   robot = getRobot(protocol.scanner)
-  #safety = getSafety(protocol.scanner) #TODO fix 
-  #safety = getSafety(protocol.scanner) #TODO fix 
-  #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
 
   positions = calib.positions
   numPos = length(calib.positions)
