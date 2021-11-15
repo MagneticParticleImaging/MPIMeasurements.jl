@@ -57,7 +57,7 @@ Geometry(dict::Dict) = params_from_dict(eval(Symbol(pop!(dict,"type"))), dict)
 convert(::Type{Geometry}, dict::Dict) = Geometry(dict)
 
 "Returns true, 0mm, 0mm if given geometry does not collide with the scanner radius based on  given position and clearance"
-@mustimplement checkCollisionYZCircle(geo::Geometry, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Clearance)
+@mustimplement checkCollisionYZCircle(geo::Geometry, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
 
 function checkCollisionYZCircle(geo::Circle, scannerRad::Unitful.Length, posY::Unitful.Length, posZ::Unitful.Length, clearance::Unitful.Length)
   r = sqrt(posY^2 + posZ^2)

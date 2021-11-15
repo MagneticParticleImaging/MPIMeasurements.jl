@@ -143,7 +143,7 @@ toScannerCoords(rob::Robot, coords::Union{RobotCoords, ScannerCoords}) = toScann
 function checkPosition(rob::Robot, pos::ScannerCoords)
   if hasDependency(rob, AbstractCollisionModule)
     cms = dependencies(rob, AbstractCollisionModule)
-    if !checkCoords(cms, pos, returnVerbose=false)
+    if !checkCoords(cms, pos)
       throw(RobotSafetyError(rob, pos.data))
     end
   else
