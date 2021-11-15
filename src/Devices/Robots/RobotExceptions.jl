@@ -9,7 +9,7 @@ end
 
 struct RobotAxisRangeError <: RobotException
     robot::Robot
-    pos::AbstractVector{<:Unitful.Length}
+    pos::RobotCoords
 end
 
 struct RobotDOFError <: RobotException
@@ -37,7 +37,7 @@ end
 
 struct RobotSafetyError <: Exception
     robot::Robot
-    pos::AbstractVector{<:Unitful.Length}
+    pos::RobotCoords
 end
 
 function Base.showerror(io::IO, ex::RobotStateError)

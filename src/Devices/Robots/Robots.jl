@@ -140,20 +140,18 @@ toRobotCoords(rob::Robot, coords::ScannerCoords) = toDeviceCoords(coordinateSyst
 toRobotCoords(rob::Robot, coords::RobotCoords) = coords
 toScannerCoords(rob::Robot, coords::Union{RobotCoords, ScannerCoords}) = toScannerCoords(coordinateSystem(rob), coords)
 
+"Returns true if given position is allowed, false otherwise"
 function checkPosition(rob::Robot, pos::ScannerCoords)
   if hasDependency(rob, AbstractCollisionModule)
     cms = dependencies(rob, AbstractCollisionModule)
-    if !checkCoords(cms, pos)
-      throw(RobotSafetyError(rob, pos.data))
-    end
-  else
-    # should this stop execution in some cases instead of warning?
-    @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+    return checkCoords(cms, pos)
   end
+  # should this stop execution in some cases instead of warning?
+  @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+  return true
 end
-
 function checkPosition(rob::Robot, pos::RobotCoords)
-  checkPosition(rob, toScannerCoords(rob, pos))
+  return checkPosition(rob, toScannerCoords(rob, pos))
 end
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
@@ -175,7 +173,9 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
   isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
   checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-  checkPosition(rob, pos)
+  if !checkPosition(rob, pos)
+    throw(RobotSafetyError(rob, pos))
+  end
 
   setstate!(rob, MOVING)
   try
@@ -227,7 +227,9 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
     pos = getPosition(rob) + dist
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-    checkPosition(rob, pos)
+    if !checkPosition(rob, pos)
+      throw(RobotSafetyError(rob, pos))
+    end
 
   else
     checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
