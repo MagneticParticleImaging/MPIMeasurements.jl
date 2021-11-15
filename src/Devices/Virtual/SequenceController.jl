@@ -58,7 +58,8 @@ function init(seqCont::SequenceController)
   seqCont.present = true
 end
 
-checkDependencies(seqCont::SequenceController) = true # TODO: Add daq
+neededDependencies(::SequenceController) = []
+optionalDependencies(::SequenceController) = []
 
 Base.close(seqCont::SequenceController) = nothing
 

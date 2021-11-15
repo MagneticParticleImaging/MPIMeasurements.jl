@@ -26,7 +26,8 @@ function init(su::DummySurveillanceUnit)
   su.present = true
 end
 
-checkDependencies(su::DummySurveillanceUnit) = true
+neededDependencies(::DummySurveillanceUnit) = []
+optionalDependencies(::DummySurveillanceUnit) = []
 
 Base.close(su::DummySurveillanceUnit) = nothing
 

@@ -39,8 +39,45 @@ function dependency(device::Device, type::DataType)
   end
 end
 
-"Chech whether the device has a dependency of the given `type`."
+"Check whether the device has a dependency of the given `type`."
 hasDependency(device::Device, type::DataType) = length(dependencies(device, type)) > 0
 
+"Retrieve all expected dependencies of a device."
+expectedDependencies(device::Device)::Vector{DataType} = vcat(neededDependencies(device), optionalDependencies(device))
+
+"Check if a device is an expected dependency of another device."
+function isExpectedDependency(device::Device, dependency::Device)
+  for expectedDependency in expectedDependencies(device)
+    if typeof(dependency) <: expectedDependency
+      return true
+    end
+  end
+
+  return false
+end
+
 @mustimplement init(device::Device)
-@mustimplement checkDependencies(device::Device)
+@mustimplement neededDependencies(device::Device)::Vector{DataType}
+@mustimplement optionalDependencies(device::Device)::Vector{DataType}
+
+function checkDependencies(device::Device)
+  # Check if all needed dependencies are assigned
+  for neededDependency in neededDependencies(device)
+    if !hasDependency(device, neededDependency)
+      throw(ScannerConfigurationError("The device with ID `$(deviceID(device))` "*
+                                      "needs a dependency of type $(neededDependency) "*
+                                      "but it is not assigned."))
+      return false
+    end
+  end
+
+  # Check if superfluous dependencies are assigned
+  for (dependencyID, dependency) in dependencies(device)
+    if !isExpectedDependency(device, dependency)
+      @warn "The device with ID `$(deviceID(device))` has a superfluous dependency "*
+            "to a device with ID `$dependencyID`."
+    end
+  end
+  
+  return true
+end

@@ -29,7 +29,8 @@ function init(daq::DummyDAQ)
   daq.present = true
 end
 
-checkDependencies(daq::DummyDAQ) = true
+neededDependencies(::DummyDAQ) = []
+optionalDependencies(::DummyDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::DummyDAQ) = nothing
 

@@ -24,7 +24,8 @@ function init(gauss::DummyGaussMeter)
   gauss.present = true
 end
 
-checkDependencies(gauss::DummyGaussMeter) = true
+neededDependencies(::DummyGaussMeter) = []
+optionalDependencies(::DummyGaussMeter) = []
 
 Base.close(gauss::DummyGaussMeter) = nothing
 
