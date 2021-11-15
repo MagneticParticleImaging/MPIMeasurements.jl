@@ -2,7 +2,7 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots
+export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots, checkPosition
 export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toRobotCoords, moveRobotOrigin, moveScannerOrigin
 export coordinateSystem
 
