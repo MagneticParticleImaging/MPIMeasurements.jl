@@ -5,16 +5,16 @@ export SurveillanceUnit, getSurveillanceUnits, getSurveillanceUnit, enableACPowe
 abstract type SurveillanceUnit <: Device end
 
 include("DummySurveillanceUnit.jl")
-#include("ArduinoSurveillanceUnit.jl")
+include("ArduinoSurveillanceUnit.jl")
 #include("ArduinoWithExternalTempUnit.jl")
-#include("MPSSurveillanceUnit.jl")
+#include("MPSSurveillanceUnit.jl") TODO
 
 Base.close(su::SurveillanceUnit) = nothing
 
 @mustimplement getTemperatures(su::SurveillanceUnit)
-@mustimplement getACStatus(su::SurveillanceUnit, scanner::MPIScanner)
-@mustimplement enableACPower(su::SurveillanceUnit, scanner::MPIScanner)
-@mustimplement disableACPower(su::SurveillanceUnit, scanner::MPIScanner)
+@mustimplement getACStatus(su::SurveillanceUnit)
+@mustimplement enableACPower(su::SurveillanceUnit)
+@mustimplement disableACPower(su::SurveillanceUnit)
 @mustimplement resetDAQ(su::SurveillanceUnit)
 @mustimplement hasResetDAQ(su::SurveillanceUnit)
 
