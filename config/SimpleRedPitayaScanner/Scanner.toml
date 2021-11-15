@@ -6,9 +6,9 @@ name = "SimpleRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
 #datasetStore = "/opt/data/HeadScanner"
-datasetStore = "~/Documents/DatasetStores/store1"
+datasetStore = "/home/niklas/Documents/DatasetStores/store1"
 defaultSequence = "1DSequence"
-defaultProtocol = "AsyncMeasurement"
+defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
 consumerThreadID = 3
 protocolThreadID = 4
@@ -16,16 +16,31 @@ protocolThreadID = 4
 [Devices]
 initializationOrder = [
   "rp_cluster",
+  "collision_module",
   "dummy_robot",
   "dummy_surveillance"
 ]
 
 [Devices.dummy_robot]
-deviceType = "DummyRobot"
+deviceType = "SimulatedRobot"
+dependencies = ["collision_module"]
+axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
+
+[Devices.dummy_robot.coordinateSystem]
+origin = ["125.5mm", "125.5mm", "75.5mm"]
+
+[Devices.collision_module]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
 
 [Devices.dummy_robot.namedPositions]
 origin = ["0mm","0mm","0mm"]
-park = ["3mm","0mm","0mm"]
+park = ["300mm","125.5mm","75.5mm"]
 
 
 [Devices.dummy_surveillance]
@@ -39,7 +54,6 @@ dependencies = []
 ips = ["192.168.1.100"] #, "192.168.1.101"]
 calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
-calibFieldToVolt = [5, 5]
 #passPDMToFastDAC = [false] #, false]
 
 [Devices.rp_cluster.chanx]
@@ -48,7 +62,7 @@ channel = 1
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
-calibration = "0.1V/mT"
+calibration = "0.005V/mT"
 feedback.channelID = "feedback_main"
 feedback.calibration = "10mT/V"
 passPDMToFastDAC = true
@@ -59,9 +73,7 @@ channel = 2
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
-calibration = "0.1V/mT"
-feedback.channelID = "feedback_main"
-feedback.calibration = "10mT/V"
+calibration = "0.005V/mT"
 
 [Devices.rp_cluster.rx_main]
 type = "rx"
