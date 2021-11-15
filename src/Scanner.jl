@@ -134,6 +134,7 @@ Base.@kwdef struct MPIScannerGeneral
   producerThreadID::Int32 = 2
   "Thread ID of the consumer thread."
   consumerThreadID::Int32 = 3
+  "Thread ID of the producer thread."
   protocolThreadID::Int32 = 4
 end
 
@@ -300,7 +301,6 @@ function getSequenceList(scanner::MPIScanner)
   end
 end
 
-# TODO getProtocolList
 
 """
     $(SIGNATURES)
@@ -395,7 +395,6 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
 
   daq = getDAQ(scanner)
   asyncProducer(channel, daq, sequence, prepTx = prepTx)
-  #disconnect(daq)
 
   if !isnothing(su)
     #disableACPower(su, scanner)
