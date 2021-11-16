@@ -20,11 +20,4 @@ Base.close(su::SurveillanceUnit) = nothing
 @mustimplement hasResetDAQ(su::SurveillanceUnit) # TODO is this has as in "was reset successfull" or if it has the ability to do so?
 
 getSurveillanceUnits(scanner::MPIScanner) = getDevices(scanner, SurveillanceUnit)
-function getSurveillanceUnit(scanner::MPIScanner)
-  surveillanceUnits = getSurveillanceUnits(scanner)
-  if length(surveillanceUnits) > 1
-    error("The scanner has more than one surveillance unit device. Therefore, a single surveillance unit cannot be retrieved unambiguously.")
-  else
-    return surveillanceUnits[1]
-  end
-end
+getSurveillanceUnit(scanner::MPIScanner) = getDevice(scanner, SurveillanceUnit)

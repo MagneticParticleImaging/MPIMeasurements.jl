@@ -77,16 +77,8 @@ scannerCoordOrigin(rob::Robot) = coordinateSystem(rob).origin
 movementOrder(rob::Robot) = "default"
 
 getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
-function getRobot(scanner::MPIScanner)
-  robots = getRobots(scanner)
-  if length(robots) == 0
-    error("The scanner has no robot.")
-  elseif length(robots) > 1
-    error("The scanner has more than one robot. Therefore, a robot cannot be retrieved unambiguously.")
-  else
-    return robots[1]
-  end
-end
+getRobot(scanner::MPIScanner) = getDevice(scanner, Robot)
+
 
 include("CollisionModule/CollisionModule.jl")
 include("RobotExceptions.jl")

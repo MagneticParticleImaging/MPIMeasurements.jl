@@ -177,14 +177,7 @@ end
 @mustimplement canConvolute(daq::AbstractDAQ)
 
 getDAQs(scanner::MPIScanner) = getDevices(scanner, AbstractDAQ)
-function getDAQ(scanner::MPIScanner)
-  daqs = getDAQs(scanner)
-  if length(daqs) > 1
-    error("The scanner has more than one DAQ device. Therefore, a single DAQ cannot be retrieved unambiguously.")
-  else
-    return daqs[1]
-  end
-end
+getDAQ(scanner::MPIScanner) = getDevice(scanner, AbstractDAQ)
 
 # function dataConversionFactor(daq::AbstractDAQ) #default
 #   factor = zeros(2, numRxChannels(daq))

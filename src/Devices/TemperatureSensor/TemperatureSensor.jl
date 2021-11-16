@@ -13,11 +13,5 @@ Base.close(t::TemperatureSensor) = nothing
 @mustimplement getTemperature(sensor::TemperatureSensor, channel::Int)
 
 getTemperatureSensors(scanner::MPIScanner) = getDevices(scanner, TemperatureSensor)
-function getTemperatureSensor(scanner::MPIScanner)
-  temperatureSensors = getTemperatureSensors(scanner)
-  if length(temperatureSensors) > 1
-    error("The scanner has more than one temperature sensor device. Therefore, a single temperature sensor cannot be retrieved unambiguously.")
-  else
-    return temperatureSensors[1]
-  end
-end
+getTemperatureSensor(scanner::MPIScanner) = getDevice(scanner, TemperatureSensor)
+

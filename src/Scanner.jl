@@ -252,9 +252,9 @@ getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 """
     $(SIGNATURES)
 
-Retrieve all devices of a specific `deviceType`.
+Retrieve all devices of a specific `deviceType`. Returns an empty vector if none are found
 """
-function getDevices(scanner::MPIScanner, deviceType::DataType)
+function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
     if typeof(device) <: deviceType
@@ -267,6 +267,22 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   knownDeviceTypes = deepsubtypes(Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
+end
+
+"""
+$(SIGNATURES)
+
+Retrieve all devices of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
+"""
+function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
+  devices = getDevices(scanner, deviceType)
+  if length(devices) > 1
+    error("The scanner has more than one $(string(deviceType)) device. Therefore, a single $(string(deviceType)) cannot be retrieved unambiguously.")
+  elseif length(devices) == 0
+    return nothing
+  else 
+    return devices[1]
+  end
 end
 
 "Bore size of the scanner."
