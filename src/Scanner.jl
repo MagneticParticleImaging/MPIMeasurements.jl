@@ -396,28 +396,26 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
-  su = nothing
-  # TODO dependency does not work because MPIScanner is not a device
-  #if hasDependency(scanner, SurveillanceUnit)
-    #su = dependency(scanner, SurveillanceUnit)
-    #enableACPower(su, ...) # TODO
+  su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
+  if !isnothing(su)
+    enableACPower(su)
     # TODO Send expected enable time to SU
-  #end
-  robot = nothing
-  #if hasDependency(scanner, Robot)
-  #  robot = dependeny(scanner, Robot)
-  #  setEnabled(robot, false)
-  #end
+  end
+  robots = getRobots(scanner)
+  for robot in robots
+    disable(robot)
+  end
 
   daq = getDAQ(scanner)
   asyncProducer(channel, daq, sequence, prepTx = prepTx)
 
   if !isnothing(su)
-    #disableACPower(su, scanner)
+    disableACPower(su)
   end
-  if !isnothing(robot)
-    #setEnabled(robot, true)
+  for robot in robots
+    enable(robot)
   end
+ 
 end
 
 # Default Consumer

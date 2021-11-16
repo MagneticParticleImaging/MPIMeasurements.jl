@@ -250,7 +250,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   numPos = length(calib.positions)
   @info "Store SF"
 
-  enableACPower(su, protocol.scanner)
+  enableACPower(su)
   stopTx(daq)
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -274,7 +274,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
       wait(calib.consumer)
       wait(calib.producerFinalizer)
       stopTx(daq)
-      disableACPower(su, protocol.scanner)
+      disableACPower(su)
       enable(robot)
       movePark(robot)
       disable(robot)
@@ -376,9 +376,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   timeGetThings = @elapsed begin
     # TODO getSafety and getTempSensor if necessary
     #safety = getSafety(protocol.scanner)
-    su = getSurveillanceUnit(protocol.scanner)
     daq = getDAQ(protocol.scanner)
-    robot = getRobot(protocol.scanner)
     #tempSensor = getTemperatureSensor(protocol.scanner)
     channel = Channel{channelType(daq)}(32)
   end
