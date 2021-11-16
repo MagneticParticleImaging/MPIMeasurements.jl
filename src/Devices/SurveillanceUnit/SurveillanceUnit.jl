@@ -6,7 +6,8 @@ abstract type SurveillanceUnit <: Device end
 
 include("DummySurveillanceUnit.jl")
 include("ArduinoSurveillanceUnit.jl")
-#include("ArduinoWithExternalTempUnit.jl")
+include("ArduinoSurveillanceUnitExternalTemp.jl")
+include("ArduinoSurveillanceUnitInternalTemp.jl")
 #include("MPSSurveillanceUnit.jl") TODO
 
 Base.close(su::SurveillanceUnit) = nothing
@@ -16,7 +17,7 @@ Base.close(su::SurveillanceUnit) = nothing
 @mustimplement enableACPower(su::SurveillanceUnit)
 @mustimplement disableACPower(su::SurveillanceUnit)
 @mustimplement resetDAQ(su::SurveillanceUnit)
-@mustimplement hasResetDAQ(su::SurveillanceUnit)
+@mustimplement hasResetDAQ(su::SurveillanceUnit) # TODO is this has as in "was reset successfull" or if it has the ability to do so?
 
 getSurveillanceUnits(scanner::MPIScanner) = getDevices(scanner, SurveillanceUnit)
 function getSurveillanceUnit(scanner::MPIScanner)

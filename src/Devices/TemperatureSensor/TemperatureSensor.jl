@@ -3,6 +3,7 @@ export TemperatureSensor, getTemperatureSensors, getTemperatureSensor, numChanne
 abstract type TemperatureSensor <: Device end
 
 include("DummyTemperatureSensor.jl")
+include("ArduinoTemperatureSensor.jl")
 #include("FOTemp.jl")
 
 Base.close(t::TemperatureSensor) = nothing
