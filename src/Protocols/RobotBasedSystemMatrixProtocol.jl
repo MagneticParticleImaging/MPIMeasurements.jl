@@ -250,7 +250,6 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   numPos = length(calib.positions)
   @info "Store SF"
 
-  enableACPower(su)
   stopTx(daq)
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -323,12 +322,15 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
+  su = getSurveillanceUnit(protocol.scanner)
+  timeMove = 0
   timePrepDAQ = 0
   timeFinalizer = 0
   timeFrameChange = 0
   timeSeq = 0
   timeTx = 0
   timeConsumer = 0
+  timeWaitSU = 0
 
   @sync begin
     # Prepare Robot/Sample
@@ -338,6 +340,9 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
     @async timePrepDAQ = @elapsed begin
       allowControlLoop = mod1(calib.currPos, 11) == 1  
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
+      # The following tasks can only be started after the finalizer and mostly only in this order
+      suTask = @async enableACPower(su)
+
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
           acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
@@ -349,6 +354,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       end
 
       timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
+      timeWaitSU = @elapsed wait(suTask)
       # TODO check again if controlLoop can be run while robot is active
       timeTx = @elapsed begin 
         if protocol.params.controlTx
@@ -365,7 +371,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
     @async timeConsumer = @elapsed wait(calib.consumer)
   end
-  @info "############### Preparing: Prep DAQ time $timePrepDAQ, Finalizer $timeFinalizer, Frame $timeFrameChange, Seq $timeSeq, Tx $timeTx, Consumer $timeConsumer" 
+  @info "############### Preparing: Move $timeMove Prep DAQ time $timePrepDAQ, Finalizer $timeFinalizer, Frame $timeFrameChange, Seq $timeSeq, SU $timeWaitSU, Tx $timeTx, Consumer $timeConsumer" 
 end
 
 function measurement(protocol::RobotBasedSystemMatrixProtocol)
@@ -377,13 +383,12 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     # TODO getSafety and getTempSensor if necessary
     #safety = getSafety(protocol.scanner)
     daq = getDAQ(protocol.scanner)
-    #tempSensor = getTemperatureSensor(protocol.scanner)
+    su = getSurveillanceUnit(protocol.scanner)
     channel = Channel{channelType(daq)}(32)
   end
 
   @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
-    # TODO Wait or answerEvents here?
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
     producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
     while !istaskdone(producer)
@@ -396,7 +401,10 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
 
   @show timeEnableSlowDAC
   start, endFrame = getFrameTiming(daq) 
-  calib.producerFinalizer = @async endSequence(daq, endFrame)
+  calib.producerFinalizer = @async begin 
+    endSequence(daq, endFrame)
+    disableACPower(su)
+  end
 end
 
 function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtocol)
