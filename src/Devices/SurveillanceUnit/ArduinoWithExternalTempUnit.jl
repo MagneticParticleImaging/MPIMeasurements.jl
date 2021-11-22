@@ -1,5 +1,5 @@
-export ArduinoWithExternalTempUnit
-
+export ArduinoWithExternalTempUnit, getStatus, resetDAQ
+# TODO comment relevant Arduino code once added to project
 struct ArduinoWithExternalTempUnit <: SurveillanceUnit
   sd::Vector{SerialDevice}
   CommandStart::String
@@ -155,9 +155,6 @@ function getMaximumTemps(Arduino::ArduinoWithExternalTempUnit)
 end
 
 
-################################################
-#----------- Surveillance Unit ---------- "id=1"
-
 export CheckACQ
 function CheckACQ(Arduino::ArduinoWithExternalTempUnit,ACQ)
     if ACQ=="ACQ"
@@ -168,109 +165,14 @@ function CheckACQ(Arduino::ArduinoWithExternalTempUnit,ACQ)
     end
 end
 
-export ArEnableWatchDog
-function ArEnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-    ACQ= ArduinoCommand(Arduino, "ENABLE:WD", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export ArDisableWatchDog
-function ArDisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-     ACQ= ArduinoCommand(Arduino, "DISABLE:WD", 1)
-     CheckACQ(Arduino,ACQ)
-end
-
-export GetDigital
-function GetDigital(Arduino::ArduinoWithExternalTempUnit, DIO::Int)
-    DIO=ArduinoCommand(Arduino,"GET:DIGITAL:"*string(DIO), 1)
-    return DIO;
-end
-
-export GetAnalog
-function GetAnalog(Arduino::ArduinoWithExternalTempUnit, ADC::Int)
-    ADC=ArduinoCommand(Arduino,"GET:ANALOG:A"*string(ADC), 1)
-    return ADC;
-end
-
-export GetErrorStatus
-function GetErrorStatus(Arduino::ArduinoWithExternalTempUnit)
-    Errorcode=ArduinoCommand(Arduino,"GET:STATUS", 1);
-    ErrorcodeBool=[parsebool(x) for x in Errorcode]
-    return ErrorcodeBool
-end
-
-export GetStatus
 function GetStatus(Arduino::ArduinoWithExternalTempUnit)
     status = ArduinoCommand(Arduino,"GET:STATS", 1)
     return status
 end
 
-export resetDAQ
 function resetDAQ(Arduino::ArduinoWithExternalTempUnit)
     ACQ = ArduinoCommand(Arduino,"RESET:RP", 1)
     CheckACQ(Arduino,ACQ)
 end
-
-export ResetWatchDog
-function ResetWatchDog(Arduino::ArduinoWithExternalTempUnit)
-     ACQ=ArduinoCommand(Arduino,"RESET:WD", 1)
-     CheckACQ(Arduino,ACQ)
-end
-
-export EnableWatchDog
-function EnableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"ENABLE:WD", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export DisableWatchDog
-function DisableWatchDog(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"DISABLE:WD", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export ResetFail
-function ResetFail(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"RESET:FAIL", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export DisableSurveillance
-function DisableSurveillance(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"DISABLE:SURVEILLANCE", 1)
-    CheckACQ(Arduino,ACQ)
-end
- 
-export EnableSurveillance
-function EnableSurveillance(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"ENABLE:SURVEILLANCE", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export GetCycletime
-function GetCycletime(Arduino::ArduinoWithExternalTempUnit)
-    tcycle=ArduinoCommand(Arduino,"GET:CYCLETIME", 1)
-    return tcycle;
-end
-
-export ResetArduino
-function ResetArduino(Arduino::ArduinoWithExternalTempUnit)
-    ACQ=ArduinoCommand(Arduino,"RESET:ARDUINO", 1)
-    CheckACQ(Arduino,ACQ)
-end
-
-export enableACPower
-function enableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
-    ACQ=ArduinoCommand(Arduino,"ENABLE:AC", 1);
-    sleep(0.5)
-    CheckACQ(Arduino,ACQ)
-end
-
-export disableACPower
-function disableACPower(Arduino::ArduinoWithExternalTempUnit, scanner::MPIScanner)
-    ACQ=ArduinoCommand(Arduino,"DISABLE:AC", 1);
-    CheckACQ(Arduino,ACQ)
-end
  
 hasResetDAQ(su::ArduinoWithExternalTempUnit) = true
- 

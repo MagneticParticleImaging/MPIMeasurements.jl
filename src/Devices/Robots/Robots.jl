@@ -2,20 +2,36 @@ using Graphics: @mustimplement
 using Unitful
 
 export Robot, RobotState, getPosition, dof, state, isReferenced, moveAbs, moveRel, movePark, enable, disable, reset, setup, doReferenceDrive, axisRange, defaultVelocity
-export teachPos, gotoPos, saveTeachedPos, namedPositions, namedPosition, getRobot, getRobots, ScannerCoords, RobotCoords, toRobotCoords, toScannerCoords
-export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, moveRobotOrigin, moveScannerOrigin
+export teachNamedPosition, gotoPos, exportNamedPositions, namedPositions, namedPosition, getRobot, getRobots, checkPosition
+export ScannerCoords, RobotCoords, getPositionScannerCoords, scannerCoordAxes, scannerCoordOrigin, toRobotCoords, moveRobotOrigin, moveScannerOrigin
+export coordinateSystem
 
 @enum RobotState INIT DISABLED READY MOVING ERROR
 
 abstract type Robot <: Device end
 
-struct ScannerCoords{T<:Unitful.Length} <: AbstractVector{T}
+struct RobotCoords{T<:Unitful.Length} <: DeviceCoords{T}
   data::Vector{T}
 end
 
-struct RobotCoords{T<:Unitful.Length} <: AbstractVector{T}
-  data::Vector{T}
-end
+function prepareRobotDict(dict::Dict)
+  if haskey(dict, "coordinateSystem")
+    coordDict = dict_to_splatting(pop!(dict, "coordinateSystem"))
+    
+    origin = nothing
+    if haskey(coordDict, :origin)
+      origin = coordDict[:origin]
+    end
+    axes = nothing
+    if haskey(coordDict, :axes)
+      axes = coordDict[:axes]
+    end
+
+    coordSystem = ScannerCoordinateSystem(axes, origin)
+    dict["coordinateSystem"] = coordSystem
+  end
+  return dict
+end 
 
 Base.getindex(c::Union{ScannerCoords,RobotCoords}, i) = getindex(c.data, i)
 Base.size(c::Union{ScannerCoords,RobotCoords}) = size(c.data)
@@ -44,42 +60,33 @@ function init(rob::Robot)
 end
 
 neededDependencies(::Robot) = []
-optionalDependencies(::Robot) = []
+optionalDependencies(::Robot) = [AbstractCollisionModule]
 
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state
 setstate!(rob::Robot, state::RobotState) = rob.state = state
+coordinateSystem(rob::Robot) = params(rob).coordinateSystem
 namedPositions(rob::Robot) = :namedPositions in fieldnames(typeof(params(rob))) ? params(rob).namedPositions : error("The parameter struct of the robot must have a field `namedPositions`.")
 namedPosition(rob::Robot, pos::AbstractString) = RobotCoords(params(rob).namedPositions[pos])
 
-# should return a matrix of shape dof(rob)×dof(rob)
-scannerCoordAxes(rob::Robot) = :scannerCoordAxes in fieldnames(typeof(params(rob))) ? params(rob).scannerCoordAxes : Matrix(1.0LinearAlgebra.I, dof(rob), dof(rob))
-# should return a vector of shape dof(rob)
-scannerCoordOrigin(rob::Robot) = :scannerCoordOrigin in fieldnames(typeof(params(rob))) ? params(rob).scannerCoordOrigin : zeros(dof(rob))*u"mm"
+# should return a matrix of shape dof(rob)×dof(rob) where the first column is the scanner x-axis in robot coordinates, second column is the scanner y-axis in robot coordinates
+scannerCoordAxes(rob::Robot) = coordinateSystem(rob).axes
+scannerCoordOrigin(rob::Robot) = coordinateSystem(rob).origin
 
 #overwrite to enable a change in movement order, if overwritten should be a string of length dof(rob), containing the lowercase letters corresponding to the axes, e.g. "yx" or "xzy"
 movementOrder(rob::Robot) = "default"
 
 getRobots(scanner::MPIScanner) = getDevices(scanner, Robot)
-function getRobot(scanner::MPIScanner)
-  robots = getRobots(scanner)
-  if length(robots) == 0
-    error("The scanner has no robot.")
-  elseif length(robots) > 1
-    error("The scanner has more than one robot. Therefore, a robot cannot be retrieved unambiguously.")
-  else
-    return robots[1]
-  end
-end
+getRobot(scanner::MPIScanner) = getDevice(scanner, Robot)
 
+
+include("CollisionModule/CollisionModule.jl")
 include("RobotExceptions.jl")
 include("DummyRobot.jl")
 include("SimulatedRobot.jl")
 include("IgusRobot.jl")
 include("IselRobot.jl")
 include("BrukerRobot.jl")
-include("Safety.jl")
-include("KnownSetups.jl")
 
 function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   if haskey(namedPositions(rob), pos_name)
@@ -90,7 +97,7 @@ function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   end
 end
 
-function teachPos(rob::Robot, pos_name::AbstractString; override=false)
+function teachNamedPosition(rob::Robot, pos_name::AbstractString; override=false)
   pos = getPosition(rob)
   if haskey(namedPositions(rob), pos_name)
     if !override
@@ -103,7 +110,7 @@ function teachPos(rob::Robot, pos_name::AbstractString; override=false)
   end
 end
 
-function saveTeachedPos(rob::Robot)
+function exportNamedPositions(rob::Robot)
   println("To save the positions, that have been tought in the current session copy and paste the following section into the config file: ")
   println()
   println("[Devices.$(deviceID(rob)).namedPositions]")
@@ -118,19 +125,26 @@ function saveTeachedPos(rob::Robot)
   println()
 end
 
-useExplicitCoordinates(rob::Robot) = ((scannerCoordAxes(rob) == LinearAlgebra.I) && (scannerCoordOrigin(rob) == zeros(dof(rob))*u"mm")) ? false : true
+useExplicitCoordinates(rob::Robot) = ((scannerCoordAxes(rob) != LinearAlgebra.I) || (scannerCoordOrigin(rob) != zeros(dof(rob))*u"mm")) # if there is a non unit transform defined, use explicit coordinates
 
-function toRobotCoords(rob::Robot, coords::ScannerCoords)
-  rotated = inv(scannerCoordAxes(rob)) * coords.data
-  return RobotCoords(rotated + scannerCoordOrigin(rob))
-end
+
+toRobotCoords(rob::Robot, coords::ScannerCoords) = toDeviceCoords(coordinateSystem(rob), coords, RobotCoords)
 toRobotCoords(rob::Robot, coords::RobotCoords) = coords
+toScannerCoords(rob::Robot, coords::Union{RobotCoords, ScannerCoords}) = toScannerCoords(coordinateSystem(rob), coords)
 
-function toScannerCoords(rob::Robot, coords::RobotCoords)
-  shifted = coords.data - scannerCoordOrigin(rob)
-  return ScannerCoords(scannerCoordAxes(rob) * shifted)
+"Returns true if given position is allowed, false otherwise"
+function checkPosition(rob::Robot, pos::ScannerCoords)
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    return checkCoords(cms, pos)
+  end
+  # should this stop execution in some cases instead of warning?
+  @warn "No valid CollisionModule defined as a dependency for robot $(deviceID(rob)), cant check movement"
+  return true
 end
-toScannerCoords(rob::Robot, coords::ScannerCoords) = coords
+function checkPosition(rob::Robot, pos::RobotCoords)
+  return checkPosition(rob, toScannerCoords(rob, pos))
+end
 
 moveAbs(rob::Robot, pos::Vararg{Unitful.Length,N}) where N = moveAbs(rob, [pos...])
 moveAbs(rob::Robot, pos::AbstractVector{<:Unitful.Length}) = moveAbs(rob, pos, defaultVelocity(rob))
@@ -151,7 +165,9 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
   isReferenced(rob) || throw(RobotReferenceError(rob)) # TODO: maybe this does not have to be limited
   checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
-  #TODO: perform safety check of coordinates
+  if !checkPosition(rob, pos)
+    throw(RobotSafetyError(rob, pos))
+  end
 
   setstate!(rob, MOVING)
   try
@@ -164,7 +180,6 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
         axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
         tmp_pos[axis] = pos.data[axis]
         _moveAbs(rob, tmp_pos, speed)
-        sleep(0.2)
       end
     end
     setstate!(rob, READY)
@@ -203,12 +218,15 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
   if isReferenced(rob)
     pos = getPosition(rob) + dist
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
+
+    if !checkPosition(rob, pos)
+      throw(RobotSafetyError(rob, pos))
+    end
+
   else
     checkAxisRange(rob, abs.(dist)) || throw(RobotAxisRangeError(rob, dist)) #if the absolute distance in any axis is larger than the range, throw an error, however not throwing an error does not mean the movement is safe!
     @warn "Performing relative movement in unreferenced state, cannot validate coordinates! Please proceed carefully and perform only movements which are safe!"
   end
-
-  #TODO: perform safety check of coordinates
 
   setstate!(rob, MOVING)
 
@@ -221,7 +239,6 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
         axis = movementOrder(rob)[i] - 'w' # 'x'->1, 'y'->2, 'z'->3
         tmp_dist[axis] = dist.data[axis]
         _moveRel(rob, tmp_dist, speed)
-        sleep(0.2)
       end
     end
     setstate!(rob, READY)

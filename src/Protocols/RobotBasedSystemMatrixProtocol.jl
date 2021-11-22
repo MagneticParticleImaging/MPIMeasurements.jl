@@ -124,6 +124,10 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.measIsBGFrame = measIsBGFrame
   protocol.systemMeasState.currPos = 1
   protocol.systemMeasState.positions = protocol.params.positions # TODO remove redundancy
+
+  if !checkPositions(protocol)
+    throw(IllegalStateException("Protocol has illegal positions"))
+  end
   
   #Prepare Signals
   numRxChannels = length(rxChannels(protocol.params.sequence)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
@@ -156,6 +160,21 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.restored = false
+end
+
+function checkPositions(protocol::RobotBasedSystemMatrixProtocol)
+  rob = getRobot(protocol.scanner)
+  valid = true
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    for cm in cms
+      valid &= all(checkCoords(cm, protocol.params.positions))
+    end
+  end
+  for pos in protocol.params.positions
+    valid &= checkAxisRange(rob, toRobotCoords(rob, ScannerCoords(pos)))
+  end
+  return valid
 end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
@@ -226,15 +245,11 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
   su = getSurveillanceUnit(protocol.scanner)
   daq = getDAQ(protocol.scanner)
   robot = getRobot(protocol.scanner)
-  #safety = getSafety(protocol.scanner) #TODO fix 
-  #safety = getSafety(protocol.scanner) #TODO fix 
-  #tempSensor = getTemperatureSensor(protocol.scanner) # TODO fix
 
   positions = calib.positions
   numPos = length(calib.positions)
   @info "Store SF"
 
-  enableACPower(su, protocol.scanner)
   stopTx(daq)
   while true
     @info "Curr Pos in performCalibrationInner $(calib.currPos)"
@@ -258,7 +273,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
       wait(calib.consumer)
       wait(calib.producerFinalizer)
       stopTx(daq)
-      disableACPower(su, protocol.scanner)
+      disableACPower(su)
       enable(robot)
       movePark(robot)
       disable(robot)
@@ -307,12 +322,15 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   calib = protocol.systemMeasState
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
+  su = getSurveillanceUnit(protocol.scanner)
+  timeMove = 0
   timePrepDAQ = 0
   timeFinalizer = 0
   timeFrameChange = 0
   timeSeq = 0
   timeTx = 0
   timeConsumer = 0
+  timeWaitSU = 0
 
   @sync begin
     # Prepare Robot/Sample
@@ -322,6 +340,9 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
     @async timePrepDAQ = @elapsed begin
       allowControlLoop = mod1(calib.currPos, 11) == 1  
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
+      # The following tasks can only be started after the finalizer and mostly only in this order
+      suTask = @async enableACPower(su)
+
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
           acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
@@ -333,6 +354,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       end
 
       timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
+      timeWaitSU = @elapsed wait(suTask)
       # TODO check again if controlLoop can be run while robot is active
       timeTx = @elapsed begin 
         if protocol.params.controlTx
@@ -349,7 +371,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
     @async timeConsumer = @elapsed wait(calib.consumer)
   end
-  @info "############### Preparing: Prep DAQ time $timePrepDAQ, Finalizer $timeFinalizer, Frame $timeFrameChange, Seq $timeSeq, Tx $timeTx, Consumer $timeConsumer" 
+  @info "############### Preparing: Move $timeMove Prep DAQ time $timePrepDAQ, Finalizer $timeFinalizer, Frame $timeFrameChange, Seq $timeSeq, SU $timeWaitSU, Tx $timeTx, Consumer $timeConsumer" 
 end
 
 function measurement(protocol::RobotBasedSystemMatrixProtocol)
@@ -360,16 +382,13 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   timeGetThings = @elapsed begin
     # TODO getSafety and getTempSensor if necessary
     #safety = getSafety(protocol.scanner)
-    su = getSurveillanceUnit(protocol.scanner)
     daq = getDAQ(protocol.scanner)
-    robot = getRobot(protocol.scanner)
-    #tempSensor = getTemperatureSensor(protocol.scanner)
+    su = getSurveillanceUnit(protocol.scanner)
     channel = Channel{channelType(daq)}(32)
   end
 
   @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
-    # TODO Wait or answerEvents here?
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
     producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
     while !istaskdone(producer)
@@ -382,7 +401,10 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
 
   @show timeEnableSlowDAC
   start, endFrame = getFrameTiming(daq) 
-  calib.producerFinalizer = @async endSequence(daq, endFrame)
+  calib.producerFinalizer = @async begin 
+    endSequence(daq, endFrame)
+    disableACPower(su)
+  end
 end
 
 function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtocol)

@@ -28,8 +28,8 @@ waveform = "sine"
 safeStartInterval = "0.5s"
 safeEndInterval = "0.5s"
 safeErrorInterval = "0.5s"
-control = true
-decouple = true
+control = false
+decouple = false
 
 
 [Fields.ff.ffx]

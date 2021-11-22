@@ -1,4 +1,4 @@
-export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError, RobotExplicitCoordinatesError
+export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError, RobotExplicitCoordinatesError, RobotSafetyError
 
 abstract type RobotException <: Exception end
 
@@ -9,7 +9,7 @@ end
 
 struct RobotAxisRangeError <: RobotException
     robot::Robot
-    pos::AbstractVector{<:Unitful.Length}
+    pos::RobotCoords
 end
 
 struct RobotDOFError <: RobotException
@@ -35,6 +35,11 @@ struct RobotExplicitCoordinatesError <: RobotException
     robot::Robot
 end
 
+struct RobotSafetyError <: Exception
+    robot::Robot
+    pos::RobotCoords
+end
+
 function Base.showerror(io::IO, ex::RobotStateError)
     if ex.state === nothing
         print(io, "RobotStateError: robot '$(deviceID(ex.robot))' is in state $(state(ex.robot))")
@@ -44,11 +49,11 @@ function Base.showerror(io::IO, ex::RobotStateError)
 end
 
 Base.showerror(io::IO, ex::RobotAxisRangeError) = (print(io, "RobotAxisRangeError: position ");
-                                               show(IOContext(io, :typeinfo=>typeof(ex.pos)), ex.pos);
+                                               show(IOContext(io, :typeinfo => typeof(ex.pos)), ex.pos);
                                                print(io, " (ScannerCoords: ");
-                                               show(IOContext(io, :typeinfo=>typeof(toScannerCoords(ex.robot,ex.pos))), toScannerCoords(ex.robot,ex.pos));
+                                               show(IOContext(io, :typeinfo => typeof(toScannerCoords(ex.robot, ex.pos))), toScannerCoords(ex.robot, ex.pos));
                                                print(io, ") is out of the axis range "); 
-                                               show(IOContext(io, :typeinfo=>typeof(axisRange(ex.robot))), axisRange(ex.robot));
+                                               show(IOContext(io, :typeinfo => typeof(axisRange(ex.robot))), axisRange(ex.robot));
                                                print(io, " of robot '$(deviceID(ex.robot))'"))
 
 Base.showerror(io::IO, ex::RobotDOFError) = print(io, "RobotDOFError: coordinates included $(ex.dof) axes, but robot '$(deviceID(ex.robot))' has $(dof(ex.robot)) degrees-of-freedom")
@@ -66,3 +71,9 @@ function Base.showerror(io::IO, ex::RobotTeachError)
 end
 
 Base.showerror(io::IO, ex::RobotExplicitCoordinatesError) = print(io, "RobotExplicitCoordinatesError: robot '$(deviceID(ex.robot))' has defined a coordinate transform and therefore needs explicit declaration of the used coordinate system. Please pass RobotCoords(pos) or ScannerCoords(pos).")
+
+Base.showerror(io::IO, ex::RobotSafetyError) = (print(io, "RobotSafetyError: position ");
+                                                show(IOContext(io, :typeinfo => typeof(ex.pos)), ex.pos);
+                                                print(io, " (ScannerCoords: ");
+                                                show(IOContext(io, :typeinfo => typeof(toScannerCoords(ex.robot, ex.pos))), toScannerCoords(ex.robot, ex.pos));
+                                                print(io, ") is not safe to move to!"); )

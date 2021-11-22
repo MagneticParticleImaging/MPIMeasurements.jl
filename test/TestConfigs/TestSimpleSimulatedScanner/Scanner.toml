@@ -12,6 +12,7 @@ defaultSequence = "SimpleSimulatedSequence"
 initializationOrder = [
   "my_daq_id",
   "simulated_gaussmeter",
+  "collision_module_1",
   "simulated_robot",
   "sequence_controller",
   "simulation_controller"
@@ -53,6 +54,18 @@ deviceType = "SimulatedGaussMeter"
 
 [Devices.simulated_robot]
 deviceType = "SimulatedRobot"
+coordinateSystem.axes = "y,z,x"
+coordinateSystem.origin = ["0mm", "0mm", "0mm"]
+dependencies = ["collision_module_1"]
+
+[Devices.collision_module_1]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "TestKreis"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
 
 [Devices.sequence_controller]
 deviceType = "SequenceController"

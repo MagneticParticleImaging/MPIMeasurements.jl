@@ -48,11 +48,10 @@ Base.@kwdef struct IgusRobotParams <: DeviceParams
   movDec::typeof(1.0u"mm/s^2") = 100.0u"mm/s^2"
   timeout::typeof(1.0u"s") = 10u"s"
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0]u"mm")
-  scannerCoordAxes::Matrix{Float64} = ones(1,1)
-  scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0]u"m"
+  coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(1)
 end
 
-IgusRobotParams(dict::Dict) = params_from_dict(IgusRobotParams, dict)
+IgusRobotParams(dict::Dict) = params_from_dict(IgusRobotParams, prepareRobotDict(dict))
 
 Base.@kwdef mutable struct IgusRobot <: Robot
   "Unique device ID for this device as defined in the configuration."

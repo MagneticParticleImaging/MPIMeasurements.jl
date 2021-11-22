@@ -10,3 +10,4 @@ addConfigurationPath(testConfigDir)
 
 include("Devices/DeviceTests.jl")
 include("Scanner/ScannerTests.jl")
+include("Safety/SafetyTests.jl")

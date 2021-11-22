@@ -134,6 +134,7 @@ Base.@kwdef struct MPIScannerGeneral
   producerThreadID::Int32 = 2
   "Thread ID of the consumer thread."
   consumerThreadID::Int32 = 3
+  "Thread ID of the producer thread."
   protocolThreadID::Int32 = 4
 end
 
@@ -251,9 +252,9 @@ getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 """
     $(SIGNATURES)
 
-Retrieve all devices of a specific `deviceType`.
+Retrieve all devices of a specific `deviceType`. Returns an empty vector if none are found
 """
-function getDevices(scanner::MPIScanner, deviceType::DataType)
+function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
     if typeof(device) <: deviceType
@@ -266,6 +267,22 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   knownDeviceTypes = deepsubtypes(Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
+end
+
+"""
+$(SIGNATURES)
+
+Retrieve all devices of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
+"""
+function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
+  devices = getDevices(scanner, deviceType)
+  if length(devices) > 1
+    error("The scanner has more than one $(string(deviceType)) device. Therefore, a single $(string(deviceType)) cannot be retrieved unambiguously.")
+  elseif length(devices) == 0
+    return nothing
+  else 
+    return devices[1]
+  end
 end
 
 "Bore size of the scanner."
@@ -300,7 +317,6 @@ function getSequenceList(scanner::MPIScanner)
   end
 end
 
-# TODO getProtocolList
 
 """
     $(SIGNATURES)
@@ -380,29 +396,26 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
-  su = nothing
-  # TODO dependency does not work because MPIScanner is not a device
-  #if hasDependency(scanner, SurveillanceUnit)
-    #su = dependency(scanner, SurveillanceUnit)
-    #enableACPower(su, ...) # TODO
+  su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
+  if !isnothing(su)
+    enableACPower(su)
     # TODO Send expected enable time to SU
-  #end
-  robot = nothing
-  #if hasDependency(scanner, Robot)
-  #  robot = dependeny(scanner, Robot)
-  #  setEnabled(robot, false)
-  #end
+  end
+  robots = getRobots(scanner)
+  for robot in robots
+    disable(robot)
+  end
 
   daq = getDAQ(scanner)
   asyncProducer(channel, daq, sequence, prepTx = prepTx)
-  #disconnect(daq)
 
   if !isnothing(su)
-    #disableACPower(su, scanner)
+    disableACPower(su)
   end
-  if !isnothing(robot)
-    #setEnabled(robot, true)
+  for robot in robots
+    enable(robot)
   end
+ 
 end
 
 # Default Consumer

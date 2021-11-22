@@ -1,4 +1,4 @@
-r_params = SimulatedRobotParams(scannerCoordAxes=[[0, 1, 0] [1, 0, 0] [0, 0, -1]], scannerCoordOrigin=[0,0,50]u"mm", movementOrder="zyx")
+r_params = SimulatedRobotParams(coordinateSystem=RobotCoordinateSystem(axes="y,x,-z", origin=[0,0,50]u"mm"), movementOrder="zyx")
 rob = SimulatedRobot(deviceID="simRob", params=r_params, dependencies=Dict{String, Union{Device, Missing}}())
 
 @test state(rob)==:INIT
@@ -27,11 +27,11 @@ enable(rob)
 doReferenceDrive(rob)
 @test isReferenced(rob)
 moveAbs(rob, RobotCoords([1,1,1]u"mm"))
-teachPos(rob, "pos1")
+teachNamedPosition(rob, "pos1")
 @test issetequal(keys(namedPositions(rob)), ["origin", "pos1"])
 
 moveAbs(rob, RobotCoords([2u"mm",2u"mm",2u"mm"]))
-teachPos(rob, "pos2")
+teachNamedPosition(rob, "pos2")
 gotoPos(rob, "pos1")
 @test getPosition(rob) == [1,1,1]u"mm"
 

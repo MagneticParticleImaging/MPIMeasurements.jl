@@ -4,13 +4,11 @@ Base.@kwdef struct SimulatedRobotParams <: DeviceParams
   defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500],[0,400],[0,250]]u"mm"
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
-  scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
-  scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
   movementOrder::String = "default"
+  coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
 end
 
-SimulatedRobotParams(dict::Dict) = params_from_dict(SimulatedRobotParams, dict)
-
+SimulatedRobotParams(dict::Dict) = params_from_dict(SimulatedRobotParams, prepareRobotDict(dict))
 Base.@kwdef mutable struct SimulatedRobot <: Robot
 "Unique device ID for this device as defined in the configuration."
   deviceID::String

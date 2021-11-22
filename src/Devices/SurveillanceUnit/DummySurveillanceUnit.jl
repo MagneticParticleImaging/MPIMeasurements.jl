@@ -32,14 +32,14 @@ optionalDependencies(::DummySurveillanceUnit) = []
 Base.close(su::DummySurveillanceUnit) = nothing
 
 getTemperatures(su::DummySurveillanceUnit) = 30.0.*ones(4) .+ 1.0.*randn(4)
-getACStatus(su::DummySurveillanceUnit, scanner::MPIScanner) = su.acPowerEnabled
+getACStatus(su::DummySurveillanceUnit) = su.acPowerEnabled
 
-function enableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)
+function enableACPower(su::DummySurveillanceUnit)
   @debug "Enable AC Power"
   su.acPowerEnabled = true
 end
 
-function disableACPower(su::DummySurveillanceUnit, scanner::MPIScanner)
+function disableACPower(su::DummySurveillanceUnit)
   @debug "Disable AC Power"
   su.acPowerEnabled = false
 end

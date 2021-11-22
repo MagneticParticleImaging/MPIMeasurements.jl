@@ -47,13 +47,12 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   delim_write::String = "\r"
   baudrate::Int = 9600
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
-  scannerCoordAxes::Matrix{Float64} = [[1,0,0] [0,1,0] [0,0,1]]
-  scannerCoordOrigin::Vector{typeof(1.0u"mm")} = [0, 0, 0]u"mm"
   referenceOrder::String = "zyx"
   movementOrder::String = "zyx"
+  coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
 end
 
-IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, dict)
+IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, prepareRobotDict(dict))
 
 Base.@kwdef mutable struct IselRobot <: Robot
   "Unique device ID for this device as defined in the configuration."
@@ -111,41 +110,57 @@ function _setup(rob::IselRobot)
     rob.controllerVersion = 2
   end
 
-  if rob.controllerVersion > 2
-    invertAxes(rob, rob.params.invertAxes) # only with newer version of controller
-  end
-
   initAxes(rob, 3)
-  if rob.controllerVersion > 2
-    setRefVelocity(rob, rob.params.defaultRefVel)
-  end
+  _setup(rob, controllverVersion(rob))
+end
+function _setup(rob::IselRobot, version::IseliMCS8)
+  invertAxes(rob, rob.params.invertAxes) # only with newer version of controller
+  setRefVelocity(rob, rob.params.defaultRefVel)
+end
+function _setup(rob::IselRobot, version::IselC142)
   _setMotorCurrent(rob, false)
 end
 
 function _enable(robot::IselRobot)
   writeIOOutput(robot, ones(Bool, 8))
+  _enable(robot, controllverVersion(robot))
+end
+function _enable(robot::IselRobot, version::IseliMCS8)
+  # NOP
+end
+function _enable(robot::IselRobot, version::IselC142)
   _setMotorCurrent(robot, true)
 end
 
 function _disable(robot::IselRobot) 
   writeIOOutput(robot, zeros(Bool, 8))
-  _setMotorCurrent(robot, false)  
+  _disable(robot, controllverVersion(robot))
+end
+function _disable(robot::IselRobot, version::IseliMCS8)
+  # NOP
+end
+function _disable(robot::IselRobot, version::IselC142)
+  _setMotorCurrent(robot, false)
+end
+
+
+function prepareReferenceDrive(rob::IselRobot, version::IselC142)
+  _moveRel(rob, [0.5u"mm", 0.5u"mm", 0.5u"mm"], nothing)
+end
+function prepareReferenceDrive(rob::IselRobot, version::IseliMCS8)
+  # NOP
 end
 
 function _doReferenceDrive(rob::IselRobot)
   # Minor shift for not hitting the limit switch
-  _moveRel(rob, [0.5u"mm", 0.5u"mm", 0.5u"mm"], nothing)
-  sleep(0.5)
+  prepareReferenceDrive(rob, controllverVersion(rob))
 
   tempTimeout = rob.sd.timeout_ms
   try
     rob.sd.timeout_ms = 180000
     refAxis(rob, params(rob).referenceOrder[1])
-    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[2])
-    sleep(0.5)
     refAxis(rob, params(rob).referenceOrder[3])
-    sleep(0.5)
   finally
     rob.sd.timeout_ms = tempTimeout
   end
@@ -398,7 +413,6 @@ function queryIsel(rob::IselRobot, cmd::String, byteLength=1)
 
   flush(sd.sp)
   send(sd, cmd)
-  sleep(0.5)
   i, c = LibSerialPort.sp_blocking_read(sd.sp.ref, byteLength, sd.timeout_ms)
   if i != byteLength
     error("Isel Robot did not respond!")

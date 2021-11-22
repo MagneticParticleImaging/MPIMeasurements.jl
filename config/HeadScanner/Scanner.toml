@@ -1,5 +1,5 @@
 [General]
-boreSize = "1337mm"
+boreSize = "230mm"
 facility = "Universitätsklinikum Hamburg-Eppendorf"
 manufacturer = "IBI"
 name = "HeadScanner"
@@ -15,58 +15,111 @@ protocolThreadID = 4
 
 [Devices]
 initializationOrder = [
-#  "rp_cluster",
-  "my_daq_id",
+  "rp_cluster",
+  "tx_controller",
+  "surveillance",
+  "surv_temp",
   "simulation_controller",
-  "robot"
+  "robot",
+  "collision_module"
 ]
 
-[Devices.my_daq_id]
-deviceType = "SimpleSimulatedDAQ"
-dependencies = [
-  "simulation_controller" ]
-#ip = "127.0.0.1"
-temperatureRise.tx_main = "10K"
-temperatureRiseSlope.tx_main = "0.005s"
-phaseChange.tx_main  = "0.1°/K"
-amplitudeChange.tx_main  = "0.05mT/K"
+# DAQ
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+ips = ["192.168.1.103","192.168.1.104","192.168.1.105"]
+calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
 
-[Devices.my_daq_id.tx_main]
+[Devices.rp_cluster.chanx]
 type = "tx"
 channel = 1
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
-calibration = "0.1V/mT"
+calibration = "1V/T"
 feedback.channelID = "feedback_main"
-feedback.calibration = "10mT/V"
+feedback.calibration = "1T/V"
+passPDMToFastDAC = true
 
+[Devices.rp_cluster.chany]
+type = "tx"
+channel = 2
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
 
-[Devices.simulation_controller]
-deviceType = "SimulationController"
-initialCoilTemperatures.tx_main = "20.0°C"
-
-[Devices.my_daq_id.rx_main]
+[Devices.rp_cluster.rx_main]
 type = "rx"
 channel = 1
 limitPeak = "1V"
 
-[Devices.my_daq_id.feedback_main]
+[Devices.rp_cluster.rx_side]
 type = "rx"
 channel = 2
 limitPeak = "1V"
 
+[Devices.rp_cluster.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.ffx]
+type = "txSlow"
+channel = 1
+
+[Devices.rp_cluster.ffy]
+type = "txSlow"
+channel = 2
+
+[Devices.tx_controller]
+deviceType = "TxDAQController"
+dependencies = ["rp_cluster"]
+phaseAccuracy = 0.1
+amplitudeAccuracy = 0.01
+controlPause = 0.2
+maxControlSteps = 10
+correctCrossCoupling = false
+
+# Robot
 [Devices.robot]
 deviceType = "IselRobot"
 baudrate = 19200
 stepsPermm = 1000
 serial_port = "/dev/ttyUSB0"
-scannerCoordOrigin = ["125  .5mm", "125.5mm", "75.5mm"]
+scannerCoordOrigin = ["125.5mm", "125.5mm", "75.5mm"]
 defaultRefVel = ["10mm/s", "10mm/s", "10mm/s"]
+axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
 defaultVel = ["10mm/s", "10mm/s", "10mm/s"]
 invertAxes = [false, false, true]
+minMaxVel = [30,40000]
 referenceOrder = "zyx"
 
 [Devices.robot.namedPositions]
 origin = ["0mm", "0mm", "0mm"]
 park2 = ["0mm", "0mm", "0mm"]
+
+[Devices.collision_module]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "170mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-90mm","Inf*mm"]
+
+
+# Surveillance Unit
+[Devices.surveillance]
+type = "ArduinoSurveillanceUnitExternalTemp"
+portAdress = "/dev/ttyACM1"
+
+[Devices.su_temp]
+type = "ArduinoTemperatureSensor"
+portAdress = "/dev/ttyACM3"
+numSensors = 16
+maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]
+selectSensors = [1,2,3,4,5,6,7,8,9,10,11,13,14,15,16]
+nameSensors = ["RX1","RX2","RX3","TX1/1","TX1/2","TX2/1","TX2/2", "SefoCoilRight", "SefoCoilLeft", "ICN X", "ICN Z", "n.c.", "(Rack)", "SefoCoreRight", "SefoCoreLeft","SefoCabin"]
