@@ -1,0 +1,7 @@
+type = "ContinousMeasurementProtocol"
+description = "A sychronous acquisition with the Red Pitaya Scanner. Data can be queried after the finished notification. Uses current scanner sequence"
+targetScanner = "HeadScanner"
+
+sequence = "1DSequence"
+
+pause = "0.01s"

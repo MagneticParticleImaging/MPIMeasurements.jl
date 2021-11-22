@@ -1,0 +1,14 @@
+type = "RobotBasedSystemMatrixProtocol"
+description = "An acquisition with the Red Pitaya"
+targetScanner = "HeadScanner"
+
+waitTime = 0.5
+bgFrames = 1
+fgFrameAverages = 1
+sequence = "1DSequence"
+
+[Positions]
+positionsType = "RegularGridPositions"
+positionsShape = [4,3,1]
+positionsFov = [0.1,0.1,0.1]
+positionsCenter = [0.0,0.0,0.0]
