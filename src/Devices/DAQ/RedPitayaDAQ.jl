@@ -193,8 +193,8 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       appendSequence(rp, daq.acqSeq)
       # TODO enableLuts not yet implemented
     else
-      numSlowDACChan(rp, 0)
-      daq.acqSeq = nothing
+      #numSlowDACChan(rp, 0)
+      #daq.acqSeq = nothing
     end
 
   end
