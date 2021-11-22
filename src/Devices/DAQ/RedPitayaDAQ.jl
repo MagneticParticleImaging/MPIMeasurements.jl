@@ -143,7 +143,7 @@ function init(daq::RedPitayaDAQ)
   end
 
   try
-    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, : , 2)
+    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, 2, :)
   catch e
     @error e
   end
@@ -193,8 +193,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       appendSequence(rp, daq.acqSeq)
       # TODO enableLuts not yet implemented
     else
-      numSlowDACChan(rp, 0)
-      daq.acqSeq = nothing
+      # TODO What to do in this case, see maybe fill with zeros in other setSequenceParams
     end
 
   end
