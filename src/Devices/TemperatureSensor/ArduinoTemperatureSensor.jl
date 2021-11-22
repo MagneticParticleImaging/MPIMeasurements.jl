@@ -64,11 +64,6 @@ function init(sensor::ArduinoTemperatureSensor)
   sensor.present = true
 end
 
-cmdStart(ard::ArduinoTemperatureSensor) = ard.params.commandStart
-cmdEnd(ard::ArduinoTemperatureSensor) = ard.params.commandEnd
-cmdDelim(ard::ArduinoTemperatureSensor) = ard.params.delim
-serialDevice(ard::ArduinoTemperatureSensor) = ard.sd
-
 function numChannels(sensor::ArduinoTemperatureSensor)
   return length(sensor.params.selectSensors)
 end

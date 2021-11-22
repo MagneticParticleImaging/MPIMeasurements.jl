@@ -27,9 +27,10 @@ Base.@kwdef mutable struct ArduinoSurveillanceUnitExternalTemp <: ArduinoSurveil
   "Vector of dependencies for this device."
   dependencies::Dict{String,Union{Device,Missing}}
 
-  sd::Union{SerialDevice, Nothing} = nothing
+  ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
 
+sendCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 
 
 neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureSensor] # could in theory be generic temp sensor
 optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = []
@@ -48,17 +49,13 @@ function init(su::ArduinoSurveillanceUnitExternalTemp)
   @info response
   if (response == "ArduinoSurveillanceV1" || response == "ArduinoSurveillanceV2"  )
     @info "Connection to ArduinoSurveillanceUnit established"
-    su.sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
+    sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
+    su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = su.params.delim, sd = sd)
   else    
     throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
   end
   su.present = true
 end
-
-cmdStart(ard::ArduinoSurveillanceUnitExternalTemp) = ard.params.commandStart
-cmdEnd(ard::ArduinoSurveillanceUnitExternalTemp) = ard.params.commandEnd
-cmdDelim(ard::ArduinoSurveillanceUnitExternalTemp) = ard.params.delim
-serialDevice(ard::ArduinoSurveillanceUnitExternalTemp) = ard.sd
 
 getTemperatureSensor(su::ArduinoSurveillanceUnitExternalTemp) = dependency(su, ArduinoTemperatureSensor)
 
@@ -74,7 +71,7 @@ end
 
 function resetDAQ(su::ArduinoSurveillanceUnitExternalTemp)
   ACQ = sendCommand(su,"RESET:RP")
-  CheckACQ(su,ACQ)
+  CheckACQ(su, ACQ)
 end
 
 hasResetDAQ(su::ArduinoSurveillanceUnitExternalTemp) = true

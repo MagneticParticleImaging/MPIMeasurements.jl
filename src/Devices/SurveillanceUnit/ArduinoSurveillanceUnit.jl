@@ -8,6 +8,27 @@ abstract type ArduinoSurveillanceUnit <: SurveillanceUnit end
 
 Base.close(su::ArduinoSurveillanceUnit) = close(serialDevice(su).sp)
 
+# TODO maybe return true if command was Received
+# Should ACQ be ACK?
+function checkACQ(ard::ArduinoSurveillanceUnit, reply)
+  if reply == "ACQ"
+    @info "Command Received"
+    return reply;
+  else
+    @warn "Error, Unknown response" reply
+  end
+end
+
+function parseBool(ard::ArduinoSurveillanceUnit, s::Char)
+  if s == '1'
+    return true
+  elseif s == '0'
+    return false
+  else
+    throw(DomainError(s))
+  end
+end
+
 function arEnableWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:WD")
   CheckACQ(Arduino, ACQ)
