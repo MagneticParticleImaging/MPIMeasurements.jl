@@ -4,7 +4,7 @@ export getDigital, getAnalog, getErrorStatus, resetWatchDog, enableWatchDog
 export disableWatchDog, resetFail, disableSurveillance, enableSurveillance
 export getCycletime, resetArduino, enableACPower, disableACPower, NOTAUS
 
-abstract type ArduinoSurveillanceUnit end
+abstract type ArduinoSurveillanceUnit <: SurveillanceUnit end
 
 Base.close(su::ArduinoSurveillanceUnit) = close(serialDevice(su).sp)
 

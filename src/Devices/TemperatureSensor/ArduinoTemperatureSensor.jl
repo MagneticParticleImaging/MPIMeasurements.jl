@@ -1,11 +1,11 @@
-export ArduinoTemperatureSensor
+export ArduinoTemperatureSensor, ArduinoTemperatureSensorParams
 # TODO comment relevant Arduino code once added to project
 Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
   portAdress::String
   numSensors::Int
   maxTemps::Vector{Int}
   selectSensors::Vector{Int}
-  nameSensors::Vector{Int}
+  nameSensors::Vector{String}
 
   commandStart::String = "!"
   commandEnd::String = "*"
@@ -17,6 +17,7 @@ Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
   parity::SPParity = SP_PARITY_NONE
   nstopbits::Integer = 1
 end
+ArduinoTemperatureSensorParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorParams, dict)
 
 Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
   "Unique device ID for this device as defined in the configuration."
@@ -30,14 +31,14 @@ Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
   "Vector of dependencies for this device."
   dependencies::Dict{String,Union{Device,Missing}}
 
-  ard::Union{SimpleArduino, Nothing} # Use composition as multiple inheritance is not supported
+  ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
 
 neededDependencies(::ArduinoTemperatureSensor) = []
 optionalDependencies(::ArduinoTemperatureSensor) = []
 
 function init(sensor::ArduinoTemperatureSensor)
-  @info "Initializing ArduinoTemperatureSensor with ID $(su.deviceID)"
+  @info "Initializing ArduinoTemperatureSensor with ID $(sensor.deviceID)"
 
   params = sensor.params
   spTU = SerialPort(params.portAdress)
@@ -48,7 +49,7 @@ function init(sensor::ArduinoTemperatureSensor)
   sleep(2) # TODO why this sleep?
   flush(spTU)
   write(spTU, "!ConnectionEstablished*#")
-  response=readuntil(spTU, Vector{Char}(delim_read), params.timeout_ms);
+  response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
   @info response
   if(!(response == "ArduinoTemperatureUnitV2") ) 
       close(spTU)
@@ -57,9 +58,10 @@ function init(sensor::ArduinoTemperatureSensor)
       @info "Connection to ArduinoTU established."        
   end
 
-  sd = SerialDevice(sp, params.pause_ms, params.timeout_ms, params.delim, params.delim)
-  ard = SimpleArduino(;commandStart = params.commandStart, commandEnde = params.commandEnd, delim = params.delim, sd = sd)
+  sd = SerialDevice(spTU, params.pause_ms, params.timeout_ms, params.delim, params.delim)
+  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = params.delim, sd = sd)
   sensor.ard = ard
+  sensor.present = true
 end
 
 cmdStart(ard::ArduinoTemperatureSensor) = ard.params.commandStart
@@ -75,9 +77,9 @@ function getTemperatures(sensor::ArduinoTemperatureSensor; names::Bool=false)
   temp = retrieveTemps(sensor)
   if length(temp) == sensor.params.numSensors
       if names
-          return [tempFloat[sensor.params.selectSensors] sensor.params.nameSensors[sensor.params.selectSensors]]
+          return [temp[sensor.params.selectSensors] sensor.params.nameSensors[sensor.params.selectSensors]]
       else
-          return tempFloat[sensor.params.selectSensors]
+          return temp[sensor.params.selectSensors]
       end
   else
       return zeros(length(sensor.params.selectSensors))

@@ -39,3 +39,7 @@ Base.@kwdef struct SimpleArduino <: Arduino
   delim::String = "#"
   sd::SerialDevice
 end
+cmdStart(ard::SimpleArduino) = ard.commandStart
+cmdEnd(ard::SimpleArduino) = ard.commandEnd
+cmdDelim(ard::SimpleArduino) = ard.delim
+serialDevice(ard::Arduino) = ard.sd

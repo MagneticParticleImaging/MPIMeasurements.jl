@@ -6,7 +6,6 @@ name = "HeadScanner"
 topology = "FFP"
 gradient = "42T/m"
 datasetStore = "/opt/data/HeadScanner"
-#datasetStore = "/home/niklas/Documents/DatasetStores/store1"
 defaultSequence = "1DSequence"
 defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
@@ -18,8 +17,7 @@ initializationOrder = [
   "rp_cluster",
   "tx_controller",
   "surveillance",
-  "surv_temp",
-  "simulation_controller",
+  "su_temp",
   "robot",
   "collision_module"
 ]
@@ -29,8 +27,8 @@ initializationOrder = [
 deviceType = "RedPitayaDAQ"
 dependencies = []
 ips = ["192.168.1.103","192.168.1.104","192.168.1.105"]
-calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
-calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00026, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+calibFFCurrentToVolt = [0.027061248, 0.026531]
 
 [Devices.rp_cluster.chanx]
 type = "tx"
@@ -86,20 +84,23 @@ correctCrossCoupling = false
 # Robot
 [Devices.robot]
 deviceType = "IselRobot"
+dependencies = ["collision_module"]
 baudrate = 19200
 stepsPermm = 1000
 serial_port = "/dev/ttyUSB0"
-scannerCoordOrigin = ["125.5mm", "125.5mm", "75.5mm"]
-defaultRefVel = ["10mm/s", "10mm/s", "10mm/s"]
+defaultRefVel = ["20mm/s", "20mm/s", "20mm/s"]
 axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
-defaultVel = ["10mm/s", "10mm/s", "10mm/s"]
+defaultVel = ["20mm/s", "20mm/s", "20mm/s"]
 invertAxes = [false, false, true]
 minMaxVel = [30,40000]
 referenceOrder = "zyx"
 
+[Devices.robot.coordinateSystem]
+origin = ["125.5mm", "125.5mm", "75.5mm"]
+
 [Devices.robot.namedPositions]
 origin = ["0mm", "0mm", "0mm"]
-park2 = ["0mm", "0mm", "0mm"]
+park = ["325.5mm", "125.5mm", "75.5mm"]
 
 [Devices.collision_module]
 deviceType = "SimpleBoreCollisionModule"
@@ -113,12 +114,13 @@ minMaxBoreAxis = ["-90mm","Inf*mm"]
 
 # Surveillance Unit
 [Devices.surveillance]
-type = "ArduinoSurveillanceUnitExternalTemp"
+deviceType = "ArduinoSurveillanceUnitExternalTemp"
+dependencies = ["su_temp"]
 portAdress = "/dev/ttyACM1"
 
 [Devices.su_temp]
-type = "ArduinoTemperatureSensor"
-portAdress = "/dev/ttyACM3"
+deviceType = "ArduinoTemperatureSensor"
+portAdress = "/dev/ttyACM0"
 numSensors = 16
 maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]
 selectSensors = [1,2,3,4,5,6,7,8,9,10,11,13,14,15,16]

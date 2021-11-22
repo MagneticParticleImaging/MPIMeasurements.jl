@@ -1,4 +1,4 @@
-export ArduinoSurveillanceUnitExternalTemp
+export ArduinoSurveillanceUnitExternalTemp, ArduinoSurveillanceUnitExternalTempParams
 
 Base.@kwdef struct ArduinoSurveillanceUnitExternalTempParams <: DeviceParams
   portAdress::String
@@ -52,6 +52,7 @@ function init(su::ArduinoSurveillanceUnitExternalTemp)
   else    
     throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
   end
+  su.present = true
 end
 
 cmdStart(ard::ArduinoSurveillanceUnitExternalTemp) = ard.params.commandStart
