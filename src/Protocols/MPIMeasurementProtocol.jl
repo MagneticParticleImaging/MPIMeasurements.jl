@@ -79,7 +79,7 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
     seq = params.sequence
     totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
     samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxBandwidth(seq)))
+    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
     @show est
