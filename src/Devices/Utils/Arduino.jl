@@ -21,4 +21,4 @@ end
 cmdStart(ard::SimpleArduino) = ard.commandStart
 cmdEnd(ard::SimpleArduino) = ard.commandEnd
 cmdDelim(ard::SimpleArduino) = ard.delim
-serialDevice(ard::Arduino) = ard.sd
+serialDevice(ard::SimpleArduino) = ard.sd
