@@ -116,7 +116,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
       acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
       measurement(protocol)
       protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-      askChoices(protocol, "Press continue when foregrund measurement can be taken", ["Continue"])
+      askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
     end
   end
 

@@ -60,7 +60,7 @@ end
 getTemperatureSensor(su::ArduinoSurveillanceUnitExternalTemp) = dependency(su, ArduinoTemperatureSensor)
 
 function getTemperatures(su::ArduinoSurveillanceUnitExternalTemp; names::Bool=false)
-  sensor = getTemperaturesSensor(su)
+  sensor = getTemperatureSensor(su)
   return getTemperatures(sensor, names = names)
 end
 
@@ -71,7 +71,7 @@ end
 
 function resetDAQ(su::ArduinoSurveillanceUnitExternalTemp)
   ACQ = sendCommand(su,"RESET:RP")
-  CheckACQ(su, ACQ)
+  checkACQ(su, ACQ)
 end
 
 hasResetDAQ(su::ArduinoSurveillanceUnitExternalTemp) = true

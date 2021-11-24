@@ -31,12 +31,12 @@ end
 
 function arEnableWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:WD")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function arDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "DISABLE:WD")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function getDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)
@@ -56,32 +56,32 @@ end
 
 function resetWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "RESET:WD")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function enableWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:WD")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function disableWatchDog(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "DISABLE:WD")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function resetFail(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "RESET:FAIL")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function disableSurveillance(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "DISABLE:SURVEILLANCE")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function enableSurveillance(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:SURVEILLANCE")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function getCycletime(Arduino::ArduinoSurveillanceUnit)
@@ -91,22 +91,22 @@ end
 
 function resetArduino(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "RESET:ARDUINO")
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function enableACPower(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:AC");
   sleep(0.5)
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 function disableACPower(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "DISABLE:AC");
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end
 
 # TODO this does not seem to be implemented in external client, check server code
 function NOTAUS(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "NOTAUS");
-  CheckACQ(Arduino, ACQ)
+  checkACQ(Arduino, ACQ)
 end

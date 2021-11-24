@@ -123,5 +123,5 @@ deviceType = "ArduinoTemperatureSensor"
 portAdress = "/dev/ttyACM0"
 numSensors = 16
 maxTemps = [41,42,43,44,45,46,47,48,49,50,51,52,53,60,60,60]
-selectSensors = [1,2,3,4,5,6,7,8,9,10,11,13,14,15,16]
+selectSensors = [4,6,8,9]
 nameSensors = ["RX1","RX2","RX3","TX1/1","TX1/2","TX2/1","TX2/2", "SefoCoilRight", "SefoCoilLeft", "ICN X", "ICN Z", "n.c.", "(Rack)", "SefoCoreRight", "SefoCoreLeft","SefoCabin"]
