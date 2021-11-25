@@ -15,6 +15,7 @@ control = true
 decouple = true
 
 [Fields.df.chanx]
+#type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
@@ -33,6 +34,7 @@ decouple = false
 
 
 [Fields.ff.ffx]
+#type = "ContinuousElectricalChannel"
 dividerSteps = 3648000
 divider = 18240000
 amplitude = "5.0V"
