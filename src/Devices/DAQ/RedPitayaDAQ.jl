@@ -38,7 +38,7 @@ end
 
 Base.@kwdef struct RedPitayaLUTChannelParams <: DAQChannelParams
   channelIdx::Int64
-  Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -82,7 +82,11 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
     elseif value["type"] == "rx"
       channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
     elseif value["type"] == "txSlow"
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"])
+      calib = nothing
+      if haskey(value, "calibration")
+        calib = uparse.(value["calibration"])
+      end
+      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
     end
   end
 
@@ -188,8 +192,8 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
       #TODO Distribute sequence on multiple redpitayas, not all the same
       @show lut
-      daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition,
-      daq.acqNumFrames*daq.acqNumFrameAverages, computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
+      daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition, daq.acqNumFrames*daq.acqNumFrameAverages,
+                      computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
       appendSequence(rp, daq.acqSeq)
       # TODO enableLuts not yet implemented
     else
@@ -222,18 +226,20 @@ function createLUT(start, seq::Sequence, lutChannels::Vector{Pair{String, DAQCha
   lutValues = []
   lutIdx = []
   # TODO loop over actual sequence channels and throw if one field cant be implemented
-  for curr in lutChannels
-    index = findfirst(x -> id(x) == curr[1], channels)
+  for channel in channels
+    index = findfirst(x -> id(channel) == x[1], lutChannels)
     if !isnothing(index)
-      channel = channels[index] 
-      tempValues = map(x-> ustrip(u"T", x), MPIFiles.values(channel))
-      if !isnothing(curr[2].calibration)
-        tempValues = tempValues.*(ustrip(u"V/T", curr[2].calibration))
+      lutChannel = lutChannels[index] 
+      tempValues = MPIFiles.values(channel)
+      # TODO what to do in the else case
+      if !isnothing(lutChannel[2].calibration)
+        tempValues = tempValues.*lutChannel[2].calibration
       end
+      tempValues = ustrip.(u"V", tempValues)
       push!(lutValues, tempValues)
-      push!(lutIdx, index)
+      push!(lutIdx, lutChannel[2].channelIdx)
     else
-      #throw(ScannerConfigurationError("No txSlow Channel defined for z"))
+      throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
     end
   end
   @assert length(lutValues) == length(channels)
@@ -242,13 +248,9 @@ function createLUT(start, seq::Sequence, lutChannels::Vector{Pair{String, DAQCha
   lutIdx = (lutIdx.-start).+1
   # Fill skipped channels with 0.0, assumption: size of all lutValues is equal
   lut = zeros(Float32, maximum(lutIdx), size(lutValues[1], 1))
-  @show lutValues
-  @show lutIdx
-  @show lut
   for (i, lutIndex) in enumerate(lutIdx)
     lut[lutIndex, :] = lutValues[i]
   end
-  @show lut
   return lut
 end
 
@@ -443,7 +445,7 @@ function setupRx(daq::RedPitayaDAQ)
   decimation(daq.rpc, daq.decimation)
   samplesPerPeriod(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
   periodsPerFrame(daq.rpc, daq.acqPeriodsPerFrame)
-  numSlowADCChan(daq.rpc, 4) # Not used as far as I know
+  #numSlowADCChan(daq.rpc, 4) # Not used as far as I know
 end
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
