@@ -198,6 +198,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       # TODO enableLuts not yet implemented
     else
       # TODO What to do in this case, see maybe fill with zeros in other setSequenceParams
+      # PauseSequence()
     end
 
   end

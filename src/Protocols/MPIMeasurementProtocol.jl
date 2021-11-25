@@ -99,7 +99,7 @@ function _execute(protocol::MPIMeasurementProtocol)
     while !(protocol.finishAcknowledged || protocol.restart)
       handleEvents(protocol) 
       protocol.cancelled && throw(CancelException())
-      sleep(0.05)  
+      sleep(0.05)
     end
     !protocol.finishAcknowledged || break
     protocol.restart && put!(protocol.biChannel, OperationSuccessfulEvent(RestartEvent()))
