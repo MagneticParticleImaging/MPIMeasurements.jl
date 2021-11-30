@@ -32,14 +32,13 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   description::AbstractString
   scanner::MPIScanner
   params::MPIMeasurementProtocolParams
-  biChannel::BidirectionalChannel{ProtocolEvent}
+  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
-  restart::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
 end
@@ -87,22 +86,22 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
   return est
 end
 
+function enterExecute(protocol::MPIMeasurementProtocol)
+  protocol.done = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+end
+
 function _execute(protocol::MPIMeasurementProtocol)
   @info "Measurement protocol started"
 
+  performMeasurement(protocol)
 
-  while true
-    protocol.restart = false
-    performMeasurement(protocol)
-
-    put!(protocol.biChannel, FinishedNotificationEvent())
-    while !(protocol.finishAcknowledged || protocol.restart)
-      handleEvents(protocol) 
-      protocol.cancelled && throw(CancelException())
-      sleep(0.05)
-    end
-    !protocol.finishAcknowledged || break
-    protocol.restart && put!(protocol.biChannel, OperationSuccessfulEvent(RestartEvent()))
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  while !(protocol.finishAcknowledged)
+    handleEvents(protocol) 
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
   end
 
   @info "Protocol finished."
@@ -193,10 +192,6 @@ function cancel(protocol::MPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
-end
-
-function handleEvent(protocol::MPIMeasurementProtocol, event::RestartEvent)
-  protocol.restart = true
 end
 
 function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)

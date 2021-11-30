@@ -47,9 +47,7 @@ function Protocol(protocolDict::Dict{String, Any}, scanner::MPIScanner)
   params = paramsType(protocolDict, scanner)
   ProtocolImpl = getConcreteType(Protocol, protocolType)
 
-  biChannel = BidirectionalChannel{ProtocolEvent}(32)
-
-  return ProtocolImpl(name=name, description=description, scanner=scanner, biChannel = biChannel, params=params)
+  return ProtocolImpl(name=name, description=description, scanner=scanner, params=params)
 end
 
 function Protocol(protocolName::AbstractString, scanner::MPIScanner)
@@ -83,8 +81,9 @@ end
 
 abstract type ProtocolEvent end
 
-@mustimplement _init(protocol::Protocol)
+@mustimplement _init(protocol::Protocol) # Prepare necessary data structures, ex. buffer for samples + background meas
 @mustimplement _execute(protocol::Protocol)
+@mustimplement enterExecute(protocol::Protocol) # Prepare execution tracking flags, ex. execution done or cancelled flags
 @mustimplement cleanup(protocol::Protocol)
 @mustimplement stop(protocol::Protocol)
 @mustimplement resume(protocol::Protocol)
@@ -93,11 +92,6 @@ abstract type ProtocolEvent end
 function init(protocol::Protocol)
   checkRequiredDevices(protocol)
   _init(protocol)
-  # Renew channel if it was closed
-  if !isopen(protocol.biChannel)
-    protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
-  end
-  return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
 end
 
 function checkRequiredDevices(protocol::Protocol)
@@ -118,9 +112,21 @@ requiredDevices(protocol::Protocol) = []
 
 timeEstimate(protocol::Protocol) = "Unknown"
 
-function execute(protocol::Protocol)
+function execute(protocol::Protocol, threadID::Integer = 1)
+  if isnothing(protocol.executeTask) || istaskdone(protocol.executeTask)
+    protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
+    @tspawnat threadID executionTask(protocol)
+    return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
+  else
+    @warn "Protocol cannot be executed again as it is still running"
+    return nothing
+  end
+end
+
+function executionTask(protocol::Protocol)
   protocol.executeTask = current_task()
   try
+    enterExecute(protocol)
     _execute(protocol)
   catch ex
     if ex isa CancelException
@@ -136,6 +142,7 @@ function execute(protocol::Protocol)
       throw(ex)
     end
   end
+  close(protocol.biChannel)
 end
 
 struct UndefinedEvent <: ProtocolEvent
@@ -265,6 +272,5 @@ include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
-include("AsyncMeasurementProtocol.jl")
 include("ContinousMeasurementProtocol.jl")
 #include("TransferFunctionProtocol.jl")
