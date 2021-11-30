@@ -24,6 +24,7 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   calibIntToVolt::Array{Float32}
   ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
   ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
+  passPDMToFastDAC::Vector{Bool}
 end
 
 Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
@@ -33,7 +34,6 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
   calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
-  passPDMToFastDAC::Bool = false
 end
 
 Base.@kwdef struct RedPitayaLUTChannelParams <: DAQChannelParams
@@ -110,10 +110,9 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
-  acqSeq::Union{AbstractSequence, Nothing} = nothing
+  acqSeq::Union{Vector{AbstractSequence}, Nothing} = nothing
   samplesPerStep::Int32 = 0
   decimation::Int32 = 64
-  #passPDMToFastDAC::Vector{Bool} = []
   samplingPoints::Int = 1
   sampleAverages::Int = 1
   acqPeriodsPerFrame::Int = 1
@@ -172,11 +171,17 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{Float64}}}, enableLuts::Vector{Union{Nothing, Array{Bool}}})
   if length(luts) != length(daq.rpc)
-    throw(DimensionMismatch("$(length(lut)) LUTs do not match $(length(daq.rpc)) RedPitayas"))
+    throw(DimensionMismatch("$(length(luts)) LUTs do not match $(length(daq.rpc)) RedPitayas"))
   end
   if length(enableLuts) != length(daq.rpc)
     throw(DimensionMismatch("$(length(enableLuts)) enableLUTs do not match $(length(daq.rpc)) RedPitayas"))
   end
+  # Restrict to sequences of equal length, not a requirement of RedPitayaDAQServer, but of MPIMeasurements for simplicityacqSeq
+  sizes = map(x-> size(x, 2) , filter(!isnothing, luts))
+  if minimum(sizes) != maximum(sizes)
+    throw(DimensionMismatch("LUTs do not have equal amount of steps"))
+  end
+
   @info "Set sequence params"
 
   stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqPeriodsPerPatch)
@@ -184,66 +189,72 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   daq.samplesPerStep = samplesPerSlowDACStep(daq.rpc)
   clearSequence(daq.rpc)
 
+  acqSeq = []
   for (i, rp) in enumerate(daq.rpc)
     lut = luts[i]
     enableLUT = enableLuts[i]
     if !isnothing(lut)
       numSlowDACChan(rp, size(lut, 1))
-      #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
-      #TODO Distribute sequence on multiple redpitayas, not all the same
       @show lut
-      daq.acqSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition, daq.acqNumFrames*daq.acqNumFrameAverages,
+      #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
+      rpSeq = ArbitrarySequence(lut, enableLUT, stepsPerRepetition, daq.acqNumFrames*daq.acqNumFrameAverages,
                       computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction))
-      appendSequence(rp, daq.acqSeq)
+      push!(acqSeq, rpSeq)
+      appendSequence(rp, rpSeq)
       # TODO enableLuts not yet implemented
     else
       # TODO What to do in this case, see maybe fill with zeros in other setSequenceParams
       # PauseSequence()
     end
-
   end
+
+  daq.acqSeq = isempty(acqSeq) ? nothing : acqSeq
+
 end
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
   luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
   enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
 
-  for rp in 1:length(daq.rpc)
-    start = (rp - 1) * 4 + 1
-    currentPossibleChannels = collect(start:start+3)
-    currentChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams
-                                                          && channel[2].channelIdx in currentPossibleChannels]
-    if !isempty(currentChannels)
-      lut = createLUT(start, sequence, currentChannels)
-      luts[rp] = lut
-    end
-  end
-  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  setSequenceParams(daq, luts, enableLuts)
-end
-
-function createLUT(start, seq::Sequence, lutChannels::Vector{Pair{String, DAQChannelParams}})
-  channels = acyclicElectricalTxChannels(seq)
-  lutChannels = sort(lutChannels, by = x -> x[2].channelIdx)
-  lutValues = []
-  lutIdx = []
-  # TODO loop over actual sequence channels and throw if one field cant be implemented
-  for channel in channels
-    index = findfirst(x -> id(channel) == x[1], lutChannels)
+  lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
+  seqChannels = acyclicElectricalTxChannels(sequence)
+  channelMapping = []
+  for channel in seqChannels
+    index = findfirst(x-> id(channel) == x[1], lutChannels)
     if !isnothing(index)
-      lutChannel = lutChannels[index] 
-      tempValues = MPIFiles.values(channel)
-      # TODO what to do in the else case
-      if !isnothing(lutChannel[2].calibration)
-        tempValues = tempValues.*lutChannel[2].calibration
-      end
-      tempValues = ustrip.(u"V", tempValues)
-      push!(lutValues, tempValues)
-      push!(lutIdx, lutChannel[2].channelIdx)
+      push!(channelMapping, (lutChannels[index][2], channel))
     else
       throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
     end
   end
-  @assert length(lutValues) == length(channels)
+
+  @show channelMapping
+  for rp in 1:length(daq.rpc)
+    start = (rp - 1) * 4 + 1
+    currentPossibleChannels = collect(start:start+3)
+    currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
+    if !isempty(currentMapping)
+      lut = createLUT(start, currentMapping)
+      luts[rp] = lut
+    end
+  end
+  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+  @show luts
+  setSequenceParams(daq, luts, enableLuts)
+end
+
+function createLUT(start, channelMapping)
+  channelMapping = sort(channelMapping, by = x -> x[1].channelIdx)
+  lutValues = []
+  lutIdx = []
+  for (lutChannel, seqChannel) in channelMapping
+    tempValues = MPIFiles.values(seqChannel)
+    if !isnothing(lutChannel.calibration)
+      tempValues = tempValues.*lutChannel.calibration
+    end
+    tempValues = ustrip.(u"V", tempValues)
+    push!(lutValues, tempValues)
+    push!(lutIdx, lutChannel.channelIdx)
+  end
 
   # Idx from 1 to 4
   lutIdx = (lutIdx.-start).+1
@@ -282,9 +293,10 @@ function endSequence(daq::RedPitayaDAQ, endFrame)
 end
 
 function getFrameTiming(daq::RedPitayaDAQ)
-  startSample = RedPitayaDAQServer.start(daq.acqSeq) * daq.samplesPerStep
+  # TODO How to signal end of sequences without any LUTs
+  startSample = RedPitayaDAQServer.start(daq.acqSeq[1]) * daq.samplesPerStep
   startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
-  endFrame = div((length(daq.acqSeq) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
+  endFrame = div((length(daq.acqSeq[1]) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
   return startFrame, endFrame
 end
 
@@ -428,13 +440,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 
-  pass = [false for rp in 1:2*length(daq.rpc)]
-  # TODO move this to abstract DAQ
-  txChannel = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
-  # TODO might need to differentiate between fast and slowdac channel here?
-  for channel in txChannel
-    pass[channel.channelIdx] = channel.passPDMToFastDAC
-  end
+  pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
   @show pass
   passPDMToFastDAC(daq.rpc, pass)
 
