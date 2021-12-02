@@ -314,5 +314,3 @@ function fillMDF(seqCont::SequenceController, mdf::MDFv2InMemory)
   #transferFunction TODO: should be added from datastore!?
   rxUnit(mdf, "V")
 end
-
-include("Control.jl")
