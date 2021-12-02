@@ -1,6 +1,3 @@
-# import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-#                            setSlowDAC, getSlowADC, enableSlowDAC, readDataSlow
-
 export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
        setTxParamsAll, disconnect
 using RedPitayaDAQServer
@@ -698,48 +695,6 @@ canConvolute(daq::RedPitayaDAQ) = false
 
 
 ######## OLD #########
-
-
-function updateParams!(daq::RedPitayaDAQ, params_::Dict)
-  connect(daq.rpc)
-
-  daq.params = DAQParams(params_)
-
-  setACQParams(daq)
-end
-
-
-function calibIntToVoltRx(daq::RedPitayaDAQ)
-  return daq.params.calibIntToVolt[:,daq.params.rxChanIdx]
-end
-
-function calibIntToVoltRef(daq::RedPitayaDAQ)
-  return daq.params.calibIntToVolt[:,daq.params.refChanIdx]
-end
-
-
-
-
-
 function disconnect(daq::RedPitayaDAQ)
   RedPitayaDAQServer.disconnect(daq.rpc)
 end
-
-function setSlowDAC(daq::RedPitayaDAQ, value, channel)
-  setSlowDAC(daq.rpc, channel, value.*daq.params.calibFFCurrentToVolt[channel])
-
-  return nothing
-end
-
-function getSlowADC(daq::RedPitayaDAQ, channel)
-  return getSlowADC(daq.rpc, channel)
-end
-
-enableSlowDAC(daq::RedPitayaDAQ, enable::Bool, numFrames=0,
-              ffRampUpTime=0.4, ffRampUpFraction=0.8) =
-            enableSlowDAC(daq.rpc, enable, numFrames, ffRampUpTime, ffRampUpFraction)
-
-
-
-#TODO: calibRefToField should be multidimensional
-refToField(daq::RedPitayaDAQ, d::Int64) = daq.params.calibRefToField[d]
