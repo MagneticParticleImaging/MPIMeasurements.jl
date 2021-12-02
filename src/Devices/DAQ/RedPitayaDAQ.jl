@@ -107,6 +107,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 
   "Reference to the Red Pitaya cluster"
   rpc::Union{RedPitayaCluster, Nothing} = nothing
+  rpv::Union{RedPitayaClusterView, Nothing} = nothing
 
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
@@ -338,15 +339,21 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   samplesToRead = samplesPerFrame * numFrames
   chunkSize = Int(ceil(0.1 * (125e6/daq.decimation)))
 
+  rpu = daq.rpc
+  if !isnothing(daq.rpv)
+    rpu = daq.rpv
+  end
+
   # Start pipeline
   @info "Pipeline started"
   try
-    readPipelinedSamples(daq.rpc, startSample, samplesToRead, channel, chunkSize = chunkSize)
+    readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @error e
     # TODO disconnect and reconnect to recover from open pipeline
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpv = nothing
   end
   @info "Pipeline finished"
   return endFrame
@@ -363,7 +370,11 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
 
   if framesInBuffer > 0
       samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
-      frames = convertSamplesToFrames(samplesToConvert, numChan(daq.rpc), samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
+      chan = numChan(daq.rpc)
+      if !isnothing(daq.rpv)
+        chan = numChan(daq.rpv)
+      end
+      frames = convertSamplesToFrames(samplesToConvert, chan, samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
 
       # TODO move this to ref and meas conversion and get the params from the channels
       c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?
@@ -382,7 +393,6 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
 
   buffer.samples = unusedSamples
   return frames
-
 end
 
 function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
@@ -390,9 +400,15 @@ function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
   uMeas = nothing
   uRef = nothing
   if !isnothing(frames)
-    #uMeas = frames[:, [1], :, :]
-    uMeas = frames[:,channelIdx(daq, daq.rxChanIDs),:,:]
-    uRef = frames[:, channelIdx(daq, daq.refChanIDs),:,:]
+    rxIds = channelIdx(daq, daq.rxChanIDs)
+    refIds = channelIdx(daq, daq.refChanIDs)
+    # Map channel index to their respective index in the view
+    if !isnothing(daq.rpv)
+      rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
+      refIds = map(x->clusterToView(daq.rpv, x), rxIds)
+    end
+    uMeas = frames[:,rxIds,:,:]
+    uRef = frames[:, refIds,:,:]
   end
   return uMeas, uRef
 end
@@ -484,7 +500,13 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
   daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
 
-
+  # Construct view to save bandwidth
+  rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
+  selection = [false for i = 1:length(daq.rpc)]
+  for i in map(x->div(x -1, 2) + 1, rxIDs)
+    selection[i] = true
+  end
+  daq.rpv = RedPitayaClusterView(daq.rpc, selection)
 
   setupRx(daq)
 end
@@ -495,6 +517,7 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
   daq.acqNumFrames = numFrames
   daq.acqNumFrameAverages = numFrameAverage
   daq.acqNumAverages = numAverages
+  daq.rpv = nothing
   setupRx(daq)
 end
 
