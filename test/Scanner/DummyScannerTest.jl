@@ -101,11 +101,11 @@
       @test surveillanceUnit isa DummySurveillanceUnit
       temps = getTemperatures(surveillanceUnit)
       @test all((27.0.*ones(4)) .≤ temps .≤ (33.0.*ones(4)))
-      @test getACStatus(surveillanceUnit, scanner) == false # AC should be off in the beginning
-      enableACPower(surveillanceUnit, scanner)
-      @test getACStatus(surveillanceUnit, scanner) == true
-      disableACPower(surveillanceUnit, scanner)
-      @test getACStatus(surveillanceUnit, scanner) == false
+      @test getACStatus(surveillanceUnit) == false # AC should be off in the beginning
+      enableACPower(surveillanceUnit)
+      @test getACStatus(surveillanceUnit) == true
+      disableACPower(surveillanceUnit)
+      @test getACStatus(surveillanceUnit) == false
       #@test resetDAQ(surveillanceUnit) # Can't be tested at the moment
 
       surveillanceUnits = getDevices(scanner, SurveillanceUnit)
@@ -119,8 +119,8 @@
       temperatureSensor = getDevice(scanner, "my_temperature_sensor_id")
       @test temperatureSensor isa DummyTemperatureSensor
       @test numChannels(temperatureSensor) == 1
-      @test getTemperature(temperatureSensor) == [42u"°C"]
-      @test typeof(getTemperature(temperatureSensor)) == Vector{typeof(1u"°C")}
+      @test getTemperatures(temperatureSensor) == [42u"°C"]
+      @test typeof(getTemperatures(temperatureSensor)) == Vector{typeof(1u"°C")}
       @test getTemperature(temperatureSensor, 1) == 42u"°C"
       @test typeof(getTemperature(temperatureSensor, 1)) == typeof(1u"°C")
 

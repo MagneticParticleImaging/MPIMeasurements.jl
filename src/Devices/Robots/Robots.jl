@@ -216,7 +216,7 @@ function moveRel(rob::Robot, dist::RobotCoords, speed::Union{Vector{<:Unitful.Ve
   state(rob) == READY || throw(RobotStateError(rob, READY))
 
   if isReferenced(rob)
-    pos = getPosition(rob) + dist
+    pos = RobotCoords(getPosition(rob) + dist)
     checkAxisRange(rob, pos) || throw(RobotAxisRangeError(rob, pos))
 
     if !checkPosition(rob, pos)
