@@ -19,8 +19,7 @@ initializationOrder = [
   "collision_module",
   "dummy_robot",
   "dummy_surveillance",
-  "dummy_temp1",
-  "dummy_temp2"
+  "dummy_temp1"
 ]
 
 [Devices.dummy_robot]
@@ -102,7 +101,4 @@ channel = 5
 calibration = "1.0V/A"
 
 [Devices.dummy_temp1]
-deviceType = "DummyTemperatureSensor"
-
-[Devices.dummy_temp2]
 deviceType = "DummyTemperatureSensor"
