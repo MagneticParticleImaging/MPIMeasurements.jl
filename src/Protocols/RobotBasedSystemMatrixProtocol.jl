@@ -63,7 +63,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
   description::AbstractString
   scanner::MPIScanner
   params::RobotBasedSystemMatrixProtocolParams
-  biChannel::BidirectionalChannel{ProtocolEvent}
+  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   
   executeTask::Union{Task, Nothing} = nothing
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
@@ -155,11 +155,6 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   else
     protocol.txCont = nothing
   end
-
-  protocol.stopped = false
-  protocol.cancelled = false
-  protocol.finishAcknowledged = false
-  protocol.restored = false
 end
 
 function checkPositions(protocol::RobotBasedSystemMatrixProtocol)
@@ -175,6 +170,13 @@ function checkPositions(protocol::RobotBasedSystemMatrixProtocol)
     valid &= checkAxisRange(rob, toRobotCoords(rob, ScannerCoords(pos)))
   end
   return valid
+end
+
+function enterExecute(protocol::RobotBasedSystemMatrixProtocol)
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  protocol.restored = false
 end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
