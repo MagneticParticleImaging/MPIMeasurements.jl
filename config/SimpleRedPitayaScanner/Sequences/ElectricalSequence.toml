@@ -15,6 +15,7 @@ control = true
 decouple = true
 
 [Fields.df.chanx]
+type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
@@ -28,6 +29,7 @@ divider = 4864
 amplitude = ["0.01T"]
 
 [Fields.df.chany]
+type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chany.c1]
@@ -48,18 +50,21 @@ control = true
 decouple = true
 
 [Fields.ff.ffx]
+type = "StepwiseElectricalChannel"
 divider = 18240000
-values = ["5.0V", "6.0V", "7.0V", "8.0V", "9.0V"]
+values = ["5.0A", "6.0A", "7.0A", "8.0A", "9.0A"]
 
 [Fields.ff.ffy]
+type = "StepwiseElectricalChannel"
 divider = 18240000
-values = ["-5.0V", "-6.0V", "-7.0V", "-8.0V", "-9.0V"]
+values = ["-5.0A", "-6.0A", "-7.0A", "-8.0A", "-9.0A"]
 
 [Fields.ff.ffz]
+type = "ContinuousElectricalChannel"
 dividerSteps = 3648000
 divider = 18240000
-amplitude = "5.0V"
-offset = "5.0V"
+amplitude = "5.0A"
+offset = "5.0A"
 phase = "0.0rad"
 waveform = "sine"
 

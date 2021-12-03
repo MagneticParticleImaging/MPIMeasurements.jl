@@ -28,7 +28,7 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
   description::AbstractString
   scanner::MPIScanner
   params::ContinousMeasurementProtocolParams
-  biChannel::BidirectionalChannel{ProtocolEvent}
+  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
@@ -72,6 +72,13 @@ function timeEstimate(protocol::ContinousMeasurementProtocol)
   est = "∞"
   return est
 end
+
+function enterExecute(protocol::ContinousMeasurementProtocol)
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+end
+
 
 function _execute(protocol::ContinousMeasurementProtocol)
   @info "Measurement protocol started"

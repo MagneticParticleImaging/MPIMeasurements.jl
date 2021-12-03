@@ -18,7 +18,8 @@ initializationOrder = [
   "rp_cluster",
   "collision_module",
   "dummy_robot",
-  "dummy_surveillance"
+  "dummy_surveillance",
+  "dummy_temp1"
 ]
 
 [Devices.dummy_robot]
@@ -51,25 +52,24 @@ deviceType = "RedPitayaDAQ"
 dependencies = []
 #ips = ["192.168.2.16"] #, "192.168.2.17"]
 #ips = ["192.168.178.52"] #, "192.168.178.53"]
-ips = ["192.168.1.100"] #, "192.168.1.101"]
+ips = ["192.168.1.100", "192.168.1.101"] # , "192.168.1.102"]
 calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
 calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
-#passPDMToFastDAC = [false] #, false]
+passPDMToFastDAC = [true, true] #, false]
 
 [Devices.rp_cluster.chanx]
 type = "tx"
-channel = 1
+channel = 2
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
 calibration = "0.005V/mT"
 feedback.channelID = "feedback_main"
 feedback.calibration = "10mT/V"
-passPDMToFastDAC = true
 
 [Devices.rp_cluster.chany]
 type = "tx"
-channel = 2
+channel = 3
 limitPeak = "1V"
 sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
@@ -77,7 +77,7 @@ calibration = "0.005V/mT"
 
 [Devices.rp_cluster.rx_main]
 type = "rx"
-channel = 1
+channel = 3
 limitPeak = "1V"
 
 [Devices.rp_cluster.rx_side]
@@ -92,9 +92,13 @@ limitPeak = "1V"
 
 [Devices.rp_cluster.ffx]
 type = "txSlow"
-channel = 1
+channel = 2
+calibration = "1.0V/A"
 
 [Devices.rp_cluster.ffy]
 type = "txSlow"
-channel = 2
+channel = 5
+calibration = "1.0V/A"
 
+[Devices.dummy_temp1]
+deviceType = "DummyTemperatureSensor"

@@ -1,8 +1,0 @@
-type = "MPIMeasurementProtocol"
-description = "Default measurement protocol for the MPS scanner. Acquires a background and forground measurement"
-targetScanner = "MPS"
-
-sequence = "MPSSequence"
-controlTx = true
-fgFrames = 10
-bgFrames = 10

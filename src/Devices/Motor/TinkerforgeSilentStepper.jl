@@ -149,7 +149,8 @@ function drive(motor::TinkerforgeSilentStepper, direction::MotorDirection)
 end
 
 # Try to reach velocity while decreasing the acceleration and increasing the velocity
-function driveToVelocity(motor::TinkerforgeSilentStepper, rpm::typeof(u"1/s"), direction::MotorDirection)
+# Commented out because with it CI failed
+#=function driveToVelocity(motor::TinkerforgeSilentStepper, rpm::typeof(u"1/s"), direction::MotorDirection)
   global stallThreashold
   stallThreashold = 10000
   if not (getMotorDirection() == "still"):
@@ -188,7 +189,7 @@ function driveToVelocity(motor::TinkerforgeSilentStepper, rpm::typeof(u"1/s"), d
   else:
   ssBrick.drive_forward()  # drives motor with set parameters till drive_backward or stop is called
   stallThreashold = 20000
-end
+end=#
 
 function stop(motor::TinkerforgeSilentStepper, delay::typeof(1.0u"s") = 0u"s")
   sleep(ustrip(u"s", delay))  # Delay the stop maneuver

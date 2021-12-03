@@ -1,4 +1,4 @@
-r_params = SimulatedRobotParams(coordinateSystem=RobotCoordinateSystem(axes="y,x,-z", origin=[0,0,50]u"mm"), movementOrder="zyx")
+r_params = SimulatedRobotParams(coordinateSystem=ScannerCoordinateSystem("y,x,-z", [0,0,50]u"mm"), movementOrder="zyx")
 rob = SimulatedRobot(deviceID="simRob", params=r_params, dependencies=Dict{String, Union{Device, Missing}}())
 
 @test state(rob)==:INIT

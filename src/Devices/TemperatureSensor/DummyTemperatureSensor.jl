@@ -26,5 +26,5 @@ optionalDependencies(::DummyTemperatureSensor) = []
 Base.close(sensor::DummyTemperatureSensor) = nothing
 
 numChannels(sensor::DummyTemperatureSensor) = 1
-getTemperatures(sensor::DummyTemperatureSensor) = 30.0.*ones(4) .+ 1.0.*randn(4)
+getTemperatures(sensor::DummyTemperatureSensor) = [42u"°C"]
 getTemperature(sensor::DummyTemperatureSensor, channel::Int)::typeof(1u"°C") = 42u"°C"

@@ -459,5 +459,5 @@ function getProtocolList(scanner::MPIScanner)
 end
 
 function execute(scanner::MPIScanner, protocol::Protocol)
-  @tspawnat scanner.generalParams.protocolThreadID execute(protocol)
+  return execute(protocol, scanner.generalParams.protocolThreadID)
 end

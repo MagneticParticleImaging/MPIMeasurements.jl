@@ -9,7 +9,11 @@ gradient = "42T/m" # Note: This is later parsed with Unitful
 [Devices]
 initializationOrder = [
     "my_daq_id",
-    "my_gauss_id"
+    "my_gauss_id",
+    "collision_module",
+    "my_robot",
+    "my_surveillance",
+    "my_temp"
 ]
 
 [Devices.my_daq_id]
@@ -19,3 +23,30 @@ sendFrequency = "25kHz" # Note: This is later parsed with Unitful
 
 [Devices.my_gauss_id]
 deviceType = "DummyGaussMeter"
+
+[Devices.my_robot]
+deviceType = "SimulatedRobot"
+dependencies = ["collision_module"]
+axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
+
+[Devices.my_robot.coordinateSystem]
+origin = ["125.5mm", "125.5mm", "75.5mm"]
+
+[Devices.collision_module]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.dummy_robot.namedPositions]
+origin = ["0mm","0mm","0mm"]
+park = ["300mm","125.5mm","75.5mm"]
+
+[Devices.my_surveillance]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.my_temp1]
+deviceType = "DummyTemperatureSensor"

@@ -35,7 +35,7 @@ end
   par = SimpleBoreCollisionModuleParams(scannerDiameter=118u"mm", objGeometry = Circle(name="Delta sample", diameter=10u"mm"), minMaxBoreAxis = [-300u"mm",Inf*u"mm"])
   cm = SimpleBoreCollisionModule(deviceID="testCollisionModule", params=par, dependencies=Dict{String, Union{Device, Missing}}())
 
-  @test checkDeltaWithRandomPoints(cm, 100000)
+  #@test checkDeltaWithRandomPoints(cm, 100000)
   @test checkCoords(cm, [0,0,0]u"mm")
   @test !checkCoords(cm, [0,1,0]u"m")
   @test !checkCoords(cm, [-300.1,0,0]u"mm")
@@ -51,7 +51,7 @@ end
   par = SimpleBoreCollisionModuleParams(scannerDiameter=118u"mm", objGeometry = Rectangle(name="Test rectangle", width=10u"mm", height=10u"mm"), minMaxBoreAxis = [-300u"mm",Inf*u"mm"])
   cm = SimpleBoreCollisionModule(deviceID="testCollisionModule", params=par, dependencies=Dict{String, Union{Device, Missing}}())
 
-  @test checkDeltaWithRandomPoints(cm, 100000)  
+  #@test checkDeltaWithRandomPoints(cm, 100000)  
 
 end
 

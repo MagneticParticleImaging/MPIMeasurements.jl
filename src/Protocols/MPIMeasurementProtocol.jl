@@ -32,14 +32,13 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   description::AbstractString
   scanner::MPIScanner
   params::MPIMeasurementProtocolParams
-  biChannel::BidirectionalChannel{ProtocolEvent}
+  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
-  restart::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
 end
@@ -79,7 +78,7 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
     seq = params.sequence
     totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
     samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxBandwidth(seq)))
+    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
     @show est
@@ -87,22 +86,22 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
   return est
 end
 
+function enterExecute(protocol::MPIMeasurementProtocol)
+  protocol.done = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+end
+
 function _execute(protocol::MPIMeasurementProtocol)
   @info "Measurement protocol started"
 
+  performMeasurement(protocol)
 
-  while true
-    protocol.restart = false
-    performMeasurement(protocol)
-
-    put!(protocol.biChannel, FinishedNotificationEvent())
-    while !(protocol.finishAcknowledged || protocol.restart)
-      handleEvents(protocol) 
-      protocol.cancelled && throw(CancelException())
-      sleep(0.05)  
-    end
-    !protocol.finishAcknowledged || break
-    protocol.restart && put!(protocol.biChannel, OperationSuccessfulEvent(RestartEvent()))
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  while !(protocol.finishAcknowledged)
+    handleEvents(protocol) 
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
   end
 
   @info "Protocol finished."
@@ -116,7 +115,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
       acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
       measurement(protocol)
       protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-      askChoices(protocol, "Press continue when foregrund measurement can be taken", ["Continue"])
+      askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
     end
   end
 
@@ -193,10 +192,6 @@ function cancel(protocol::MPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
-end
-
-function handleEvent(protocol::MPIMeasurementProtocol, event::RestartEvent)
-  protocol.restart = true
 end
 
 function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
