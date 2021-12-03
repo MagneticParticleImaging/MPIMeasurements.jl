@@ -1,7 +1,7 @@
 import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
-       scannerManufacturer, scannerName, scannerTopology, scannerGradient,
+       scannerManufacturer, scannerName, scannerTopology, scannerGradient, scannerDatasetStore,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
        asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
        getProtocolList, setProtocol, getTransferFunctionList
@@ -302,6 +302,14 @@ scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
 
 "Gradient of the scanners selection field."
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
+
+scannerDatasetStore(scanner::MPIScanner) = scanner.generalParams.datasetStore
+
+"Default sequence of the scanner."
+defaultSequence(scanner::MPIScanner) = scanner.generalParams.defaultSequence
+
+"Default protocol of the scanner."
+defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol
 
 """
     $(SIGNATURES)

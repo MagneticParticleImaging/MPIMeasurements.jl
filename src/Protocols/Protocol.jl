@@ -149,7 +149,7 @@ struct AnswerEvent <: ProtocolEvent
   answer::Bool
   question::DecisionEvent
 end
-struct MultipleChoiceEvent <: ProtocolEvent
+struct MultipleChoiceEvent <: ProtocolEvent # TODO: How about multiple values for a question?
   message::AbstractString
   choices::Vector{AbstractString}
 end
@@ -261,10 +261,10 @@ struct NonInteractive <: ProtocolInteractivity end
 struct Interactive <: ProtocolInteractivity end
 @mustimplement protocolInteractivity(protocol::Protocol)
 
-include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
 include("AsyncMeasurementProtocol.jl")
 include("ContinousMeasurementProtocol.jl")
 #include("TransferFunctionProtocol.jl")
+include("ConsoleProtocolHandler.jl")

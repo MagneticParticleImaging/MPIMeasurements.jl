@@ -16,7 +16,7 @@ using Unitful
 using TOML
 using ThreadPools
 #using HDF5
-#using ProgressMeter
+using ProgressMeter
 using Sockets
 #using DelimitedFiles
 #using LinearAlgebra
@@ -27,6 +27,8 @@ using Graphics: @mustimplement
 using Scratch
 using Mmap
 using DocStringExtensions
+import REPL
+using REPL.TerminalMenus
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
 
 # TODO: This is a workaround for CI with GTK since precompilation fails with headless systems

@@ -5,6 +5,8 @@ manufacturer = "Me, Myself and I"
 name = "DummyScanner"
 topology = "FFL" # Of course ;)
 gradient = "42T/m" # Note: This is later parsed with Unitful
+datasetStore = "~/.mpilab/data"
+defaultProtocol = "DummyMeasurement"
 
 [Devices]
 initializationOrder = [
@@ -17,7 +19,6 @@ initializationOrder = [
 [Devices.my_daq_id]
 deviceType = "DummyDAQ"
 samplesPerPeriod = 1000
-sendFrequency = "25kHz"
 
 [Devices.my_gauss_id]
 deviceType = "DummyGaussMeter"

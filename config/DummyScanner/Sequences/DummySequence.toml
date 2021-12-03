@@ -1,7 +1,7 @@
 [General]
-name = "MPSSequence"
+name = "DummySequence"
 description = "Precise description."
-targetScanner = "MPS"
+targetScanner = "DummyScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]
@@ -10,11 +10,10 @@ baseFrequency = "125.0MHz"
 safeStartInterval = "0.5s"
 safeEndInterval = "0.5s"
 safeErrorInterval = "0.5s"
-control = true
+control = false
 decouple = false
 
 [Fields.df.chanx]
-type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
@@ -33,7 +32,6 @@ decouple = false
 
 
 [Fields.ff.ffx]
-type = "StepwiseElectricalChannel"
 divider = 4800
 values = ["0.0V"]
 
