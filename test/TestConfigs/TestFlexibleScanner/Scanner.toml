@@ -1,0 +1,19 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestFlexibleScanner"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "./tmp/TestFlexibleScannerStore"
+defaultSequence = ""
+
+[Devices]
+initializationOrder = [
+    "my_daq_id",
+]
+
+[Devices.my_daq_id]
+deviceType = "FlexibleDAQ" # This is not defined within MPIMeasurements!
+samplesPerPeriod = 1000
+sendFrequency = "25kHz"

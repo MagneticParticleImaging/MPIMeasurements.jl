@@ -1,0 +1,104 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "SimpleRedPitayaScanner"
+topology = "FFL"
+gradient = "42T/m"
+#datasetStore = "/opt/data/HeadScanner"
+datasetStore = "/home/niklas/Documents/DatasetStores/store1"
+defaultSequence = "1DSequence"
+defaultProtocol = "MPIMeasurement"
+producerThreadID = 2
+consumerThreadID = 3
+protocolThreadID = 4
+
+[Devices]
+initializationOrder = [
+  "rp_cluster",
+  "collision_module",
+  "dummy_robot",
+  "dummy_surveillance",
+  "dummy_temp1"
+]
+
+[Devices.dummy_robot]
+deviceType = "SimulatedRobot"
+dependencies = ["collision_module"]
+axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
+
+[Devices.dummy_robot.coordinateSystem]
+origin = ["125.5mm", "125.5mm", "75.5mm"]
+
+[Devices.collision_module]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.dummy_robot.namedPositions]
+origin = ["0mm","0mm","0mm"]
+park = ["300mm","125.5mm","75.5mm"]
+
+
+[Devices.dummy_surveillance]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+#ips = ["192.168.2.16"] #, "192.168.2.17"]
+#ips = ["192.168.178.52"] #, "192.168.178.53"]
+ips = ["192.168.1.100", "192.168.1.101"] # , "192.168.1.102"]
+calibFFCurrentToVolt = [0.08547008547008547,0.08547008547008547]
+calibIntToVolt = [0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877, 0.00012957305, 0.015548877]
+passPDMToFastDAC = [true, true] #, false]
+
+[Devices.rp_cluster.chanx]
+type = "tx"
+channel = 2
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.005V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
+
+[Devices.rp_cluster.chany]
+type = "tx"
+channel = 3
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.005V/mT"
+
+[Devices.rp_cluster.rx_main]
+type = "rx"
+channel = 3
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx_side]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.ffx]
+type = "txSlow"
+channel = 2
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.ffy]
+type = "txSlow"
+channel = 5
+calibration = "1.0V/A"
+
+[Devices.dummy_temp1]
+deviceType = "DummyTemperatureSensor"

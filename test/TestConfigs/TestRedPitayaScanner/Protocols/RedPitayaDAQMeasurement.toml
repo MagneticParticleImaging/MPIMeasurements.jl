@@ -1,0 +1,6 @@
+name = "RedPitayaDAQMeasurement"
+type = "DAQMeasurementProtocol"
+description = "An acquisition with the Red Pitaya"
+targetScanner = "TestRedPitayaScanner"
+
+sequenceName = "SimpleRedPitayaSequence"

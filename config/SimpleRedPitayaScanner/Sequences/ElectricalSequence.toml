@@ -1,0 +1,77 @@
+[General]
+name = "ElectricalSequence"
+description = "Precise description."
+targetScanner = "HeadScanner"
+baseFrequency = "125.0MHz"
+triggered = false
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.df.chanx]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.chanx.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chanx.c2]
+divider = 4864
+amplitude = ["0.01T"]
+
+[Fields.df.chany]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.chany.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chany.c2]
+divider = 4864
+amplitude = ["0.01T"]
+
+[Fields.ff]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.ff.ffx]
+type = "StepwiseElectricalChannel"
+divider = 18240000
+values = ["5.0A", "6.0A", "7.0A", "8.0A", "9.0A"]
+
+[Fields.ff.ffy]
+type = "StepwiseElectricalChannel"
+divider = 18240000
+values = ["-5.0A", "-6.0A", "-7.0A", "-8.0A", "-9.0A"]
+
+[Fields.ff.ffz]
+type = "ContinuousElectricalChannel"
+dividerSteps = 3648000
+divider = 18240000
+amplitude = "5.0A"
+offset = "5.0A"
+phase = "0.0rad"
+waveform = "sine"
+
+[Acquisition]
+channels = ["rx_main", "rx_side"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+numFrames = 20
+numAverages = 1
+numFrameAverages = 1

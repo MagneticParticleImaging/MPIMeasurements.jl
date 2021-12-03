@@ -1,0 +1,38 @@
+[General]
+name = "SimpleSimulatedSequence"
+description = "Precise description."
+targetScanner = "MyAwesomeScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.my_df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.my_df.tx_main]
+waveform = "sine"
+offset = "0.0mT"
+
+[Fields.my_df.tx_main.main_component]
+divider = 5000
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+
+[Acquisition]
+channels = ["rx_main"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+
+[Acquisition.Foreground]
+numFrames = 2000
+numAverages = 1
+numFrameAverages = 1
+
+[Acquisition.Background]
+numFrames = 20
+numAverages = 5
+numFrameAverages = 5

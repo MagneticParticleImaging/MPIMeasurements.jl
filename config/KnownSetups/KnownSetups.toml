@@ -1,0 +1,80 @@
+[Devices.dSampleRegularScanner]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.mouseAdapterRegularScanner]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.name = "Mouse adapter"
+objGeometry.diameter = "38mm"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-295mm","Inf*mm"]
+
+[Devices.dSampleMouseScanner]
+deviceType = "SimpleBoreCollisionModule" 
+scannerDiameter = "40mm"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.mouseAdapterMouseScanner]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "40mm"
+objGeometry.type = "Circle"
+objGeometry.name = "Mouse adapter"
+objGeometry.diameter = "38mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-295mm","Inf*mm"]
+
+[Devices.dSampleRatScanner] 
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "72mm"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+clearance = "1mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.mouseAdapterRatScanner]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "72mm"
+objGeometry.type = "Circle"
+objGeometry.name = "Mouse adapter"
+objGeometry.diameter = "38mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-295mm","Inf*mm"]
+
+[Devices.hallSensorRegularScanner]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.name = "Hall Sensor"
+objGeometry.diameter = "22mm"
+scannerDiameter = "118mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-345mm","Inf*mm"]
+
+[Devices.hallSensorMouseScanner] 
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "40mm"
+objGeometry.type = "Circle"
+objGeometry.name = "Hall Sensor"
+objGeometry.diameter = "22mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-345mm","Inf*mm"]
+
+[Devices.hallSensorRatScanner]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "118mm"
+objGeometry.type = "Circle"
+objGeometry.name = "Hall Sensor"
+objGeometry.diameter = "22mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-345mm","Inf*mm"]

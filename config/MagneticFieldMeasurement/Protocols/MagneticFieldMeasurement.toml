@@ -1,0 +1,11 @@
+name = "MagneticFieldMeasurement"
+type = "RobotBasedMagneticFieldStaticProtocol"
+description = "A magnetic field measurement."
+targetScanner = "MagneticFieldMeasurement"
+
+positions.type = "RegularGridPositions"
+positions.shape = [10, 5, 10]
+positions.fov = ["10.0mm", "10.0mm", "10.0mm"]
+positions.center = ["111.5mm", "316.0mm", "128.5mm"]
+
+postMoveWaitTime = "1.0s"

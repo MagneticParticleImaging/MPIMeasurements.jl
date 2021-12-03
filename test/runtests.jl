@@ -2,14 +2,12 @@ using MPIMeasurements
 using Test
 using Unitful
 
-include("config.jl")
+#ENV["JULIA_DEBUG"] = "MPIMeasurements"
 
-imgdir = joinpath(@__DIR__(), "images")
-mkpath(imgdir)
+# Add test configurations to path
+testConfigDir = normpath(string(@__DIR__), "TestConfigs")
+addConfigurationPath(testConfigDir)
 
-
-scanner = MPIScanner(conf)
-
-include("Safety/tests.jl")
-include("Robots/tests.jl")
-include("DAQ/tests.jl")
+include("Devices/DeviceTests.jl")
+include("Scanner/ScannerTests.jl")
+include("Safety/SafetyTests.jl")

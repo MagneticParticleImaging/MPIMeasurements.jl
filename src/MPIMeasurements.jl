@@ -1,71 +1,80 @@
 module MPIMeasurements
 
-using Pkg
+#using MPIFiles: calibration
+#using Dates: include
+#using Reexport: include
+#using Pkg
 
-using Compat
+#using Compat
+using UUIDs
+using Mmap: settings
+using Base: Integer
 using Reexport
-#using IniFile
 @reexport using MPIFiles
-#@reexport using Redpitaya
-@reexport using RedPitayaDAQServer
-@reexport using Unitful
-@reexport using Unitful.DefaultSymbols
-@reexport using Pkg.TOML
-@reexport using ThreadPools
-using HDF5
-using ProgressMeter
+import MPIFiles: hasKeyAndValue
+using Unitful
+using TOML
+using ThreadPools
+#using HDF5
+#using ProgressMeter
 using Sockets
-using DelimitedFiles
-using LinearAlgebra
-using Statistics
+#using DelimitedFiles
+#using LinearAlgebra
+#using Statistics
 using Dates
+using InteractiveUtils
+using Graphics: @mustimplement
+using Scratch
+using Mmap
+using DocStringExtensions
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
 
-#using MPISimulations
+export addConfigurationPath
 
-import RedPitayaDAQServer: currentFrame, currentPeriod, readData, readDataPeriods,
-                           setSlowDAC, getSlowADC, enableSlowDAC, start, convertSamplesToFrames
-import Base.write
-#import PyPlot.disconnect
+const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
 
-# abstract supertype for all possible serial devices
+# circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
+"""
+Abstract type for all protocols
+
+Every protocol has to implement its own protocol struct which identifies it.
+A concrete implementation should contain e.g. the handle to the datastore
+or internal variables.
+The device struct must at least have the fields `name`, `description`,
+`scanner` and `params` and all other fields should have default values.
+"""
+abstract type Protocol end
+
+# circular reference between Device.jl and Utils.jl. Thus we predefine the Device
+"""
+Abstract type for all devices
+
+Every device has to implement its own device struct which identifies it.
+A concrete implementation should contain e.g. the handle to device ressources
+or internal variables.
+The device struct must at least have the fields `deviceID`, `params` and `dependencies` and
+all other fields should have default values.
+"""
 abstract type Device end
-abstract type Robot end
-abstract type GaussMeter end
-abstract type SurveillanceUnit end
-abstract type TemperatureSensor end
+include("Scanner.jl")
+include("Utils/Utils.jl")
+include("Devices/Device.jl")
 
-# abstract supertype for all measObj etc.
-abstract type MeasObj end
-export Device, Robot, GaussMeter, MeasObj
+include("Devices/Devices.jl")
+include("Protocols/Protocol.jl")
+include("Utils/Storage.jl") # Depends on MPIScanner
 
-include("DAQ/DAQ.jl")
-#include("TransferFunction/TransferFunction.jl") #Moved to MPIFiles
-include("Safety/RobotSafety.jl")
-include("Safety/KnownSetups.jl")
+"""
+    $(SIGNATURES)
 
-# LibSerialPort currently only supports linux and julia versions above 0.6
-# TODO work this part out under julia-1.0.0
-if Sys.isunix() && VERSION >= v"0.6"
-  using LibSerialPort
-  include("SerialDevices/SerialDevices.jl")
+Initialize configuration paths with the package.
+"""
+function __init__()
+  defaultScannerConfigurationPath = joinpath(homedir(), ".mpi", "Scanners")
+  if isdir(defaultScannerConfigurationPath)
+    addConfigurationPath(defaultScannerConfigurationPath)
+  end
 end
-
-#include("Robots/Robots.jl")
-include("Scanner/Scanner.jl")
-include("Robots/Robots.jl")
-include("Sequences/Sequences.jl")
-
-if Sys.isunix() && VERSION >= v"0.6"
-  include("GaussMeter/GaussMeter.jl")
-  include("TemperatureSensor/TemperatureSensor.jl")
-  include("Measurements/Measurements.jl")
-  include("SurveillanceUnit/SurveillanceUnit.jl")
-end
-
-
-#function __init__()
-#    Unitful.register(MPIMeasurements)
-#end
-
 
 end # module
