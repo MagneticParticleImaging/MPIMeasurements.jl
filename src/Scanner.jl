@@ -69,6 +69,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
       end
 
       DeviceImpl = getConcreteType(Device, deviceType)
+      validateDeviceStruct(DeviceImpl)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
 
       paramsInst = DeviceParamsImpl(params)

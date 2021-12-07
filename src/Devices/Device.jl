@@ -10,20 +10,29 @@ automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
+function validateDeviceStruct(device::Type{<:Device})
+  requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
+  missingFields = [x for x in requiredFields if in(x, fieldnames(device))]
+  if length(missingFields) > 0
+    msg = "Device struct $(string(device)) is missing the required fields " * join(missingFields, ", ", " and ")
+    throw(ScannerConfigurationError(msg))
+  end
+end
+
 "Retrieve the ID of a device."
-deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct for `$(typeof(device))` must have a field `deviceID`.")
+deviceID(device::Device) = device.deviceID 
 
 "Retrieve the parameters of a device."
-params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct for `$(typeof(device))` must have a field `params`.")
+params(device::Device) = device.params
 
 "Check whether the device is optional."
-isOptional(device::Device) = :optional in fieldnames(typeof(device)) ? device.optional : error("The device struct for `$(typeof(device))` must have a field `optional`.")
+isOptional(device::Device) = device.optional
 
 "Check whether the device is present."
-isPresent(device::Device) = :present in fieldnames(typeof(device)) ? device.present : error("The device struct for `$(typeof(device))` must have a field `present`.")
+isPresent(device::Device) = device.present
 
 "Retrieve the dependencies of a device."
-dependencies(device::Device) = :dependencies in fieldnames(typeof(device)) ? device.dependencies : error("The device struct for `$(typeof(device))` must have a field `dependencies`.")
+dependencies(device::Device) = device.dependencies
 
 "Retrieve all dependencies of a certain type."
 dependencies(device::Device, type::DataType) = [dependency for dependency in values(dependencies(device)) if dependency isa type]
