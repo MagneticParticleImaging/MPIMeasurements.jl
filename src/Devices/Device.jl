@@ -12,7 +12,7 @@ abstract type DeviceParams end
 
 function validateDeviceStruct(device::Type{<:Device})
   requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
-  missingFields = [x for x in requiredFields if in(x, fieldnames(device))]
+  missingFields = [x for x in requiredFields if !in(x, fieldnames(device))]
   if length(missingFields) > 0
     msg = "Device struct $(string(device)) is missing the required fields " * join(missingFields, ", ", " and ")
     throw(ScannerConfigurationError(msg))
