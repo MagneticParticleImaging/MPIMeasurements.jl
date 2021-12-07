@@ -14,7 +14,6 @@ initializationOrder = [
   "simulated_gaussmeter",
   "collision_module_1",
   "simulated_robot",
-  "sequence_controller",
   "simulation_controller"
 ]
 
@@ -66,14 +65,6 @@ objGeometry.diameter = "10mm"
 objGeometry.name = "TestKreis"
 clearance = "2mm"
 minMaxBoreAxis = ["-300mm","Inf*mm"]
-
-[Devices.sequence_controller]
-deviceType = "SequenceController"
-dependencies = [
-  "my_daq_id"
-]
-saveInterval = "0.5s"
-maxControlSteps = 5
 
 [Devices.simulation_controller]
 deviceType = "SimulationController"
