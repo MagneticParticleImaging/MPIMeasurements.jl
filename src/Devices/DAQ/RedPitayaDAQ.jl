@@ -629,7 +629,7 @@ currentPeriod(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentPeriod(daq.rpc)
 function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
   u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1, useCalibration = true)
 
-  @info "size u in readData: $(size(u))"
+  @info "size u in readData: $(size(u))" 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:,:]u"V"
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:,:]u"V"
 
