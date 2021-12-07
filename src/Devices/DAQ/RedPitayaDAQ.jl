@@ -627,7 +627,7 @@ currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)
 currentPeriod(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentPeriod(daq.rpc)
 
 function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
-  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1)
+  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1, useCalibration = true)
 
   @info "size u in readData: $(size(u))"
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:,:]u"V"
@@ -644,7 +644,7 @@ function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, nu
 end
 
 function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod, acqNumAverages)
-  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages)
+  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:]
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:]
