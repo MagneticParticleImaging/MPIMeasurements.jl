@@ -19,7 +19,6 @@ using Sockets
 using Dates
 using InteractiveUtils
 using Graphics: @mustimplement
-using Scratch
 using Mmap
 using DocStringExtensions
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
