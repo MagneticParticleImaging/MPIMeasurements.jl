@@ -16,6 +16,7 @@ for enum in [:TestEnum]
   end
 end
 
+# Basic Test Devices
 Base.@kwdef mutable struct TestDeviceParams <: DeviceParams
   stringValue::String = "default"
   stringArray::Vector{String} = []
@@ -27,14 +28,13 @@ Base.@kwdef mutable struct TestDeviceParams <: DeviceParams
   unitArray::Vector{typeof(1.0u"V")} = []
 
   primitiveValue::Integer = 0
-  primitveArray::Vector{Integer} = 0
+  primitveArray::Vector{Integer} = []
 
-  arrayArray::Vector{Vector{Bool}}
+  arrayArray::Vector{Vector{Bool}} = []
 end
 
 TestDeviceParams(dict::Dict) = params_from_dict(TestDeviceParams, dict)
 
-# Basic Test Device
 Base.@kwdef mutable struct TestDevice <: Device
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
@@ -50,9 +50,60 @@ Base.@kwdef mutable struct TestDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestDevice) = dev.initRan = true
-neededDependencies(dev::TestDevice) = []
-optionalDependencies(dev::TestDevice) = []
+MPIMeasurements.init(dev::TestDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestDevice) = []
+
+Base.@kwdef mutable struct TestDependencyDeviceParams <: DeviceParams
+  # NOP
+end
+
+TestDependencyDeviceParams(dict::Dict) = params_from_dict(TestDependencyDeviceParams, dict)
+
+Base.@kwdef mutable struct TestDependencyDevice <: Device
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::TestDependencyDeviceParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+
+  initRan::Bool = false
+end
+
+MPIMeasurements.init(dev::TestDependencyDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestDependencyDevice) = [TestDevice]
+MPIMeasurements.optionalDependencies(dev::TestDependencyDevice) = []
+
+Base.@kwdef mutable struct TestDeviceBParams <: DeviceParams
+  # NOP
+end
+
+TestDeviceBParams(dict::Dict) = params_from_dict(TestDeviceBParams, dict)
+
+Base.@kwdef mutable struct TestDeviceB <: Device
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::TestDeviceBParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+
+  initRan::Bool = false
+end
+
+MPIMeasurements.init(dev::TestDeviceB) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestDeviceB) = []
+MPIMeasurements.optionalDependencies(dev::TestDeviceB) = []
+
 
 # "Broken" Test Devices
 Base.@kwdef mutable struct TestMissingIDDevice <: Device
@@ -70,9 +121,9 @@ Base.@kwdef mutable struct TestMissingIDDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestMissingIDDevice) = dev.initRan = true
-neededDependencies(dev::TestMissingIDDevice) = []
-optionalDependencies(dev::TestMissingIDDevice) = []
+MPIMeasurements.init(dev::TestMissingIDDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestMissingIDDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestMissingIDDevice) = []
 
 Base.@kwdef mutable struct TestMissingParamsDevice <: Device
   "Unique device ID for this device as defined in the configuration."
@@ -89,9 +140,9 @@ Base.@kwdef mutable struct TestMissingParamsDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestMissingParamsDevice) = dev.initRan = true
-neededDependencies(dev::TestMissingParamsDevice) = []
-optionalDependencies(dev::TestMissingParamsDevice) = []
+MPIMeasurements.init(dev::TestMissingParamsDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestMissingParamsDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestMissingParamsDevice) = []
 
 Base.@kwdef mutable struct TestMissingOptionalDevice <: Device
   "Unique device ID for this device as defined in the configuration."
@@ -108,9 +159,9 @@ Base.@kwdef mutable struct TestMissingOptionalDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestMissingOptionalDevice) = dev.initRan = true
-neededDependencies(dev::TestMissingOptionalDevice) = []
-optionalDependencies(dev::TestMissingOptionalDevice) = []
+MPIMeasurements.init(dev::TestMissingOptionalDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestMissingOptionalDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestMissingOptionalDevice) = []
 
 Base.@kwdef mutable struct TestMissingPresentDevice <: Device
   "Unique device ID for this device as defined in the configuration."
@@ -127,9 +178,9 @@ Base.@kwdef mutable struct TestMissingPresentDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestMissingPresentDevice) = dev.initRan = true
-neededDependencies(dev::TestMissingPresentDevice) = []
-optionalDependencies(dev::TestMissingPresentDevice) = []
+MPIMeasurements.init(dev::TestMissingPresentDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestMissingPresentDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestMissingPresentDevice) = []
 
 Base.@kwdef mutable struct TestMissingDependencyDevice <: Device
   "Unique device ID for this device as defined in the configuration."
@@ -146,6 +197,6 @@ Base.@kwdef mutable struct TestMissingDependencyDevice <: Device
   initRan::Bool = false
 end
 
-init(dev::TestMissingDependencyDevice) = dev.initRan = true
-neededDependencies(dev::TestMissingDependencyDevice) = []
-optionalDependencies(dev::TestMissingDependencyDevice) = []
+MPIMeasurements.init(dev::TestMissingDependencyDevice) = dev.initRan = true
+MPIMeasurements.neededDependencies(dev::TestMissingDependencyDevice) = []
+MPIMeasurements.optionalDependencies(dev::TestMissingDependencyDevice) = []

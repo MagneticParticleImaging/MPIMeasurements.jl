@@ -1,0 +1,22 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestDeviceWrongDependencies"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "./tmp/TestSimpleSimulatedScannerStore"
+defaultSequence = "SimpleSimulatedSequence"
+
+[Devices]
+initializationOrder = [
+  "testDependency",
+  "testDevice"
+]
+
+[Devices.testDevice]
+deviceType = "TestDependencyDevice"
+dependencies = ["testDependency"]
+
+[Devices.testDependency]
+deviceType = "TestDeviceB"
