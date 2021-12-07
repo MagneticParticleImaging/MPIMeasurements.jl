@@ -1,5 +1,3 @@
-using Plots
-
 export SimpleBoreCollisionModule, SimpleBoreCollisionModuleParams
 
 Base.@kwdef struct SimpleBoreCollisionModuleParams <: DeviceParams

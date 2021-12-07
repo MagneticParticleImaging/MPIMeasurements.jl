@@ -8,6 +8,7 @@ using Unitful
 testConfigDir = normpath(string(@__DIR__), "TestConfigs")
 addConfigurationPath(testConfigDir)
 
+#testScanner = "TestSimpleSimulatedScanner"
 include("Devices/DeviceTests.jl")
-include("Scanner/ScannerTests.jl")
+#include("Scanner/ScannerTests.jl")
 include("Safety/SafetyTests.jl")
