@@ -1,0 +1,39 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestDeviceWorkingScanner"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "./tmp/TestSimpleSimulatedScannerStore"
+defaultSequence = "SimpleSimulatedSequence"
+
+[Devices]
+initializationOrder = [
+  "testDevice",
+  "testDependency",
+  "testUnambiguousDevice"
+]
+
+[Devices.testDependency]
+deviceType = "TestDependencyDevice"
+dependencies = ["testDevice"]
+
+[Devices.testDevice]
+deviceType = "TestDevice"
+stringValue = "BAR"
+stringArray = ["MPI", "Measurements", "Test", "String"]
+enumValue = "BAR"
+enumArray = ["FOO", "FOO", "BAR"]
+unitValue = "11.0V"
+unitArray = ["0.5V", "0.4V", "1.0V"]
+primitiveValue = 2
+primitveArray = [1, 2, 3, 4, 5, 6]
+arrayArray = [["10mm", "20mm"], ["30mm", "40mm"], ["50mm", "60mm"]]
+
+[Devices.testUnambiguousDevice]
+deviceType = "TestDevice"
+
+[Devices.testUnusedDevice]
+deviceType = "TestDependencyDevice"
+dependencies = ["testDependency"]

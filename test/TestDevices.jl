@@ -8,7 +8,7 @@ for enum in [:TestEnum]
     T = $enum
     function Base.convert(::Type{T}, x::String)
       try 
-        return stringToEnum(x, T)
+        return MPIMeasurements.stringToEnum(x, T)
       catch ex
         throw(ScannerConfigurationError(ex.msg))
       end
@@ -51,7 +51,7 @@ Base.@kwdef mutable struct TestDevice <: Device
 end
 
 function MPIMeasurements._init(dev::TestDevice)
-  # NOP
+  dev.initRan = true
 end
 MPIMeasurements.neededDependencies(dev::TestDevice) = []
 MPIMeasurements.optionalDependencies(dev::TestDevice) = []
@@ -78,7 +78,7 @@ Base.@kwdef mutable struct TestDependencyDevice <: Device
 end
 
 function MPIMeasurements._init(dev::TestDependencyDevice)
-  # NOP
+  dev.initRan = true
 end
 MPIMeasurements.neededDependencies(dev::TestDependencyDevice) = [TestDevice]
 MPIMeasurements.optionalDependencies(dev::TestDependencyDevice) = []
@@ -105,7 +105,7 @@ Base.@kwdef mutable struct TestDeviceB <: Device
 end
 
 function MPIMeasurements._init(dev::TestDeviceB)
-  # NOP
+  dev.initRan = true
 end
 MPIMeasurements.neededDependencies(dev::TestDeviceB) = []
 MPIMeasurements.optionalDependencies(dev::TestDeviceB) = []

@@ -1,0 +1,52 @@
+[General]
+name = "1DSequence"
+description = "Precise description."
+targetScanner = "testscanner"
+baseFrequency = "125.0MHz"
+triggered = false
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = true
+
+[Fields.df.chanx]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.chanx.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+
+[Fields.ff]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = false
+decouple = false
+
+
+[Fields.ff.ffx]
+type = "ContinuousElectricalChannel"
+dividerSteps = 3648000
+divider = 18240000
+amplitude = "0.2A"
+offset = "0.4A"
+phase = "0.0rad"
+waveform = "sine"
+
+
+[Acquisition]
+channels = ["rx_main", "rx_side"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+numFrames = 1
+numAverages = 1
+numFrameAverages = 1
