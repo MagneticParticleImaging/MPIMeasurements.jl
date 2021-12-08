@@ -18,10 +18,8 @@ Base.@kwdef mutable struct DummyGaussMeter <: GaussMeter
   dependencies::Dict{String, Union{Device, Missing}}
 end
 
-function init(gauss::DummyGaussMeter)
-  @debug "Initializing dummy gaussmeter unit with ID `$(gauss.deviceID)`."
-
-  gauss.present = true
+function _init(gauss::DummyGaussMeter)
+  # NOP
 end
 
 neededDependencies(::DummyGaussMeter) = []

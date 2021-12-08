@@ -1,4 +1,4 @@
-export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, checkDependencies
+export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, _init, checkDependencies
 
 abstract type VirtualDevice <: Device end
 
@@ -65,9 +65,15 @@ function isExpectedDependency(device::Device, dependency::Device)
   return false
 end
 
-@mustimplement init(device::Device)
+@mustimplement _init(device::Device)
 @mustimplement neededDependencies(device::Device)::Vector{DataType}
 @mustimplement optionalDependencies(device::Device)::Vector{DataType}
+
+function init(device::Device)
+  @info "Initializing $(typeof(device)) with ID `$(deviceID(device))`"
+  _init(device)
+  device.present = true
+end
 
 function checkDependencies(device::Device)
   # Check if all needed dependencies are assigned

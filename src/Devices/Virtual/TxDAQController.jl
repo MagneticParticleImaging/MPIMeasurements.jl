@@ -33,9 +33,8 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   controlledChannels::Vector{ControlledChannel} = []
 end
 
-function init(tx::TxDAQController)
-  @info "Initializing TxDAQController with ID `$(tx.deviceID)`."
-  tx.present = true
+function _init(tx::TxDAQController)
+  # NOP
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
