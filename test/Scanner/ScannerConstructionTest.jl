@@ -12,5 +12,6 @@
   @testset "Incorrect Dependency" begin
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestDeviceMissingDependencies")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestDeviceWrongDependencies")
+    @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestDeviceUninitDependencies")
   end
 end

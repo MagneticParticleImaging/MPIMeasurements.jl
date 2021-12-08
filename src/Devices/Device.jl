@@ -74,7 +74,7 @@ function init(device::Device)
   
   # Only init a device if all dependencies are present
   uninitDependencies = []
-  for dev in dependencies(device)
+  for dev in values(dependencies(device)) # Should only be of type <: Device at this point
     if !isPresent(dev)
       push!(uninitDependencies, deviceID(dev))
     end

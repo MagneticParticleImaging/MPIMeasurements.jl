@@ -10,7 +10,8 @@ defaultSequence = "SimpleSimulatedSequence"
 
 [Devices]
 initializationOrder = [
-  "testDevice"
+  "testDevice",
+  "testDependency"
 ]
 
 [Devices.testDevice]
