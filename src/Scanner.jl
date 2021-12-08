@@ -266,6 +266,7 @@ function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
 end
 function getDevices(scanner::MPIScanner, deviceType::String)
   knownDeviceTypes = deepsubtypes(Device)
+  push!(knownDeviceTypes, Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
 end
