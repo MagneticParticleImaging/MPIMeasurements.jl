@@ -71,6 +71,19 @@ end
 
 function init(device::Device)
   @info "Initializing $(typeof(device)) with ID `$(deviceID(device))`"
+  
+  # Only init a device if all dependencies are present
+  uninitDependencies = []
+  for dev in dependencies(device)
+    if !isPresent(dev)
+      push!(uninitDependencies, deviceID(dev))
+    end
+  end
+  if length(uninitDependencies) > 0
+    msg = "Initialization order error: The device $(deviceID(device)) cannot be initialized because it depends on the uninitialized devices " * join(uninitDependencies, ", ", " and ")
+    throw(ScannerConfigurationError(msg))
+  end
+
   _init(device)
   device.present = true
 end
