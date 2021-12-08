@@ -10,7 +10,6 @@ addConfigurationPath(testConfigDir)
 
 include("Scanner/ScannerTests.jl")
 
-#testScanner = "TestSimpleSimulatedScanner"
-#include("Devices/DeviceTests.jl")
-#include("Scanner/ScannerTests.jl")
+testScanner = "TestSimpleSimulatedScanner"
+include("Devices/DeviceTests.jl")
 #include("Safety/SafetyTests.jl")

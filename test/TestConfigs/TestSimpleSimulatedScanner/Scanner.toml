@@ -10,11 +10,14 @@ defaultSequence = "SimpleSimulatedSequence"
 
 [Devices]
 initializationOrder = [
-  "my_daq_id",
   "simulated_gaussmeter",
   "collision_module_1",
   "simulated_robot",
-  "simulation_controller"
+  "simulation_controller",
+  "my_daq_id",
+  "simulated_tempSensor",
+  "dummy_su",
+  "simulated_amplifier"
 ]
 
 [Devices.my_daq_id]
@@ -70,3 +73,11 @@ minMaxBoreAxis = ["-300mm","Inf*mm"]
 deviceType = "SimulationController"
 initialCoilTemperatures.tx_main = "20.0°C"
 
+[Devices.simulated_tempSensor]
+deviceType = "DummyTemperatureSensor"
+
+[Devices.dummy_su]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.simulated_amplifier]
+deviceType = "SimulatedAmplifier"
