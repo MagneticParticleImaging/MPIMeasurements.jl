@@ -1,5 +1,5 @@
-function deviceTest(device::Amplifier)
-  @testset "$(string(typeof(device)))" begin
+function deviceTest(amp::Amplifier)
+  @testset "$(string(typeof(amp)))" begin
     @test state(amp) == false # default
     @test mode(amp) == AMP_VOLTAGE_MODE # Safe default
     @test voltageMode(amp) == AMP_LOW_VOLTAGE_MODE # Safe default
@@ -26,7 +26,7 @@ function deviceTest(device::Amplifier)
     matchingNetwork(amp, 2)
     @test matchingNetwork(amp) == 2
 
-    @test temperature(amp) == 25.0u"°C"
+    @test typeof(temperature(amp)) == typeof(1.0u"°C")
 
     toCurrentMode(amp)
     @test mode(amp) == AMP_CURRENT_MODE
