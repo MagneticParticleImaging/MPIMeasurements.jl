@@ -2,6 +2,7 @@
 include("Utils/UtilDevices.jl")
 include("Amplifier/Amplifier.jl")
 include("DAQ/DAQ.jl")
+include("Display/Display.jl")
 include("GaussMeter/GaussMeter.jl")
 include("Robots/Robots.jl")
 include("SurveillanceUnit/SurveillanceUnit.jl")

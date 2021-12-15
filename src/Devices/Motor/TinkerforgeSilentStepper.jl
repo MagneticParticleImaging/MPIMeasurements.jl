@@ -1,6 +1,6 @@
 export TinkerforgeSilentStepperParams, TinkerforgeSilentStepper
 
-Base.@kwdef struct TinkerforgeSilentStepperParams <: DeviceParams
+Base.@kwdef struct TinkerforgeSilentStepperBrickParams <: DeviceParams
   host::IPAddr = ip"127.0.0.1"
   port::Integer = 4223
   uid::String
@@ -11,13 +11,13 @@ Base.@kwdef struct TinkerforgeSilentStepperParams <: DeviceParams
   allowedVoltageDrop
   stallThreshold::Integer = 20000
 end
-TinkerforgeSilentStepperParams(dict::Dict) = params_from_dict(TinkerforgeSilentStepperParams, dict)
+TinkerforgeSilentStepperBrickParams(dict::Dict) = params_from_dict(TinkerforgeSilentStepperBrickParams, dict)
 
-Base.@kwdef mutable struct TinkerforgeSilentStepper <: StepperMotor
+Base.@kwdef mutable struct TinkerforgeSilentStepperBrick <: StepperMotor
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
   "Parameter struct for this devices read from the configuration."
-  params::SimulatedGaussMeterParams
+  params::TinkerforgeSilentStepperBrickParams
   "Flag if the device is optional."
 	optional::Bool = false
   "Flag if the device is present."
@@ -25,11 +25,11 @@ Base.@kwdef mutable struct TinkerforgeSilentStepper <: StepperMotor
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
-  brick = missing
+  brick::BrickSilentStepper = missing
   stallSum = 0
 end
 
-function init(motor::TinkerforgeSilentStepper)
+function init(motor::TinkerforgeSilentStepperBrick)
   @debug "Initializing Tinkerforge silent stepper unit with ID `$(motor.deviceID)`."
 
   tinkerforge = PyCall.pyimport("tinkerforge")
@@ -55,9 +55,9 @@ function init(motor::TinkerforgeSilentStepper)
   motor.present = true
 end
 
-checkDependencies(motor::TinkerforgeSilentStepper) = true
+checkDependencies(motor::TinkerforgeSilentStepperBrick) = true
 
-Base.close(motor::TinkerforgeSilentStepper) = nothing
+Base.close(motor::TinkerforgeSilentStepperBrick) = nothing
 
 # Note: This is commented out because I am not sure how to handle the callback. Using a global variable would only work with one device.
 # function allDataCallback(current_velocity, current_position, remaining_step, stack_voltage, external_voltage,
@@ -83,22 +83,22 @@ Base.close(motor::TinkerforgeSilentStepper) = nothing
 #     if getMotorDirection() == "still":
 #         stallSum = 0
 
-host(motor::TinkerforgeSilentStepper) = motor.params.host
-port(motor::TinkerforgeSilentStepper) = motor.params.port
-uid(motor::TinkerforgeSilentStepper) = motor.params.uid
-motorCurrent(motor::TinkerforgeSilentStepper) = motor.params.motorCurrent
-stepResolution(motor::TinkerforgeSilentStepper) = motor.params.stepResolution
-microStepResolution(motor::TinkerforgeSilentStepper) = motor.params.microStepResolution
-gearRatio(motor::TinkerforgeSilentStepper) = motor.params.gearRatio
-allowedVoltageDrop(motor::TinkerforgeSilentStepper) = motor.params.allowedVoltageDrop
-stallThreshold(motor::TinkerforgeSilentStepper) = motor.params.stallThreshold
+host(motor::TinkerforgeSilentStepperBrick) = motor.params.host
+port(motor::TinkerforgeSilentStepperBrick) = motor.params.port
+uid(motor::TinkerforgeSilentStepperBrick) = motor.params.uid
+motorCurrent(motor::TinkerforgeSilentStepperBrick) = motor.params.motorCurrent
+stepResolution(motor::TinkerforgeSilentStepperBrick) = motor.params.stepResolution
+microStepResolution(motor::TinkerforgeSilentStepperBrick) = motor.params.microStepResolution
+gearRatio(motor::TinkerforgeSilentStepperBrick) = motor.params.gearRatio
+allowedVoltageDrop(motor::TinkerforgeSilentStepperBrick) = motor.params.allowedVoltageDrop
+stallThreshold(motor::TinkerforgeSilentStepperBrick) = motor.params.stallThreshold
 
 
 # Function that calculates the velocity in steps per second to get x rpm at the motor
-rpm2sps(motor::TinkerforgeSilentStepper, rpm::Real) = rpm * 200 / 60 * microStepResolution(motor) * gearRatio(motor)
-sps2rpm(motor::TinkerforgeSilentStepper, sps::Real) = sps * 60 / 200 * 1 / microStepResolution(motor) * 1 / gearRatio(motor)
+rpm2sps(motor::TinkerforgeSilentStepperBrick, rpm::Real) = rpm * 200 / 60 * microStepResolution(motor) * gearRatio(motor)
+sps2rpm(motor::TinkerforgeSilentStepperBrick, sps::Real) = sps * 60 / 200 * 1 / microStepResolution(motor) * 1 / gearRatio(motor)
 
-function direction(motor::TinkerforgeSilentStepper)
+function direction(motor::TinkerforgeSilentStepperBrick)
   if motor.brick.get_current_velocity() > 0
     return MOTOR_FORWARD
   elseif motor.brick.get_current_velocity() < 0
@@ -108,12 +108,12 @@ function direction(motor::TinkerforgeSilentStepper)
   end
 end
 
-function emergencyBreak(motor::TinkerforgeSilentStepper)
+function emergencyBreak(motor::TinkerforgeSilentStepperBrick)
   motor.brick.full_brake()
   motor.brick.disable()
 end
 
-function driveSteps(motor::TinkerforgeSilentStepper, numSteps::Integer, direction::MotorDirection)
+function driveSteps(motor::TinkerforgeSilentStepperBrick, numSteps::Integer, direction::MotorDirection)
   if direction == MOTOR_BACKWARD
     numSteps = -numSteps
   end
@@ -132,7 +132,7 @@ function driveSteps(motor::TinkerforgeSilentStepper, numSteps::Integer, directio
   motor.brick.set_steps(numSteps)
 end
 
-function drive(motor::TinkerforgeSilentStepper, direction::MotorDirection)
+function drive(motor::TinkerforgeSilentStepperBrick, direction::MotorDirection)
   if direction(motor) != MOTOR_STILL
     stop(motor, 0u"s")
   end
@@ -150,7 +150,7 @@ end
 
 # Try to reach velocity while decreasing the acceleration and increasing the velocity
 # Commented out because with it CI failed
-#=function driveToVelocity(motor::TinkerforgeSilentStepper, rpm::typeof(u"1/s"), direction::MotorDirection)
+#=function driveToVelocity(motor::TinkerforgeSilentStepperBrick, rpm::typeof(u"1/s"), direction::MotorDirection)
   global stallThreashold
   stallThreashold = 10000
   if not (getMotorDirection() == "still"):
@@ -191,7 +191,7 @@ end
   stallThreashold = 20000
 end=#
 
-function stop(motor::TinkerforgeSilentStepper, delay::typeof(1.0u"s") = 0u"s")
+function stop(motor::TinkerforgeSilentStepperBrick, delay::typeof(1.0u"s") = 0u"s")
   sleep(ustrip(u"s", delay))  # Delay the stop maneuver
   motor.brick.stop()  # Stop the motor with the deacceleration set in the motor parameters
 
@@ -203,7 +203,7 @@ function stop(motor::TinkerforgeSilentStepper, delay::typeof(1.0u"s") = 0u"s")
   # stallSum=0
 end
 
-function progress(motor::TinkerforgeSilentStepper)
+function progress(motor::TinkerforgeSilentStepperBrick)
   setSteps = motor.brick.get_steps()
   remainingSteps = motor.brick.get_remaining_steps()
   donePercentage = 100 * remainingSteps / setSteps
