@@ -1,0 +1,8 @@
+type = "MPIMeasurementProtocol"
+description = "A test protocol"
+targetScanner = "TestDeviceWorkingScanner"
+
+sequence = "1DSequence"
+
+fgFrames = 1
+bgFrames = 1

@@ -1,7 +1,19 @@
+function deviceTest(device::Device)
+  @testset "$(string(typeof(device)))" begin
+    # NOP
+  end
+end
+
+include("Amplifier/AmplifierTests.jl")
+include("CollisionModule/ColisionModuleTests.jl")
+#include("DAQ/DAQTests.jl")
+#include("GaussMeter/GaussMeterTests.jl")
+#include("Virtual/VirtualDeviceTests.jl")
+#include("Robots/RobotTests.jl")
+
 @testset "Devices" begin
-  include("Amplifier/AmplifierTests.jl")
-  include("DAQ/DAQTests.jl")
-  include("GaussMeter/GaussMeterTests.jl")
-  include("Virtual/VirtualDeviceTests.jl")
-  include("Robots/RobotTests.jl")
+  mpiScanner = MPIScanner(testScanner)
+  for device in getDevices(mpiScanner, Device)
+    deviceTest(device)
+  end
 end

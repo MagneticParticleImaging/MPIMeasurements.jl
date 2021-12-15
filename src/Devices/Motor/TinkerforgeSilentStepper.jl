@@ -29,9 +29,7 @@ Base.@kwdef mutable struct TinkerforgeSilentStepper <: StepperMotor
   stallSum = 0
 end
 
-function init(motor::TinkerforgeSilentStepper)
-  @debug "Initializing Tinkerforge silent stepper unit with ID `$(motor.deviceID)`."
-
+function _init(motor::TinkerforgeSilentStepper)
   tinkerforge = PyCall.pyimport("tinkerforge")
   ipConnection = tinkerforge.ip_connection.IPConnection()
 
@@ -51,8 +49,6 @@ function init(motor::TinkerforgeSilentStepper)
   motor.brick.set_speed_ramping(acceleration, deacceleration)  # steps per s^2, acceleration and deacceleration of the motor, 8000 steps per s in 10 s equals 800 steps per s^2
   motor.brick.set_motor_current(motorCurrent * 1000)  # /mA, sets the current to drive the motor.
   motor.brick.set_step_configuration(stepResolution, true)  # sets the defines stepResolution and activates Interpolation
-
-  motor.present = true
 end
 
 checkDependencies(motor::TinkerforgeSilentStepper) = true

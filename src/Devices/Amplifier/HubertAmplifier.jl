@@ -24,9 +24,7 @@ Base.@kwdef mutable struct HubertAmplifier <: Amplifier
   driver::Union{SerialPort, Missing} = missing
 end
 
-function init(amp::HubertAmplifier)
-  @debug "Initializing Hubert amplifier unit with ID `$(amp.deviceID)`."
-
+function _init(amp::HubertAmplifier)
 	@warn "The code for the Hubert amplifier has not yet been tested within MPIMeasurements!"
 
 	amp.driver = SerialPort(port)
@@ -39,8 +37,6 @@ function init(amp::HubertAmplifier)
 	mode(amp, amp.params.mode)
 	voltageMode(amp, amp.params.voltageMode)
 	matchingNetwork(amp, amp.params.matchingNetwork)
-
-	amp.present = true
 end
 
 checkDependencies(amp::HubertAmplifier) = true

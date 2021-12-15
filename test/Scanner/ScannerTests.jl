@@ -1,5 +1,5 @@
 @testset "Scanners" begin
-  include("DummyScannerTest.jl")
-  include("FlexibleScannerTest.jl")
-  include("SimpleSimulatedScannerTest.jl")
+  include("ScannerConstructionTest.jl")
+  include("ExtensibleScannerTest.jl")
+  #include("SimpleSimulatedScannerTest.jl")
 end

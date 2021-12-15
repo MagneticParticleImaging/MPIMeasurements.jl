@@ -18,7 +18,9 @@ Base.@kwdef mutable struct DummyTemperatureSensor <: TemperatureSensor
   dependencies::Dict{String, Union{Device, Missing}}
 end
 
-init(sensor::DummyTemperatureSensor) = sensor.present = true
+function _init(sensor::DummyTemperatureSensor)
+  # NOP
+end
 
 neededDependencies(::DummyTemperatureSensor) = []
 optionalDependencies(::DummyTemperatureSensor) = []

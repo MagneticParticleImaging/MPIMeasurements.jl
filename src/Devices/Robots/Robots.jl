@@ -53,10 +53,8 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _isReferenced(rob::Robot)
 @mustimplement _getPosition(rob::Robot)
 
-function init(rob::Robot)
-  @debug "Initializing robot with ID `$(rob.deviceID)`."
+function _init(rob::Robot)
   setup(rob)
-  rob.present = true
 end
 
 neededDependencies(::Robot) = []
