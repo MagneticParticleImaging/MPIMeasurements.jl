@@ -87,6 +87,7 @@ include("SimulatedRobot.jl")
 include("IgusRobot.jl")
 include("IselRobot.jl")
 include("BrukerRobot.jl")
+include("StepcraftRobot.jl")
 
 function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   if haskey(namedPositions(rob), pos_name)
