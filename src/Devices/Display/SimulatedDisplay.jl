@@ -9,7 +9,7 @@ Base.@kwdef mutable struct SimulatedDisplay <: Display
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
   "Parameter struct for this devices read from the configuration."
-  params::SimulatedGaussMeterParams
+  params::SimulatedDisplayParams
   "Flag if the device is optional."
 	optional::Bool = false
   "Flag if the device is present."

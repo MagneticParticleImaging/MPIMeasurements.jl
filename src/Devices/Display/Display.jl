@@ -6,10 +6,6 @@ abstract type Display <: Device end
 
 Base.close(disp::Display) = nothing
 
-@mustimplement direction(disp::Display)
-@mustimplement direction(disp::Display, dir::DisplayDirection)
-
-
 getDisplays(scanner::MPIScanner) = getDevices(scanner, Display)
 function getDisplay(scanner::MPIScanner)
   displays = getDisplays(scanner)
@@ -19,7 +15,5 @@ function getDisplay(scanner::MPIScanner)
     return displays[1]
   end
 end
-
-
 
 include("SimulatedDisplay.jl")

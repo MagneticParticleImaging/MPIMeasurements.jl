@@ -1,7 +1,3 @@
-
-export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
-@enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
-
 export ConsoleProtocolHandler
 Base.@kwdef mutable struct ConsoleProtocolHandler
   # Protocol Interaction
@@ -364,53 +360,6 @@ function confirmFinishedProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
   @info "Protocol finished!"
   cph.updating = false
-end
-
-### Async Measurement Protocol ###
-function handleNewProgress(cph::ConsoleProtocolHandler, protocol::AsyncMeasurementProtocol, event::ProgressEvent)
-  @info "Asking for new frame $(event.done)"
-  dataQuery = DataQueryEvent("FRAME:$(event.done)")
-  put!(cph.biChannel, dataQuery)
-  return false
-end
-
-function handleEvent(cph::ConsoleProtocolHandler, protocol::AsyncMeasurementProtocol, event::DataAnswerEvent)
-  channel = cph.biChannel
-  # We were waiting on the last buffer request
-  if event.query.message == "BUFFER"
-    @info "Finishing measurement"
-    bgdata = nothing 
-    buffer = event.data
-    #filenameExperiment = MPIFiles.saveasMDF(cph.mdfstore, cph.scanner, cph.protocol.params.sequence, buffer, params)
-    #updateData(cph.rawDataWidget, filenameExperiment)
-    #updateExperimentStore(mpilab[], mpilab[].currentStudy)
-    @info "Would store now"
-    put!(channel, FinishedAckEvent())
-    return true
-  # We were waiting on a new frame
-  elseif startswith(event.query.message, "FRAME") && cph.protocolState == PS_RUNNING
-    frame = event.data
-    if !isnothing(frame)
-      @info "Received frame"
-      #infoMessage(m, "$(m.progress.unit) $(m.progress.done) / $(m.progress.total)", "green")
-      #if get_gtk_property(m["cbOnlinePlotting",CheckButtonLeaf], :active, Bool)
-      #seq = cph.protocol.params.sequence
-      #deltaT = ustrip(u"s", dfCycle(seq) / rxNumSamplesPerPeriod(seq))
-      #updateData(cph.rawDataWidget, frame, deltaT)
-      #end
-    end
-    # Ask for next progress
-    progressQuery = ProgressQueryEvent()
-    put!(channel, progressQuery)
-  end
-  return false
-end
-
-function handleFinished(cph::ConsoleProtocolHandler, protocol::AsyncMeasurementProtocol)
-  @info "Asking for full buffer"
-  bufferRequest = DataQueryEvent("BUFFER")
-  put!(cph.biChannel, bufferRequest)
-  return false
 end
 
 ### RobotBasedSystemMatrixProtocol ###

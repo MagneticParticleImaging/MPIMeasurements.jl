@@ -5,13 +5,13 @@ Base.@kwdef struct TinkerforgeBrickletLCD20x4DisplayParams <: DeviceParams
   port::Integer = 4223
   uid::String
 end
-TinkerforgeBrickletLCD20x4DisplayParams(dict::Dict) = params_from_dict(TinkerforgeBrickletLCD20x4DisplayBrickParams, dict)
+TinkerforgeBrickletLCD20x4DisplayParams(dict::Dict) = params_from_dict(TinkerforgeBrickletLCD20x4DisplayParams, dict)
 
 Base.@kwdef mutable struct TinkerforgeBrickletLCD20x4DisplayBrick <: StepperMotor
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
   "Parameter struct for this devices read from the configuration."
-  params::TinkerforgeBrickletLCD20x4DisplayBrickParams
+  params::TinkerforgeBrickletLCD20x4DisplayParams
   "Flag if the device is optional."
 	optional::Bool = false
   "Flag if the device is present."
