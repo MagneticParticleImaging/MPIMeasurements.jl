@@ -8,6 +8,9 @@ export  Protocol, ProtocolParams, name, description, scanner, params, runProtoco
 
 abstract type ProtocolParams end
 
+export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
+@enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
+
 name(protocol::Protocol)::AbstractString = protocol.name
 description(protocol::Protocol)::AbstractString = protocol.description
 scanner(protocol::Protocol)::MPIScanner = protocol.scanner
