@@ -27,8 +27,12 @@ using Graphics: @mustimplement
 using Scratch
 using Mmap
 using DocStringExtensions
+using PyTinkerforge
+using ReplMaker
+
 import REPL
-using REPL.TerminalMenus
+import REPL: LineEdit, REPLCompletions
+import REPL: TerminalMenus
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
 
 export addConfigurationPath
@@ -59,6 +63,7 @@ The device struct must at least have the fields `deviceID`, `params` and `depend
 all other fields should have default values.
 """
 abstract type Device end
+
 include("Scanner.jl")
 include("Utils/Utils.jl")
 include("Devices/Device.jl")
@@ -66,17 +71,20 @@ include("Devices/Device.jl")
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
 include("Utils/Storage.jl") # Depends on MPIScanner
+include("Utils/Console/Console.jl")
 
 """
     $(SIGNATURES)
 
-Initialize configuration paths with the package.
+Initialize configuration paths with the package and enable MPI REPL mode.
 """
 function __init__()
   defaultScannerConfigurationPath = joinpath(homedir(), ".mpi", "Scanners")
   if isdir(defaultScannerConfigurationPath)
     addConfigurationPath(defaultScannerConfigurationPath)
   end
+
+  mpi_mode_enable()
 end
 
 end # module

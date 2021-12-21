@@ -155,6 +155,8 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   else
     protocol.txCont = nothing
   end
+
+  return nothing
 end
 
 function checkPositions(protocol::RobotBasedSystemMatrixProtocol)

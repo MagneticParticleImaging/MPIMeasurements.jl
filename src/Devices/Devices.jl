@@ -6,7 +6,7 @@ include("Display/Display.jl")
 include("GaussMeter/GaussMeter.jl")
 include("Robots/Robots.jl")
 include("SurveillanceUnit/SurveillanceUnit.jl")
-include("TemperatureSensor/TemperatureSensor.jl")
+include("Sensors/Sensors.jl")
 include("Virtual/Virtual.jl")
 
 

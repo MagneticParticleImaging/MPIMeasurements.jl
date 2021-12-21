@@ -69,6 +69,8 @@ function _init(protocol::MPIMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
+
+  return nothing
 end
 
 function timeEstimate(protocol::MPIMeasurementProtocol)

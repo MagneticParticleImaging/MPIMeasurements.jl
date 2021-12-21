@@ -66,6 +66,8 @@ function _init(protocol::ContinousMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.counter = 0
+
+  return nothing
 end
 
 function timeEstimate(protocol::ContinousMeasurementProtocol)

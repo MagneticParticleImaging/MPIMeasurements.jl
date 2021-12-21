@@ -303,6 +303,7 @@ scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
 "Gradient of the scanners selection field."
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
 
+"Path of the dataset store."
 scannerDatasetStore(scanner::MPIScanner) = scanner.generalParams.datasetStore
 
 "Default sequence of the scanner."

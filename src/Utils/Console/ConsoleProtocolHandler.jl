@@ -19,12 +19,12 @@ end
 
 function ConsoleProtocolHandler(scanner::MPIScanner, protocol::Protocol)
   cph = ConsoleProtocolHandler(;scanner=scanner, protocol=protocol)
-  cph.mdfstore = DatasetStore(scannerDatasetStore(scanner))
+  cph.mdfstore = MDFDatasetStore(scannerDatasetStore(scanner))
   initProtocol(cph)
   return cph
 end
 
-ConsoleProtocolHandler(scanner::MPIScanner) = ConsoleProtocolHandler(scanner, defaultProtocol(scanner))
+ConsoleProtocolHandler(scanner::MPIScanner) = ConsoleProtocolHandler(scanner, Protocol(defaultProtocol(scanner), scanner))
 ConsoleProtocolHandler(scanner::String) = ConsoleProtocolHandler(MPIScanner(scanner))
 function ConsoleProtocolHandler(scanner::String, protocol::String)
   scanner_ = MPIScanner(scanner)
@@ -32,26 +32,23 @@ function ConsoleProtocolHandler(scanner::String, protocol::String)
 end
 
 export study
-study(cph::ConsoleProtocolHandler) = sph.currStudy
-study(cph::ConsoleProtocolHandler, study::MDFv2Study) = sph.currStudy = study
+study(cph::ConsoleProtocolHandler) = cph.currStudy
+study(cph::ConsoleProtocolHandler, study::MDFv2Study) = cph.currStudy = study
 
 export experiment
-experiment(cph::ConsoleProtocolHandler) = sph.currExperiment
-experiment(cph::ConsoleProtocolHandler, experiment::MDFv2Experiment) = sph.currExperiment = experiment
+experiment(cph::ConsoleProtocolHandler) = cph.currExperiment
+experiment(cph::ConsoleProtocolHandler, experiment::MDFv2Experiment) = cph.currExperiment = experiment
 
 export initProtocol
 function initProtocol(cph::ConsoleProtocolHandler)
   try 
-    @info "Setting protocol parameters"
-    for parameterObj in cph["boxProtocolParameter", BoxLeaf]
-      setProtocolParameter(cph, parameterObj, cph.protocol.params)
-    end
     @info "Init protocol"
-    cph.biChannel = init(cph.protocol)
+    init(cph.protocol)
+    cph.biChannel = biChannel(cph.protocol)
     return true
   catch e
     @error e
-    showError(e)
+    #showError(e)
     return false
   end
 end
@@ -67,7 +64,7 @@ function startProtocol(cph::ConsoleProtocolHandler)
     return true
   catch e
     @error e
-    showError(e)
+    #showError(e)
     return false
   end
 end
@@ -115,7 +112,7 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
   catch ex
     confirmFinishedProtocol(cph)
     close(timer)
-    showError(ex)
+    #showError(ex)
   end
 end
 
@@ -135,7 +132,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::Exc
   stack = Base.catch_stack(protocol.executeTask)[1]
   @error stack[1]
   @error stacktrace(stack[2])
-  showError(stack[1])
+  #showError(stack[1])
   cph.protocolState = PS_FAILED
   return true
 end
