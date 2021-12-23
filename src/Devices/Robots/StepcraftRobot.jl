@@ -11,7 +11,7 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
   stepsPermm::Float64 = 100
 
-  serial_port::String = "/dev/ttyUSB1"
+  serial_port::String = "/dev/ttyUSB0"
   pause_ms::Int = 200
   timeout_ms::Int = 40000
   delim_read::String = "\r"
@@ -85,7 +85,7 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   
   #Stepcraft responds always CR or error code (except: mode 2)
   if out == ""
-    error("Stepcraft Robot did not respond!")
+    error("Stepcraft robot did not respond!")
   end
 
   flush(sd.sp)
@@ -105,27 +105,29 @@ function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Uni
 end
 
 function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  posSC = ustrip(pos).*1000
+  distSC = ustrip(dist).*1000
   V = 1 #toDO
-  command = "\$E"*"$V"*",x$(posSC[1]),y$(posSC[2]),z$(posSC[3])"*"\r"
+  command = "\$E"*"$V"*",x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"*"\r"
   out = stepcraftCommand(rob,command)
 end
 
 function _enable(rob::StepcraftRobot)
-  #toDO: Stecraft Mode?
+  #toDO: Stepcraft Mode?
   #out = stepcraftCommand(rob,command)
 end
 
 function _disable(rob::StepcraftRobot)
   #Stop?
-  out = stepcraftCommand(rob,"@S\r")
+  #toDo: Wo wird das ausgeführt. Macht die Referenz kaputt...
+  #out = stepcraftCommand(rob,"@S\r")
 end
 
 function _reset(rob::StepcraftRobot)
   #Führt einen Neustart des Steuerprogramms durch. Ein Neustart ist z.B.
   #nach einem Programmupdate oder nach Änderung der Baudrate nötig.
   #Mit dem Neustart werden alle Parameter neu eingelesen.
-  out = stepcraftCommand(rob,"@R\r")
+  #toDo: Wo wird das ausgeführt. Macht die Referenz kaputt...
+  #out = stepcraftCommand(rob,"@R\r")
 end
 
 function _doReferenceDrive(rob::StepcraftRobot)
@@ -141,7 +143,7 @@ function _isReferenced(rob::StepcraftRobot)
   elseif out == "@X04\r"
     return true
   else
-    return true #toDO: error("Unknown Response: ", out)
+    return true #toDO: error("Unknown Response: ", out), wann wird das abgefragt?
   end
 end
 

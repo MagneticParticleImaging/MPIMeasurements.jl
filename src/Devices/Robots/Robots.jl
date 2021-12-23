@@ -182,8 +182,10 @@ function moveAbs(rob::Robot, pos::RobotCoords, speed::Union{Vector{<:Unitful.Vel
       end
     end
     setstate!(rob, READY)
+    @info "Robot READY"
   catch exc
     setstate!(rob, ERROR)
+    @info "Robot ERROR"
     throw(RobotDeviceError(rob, exc))
   end
 end
