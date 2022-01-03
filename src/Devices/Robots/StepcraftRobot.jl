@@ -1,12 +1,18 @@
 export StepcraftRobot, StepcraftRobotParams
 
+  #toDo: Check whether all functions can be executed in one mode: Answer No...
+  #toDO: Check for differences with baby stepcraft
+
   #Mode 0: Transfer parameters and adjust settings
   #Mode 1: Simple movement functions for setting up the machine
   #Mode 2: Workpiece machining with speed and path control
   #Mode 3: Batch mode, runs a program with plain text commands
   #Mode 4: Speed mode for endless driving
   #Mode 9: Update and file transfer (e.g. program update)
-  @enum StepcraftMode TRANSFER=0 SIMPLE=1 
+
+  #-> In mode 2 no Answers from controller when command is valid!
+
+  @enum StepcraftMode PARAMETERS=0 MOVEMENT=1 
 
 Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
@@ -67,16 +73,9 @@ function _setup(rob::StepcraftRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
 
-  #toDo: Check whether all functions can be executed in one mode: Answer No...
-  #-> In mode 2 no Answers from controller when command is valid!
-  #toDO: Check for differences with baby stepcraft
-  
-  #Initilise Stepcraft Mode "@Mx\r":
-  
-  #Standard drive mode: 1, For Paramter estimation mode: 0
-
-  stepcraftCommand(rob,"@M1\r")
-
+  #Standard drive mode: MOVEMENT (1), for paramter estimation mode: PARAMETERS (0)
+  #Initilise Stepcraft Mode MOVEMENT:
+  changeStepcraftMode(rob,MOVEMENT)
 end
 
 function stepcraftCommand(rob::StepcraftRobot, cmd::String)
@@ -97,8 +96,8 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   return out
 end
 
-function changeStepcraftMode(rob::StepcraftRobot,mode::Int)
-  out = stepcraftCommand(rob,"@M$mode\r")
+function changeStepcraftMode(rob::StepcraftRobot,mode::StepcraftMode)
+  return stepcraftCommand(rob,"@M$(Int(mode))\r")
 end
 
 # device specific implementations of basic functionality
@@ -155,10 +154,10 @@ function _isReferenced(rob::StepcraftRobot)
   end
 end
 
-function stepcraftStatus(rob::)
+function stepcraftStatus(rob::StepcraftRobot)
 end
 
-function stepcraftIdleStatus(rob::)
+function stepcraftIdleStatus(rob::StepcraftRobot)
   status = stepcraftStatus()
   stepcraftStatus(rob, status)
 end
