@@ -87,7 +87,7 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
 
   out = readuntil(rob.sd.sp,Vector{Char}("\r"),rob.params.timeout_ms)
   
-  #Stepcraft responds always CR or error code (except: mode 2)
+  #Stepcraft responds always CR or error code with CR (except: mode 2)
   if out == ""
     error("Stepcraft robot did not respond!")
   end
@@ -155,15 +155,18 @@ function _isReferenced(rob::StepcraftRobot)
 end
 
 function stepcraftStatus(rob::StepcraftRobot)
+  return stepcraftCommand(rob,"@XCR")[3:4]
 end
 
 function stepcraftIdleStatus(rob::StepcraftRobot)
   status = stepcraftStatus()
-  stepcraftStatus(rob, status)
+  return stepcraftIdleStatus(rob, status)
 end
+
 function stepcraftIdleStatus(rob::, status::AbstractString)
- # read digit
- # return 0 or 1
+  # read digit
+  state = digits(parse(Int,status,base=16), base=2, pad=4)
+  # return 0 or 1
 end
 
 function stepcraftCheckError(rob::)
