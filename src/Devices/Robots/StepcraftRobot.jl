@@ -1,5 +1,13 @@
 export StepcraftRobot, StepcraftRobotParams
 
+  #Mode 0: Transfer parameters and adjust settings
+  #Mode 1: Simple movement functions for setting up the machine
+  #Mode 2: Workpiece machining with speed and path control
+  #Mode 3: Batch mode, runs a program with plain text commands
+  #Mode 4: Speed mode for endless driving
+  #Mode 9: Update and file transfer (e.g. program update)
+  @enum StepcraftMode TRANSFER=0 SIMPLE=1 
+
 Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
@@ -17,6 +25,8 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Int = 115200
+
+  statusPause::typeof(1.0u"s") = 0.01u"s"
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -45,6 +55,7 @@ Base.@kwdef mutable struct StepcraftRobot <: Robot
   isReferenced::Bool = false
   "Version of the Isel Controller 1=C142; 2=newer"
   controllerVersion::Int = 1
+
 end
 
 
@@ -61,14 +72,8 @@ function _setup(rob::StepcraftRobot)
   #toDO: Check for differences with baby stepcraft
   
   #Initilise Stepcraft Mode "@Mx\r":
-  #Mode 0: Transfer parameters and adjust settings
-  #Mode 1: Simple movement functions for setting up the machine
-  #Mode 2: Workpiece machining with speed and path control
-  #Mode 3: Batch mode, runs a program with plain text commands
-  #Mode 4: Speed mode for endless driving
-  #Mode 9: Update and file transfer (e.g. program update)
   
-  #Standard dirve mode: 1, For Paramter estimation mode: 0
+  #Standard drive mode: 1, For Paramter estimation mode: 0
 
   stepcraftCommand(rob,"@M1\r")
 
@@ -102,6 +107,9 @@ function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Uni
   V = 1 #toDO
   command = "\$E"*"$V"*",X$(posSC[1]),Y$(posSC[2]),Z$(posSC[3])"*"\r"
   out = stepcraftCommand(rob,command)
+  while statusCheck
+    sleep(ustrip(u"s", rob.params.statusPause))
+  end
 end
 
 function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -131,12 +139,12 @@ function _reset(rob::StepcraftRobot)
 end
 
 function _doReferenceDrive(rob::StepcraftRobot)
-  out = stepcraftCommand(rob,"\$HzxyCR")
+  return stepcraftCommand(rob,"\$HzxyCR")
 end
 
 function _isReferenced(rob::StepcraftRobot)
   out = stepcraftCommand(rob,"@XCR")
-  
+  #toDo: Funktion: Statusabfrage
   #toDO. Check Doc
   if out == "@X00\r"
     return false
@@ -145,6 +153,24 @@ function _isReferenced(rob::StepcraftRobot)
   else
     return true #toDO: error("Unknown Response: ", out), wann wird das abgefragt?
   end
+end
+
+function stepcraftStatus(rob::)
+end
+
+function stepcraftIdleStatus(rob::)
+  status = stepcraftStatus()
+  stepcraftStatus(rob, status)
+end
+function stepcraftIdleStatus(rob::, status::AbstractString)
+ # read digit
+ # return 0 or 1
+end
+
+function stepcraftCheckError(rob::)
+  status = stepCraftStatus()
+  # read digit
+  # second bit set
 end
 
 function _getPosition(rob::StepcraftRobot)
