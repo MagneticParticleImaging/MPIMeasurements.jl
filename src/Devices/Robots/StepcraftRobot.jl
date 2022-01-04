@@ -71,7 +71,7 @@ Base.@kwdef mutable struct StepcraftRobot <: Robot
   "Version of the Isel Controller 1=C142; 2=newer"
   controllerVersion::Int = 1
   "Current Stepcraft state"
-  stepcraftStatus::StepcraftStatus = StepcraftStatus()
+  stepcraftStatus::StepcraftStatus = StepcraftStatus(0,0,0,0,0)
 
 end
 
@@ -86,6 +86,7 @@ function _setup(rob::StepcraftRobot)
 
   #Initilise Stepcraft Mode MOVEMENT:
   changeStepcraftMode(rob,MOVEMENT)
+  updateStepcraftStatus(rob)
 end
 
 function stepcraftCommand(rob::StepcraftRobot, cmd::String)
