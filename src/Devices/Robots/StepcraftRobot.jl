@@ -119,12 +119,13 @@ function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Un
 end
 
 function _enable(rob::StepcraftRobot)
+  #No relais in stecraft
   #toDO: Stepcraft Mode?
   #out = stepcraftCommand(rob,command)
 end
 
 function _disable(rob::StepcraftRobot)
-  #Stop?
+  #No relais in stecraft
   #toDo: Wo wird das ausgeführt. Macht die Referenz kaputt...
   #out = stepcraftCommand(rob,"@S\r")
 end
@@ -141,38 +142,52 @@ function _doReferenceDrive(rob::StepcraftRobot)
   return stepcraftCommand(rob,"\$HzxyCR")
 end
 
-function _isReferenced(rob::StepcraftRobot)
-  out = stepcraftCommand(rob,"@XCR")
-  #toDo: Funktion: Statusabfrage
-  #toDO. Check Doc
-  if out == "@X00\r"
-    return false
-  elseif out == "@X04\r"
-    return true
-  else
-    return true #toDO: error("Unknown Response: ", out), wann wird das abgefragt?
-  end
-end
-
 function stepcraftStatus(rob::StepcraftRobot)
   return stepcraftCommand(rob,"@XCR")[3:4]
 end
 
 function stepcraftIdleStatus(rob::StepcraftRobot)
-  status = stepcraftStatus()
-  return stepcraftIdleStatus(rob, status)
+  status = stepcraftStatus(rob)
+  return stepcraftIdleStatus(status)
 end
 
-function stepcraftIdleStatus(rob::, status::AbstractString)
-  # read digit
-  state = digits(parse(Int,status,base=16), base=2, pad=4)
-  # return 0 or 1
+function stepcraftIdleStatus(status::AbstractString)
+  #0: stepcraft holds position, 1: stepcraft moves
+  return digits(parse(Int,status,base=16), base=2, pad=4)[1]
 end
 
-function stepcraftCheckError(rob::)
-  status = stepCraftStatus()
-  # read digit
-  # second bit set
+function stepcraftCheckError(rob::StepcraftRobot)
+  status = stepcraftStatus(rob)
+  return stepcraftCheckError(status)
+end
+
+function stepcraftCheckError(status::AbstractString)
+  #0: no error, 1: error
+  error = digits(parse(Int,status,base=16), base=2, pad=4)[2]
+  if error
+    error("stepcraft in error state!")
+  end
+  return error
+end
+
+function _isReferenced(rob::StepcraftRobot)
+  status = stepcraftStatus(rob)
+  return _isReferenced(status)
+end
+
+function _isReferenced(status::AbstractString)
+  #stepcraft returns 0 for referenced and 1 for not referenced
+  return !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
+end
+
+function stepcraftBusyReferencing(rob::StepcraftRobot)
+  status = stepcraftStatus(rob)
+  return stepcraftBusyReferencing(status)
+end
+
+function stepcraftBusyReferencing(status::AbstractString)
+  #0: No reference drive right now, 1: stepcraft is right in the reference drive
+  return digits(parse(Int,status,base=16), base=2, pad=4)[3]
 end
 
 function _getPosition(rob::StepcraftRobot)
