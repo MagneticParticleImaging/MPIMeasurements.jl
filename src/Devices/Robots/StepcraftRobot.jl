@@ -10,6 +10,7 @@ export StepcraftRobot, StepcraftRobotParams
   #Mode 4: Speed mode for endless driving
   #Mode 9: Update and file transfer (e.g. program update)
 
+  #Standard drive mode: MOVEMENT (1), for paramter estimation mode: PARAMETERS (0)
   #-> In mode 2 no Answers from controller when command is valid!
 
   @enum StepcraftMode PARAMETERS=0 MOVEMENT=1 
@@ -41,6 +42,14 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
 end
 StepcraftRobotParams(dict::Dict) = params_from_dict(StepcraftRobotParams, prepareRobotDict(dict))
 
+struct  StepcraftStatus
+  idle::Bool
+  hasError::Bool
+  isReferenced::Bool
+  onReferenceDrive::Bool
+  isWaiting::Bool
+end
+
 Base.@kwdef mutable struct StepcraftRobot <: Robot
   "Unique device ID for this device as defined in the configuration."
   deviceID::String
@@ -61,6 +70,8 @@ Base.@kwdef mutable struct StepcraftRobot <: Robot
   isReferenced::Bool = false
   "Version of the Isel Controller 1=C142; 2=newer"
   controllerVersion::Int = 1
+  "Current Stepcraft state"
+  stepcraftStatus::StepcraftStatus = StepcraftStatus()
 
 end
 
@@ -73,7 +84,6 @@ function _setup(rob::StepcraftRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
 
-  #Standard drive mode: MOVEMENT (1), for paramter estimation mode: PARAMETERS (0)
   #Initilise Stepcraft Mode MOVEMENT:
   changeStepcraftMode(rob,MOVEMENT)
 end
@@ -100,15 +110,25 @@ function changeStepcraftMode(rob::StepcraftRobot,mode::StepcraftMode)
   return stepcraftCommand(rob,"@M$(Int(mode))\r")
 end
 
+function updateStepcraftStatus(rob::StepcraftRobot)
+  status = stepcraftCommand(rob,"@XCR")[3:4]
+  rob.StepcraftStatus.idle = digits(parse(Int,status,base=16), base=2, pad=4)[1]
+  rob.StepcraftStatus.hasError = digits(parse(Int,status,base=16), base=2, pad=4)[2]
+  if rob.StepcraftStatus.hasError
+    error("stepcraft in error state!")
+  end
+  rob.StepcraftStatus.isReferenced = !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
+  rob.StepcraftStatus.onReferenceDrive = digits(parse(Int,status,base=16), base=2, pad=4)[4]
+end
+
 # device specific implementations of basic functionality
 function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+  #[posC] = 1/1000 mm
   posSC = ustrip(pos).*1000
   V = 1 #toDO
   command = "\$E"*"$V"*",X$(posSC[1]),Y$(posSC[2]),Z$(posSC[3])"*"\r"
   out = stepcraftCommand(rob,command)
-  while statusCheck
-    sleep(ustrip(u"s", rob.params.statusPause))
-  end
+  waitForEndOfMovement(rob)
 end
 
 function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -116,22 +136,30 @@ function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Un
   V = 1 #toDO
   command = "\$E"*"$V"*",x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"*"\r"
   out = stepcraftCommand(rob,command)
+  waitForEndOfMovement(rob)
+end
+
+function waitForEndOfMovement(rob::StepcraftRobot)
+  while rob.StepcraftStatus.idle
+    updateStepcraftStatus(rob)
+    sleep(ustrip(u"s", rob.params.statusPause))
+  end
 end
 
 function _enable(rob::StepcraftRobot)
-  #No relais in stecraft
+  #No relais in stepcraft
   #toDO: Stepcraft Mode?
   #out = stepcraftCommand(rob,command)
 end
 
 function _disable(rob::StepcraftRobot)
-  #No relais in stecraft
+  #No relais in stepcraft
   #toDo: Wo wird das ausgeführt. Macht die Referenz kaputt...
   #out = stepcraftCommand(rob,"@S\r")
 end
 
 function _reset(rob::StepcraftRobot)
-  #Führt einen Neustart des Steuerprogramms durch. Ein Neustart ist z.B.
+  #Untenstehender Befehl führt einen Neustart des Steuerprogramms durch. Ein Neustart ist z.B.
   #nach einem Programmupdate oder nach Änderung der Baudrate nötig.
   #Mit dem Neustart werden alle Parameter neu eingelesen.
   #toDo: Wo wird das ausgeführt. Macht die Referenz kaputt...
@@ -139,58 +167,67 @@ function _reset(rob::StepcraftRobot)
 end
 
 function _doReferenceDrive(rob::StepcraftRobot)
-  return stepcraftCommand(rob,"\$HzxyCR")
-end
+  out = stepcraftCommand(rob,"\$HzxyCR")
 
-function stepcraftStatus(rob::StepcraftRobot)
-  return stepcraftCommand(rob,"@XCR")[3:4]
-end
-
-function stepcraftIdleStatus(rob::StepcraftRobot)
-  status = stepcraftStatus(rob)
-  return stepcraftIdleStatus(status)
-end
-
-function stepcraftIdleStatus(status::AbstractString)
-  #0: stepcraft holds position, 1: stepcraft moves
-  return digits(parse(Int,status,base=16), base=2, pad=4)[1]
-end
-
-function stepcraftCheckError(rob::StepcraftRobot)
-  status = stepcraftStatus(rob)
-  return stepcraftCheckError(status)
-end
-
-function stepcraftCheckError(status::AbstractString)
-  #0: no error, 1: error
-  error = digits(parse(Int,status,base=16), base=2, pad=4)[2]
-  if error
-    error("stepcraft in error state!")
+  #Wait for end of reference drive
+  while rob.StepcraftStatus.isReferenced
+    updateStepcraftStatus(rob)
+    sleep(ustrip(u"s", rob.params.statusPause))
   end
-  return error
 end
+
+# function stepcraftStatus(rob::StepcraftRobot)
+#   return stepcraftCommand(rob,"@XCR")[3:4]
+# end
+
+# function stepcraftIdleStatus(rob::StepcraftRobot)
+#   status = stepcraftStatus(rob)
+#   return stepcraftIdleStatus(status)
+# end
+
+# function stepcraftIdleStatus(status::AbstractString)
+#   #0: stepcraft holds position, 1: stepcraft moves
+#   return digits(parse(Int,status,base=16), base=2, pad=4)[1]
+# end
+
+# function stepcraftCheckError(rob::StepcraftRobot)
+#   status = stepcraftStatus(rob)
+#   return stepcraftCheckError(status)
+# end
+
+# function stepcraftCheckError(status::AbstractString)
+#   #0: no error, 1: error
+#   error = digits(parse(Int,status,base=16), base=2, pad=4)[2]
+#   if error
+#     error("stepcraft in error state!")
+#   end
+#   return error
+# end
 
 function _isReferenced(rob::StepcraftRobot)
-  status = stepcraftStatus(rob)
-  return _isReferenced(status)
+  #status = stepcraftStatus(rob)
+  #return _isReferenced(status)
+  updateStepcraftStatus(rob)
+  return rob.StepcraftStatus.isReferenced
 end
 
-function _isReferenced(status::AbstractString)
-  #stepcraft returns 0 for referenced and 1 for not referenced
-  return !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
-end
+# function _isReferenced(status::AbstractString)
+#   #stepcraft returns 0 for referenced and 1 for not referenced
+#   return !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
+# end
 
-function stepcraftBusyReferencing(rob::StepcraftRobot)
-  status = stepcraftStatus(rob)
-  return stepcraftBusyReferencing(status)
-end
+# function stepcraftBusyReferencing(rob::StepcraftRobot)
+#   status = stepcraftStatus(rob)
+#   return stepcraftBusyReferencing(status)
+# end
 
-function stepcraftBusyReferencing(status::AbstractString)
-  #0: No reference drive right now, 1: stepcraft is right in the reference drive
-  return digits(parse(Int,status,base=16), base=2, pad=4)[3]
-end
+# function stepcraftBusyReferencing(status::AbstractString)
+#   #0: No reference drive right now, 1: stepcraft is right in the reference drive
+#   return digits(parse(Int,status,base=16), base=2, pad=4)[4]
+# end
 
 function _getPosition(rob::StepcraftRobot)
+  updateStepcraftStatus(rob)
   changeStepcraftMode(rob,0)
 
   pos = zeros(3)
