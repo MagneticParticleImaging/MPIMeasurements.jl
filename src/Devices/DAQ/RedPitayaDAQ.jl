@@ -350,6 +350,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
     # TODO disconnect and reconnect to recover from open pipeline
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips)
+    masterTrigger(daq.rpc, false)
     daq.rpv = nothing
   end
   @info "Pipeline finished"
