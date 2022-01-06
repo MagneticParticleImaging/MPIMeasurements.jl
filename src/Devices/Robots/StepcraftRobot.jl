@@ -82,10 +82,11 @@ defaultVelocity(rob::StepcraftRobot) = nothing # should be implemented for a rob
 function _setup(rob::StepcraftRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
+  set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
 
   #invertAxes(rob, rob.params.invertAxes)
   stepcraftCommand(rob, "@M")
-  #changeStepcraftMode(rob,MOVEMENT)
+  changeStepcraftMode(rob,MOVEMENT)
   updateStepcraftStatus(rob)
   if rob.stepcraftStatus.hasError == true
     error("stepcraft in error state!")
@@ -108,7 +109,7 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   @info cmd
   flush(sd.sp)
   send(sd, cmd)
-  flush(sd.sp)
+  #flush(sd.sp)
   out = readuntil(rob.sd.sp,Vector{Char}("\r"),rob.params.timeout_ms)
   
   #Stepcraft responds always CR or error code with CR (except: mode 2)
@@ -128,17 +129,17 @@ function updateStepcraftStatus(rob::StepcraftRobot)
   preStatus = @time stepcraftCommand(rob,"@XCR")  
   status = preStatus[3:4]
   @info preStatus
-  @info "onReferenceDrive: ",digits(parse(Int,status,base=16), base=2, pad=4)[4]
-  @info "isReferenced: ",!convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
-  @info "hasError: ", digits(parse(Int,status,base=16), base=2, pad=4)[2]
-  @info "idle: ", !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[1])
+  @info "onReferenceDrive: ",digits(parse(Int,status[2],base=16), base=2, pad=3)[3]
+  @info "isReferenced: ",convert(Bool,digits(parse(Int,status[2],base=16), base=2, pad=3)[2])
+  @info "hasError: ", digits(parse(Int,status[2],base=16), base=16, pad=3)[1]
+  @info "idle: ", !convert(Bool,digits(parse(Int,status[1],base=16), base=1, pad=4)[1])
 
   rob.stepcraftStatus.idle = !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[1])
   rob.stepcraftStatus.hasError = digits(parse(Int,status,base=16), base=2, pad=4)[2]
-  if rob.stepcraftStatus.hasError
-    error("stepcraft in error state!")
-  end
-  rob.stepcraftStatus.isReferenced = !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
+  # if rob.stepcraftStatus.hasError
+  #   error("stepcraft in error state!")
+  # end
+  rob.stepcraftStatus.isReferenced = convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
   rob.stepcraftStatus.onReferenceDrive = digits(parse(Int,status,base=16), base=2, pad=4)[4]
   
 end
@@ -150,7 +151,7 @@ function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Uni
   V = 1 #toDO
   command = "\$E"*"$V"*",X$(posSC[1]),Y$(posSC[2]),Z$(posSC[3])"
   out = stepcraftCommand(rob,command)
-  #waitForEndOfMovement(rob)
+  catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
 end
 
@@ -159,8 +160,18 @@ function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Un
   V = 1 #toDO
   command = "\$E"*"$V"*",x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"
   out = stepcraftCommand(rob,command)
-  #waitForEndOfMovement(rob)
+  catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
+end
+
+function catchingStepcraftSpam(rob::StepcraftRobot)
+  #Hack(-elberg) to get rid of the position data sended during movements... 
+  bla = readuntil(rob.sd.sp, Vector{Char}("\r"), 100)
+  while bla != ""
+    bla = readuntil(rob.sd.sp, Vector{Char}("\r"), 100)
+    #println(bla)#*string(length(bla)))
+    updateStepcraftStatus(rob)
+  end
 end
 
 function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false)
@@ -203,6 +214,7 @@ end
 
 function _doReferenceDrive(rob::StepcraftRobot)
   out = stepcraftCommand(rob,"\$Hzxy")
+  catchingStepcraftSpam(rob)
   waitForStatus(rob,:isReferenced,false)
 end
 
