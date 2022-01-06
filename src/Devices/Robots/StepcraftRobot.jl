@@ -106,7 +106,7 @@ end
 function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   sd = rob.sd
   @debug "queryStepcraft: " cmd
-  @info cmd
+  #@info cmd
   flush(sd.sp)
   send(sd, cmd)
   #flush(sd.sp)
@@ -129,19 +129,12 @@ function updateStepcraftStatus(rob::StepcraftRobot)
   preStatus = @time stepcraftCommand(rob,"@XCR")  
   status = preStatus[3:4]
   @info preStatus
-  @info "onReferenceDrive: ",digits(parse(Int,status[2],base=16), base=2, pad=3)[3]
-  @info "isReferenced: ",convert(Bool,digits(parse(Int,status[2],base=16), base=2, pad=3)[2])
-  @info "hasError: ", digits(parse(Int,status[2],base=16), base=16, pad=3)[1]
-  @info "idle: ", !convert(Bool,digits(parse(Int,status[1],base=16), base=1, pad=4)[1])
 
-  rob.stepcraftStatus.idle = !convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[1])
-  rob.stepcraftStatus.hasError = digits(parse(Int,status,base=16), base=2, pad=4)[2]
-  # if rob.stepcraftStatus.hasError
-  #   error("stepcraft in error state!")
-  # end
-  rob.stepcraftStatus.isReferenced = convert(Bool,digits(parse(Int,status,base=16), base=2, pad=4)[3])
-  rob.stepcraftStatus.onReferenceDrive = digits(parse(Int,status,base=16), base=2, pad=4)[4]
-  
+  rob.stepcraftStatus.idle = 1 - parse(Bool,status[1])
+  rob.stepcraftStatus.hasError = (parse(Int,status[2],base=16) >> 1) & 1
+  rob.stepcraftStatus.isReferenced = (parse(Int,status[2],base=16) >> 2) & 1
+  rob.stepcraftStatus.onReferenceDrive = (parse(Int,status[2],base=16) >> 3) & 1
+  @show rob.stepcraftStatus
 end
 
 # device specific implementations of basic functionality
@@ -170,7 +163,7 @@ function catchingStepcraftSpam(rob::StepcraftRobot)
   while bla != ""
     bla = readuntil(rob.sd.sp, Vector{Char}("\r"), 100)
     #println(bla)#*string(length(bla)))
-    updateStepcraftStatus(rob)
+    #updateStepcraftStatus(rob)
   end
 end
 
