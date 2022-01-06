@@ -13,6 +13,8 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   measureBackground::Bool = true
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
+  "Remember background measurement"
+  rememberBGMeas::Bool = false
 end
 function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
   sequence = nothing
@@ -109,14 +111,12 @@ function _execute(protocol::MPIMeasurementProtocol)
 end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
-  if length(protocol.bgMeas) == 0 && protocol.params.measureBackground
-    message = "No background measurement was taken\nShould one be measured now?"
-    if askConfirmation(protocol, message)
-      acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
-      measurement(protocol)
-      protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-      askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
-    end
+  if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
+    askChoices(protocol, "Press continue when background measurement can be taken", ["Continue"])
+    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+    measurement(protocol)
+    protocol.bgMeas = protocol.scanner.seqMeasState.buffer
+    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])    
   end
 
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
