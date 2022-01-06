@@ -22,16 +22,16 @@ Base.@kwdef mutable struct TinkerforgeBrickletDistanceIRV2DistanceSensor <: Disp
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
-  deviceInternal::Union{BrickletDistanceIRV2, Missing} = missing
-  ipcon::Union{IPConnection, Missing} = missing
+  deviceInternal::Union{PyTinkerforge.BrickletDistanceIRV2, Missing} = missing
+  ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 end
 
 function init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
   @debug "Initializing Tinkerforge display unit with ID `$(disp.deviceID)`."
 
-  disp.ipcon = IPConnection()
+  disp.ipcon = PyTinkerforge.IPConnection()
   PyTinkerforge.connect(disp.ipcon, disp.params.host, disp.params.port)
-  disp.deviceInternal = BrickletDistanceIRV2(disp.params.uid, disp.ipcon)
+  disp.deviceInternal = PyTinkerforge.BrickletDistanceIRV2(disp.params.uid, disp.ipcon)
 
   disp.present = true
 
@@ -41,8 +41,8 @@ end
 
 checkDependencies(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = true
 
-Base.close(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = disconnect(disp.ipcon)
+Base.close(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.disconnect(disp.ipcon)
 
-distance(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = get_distance(disp.deviceInternal)
-movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = get_moving_average_configuration(disp.deviceInternal)
-movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor, length_::Integer) = set_moving_average_configuration(disp.deviceInternal, length_)
+distance(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_distance(disp.deviceInternal)
+movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_moving_average_configuration(disp.deviceInternal)
+movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor, length_::Integer) = PyTinkerforge.set_moving_average_configuration(disp.deviceInternal, length_)

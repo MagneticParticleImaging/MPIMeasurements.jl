@@ -19,25 +19,25 @@ Base.@kwdef mutable struct TinkerforgeBrickletLCD20x4Display <: Display
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
 
-  deviceInternal::Union{BrickletLCD20x4, Missing} = missing
-  ipcon::Union{IPConnection, Missing} = missing
+  deviceInternal::Union{PyTinkerforge.BrickletLCD20x4, Missing} = missing
+  ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 end
 
 function init(disp::TinkerforgeBrickletLCD20x4Display)
   @debug "Initializing Tinkerforge display unit with ID `$(disp.deviceID)`."
 
-  disp.ipcon = IPConnection()
+  disp.ipcon = PyTinkerforge.IPConnection()
   PyTinkerforge.connect(disp.ipcon, disp.params.host, disp.params.port)
-  disp.deviceInternal = BrickletLCD20x4(disp.params.uid, disp.ipcon)
+  disp.deviceInternal = PyTinkerforge.BrickletLCD20x4(disp.params.uid, disp.ipcon)
 
   disp.present = true
 end
 
 checkDependencies(disp::TinkerforgeBrickletLCD20x4Display) = true
 
-Base.close(disp::TinkerforgeBrickletLCD20x4Display) = disconnect(disp.ipcon)
+Base.close(disp::TinkerforgeBrickletLCD20x4Display) = PyTinkerforge.disconnect(disp.ipcon)
 
-clear(disp::TinkerforgeBrickletLCD20x4Display) = clear_display(disp.deviceInternal)
-writeLine(disp::TinkerforgeBrickletLCD20x4Display, row::Integer, column::Integer, message::String) = write_line(disp.deviceInternal, row, column, message)
+clear(disp::TinkerforgeBrickletLCD20x4Display) = PyTinkerforge.clear_display(disp.deviceInternal)
+writeLine(disp::TinkerforgeBrickletLCD20x4Display, row::Integer, column::Integer, message::String) = PyTinkerforge.write_line(disp.deviceInternal, row, column, message)
 hasBacklight(disp::TinkerforgeBrickletLCD20x4Display) = true
-setBacklight(disp::TinkerforgeBrickletLCD20x4Display, state::Bool) = state ? backlight_on(disp.deviceInternal) : backlight_off(disp.deviceInternal)
+setBacklight(disp::TinkerforgeBrickletLCD20x4Display, state::Bool) = state ? PyTinkerforge.backlight_on(disp.deviceInternal) : PyTinkerforge.backlight_off(disp.deviceInternal)

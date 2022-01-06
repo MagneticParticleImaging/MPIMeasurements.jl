@@ -1,5 +1,3 @@
-using Plots
-
 export SimpleBoreCollisionModule, SimpleBoreCollisionModuleParams
 
 Base.@kwdef struct SimpleBoreCollisionModuleParams <: DeviceParams
@@ -69,9 +67,9 @@ function plotSafetyErrors(cm::SimpleBoreCollisionModule, errorIndices::Vector{In
   x_scanner2 = (scannerRad - cm.params.clearance.distance) * cos.(t * pi);
   y_scanner2 = (scannerRad - cm.params.clearance.distance) * sin.(t * pi);
   
-  fig = plot(title="Plot results - $(geo.name) positions", xlabel="y [mm]", ylabel="z [mm]", aspect_ratio=:equal)
-  plot!(ustrip.(u"mm", x_scanner), ustrip.(u"mm", y_scanner), color=:blue, label="scanner")
-  plot!(ustrip.(u"mm", x_scanner2), ustrip.(u"mm", y_scanner2), color=:yellow, label="scanner, with clearance")
+  fig = Plots.plot(title="Plot results - $(geo.name) positions", xlabel="y [mm]", ylabel="z [mm]", aspect_ratio=:equal)
+  Plots.plot!(ustrip.(u"mm", x_scanner), ustrip.(u"mm", y_scanner), color=:blue, label="scanner")
+  Plots.plot!(ustrip.(u"mm", x_scanner2), ustrip.(u"mm", y_scanner2), color=:yellow, label="scanner, with clearance")
   for i = errorIndices
     y_i = coords[i, 2];
     z_i = coords[i, 3];
@@ -81,7 +79,7 @@ function plotSafetyErrors(cm::SimpleBoreCollisionModule, errorIndices::Vector{In
       x_geometry = geo.diameter / 2 * cos.(t * pi) .+ y_i;
       y_geometry = geo.diameter / 2 * sin.(t * pi) .+ z_i;
       
-      plot!(ustrip.(u"mm", x_geometry), ustrip.(u"mm", y_geometry), color=:red)
+      Plots.plot!(ustrip.(u"mm", x_geometry), ustrip.(u"mm", y_geometry), color=:red)
 
     elseif typeof(geo) == Rectangle
       # Create rectangle corner points
@@ -95,7 +93,7 @@ function plotSafetyErrors(cm::SimpleBoreCollisionModule, errorIndices::Vector{In
       p_br = ustrip.(u"mm", [y_i + geo.width / 2, z_i - geo.height / 2]);
 
       rect = transpose([p_bl p_ul p_ur p_br p_bl])
-      plot!(rect[:,1], rect[:,2], color=:red);
+      Plots.plot!(rect[:,1], rect[:,2], color=:red);
       
     elseif typeof(geo) == Triangle
       # Create triangle corner points
@@ -107,9 +105,9 @@ function plotSafetyErrors(cm::SimpleBoreCollisionModule, errorIndices::Vector{In
       p_br = ustrip.(u"mm", [y_i + geo.width / 2, z_i - geo.height / 3]);
 
       tri = [p_bl p_u p_br p_bl]
-      plot!(tri[1,:], tri[2,:], color=:red, label=nothing);
+      Plots.plot!(tri[1,:], tri[2,:], color=:red, label=nothing);
     end
     
   end
-  display(fig)
+  Plots.display(fig)
 end

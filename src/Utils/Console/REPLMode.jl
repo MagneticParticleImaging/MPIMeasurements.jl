@@ -25,7 +25,7 @@ mpi_repl_mode = MPIREPLMode()
 
 include("Commands.jl")
 
-default_commands() = keys(commands)
+default_commands() = keys(mpi_repl_mode.commands)
 
 function parse_command(command::String)
   splittedCommand = convert(Vector{String}, split(command, " "))

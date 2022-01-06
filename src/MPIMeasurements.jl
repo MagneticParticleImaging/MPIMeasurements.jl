@@ -1,43 +1,37 @@
 module MPIMeasurements
 
-#using MPIFiles: calibration
-#using Dates: include
-#using Reexport: include
-#using Pkg
-
-#using Compat
 using UUIDs
 using Mmap: settings
 using Base: Integer
-using Reexport
-@reexport using MPIFiles
-import MPIFiles: hasKeyAndValue
+using ThreadPools
+using Sockets
+using Dates
 using Unitful
 using TOML
-using ThreadPools
-#using HDF5
 using ProgressMeter
-using Sockets
-#using DelimitedFiles
-#using LinearAlgebra
-#using Statistics
-using Dates
 using InteractiveUtils
 using Graphics: @mustimplement
 using Scratch
 using Mmap
 using DocStringExtensions
-using PyTinkerforge
-using ReplMaker
+import Plots
 
+using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
 
-export addConfigurationPath
+using Reexport
+@reexport using MPIFiles
+import MPIFiles: hasKeyAndValue
+
+using RedPitayaDAQServer
+import PyTinkerforge
 
 const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+
+export addConfigurationPath
 addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
 
 # circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol

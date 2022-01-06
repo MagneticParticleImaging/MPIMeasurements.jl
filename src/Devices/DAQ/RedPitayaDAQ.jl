@@ -1,6 +1,5 @@
 export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
        setTxParamsAll, disconnect
-using RedPitayaDAQServer
 
 @enum RPTriggerMode begin
   INTERNAL
@@ -683,15 +682,6 @@ numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
 numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
-
-
-
-
-
-
-
-
-
 
 
 ######## OLD #########

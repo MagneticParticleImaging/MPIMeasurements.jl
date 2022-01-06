@@ -46,6 +46,8 @@ function mpi_mode_activate(;scannerName_::Union{String, Nothing} = nothing)
     println("A scanner has already been activated. Please deactivate first.")
     # Handle shutdown of old protocol handler
   end
+
+  return
 end
 
 # function mpi_mode_add_configuration(path::String)
