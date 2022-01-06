@@ -147,7 +147,7 @@ function measurement(protocol::MPIMeasurementProtocol)
     @error stacktrace(stack[2])
     ex = stack[1]
   end
-  if  Base.istaskfailed(consumer)
+  if Base.istaskfailed(consumer)
     @error "Consumer failed"
     stack = Base.catch_stack(consumer)[1]
     @error stack[1]
