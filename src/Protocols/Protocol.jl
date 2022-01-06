@@ -71,6 +71,7 @@ end
 Protocol(protocolName::AbstractString, scannerName::AbstractString) = Protocol(protocolName, MPIScanner(scannerName))
 Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protocol(protocolDict, MPIScanner(scannerName))
 
+# TODO (from Jonas): Is this still used?
 function runProtocol(protocol::Protocol)
   # TODO: Error handling
   # TODO command line "handler"

@@ -44,7 +44,7 @@ const center = "center\n"
 const park = "park\n"
 const pos = "pos\n"
 const quit = "quit\n"
-const exit = "exit\n"
+const exit_ = "exit\n"
 const err = "err?\n"
 
 
@@ -109,7 +109,7 @@ function _sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
   # p = open(`cat`,"r+");
     startmovetime = now(Dates.UTC)
     writetask = write(p.in, brukercmd.command)
-    writetaskexit = write(p.in, exit)
+    writetaskexit = write(p.in, exit_)
     readtask = @async readavailable(p.out)
     wait(readtask)
     endmovetime = now(Dates.UTC)

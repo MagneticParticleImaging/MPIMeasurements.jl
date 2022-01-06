@@ -9,6 +9,7 @@ end
 Base.@kwdef struct CommandSpec
   canonical_name::String
   short_name::Union{String, Nothing} = nothing
+  synonyms::Union{Vector{String}, Nothing} = nothing
   api::Function
   option_specs::Union{Dict{String, OptionSpec}, Nothing} = nothing
   completions::Union{Function, Nothing} = nothing
@@ -18,31 +19,50 @@ end
 
 Base.@kwdef mutable struct MPIREPLMode
   activeProtocolHandler::Union{ConsoleProtocolHandler, Nothing} = nothing
-  commands::Dict{String, CommandSpec} = Dict{String, CommandSpec}()
+  commands::Vector{CommandSpec} = Vector{CommandSpec}()
 end
 
 mpi_repl_mode = MPIREPLMode()
 
 include("Commands.jl")
 
-default_commands() = keys(mpi_repl_mode.commands)
+default_commands() = [command.canonical_name for command in mpi_repl_mode.commands]
+
+function get_command(command::String)
+  for command_ in mpi_repl_mode.commands
+    if command_.canonical_name == command || command_.short_name == command
+      return command_
+    end
+
+    if !isnothing(command_.synonyms) && command in command_.synonyms
+      return command_
+    end
+  end
+
+  return nothing
+end
 
 function parse_command(command::String)
   splittedCommand = convert(Vector{String}, split(command, " "))
-  if haskey(mpi_repl_mode.commands, splittedCommand[1])
-    spec = mpi_repl_mode.commands[splittedCommand[1]]
 
+  spec = get_command(splittedCommand[1])
+
+  if !isnothing(spec)
     if length(splittedCommand) > 1
-      if haskey(spec.option_specs, splittedCommand[2])
-        spec.api(;Dict{Symbol, Any}(spec.option_specs[splittedCommand[2]].api => splittedCommand[3])...)
+      if !isnothing(spec.option_specs)
+        if haskey(spec.option_specs, splittedCommand[2])
+          spec.api(;Dict{Symbol, Any}(spec.option_specs[splittedCommand[2]].api => splittedCommand[3])...)
+        else
+          spec.api(;Dict{Symbol, Any}(spec.option_specs["default"].api => splittedCommand[2])...)
+        end
       else
-        spec.api(;Dict{Symbol, Any}(spec.option_specs["default"].api => splittedCommand[2])...)
+        println("No additional parameters allowed for command `$(spec.canonical_name)`.")
       end
     else
       spec.api()
     end
   else
-    print("Command `$(splittedInstruction[1])` cannot be found.")
+    print("Command `$(splittedCommand[1])` cannot be found.")
   end
 end
 
@@ -83,10 +103,24 @@ function completions(full, index)::Tuple{Vector{String},UnitRange{Int},Bool}
 end
 
 function _completions(input, final, offset, index)
-  @info "" input, final, offset, index
+  if final
+    possible = [command for command in default_commands() if startswith(command, input)]
+  else
+    splittedCommand = convert(Vector{String}, split(input, " "))
 
-  possible = ["activate", "list"]
+    if length(splittedCommand) > 1
+      command_ = get_command(splittedCommand[1])
 
+      if isnothing(command_.completions)
+        possible = []
+      else
+        possible = command_.completions(join(splittedCommand[2:end], " "), final, offset, index)
+      end
+    else
+      possible = [command for command in default_commands() if startswith(command, input)]
+    end
+  end
+  
   return possible, offset:index, !isempty(possible)
 end
 
