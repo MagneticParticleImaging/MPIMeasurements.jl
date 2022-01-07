@@ -28,6 +28,19 @@ include("Commands.jl")
 
 default_commands() = [command.canonical_name for command in mpi_repl_mode.commands]
 
+function extended_commands()
+  canonicalNames = default_commands()
+
+  synonyms = []
+  for command in mpi_repl_mode.commands
+    if !isnothing(command.synonyms)
+      append!(synonyms, command.synonyms)
+    end
+  end
+
+  return vcat(canonicalNames, synonyms)
+end
+
 function get_command(command::String)
   for command_ in mpi_repl_mode.commands
     if command_.canonical_name == command || command_.short_name == command
@@ -103,22 +116,18 @@ function completions(full, index)::Tuple{Vector{String},UnitRange{Int},Bool}
 end
 
 function _completions(input, final, offset, index)
-  if final
-    possible = [command for command in default_commands() if startswith(command, input)]
-  else
-    splittedCommand = convert(Vector{String}, split(input, " "))
+  splittedCommand = convert(Vector{String}, split(input, " "))
 
-    if length(splittedCommand) > 1
-      command_ = get_command(splittedCommand[1])
+  if length(splittedCommand) > 1
+    command_ = get_command(splittedCommand[1])
 
-      if isnothing(command_.completions)
-        possible = []
-      else
-        possible = command_.completions(join(splittedCommand[2:end], " "), final, offset, index)
-      end
+    if isnothing(command_.completions)
+      possible = []
     else
-      possible = [command for command in default_commands() if startswith(command, input)]
+      possible = command_.completions(join(splittedCommand[2:end], " "), final, offset, index)
     end
+  else
+    possible = [command for command in extended_commands() if startswith(command, input)]
   end
   
   return possible, offset:index, !isempty(possible)

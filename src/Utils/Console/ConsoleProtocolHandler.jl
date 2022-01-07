@@ -57,11 +57,16 @@ export startProtocol
 function startProtocol(cph::ConsoleProtocolHandler)
   try 
     @info "Execute protocol"
-    execute(cph.scanner, cph.protocol)
-    cph.protocolState = PS_INIT
-    @info "Start event handler"
-    cph.eventHandler = Timer(timer -> eventHandler(cph, timer), 0.0, interval=0.05)
-    return true
+    cph.biChannel = execute(cph.scanner, cph.protocol)
+    if isnothing(cph.biChannel)
+      cph.protocolState = PS_UNDEFINED
+      return false
+    else
+      cph.protocolState = PS_INIT
+      @info "Start event handler"
+      cph.eventHandler = Timer(timer -> eventHandler(cph, timer), 0.0, interval=0.05)
+      return true
+    end
   catch e
     @error e
     #showError(e)
@@ -71,6 +76,11 @@ end
 
 export endProtocol
 function endProtocol(cph::ConsoleProtocolHandler)
+  if isnothing(cph.biChannel)
+    @error "The communication channel is not available. Has the protocol been started?"
+    return
+  end
+
   if isopen(cph.biChannel)
     put!(cph.biChannel, FinishedAckEvent())
   end

@@ -90,7 +90,20 @@ push!(mpi_repl_mode.commands, CommandSpec(
     ),
   ),
   completions = (input, final, offset, index) -> begin
-    return [scanner_ for scanner_ in list_scanners() if startswith(scanner_, input)]
+    # In case of an empty input, return the default if available
+    if input == ""
+      settingspath = abspath(homedir(), ".mpi")
+      settingsfile = joinpath(settingspath, "Settings.toml")
+      if isfile(settingsfile)
+        settings = TOML.parsefile(settingsfile)
+        scannerName_ = settings["scanner"]
+        return [scannerName_]
+      else
+        return []
+      end
+    else
+      return [scanner_ for scanner_ in list_scanners() if startswith(scanner_, input)]
+    end
   end,
   description = "Activate a specific scanner or select from a list"
 ))
@@ -116,7 +129,7 @@ push!(mpi_repl_mode.commands, CommandSpec(
 
 function check_protocol_available(protocolName_::String)
   if !(protocolName_ in getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner))
-    println("The selected protocol `$protocolName_` is not available. Please check the correct spelling or use `init` without an argument to select from a list.")
+    println("The selected protocol `$protocolName_` is not available. Please check the spelling or use `init` without an argument to select from a list.")
     return false
   else
     return true
@@ -156,7 +169,7 @@ function mpi_mode_init_protocol(;protocolName_::Union{String, Nothing} = nothing
       return
     else
       menu = REPL.TerminalMenus.RadioMenu(["Yes", "No"], pagesize=4)
-      choice = REPL.TerminalMenus.request("The current protocol is `$currProtocolName`. Do you want to change this?", menu, cursor=2)
+      choice = REPL.TerminalMenus.request("The current protocol is `$currProtocolName`. Do you want to stop the current one and change to `$protocolName_`?", menu, cursor=2)
 
       if choice == 1
         global mpi_repl_mode.activeProtocolHandler.protocol = nothing
@@ -187,7 +200,18 @@ push!(mpi_repl_mode.commands, CommandSpec(
       api = :protocolName_,
     ),
   ),
-  completions = nothing,
+  completions = (input, final, offset, index) -> begin  
+    # Prevent errors with non-activated scanner
+    if isnothing(mpi_repl_mode.activeProtocolHandler) || isnothing(mpi_repl_mode.activeProtocolHandler.scanner)
+      return []
+    end
+
+    if input == ""
+      return [defaultProtocol(mpi_repl_mode.activeProtocolHandler.scanner)]
+    else
+      return [protocol_ for protocol_ in getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner) if startswith(protocol_, input)]
+    end
+  end,
   description = "Init protocol."
 ))
 

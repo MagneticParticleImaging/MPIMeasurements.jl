@@ -117,6 +117,7 @@ requiredDevices(protocol::Protocol) = []
 timeEstimate(protocol::Protocol) = "Unknown"
 
 function execute(protocol::Protocol, threadID::Integer = 1)
+  @debug protocol.executeTask 
   if isnothing(protocol.executeTask) || istaskdone(protocol.executeTask)
     protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
     @tspawnat threadID executionTask(protocol)
