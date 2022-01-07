@@ -24,7 +24,8 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
-  stepsPermm::Float64 = 100
+  stepsPerRotation::Float64 = 200
+  distancePerRotation::typeof(1u"mm") = 2u"mm"
 
   serial_port::String = "/dev/ttyUSB0"
   pause_ms::Int = 200
@@ -84,8 +85,8 @@ function _setup(rob::StepcraftRobot)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
   set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
 
-  invertAxes(rob, rob.params.invertAxes)
-  stepcraftCommand(rob, "@M")
+  setSpindel(rob)
+  invertAxes(rob)
   changeStepcraftMode(rob,MOVEMENT)
   updateStepcraftStatus(rob)
   if rob.stepcraftStatus.hasError == true
@@ -93,7 +94,24 @@ function _setup(rob::StepcraftRobot)
   end
 end
 
-function invertAxes(rob::StepcraftRobot,axes::Array{Bool,1})
+function setSpindel(rob::StepcraftRobot)
+  changeStepcraftMode(rob,PARAMETERS)
+
+  stepsPerRotation = rob.params.stepsPerRotation
+  distancePerRotation = Int(round(ustrip(rob.params.distancePerRotation*1000)))
+  stepcraftCommand(rob,"#Zx,$(stepsPerRotation)")
+  stepcraftCommand(rob,"#Zy,$(stepsPerRotation)")
+  stepcraftCommand(rob,"#Zz,$(stepsPerRotation)")
+  stepcraftCommand(rob,"#Nx,$(distancePerRotation)")
+  stepcraftCommand(rob,"#Ny,$(distancePerRotation)")
+  stepcraftCommand(rob,"#Nz,$(distancePerRotation)")
+
+  changeStepcraftMode(rob,MOVEMENT)
+end
+
+function invertAxes(rob::StepcraftRobot)
+  axes = rob.params.invertAxes
+  
   changeStepcraftMode(rob,PARAMETERS)
 
   #For normal drive:
@@ -101,10 +119,11 @@ function invertAxes(rob::StepcraftRobot,axes::Array{Bool,1})
   stepcraftCommand(rob,"#Yy,$(convert(Int,axes[2]))")
   stepcraftCommand(rob,"#Yz,$(convert(Int,axes[3]))")
 
-  #For Refernce drive
+  #For reference drive
   stepcraftCommand(rob,"#DX,$(convert(Int,axes[1])),2,2,2")
   stepcraftCommand(rob,"#DY,$(convert(Int,axes[2])),2,2,2")
   stepcraftCommand(rob,"#DZ,$(convert(Int,axes[3])),2,2,2")
+
   changeStepcraftMode(rob,MOVEMENT)
 end
 
@@ -116,7 +135,7 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   send(sd, cmd)
   #flush(sd.sp)
   out = readuntil(rob.sd.sp,Vector{Char}("\r"),rob.params.timeout_ms)
-  @info out
+  #@info out
   #Stepcraft responds always CR or error code with CR (except: mode 2)
   if out == ""
     error("Stepcraft robot did not respond!")
@@ -140,7 +159,7 @@ end
 
 function updateStepcraftStatus(rob::StepcraftRobot)
   #Don't trust hasError and on onReferenceDrive. toDo: trustworthy error
-  status = stepcraftCommand(rob,"@XCR")[3:4]
+  status = stepcraftCommand(rob,"@X")[3:4]
   
   rob.stepcraftStatus.idle = 1 - parse(Bool,status[1])
   rob.stepcraftStatus.hasError = (parse(Int,status[2],base=16) >> 1) & 1
