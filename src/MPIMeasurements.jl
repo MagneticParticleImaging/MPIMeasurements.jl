@@ -11,7 +11,6 @@ using TOML
 using ProgressMeter
 using InteractiveUtils
 using Graphics: @mustimplement
-using Scratch
 using Mmap
 using DocStringExtensions
 import Plots

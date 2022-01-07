@@ -345,11 +345,11 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   try
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
-    @error e
-    # TODO disconnect and reconnect to recover from open pipeline
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips)
+    masterTrigger(daq.rpc, false)
     daq.rpv = nothing
+    rethrow(e)
   end
   @info "Pipeline finished"
   return endFrame
@@ -367,24 +367,17 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
   if framesInBuffer > 0
       samplesToConvert = view(samples, :, 1:(samplesPerFrame * framesInBuffer))
       chan = numChan(daq.rpc)
+      rpu = daq.rpc
       if !isnothing(daq.rpv)
+        rpu = daq.rpv
         chan = numChan(daq.rpv)
       end
-      frames = convertSamplesToFrames(samplesToConvert, chan, samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
-
-      # TODO move this to ref and meas conversion and get the params from the channels
-      c = daq.params.calibIntToVolt #is calibIntToVolt ever sanity checked?
-      for d = 1:size(frames, 2)
-        frames[:, d, :, :] .*= c[1,d]
-        frames[:, d, :, :] .+= c[2,d]
-      end
-
+      frames = convertSamplesToFrames(rpu, samplesToConvert, chan, samplesPerPeriod(daq.rpc), periodsPerFrame(daq.rpc), framesInBuffer, daq.acqNumAverages, 1)
       if (samplesPerFrame * framesInBuffer) + 1 <= samplesInBuffer
           unusedSamples = samples[:, (samplesPerFrame * framesInBuffer) + 1:samplesInBuffer]
       else
         unusedSamples = nothing
       end
-
   end
 
   buffer.samples = unusedSamples
@@ -633,16 +626,9 @@ currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)
 currentPeriod(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentPeriod(daq.rpc)
 
 function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
-  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1)
+  u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1, useCalibration = true)
 
-  @info "size u in readData: $(size(u))"
-  # TODO: Should be replaced when https://github.com/tknopp/RedPitayaDAQServer/pull/32 is resolved
-  c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
-  for d=1:size(u,2)
-    u[:,d,:,:] .*= c[1,d]
-    u[:,d,:,:] .+= c[2,d]
-  end
-
+  @info "size u in readData: $(size(u))" 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:,:]u"V"
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:,:]u"V"
 
@@ -657,15 +643,7 @@ function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, nu
 end
 
 function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod, acqNumAverages)
-  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages)
-
-  # TODO: Should be replaced when https://github.com/tknopp/RedPitayaDAQServer/pull/32 is resolved
-  #c = repeat([0.00012957305 0.015548877], outer=2*10)' # TODO: This is just an arbitrary number. The whole part should be replaced by calibration values coming from EEPROM.
-  c = daq.params.calibIntToVolt
-  for d=1:size(u,2)
-    u[:,d,:,:] .*= c[1,d]
-    u[:,d,:,:] .+= c[2,d]
-  end
+  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:]
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:]
