@@ -1,7 +1,6 @@
 export StepcraftRobot, StepcraftRobotParams
 
   #toDo: Check whether all functions can be executed in one mode: Answer No...
-  #toDO: Check for differences with baby stepcraft
 
   #Mode 0: Transfer parameters and adjust settings
   #Mode 1: Simple movement functions for setting up the machine
@@ -21,7 +20,8 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
   defaultRefVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
-  invertAxes::Vector{Bool} = [true, false, true]
+  invertRefAxes::Vector{Bool}
+  invertAxes::Vector{Bool} = [false, false, false]
 
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s, toDo
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms, toDo
@@ -88,13 +88,14 @@ function _setup(rob::StepcraftRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
   set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
+  flush(sp)
 
   setSpindel(rob)
   initSpeed(rob)
   invertAxes(rob)
   setStepcraftMode(rob,MOVEMENT)
   updateStepcraftStatus(rob)
-  if rob.stepcraftStatus.hasError == true
+  if rob.stepcraftStatus.hasError
     error("stepcraft in error state!")
   end
 end
@@ -128,15 +129,15 @@ function initSpeed(rob::StepcraftRobot)
 
   rob.vel = rob.params.defaultVel
   
-  #For reference drive
-  
+  #For reference drive, also sets axes inversion
   refVel = ustrip(uconvert.(u"µm/s",rob.params.defaultRefVel))
+  axes = rob.params.invertRefAxes
   stepcraftCommand(rob,"#G6,$(Int(round(minimum(refVel))))")
-  stepcraftCommand(rob,"#DX,1,6,6,6")
-  stepcraftCommand(rob,"#DY,0,6,6,6")
-  stepcraftCommand(rob,"#DZ,1,6,6,6")
+  stepcraftCommand(rob,"#DX,$(convert(Int, axes[1])),6,6,6")
+  stepcraftCommand(rob,"#DY,$(convert(Int, axes[2])),6,6,6")
+  stepcraftCommand(rob,"#DZ,$(convert(Int, axes[3])),6,6,6")
 
-  #setStepcraftMode(rob,MOVEMENT)
+  setStepcraftMode(rob,MOVEMENT)
 end
 
 function invertAxes(rob::StepcraftRobot)
@@ -171,7 +172,7 @@ function stepcraftCommand(rob::StepcraftRobot, cmd::String)
   return out
 end
 
-function setSpeed(rob::StepcraftRobot,speed::Union{Vector{<:Unitful.Velocity},Nothing})
+function setSpeed(rob::StepcraftRobot,speed::Vector{<:Unitful.Velocity})
   #There are 100 memory locations to store velocities. We use only the first six and 
   #update it as soon as a new velocity is set. On entry 6 the velocitiy during 
   #the search run, the free run from the switch and the subsequent optional offset 
@@ -185,7 +186,7 @@ function setSpeed(rob::StepcraftRobot,speed::Union{Vector{<:Unitful.Velocity},No
 
   setStepcraftMode(rob,PARAMETERS)
   
-  if (speed != nothing) & (speed != rob.vel)
+  if (speed != rob.vel)
     #Set new velocities
     speedRob = ustrip(uconvert.(u"µm/s",speed))
     stepcraftCommand(rob,"#G1,$(Int(round(minimum(speedRob))))")
@@ -199,19 +200,24 @@ function setSpeed(rob::StepcraftRobot,speed::Union{Vector{<:Unitful.Velocity},No
   setStepcraftMode(rob,MOVEMENT)
 end
 
+function setSpeed(rob::StepcraftRobot, speed::Nothing)
+  # NOP
+end
+
 function setStepcraftMode(rob::StepcraftRobot,mode::StepcraftMode)
   return stepcraftCommand(rob,"@M$(Int(mode))")
 end
 
 function updateStepcraftStatus(rob::StepcraftRobot)
   #Don't trust hasError and onReferenceDrive. toDo: trustworthy error
-  status = stepcraftCommand(rob,"@X")[3:4]
+  preStatus = stepcraftCommand(rob,"@X")
+  @info preStatus
+  status = preStatus[3:4]
   
   rob.stepcraftStatus.idle = 1 - parse(Bool,status[1])
   rob.stepcraftStatus.hasError = (parse(Int,status[2],base=16) >> 1) & 1
   rob.stepcraftStatus.isReferenced = (parse(Int,status[2],base=16) >> 2) & 1
   rob.stepcraftStatus.onReferenceDrive = (parse(Int,status[2],base=16) >> 3) & 1
-  @show rob.stepcraftStatus
 end
 
 # device specific implementations of basic functionality
@@ -227,20 +233,21 @@ function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Uni
 end
 
 function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
-  distSC = ustrip(uconvert(u"µm",dist))
+  distSC = ustrip(uconvert.(u"µm",dist))
   setSpeed(rob,speed)
   #robot moves with minimal velocity of speed...
   command = "\$E1,x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"
   out = stepcraftCommand(rob,command)
+  @info "bla"*out*"foo"
   catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
 end
 
 function catchingStepcraftSpam(rob::StepcraftRobot)
   #Hack(-elberg) to get rid of the position data sended during movements... 
-  bla = readuntil(rob.sd.sp, Vector{Char}("\r"), 100)
-  while bla != ""
-    bla = readuntil(rob.sd.sp, Vector{Char}("\r"), 100)
+  reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
+  while reply != ""
+    reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
     #println(bla)#*string(length(bla)))
     #updateStepcraftStatus(rob)
   end
@@ -258,7 +265,7 @@ function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false
 end
 
 function waitForEndOfMovement(rob::StepcraftRobot)
-  while rob.StepcraftStatus.idle
+  while rob.stepcraftStatus.idle
     updateStepcraftStatus(rob)
     sleep(ustrip(u"s", rob.params.statusPause))
   end
@@ -288,7 +295,7 @@ end
 
 function _isReferenced(rob::StepcraftRobot)
   updateStepcraftStatus(rob)
-  return rob.StepcraftStatus.isReferenced
+  return rob.stepcraftStatus.isReferenced
 end
 
 function _getPosition(rob::StepcraftRobot)
@@ -306,3 +313,5 @@ function _getPosition(rob::StepcraftRobot)
   
   return pos./1000*u"mm"
 end
+
+Base.close(rob::StepcraftRobot) = close(rob.sd.sp)
