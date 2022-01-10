@@ -90,6 +90,9 @@ function _setup(rob::StepcraftRobot)
   set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
   flush(sp)
 
+  #Getting rid of the stepcraft spam. The following command is not in the manual but deactivates the serial position monitoring during movements:
+  stepcraftCommand(rob,"#C52,0")
+
   setSpindel(rob)
   initSpeed(rob)
   invertAxes(rob)
