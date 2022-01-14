@@ -101,6 +101,7 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
 
     if isready(channel)
       event = take!(channel)
+      @debug "Event handler received event of type $(typeof(event)) and is now dispatching it."
       finished = handleEvent(cph, cph.protocol, event)
     elseif !isopen(channel)
       finished = true
@@ -120,9 +121,11 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
     end
 
   catch ex
+    @error "The eventhandler catched an exception."
     confirmFinishedProtocol(cph)
     close(timer)
     #showError(ex)
+    throw(ex)
   end
 end
 
@@ -170,6 +173,7 @@ end
 function handleNewProgress(cph::ConsoleProtocolHandler, protocol::Protocol, event::ProgressEvent)
   if isnothing(cph.progressDisplay)
     cph.progressDisplay = Progress(event.total, 0.5)
+    @debug cph.progressDisplay
   end
 
   progressQuery = ProgressQueryEvent()
@@ -178,13 +182,15 @@ function handleNewProgress(cph::ConsoleProtocolHandler, protocol::Protocol, even
 end
 
 function displayProgress(cph::ConsoleProtocolHandler)
-  update!(cph.progressDisplay, sph.progress.done)
+  println("Progress: $(cph.progress.done)")
+  #update!(cph.progressDisplay, cph.progress.done)
 end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::DecisionEvent)
+  @debug "Handling decision event for message \"$(event.message)\"."
   options = ["Yes", "No"]
-  menu = RadioMenu(options, pagesize=2)
-  choice = request("$(event.message):", menu)
+  menu = TerminalMenus.RadioMenu(options, pagesize=2)
+  choice = TerminalMenus.request("$(event.message):", menu)
 
   if choice == -1
     @info "Cancelled"
@@ -204,8 +210,10 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::Dec
 end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::MultipleChoiceEvent)
-  menu = RadioMenu(event.choices, pagesize=5)
-  reply = request("$(event.message):", menu)
+  @debug "Handling multiple choice event for message \"$(event.message)\"."
+  menu = TerminalMenus.RadioMenu(Vector{String}(event.choices), pagesize=5)
+  reply = TerminalMenus.request("$(event.message):", menu)
+  @debug "The answer is `$(event.choices[reply])`."
   put!(cph.biChannel, ChoiceAnswerEvent(reply, event))
   return false
 end

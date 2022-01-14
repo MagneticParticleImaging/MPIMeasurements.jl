@@ -29,6 +29,7 @@ isopen(biChannel::BidirectionalChannel) = isopen(inChannel(biChannel)) && isopen
 function close(biChannel::BidirectionalChannel)
     close(biChannel.in)
     close(biChannel.out)
+    error("Channel is closed here")
 end
 
 eltype(::Type{BidirectionalChannel{T}}) where {T} = T

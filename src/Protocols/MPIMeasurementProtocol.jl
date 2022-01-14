@@ -110,18 +110,30 @@ function _execute(protocol::MPIMeasurementProtocol)
 
   @info "Protocol finished."
   close(protocol.biChannel)
+  @debug "Protocol channel closed after execution."
 end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
+    @debug "Asking for background measurement."
     askChoices(protocol, "Press continue when background measurement can be taken", ["Continue"])
+
+    @debug "Setting number of background frames."
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+
+    @debug "Taking background measurement."
     measurement(protocol)
     protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])    
+
+    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
+  else
+    @debug "No background measurement was selected."   
   end
 
+  @debug "Setting number of foreground frames."
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+
+  @debug "Starting foreground measurement."
   measurement(protocol)
 end
 

@@ -94,6 +94,7 @@ abstract type ProtocolEvent end
 @mustimplement cancel(protocol::Protocol)
 
 function init(protocol::Protocol)
+  @debug "Initializing protocol $(name(protocol)) with inner initializer."
   checkRequiredDevices(protocol)
   _init(protocol)
 end
@@ -117,13 +118,16 @@ requiredDevices(protocol::Protocol) = []
 timeEstimate(protocol::Protocol) = "Unknown"
 
 function execute(protocol::Protocol, threadID::Integer = 1)
-  @debug protocol.executeTask 
   if isnothing(protocol.executeTask) || istaskdone(protocol.executeTask)
+    @debug "Executing protocol since the execute task is either `nothing` or done."
     protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
     @tspawnat threadID executionTask(protocol)
     return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
   else
-    @warn "Protocol cannot be executed again as it is still running"
+    if !isnothing(protocol.executeTask)
+      @debug "The execute task is not `nothing` but not done."
+    end
+    @warn "Protocol cannot be executed again as it is still running."
     return nothing
   end
 end
@@ -135,18 +139,23 @@ function executionTask(protocol::Protocol)
     _execute(protocol)
   catch ex
     if ex isa CancelException
+      @debug "A CancelException has been thrown during execution."
       put!(protocol.biChannel, OperationSuccessfulEvent(CancelEvent()))
       close(protocol.biChannel)
     elseif ex isa IllegalStateException
+      @debug "An IllegalStateException has been thrown during execution."
       put!(protocol.biChannel, IllegaleStateEvent(ex.message))
       close(protocol.biChannel)
     else
       # Let task fail
+      @debug "An exception has been thrown during execution."
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
       throw(ex)
     end
   end
+
+  @debug "Execution task ending. Closing communication channel."
   close(protocol.biChannel)
 end
 
@@ -223,6 +232,7 @@ struct StorageSuccessEvent <: ProtocolEvent
 end
 
 function askConfirmation(protocol::Protocol, message::AbstractString)
+  @debug "Asking for confirmation on \"$message\"."
   channel = biChannel(protocol)
   question = DecisionEvent(message)
   put!(channel, question)
@@ -239,6 +249,7 @@ function askConfirmation(protocol::Protocol, message::AbstractString)
 end
 
 function askChoices(protocol::Protocol, message::AbstractString, choices::Vector{<:AbstractString})
+  @debug "Asking for decision on \"$message\" with the following choices: $(join(choices, ", ", " and "))."
   channel = biChannel(protocol)
   question = MultipleChoiceEvent(message, choices)
   put!(channel, question)
