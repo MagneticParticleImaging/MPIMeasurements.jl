@@ -492,6 +492,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   # Construct view to save bandwidth
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
+  @debug "Sometimes a bounds error happens here due to selection being of length 1" selection length(selection) map(x->div(x -1, 2) + 1, rxIDs)
   for i in map(x->div(x -1, 2) + 1, rxIDs)
     selection[i] = true
   end

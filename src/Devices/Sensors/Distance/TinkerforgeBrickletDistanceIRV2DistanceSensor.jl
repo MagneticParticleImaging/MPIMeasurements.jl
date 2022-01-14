@@ -27,7 +27,7 @@ Base.@kwdef mutable struct TinkerforgeBrickletDistanceIRV2DistanceSensor <: Disp
 end
 
 function init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
-  @debug "Initializing Tinkerforge display unit with ID `$(disp.deviceID)`."
+  @debug "Initializing Tinkerforge distance sensor unit with ID `$(disp.deviceID)`."
 
   disp.ipcon = PyTinkerforge.IPConnection()
   PyTinkerforge.connect(disp.ipcon, disp.params.host, disp.params.port)
@@ -39,10 +39,10 @@ function init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
   movingAverageLength(disp, disp.params.movingAverageLength)
 end
 
-checkDependencies(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = true
-
+neededDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
+optionalDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
 Base.close(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.disconnect(disp.ipcon)
 
-distance(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_distance(disp.deviceInternal)
+getDistance(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_distance(disp.deviceInternal)*u"mm"
 movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_moving_average_configuration(disp.deviceInternal)
 movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor, length_::Integer) = PyTinkerforge.set_moving_average_configuration(disp.deviceInternal, length_)

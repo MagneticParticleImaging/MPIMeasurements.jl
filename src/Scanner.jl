@@ -111,19 +111,19 @@ Note: The fields correspond to the root section of an MDF file.
 """
 Base.@kwdef struct MPIScannerGeneral
   "Bore size of the scanner."
-  boreSize::typeof(1u"mm")
+  boreSize::Union{typeof(1u"mm"), Nothing} = nothing
   "Facility where the scanner is located."
-  facility::String
+  facility::String = "N.A."
   "Manufacturer of the scanner."
-  manufacturer::String
+  manufacturer::String = "N.A."
   "Name of the scanner"
   name::String
   "Topology of the scanner, e.g. FFL or FFP."
-  topology::String
+  topology::String = "N.A."
   "Gradient of the scanners selection field."
-  gradient::typeof(1u"T/m")
+  gradient::Union{typeof(1u"T/m"), Nothing} = nothing
   "Path of the dataset store."
-  datasetStore::String
+  datasetStore::String = ""
   "Default sequence of the scanner."
   defaultSequence::String = ""
   "Default protocol of the scanner."

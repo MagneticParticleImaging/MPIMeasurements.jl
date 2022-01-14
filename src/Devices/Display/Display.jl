@@ -6,15 +6,11 @@ abstract type Display <: Device end
 
 Base.close(disp::Display) = nothing
 
+export getDisplays
 getDisplays(scanner::MPIScanner) = getDevices(scanner, Display)
-function getDisplay(scanner::MPIScanner)
-  displays = getDisplays(scanner)
-  if length(Displays) > 1
-    error("The scanner has more than one display device. Therefore, a single display cannot be retrieved unambiguously.")
-  else
-    return displays[1]
-  end
-end
+
+export getDisplay
+getDisplay(scanner::MPIScanner) = getDevice(scanner, Display)
 
 export clear
 @mustimplement clear(disp::Display)

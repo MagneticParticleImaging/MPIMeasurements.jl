@@ -1,4 +1,4 @@
-export SimulatedTemperatureSensor, SimulatedTemperatureSensorParams, numChannels, getTemperature
+export SimulatedTemperatureSensor, SimulatedTemperatureSensorParams
 
 Base.@kwdef struct SimulatedTemperatureSensorParams <: DeviceParams
   

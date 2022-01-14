@@ -37,7 +37,7 @@ protocolName_ = "DummyMeasurement"
 cph = ConsoleProtocolHandler(scannerName_, protocolName_)
 study(cph, study_)
 experiment(cph, experiment_)
-startProtocol(sph)
+startProtocol(cph)
 
 #data = protocol.mdf.measurement.data
 #dataRMS = mapslices(x -> sqrt(1/length(x)*sum(x.^2)), data, dims = 1)

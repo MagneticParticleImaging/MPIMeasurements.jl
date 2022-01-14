@@ -27,7 +27,7 @@ function init(motor::SimulatedMotor)
   motor.present = true
 end
 
-checkDependencies(motor::SimulatedMotor) = true
-
+neededDependencies(::SimulatedMotor) = []
+optionalDependencies(::SimulatedMotor) = []
 Base.close(motor::SimulatedMotor) = nothing
 
