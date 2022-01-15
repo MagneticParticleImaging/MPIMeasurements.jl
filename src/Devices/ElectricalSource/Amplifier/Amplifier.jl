@@ -35,7 +35,7 @@ function convert(::Type{AmplifierVoltageMode}, x::String)
   end
 end
 
-abstract type Amplifier <: Device end
+abstract type Amplifier <: ElectricalSource end
 
 Base.close(amp::Amplifier) = nothing
 
@@ -50,15 +50,11 @@ Base.close(amp::Amplifier) = nothing
 @mustimplement matchingNetwork(amp::Amplifier, network::Integer)
 @mustimplement temperature(amp::Amplifier)::typeof(1.0u"°C")
 
+export getAmplifiers
 getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
-function getAmplifier(scanner::MPIScanner)
-  amplifiers = getGaussMeters(scanner)
-  if length(amplifiers) > 1
-    error("The scanner has more than one amplifier device. Therefore, a single amplifier cannot be retrieved unambiguously.")
-  else
-    return amplifiers[1]
-  end
-end
+
+export getAmplifiers
+getAmplifier(scanner::MPIScanner) = getDevice(scanner, Amplifier)
 
 """
 Sets the amplifier to current mode.
