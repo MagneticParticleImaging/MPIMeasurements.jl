@@ -33,9 +33,10 @@ function init(disp::TinkerforgeBrickletOLED128x64V2Display)
   disp.present = true
 end
 
-checkDependencies(disp::TinkerforgeBrickletOLED128x64V2Display) = true
-
+neededDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
+optionalDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
 Base.close(disp::TinkerforgeBrickletOLED128x64V2Display) = PyTinkerforge.disconnect(disp.ipcon)
+isTinkerforgeDevice(::TinkerforgeBrickletOLED128x64V2Display) = true
 
 clear(disp::TinkerforgeBrickletOLED128x64V2Display) = PyTinkerforge.clear_display(disp.deviceInternal)
 writeLine(disp::TinkerforgeBrickletOLED128x64V2Display, row::Integer, column::Integer, message::String) = PyTinkerforge.write_line(disp.deviceInternal, row, column, message)

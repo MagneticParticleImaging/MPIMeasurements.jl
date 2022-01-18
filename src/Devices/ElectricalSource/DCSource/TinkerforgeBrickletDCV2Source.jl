@@ -43,6 +43,7 @@ end
 neededDependencies(::TinkerforgeBrickletDCV2Source) = []
 optionalDependencies(::TinkerforgeBrickletDCV2Source) = []
 Base.close(source::TinkerforgeBrickletDCV2Source) = PyTinkerforge.disconnect(source.ipcon)
+isTinkerforgeDevice(::TinkerforgeBrickletDCV2Source) = true
 
 externalVoltage(source::TinkerforgeBrickletDCV2Source) = PyTinkerforge.get_external_input_voltage(source)u"mV"
 enable(source::TinkerforgeBrickletDCV2Source) = PyTinkerforge.set_enabled(source, true)

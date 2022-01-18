@@ -1,2 +1,2 @@
 include("Arduino.jl")
-#include("Tinkerforge.jl")
+include("Tinkerforge.jl")

@@ -42,6 +42,7 @@ end
 neededDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
 optionalDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
 Base.close(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.disconnect(disp.ipcon)
+isTinkerforgeDevice(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = true
 
 getDistance(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_distance(disp.deviceInternal)*u"mm"
 movingAverageLength(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.get_moving_average_configuration(disp.deviceInternal)

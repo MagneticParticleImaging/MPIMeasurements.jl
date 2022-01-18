@@ -36,6 +36,7 @@ end
 neededDependencies(::TinkerforgeBrickletIndustrialPTC) = []
 optionalDependencies(::TinkerforgeBrickletIndustrialPTC) = []
 Base.close(disp::TinkerforgeBrickletIndustrialPTC) = PyTinkerforge.disconnect(disp.ipcon)
+isTinkerforgeDevice(::TinkerforgeBrickletIndustrialPTC) = true
 
 numChannels(sensor::TinkerforgeBrickletIndustrialPTC) = 1
 getTemperatures(sensor::TinkerforgeBrickletIndustrialPTC)::Vector{typeof(1u"°C")} = [getTemperature(sensor, 1)]

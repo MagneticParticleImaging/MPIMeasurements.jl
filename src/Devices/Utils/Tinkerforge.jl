@@ -1,21 +1,18 @@
 
+# Default for all devices
+isTinkerforgeDevice(::Device) = false
 
-mutable struct TinkerforgeConnection
-  host::IPAddr = ip"127.0.0.1"
-  port::Integer = 4223
-  connection
+export TinkerforgeDevice
+struct TinkerforgeDevice <: Device end
 
-  function TinkerforgeConnection()
-    Conda.pip_interop(true)
-    Conda.pip("install", "Tinkerforge")
-    tinkerforge = pyimport("tinkerforge")
-    ip_connection_package = pyimport("tinkerforge.ip_connection")
-    ipcon = ip_connection_package.IPConnection()
-    ipcon.connect("127.0.0.1", 4223)
-    lcd_package = pyimport("tinkerforge.bricklet_lcd_20x4")
-    lcd = lcd_package.BrickletLCD20x4("BL1", ip_con)
-  end
-end
+export host
+host(device::T) where T <: Device = isTinkerforgeDevice(device) ? host(TinkerforgeDevice(), device) : error("`host` not implemented for device of type $(typeof(device)).")
+host(::TinkerforgeDevice, device::T) where T <:Device = device.params.host
 
-self.ip_con = IPConnection()
-            self.ip_con.connect(self.HOST, self.PORT)
+export port
+port(device::T) where T <: Device = isTinkerforgeDevice(device) ? port(TinkerforgeDevice(), device) : error("`port` not implemented for device of type $(typeof(device)).")
+port(::TinkerforgeDevice, device::T) where T <:Device = device.params.port
+
+export uid
+uid(device::T) where T <: Device = isTinkerforgeDevice(device) ? uid(TinkerforgeDevice(), device) : error("`uid` not implemented for device of type $(typeof(device)).")
+uid(::TinkerforgeDevice, device::T) where T <:Device = device.params.uid

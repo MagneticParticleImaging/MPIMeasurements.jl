@@ -33,9 +33,10 @@ function init(disp::TinkerforgeBrickletLCD20x4Display)
   disp.present = true
 end
 
-checkDependencies(disp::TinkerforgeBrickletLCD20x4Display) = true
-
+neededDependencies(::TinkerforgeBrickletLCD20x4Display) = []
+optionalDependencies(::TinkerforgeBrickletLCD20x4Display) = []
 Base.close(disp::TinkerforgeBrickletLCD20x4Display) = PyTinkerforge.disconnect(disp.ipcon)
+isTinkerforgeDevice(::TinkerforgeBrickletLCD20x4Display) = true
 
 clear(disp::TinkerforgeBrickletLCD20x4Display) = PyTinkerforge.clear_display(disp.deviceInternal)
 writeLine(disp::TinkerforgeBrickletLCD20x4Display, row::Integer, column::Integer, message::String) = PyTinkerforge.write_line(disp.deviceInternal, row, column, message)

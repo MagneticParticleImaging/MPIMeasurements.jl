@@ -39,4 +39,4 @@ export progress
 @mustimplement progress(motor::StepperMotor)
 
 include("SimulatedMotor.jl")
-include("TinkerforgeSilentStepper.jl")
+include("TinkerforgeStepperMotor.jl")
