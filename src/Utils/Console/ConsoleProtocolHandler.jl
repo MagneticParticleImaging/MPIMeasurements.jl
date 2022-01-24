@@ -20,7 +20,9 @@ end
 function ConsoleProtocolHandler(scanner::MPIScanner, protocol::Protocol)
   cph = ConsoleProtocolHandler(;scanner=scanner, protocol=protocol)
   cph.mdfstore = MDFDatasetStore(scannerDatasetStore(scanner))
-  initProtocol(cph)
+  if !initProtocol(cph)
+    cph = nothing
+  end
   return cph
 end
 
