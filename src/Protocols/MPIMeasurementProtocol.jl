@@ -112,11 +112,15 @@ end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
-    askChoices(protocol, "Press continue when background measurement can be taken", ["Continue"])
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
     measurement(protocol)
     protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])    
+    if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end    
   end
 
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
