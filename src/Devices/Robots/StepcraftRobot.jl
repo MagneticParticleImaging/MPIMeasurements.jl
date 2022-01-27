@@ -90,9 +90,7 @@ function _setup(rob::StepcraftRobot)
   set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
   flush(sp)
 
-  #Getting rid of the stepcraft spam. The following command is not in the manual but deactivates the serial position monitoring during movements:
-  stepcraftCommand(rob,"#C52,0")
-
+  stopStepcraftSpam(rob)
   setSpindel(rob)
   initSpeed(rob)
   invertAxes(rob)
@@ -101,6 +99,13 @@ function _setup(rob::StepcraftRobot)
   if rob.stepcraftStatus.hasError
     error("stepcraft in error state!")
   end
+end
+
+function stopStepcraftSpam(rob::StepcraftRobot)
+  #Getting rid of the stepcraft spam. The following command is not in the manual but deactivates the serial position monitoring during movements:
+  setStepcraftMode(rob,PARAMETERS)
+  stepcraftCommand(rob,"#C52,0")
+  setStepcraftMode(rob,MOVEMENT)
 end
 
 function setSpindel(rob::StepcraftRobot)
@@ -214,7 +219,7 @@ end
 function updateStepcraftStatus(rob::StepcraftRobot)
   #Don't trust hasError and onReferenceDrive. toDo: trustworthy error
   preStatus = stepcraftCommand(rob,"@X")
-  @info preStatus
+  #@info preStatus
   status = preStatus[3:4]
   
   rob.stepcraftStatus.idle = 1 - parse(Bool,status[1])
@@ -241,7 +246,7 @@ function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Un
   #robot moves with minimal velocity of speed...
   command = "\$E1,x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"
   out = stepcraftCommand(rob,command)
-  @info "bla"*out*"foo"
+  #@info "bla"*out*"foo"
   catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
 end
@@ -251,13 +256,13 @@ function catchingStepcraftSpam(rob::StepcraftRobot)
   reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
   while reply != ""
     reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
-    #println(bla)#*string(length(bla)))
+    println(reply)#*string(length(bla)))
     #updateStepcraftStatus(rob)
   end
 end
 
 function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false)
-	updateStepcraftStatus(rob)
+  updateStepcraftStatus(rob)
 	while getfield(rob.stepcraftStatus, status) == inverted
 		updateStepcraftStatus(rob)
 		if rob.stepcraftStatus.hasError && status != :hasError
@@ -290,7 +295,7 @@ function _reset(rob::StepcraftRobot)
   #out = stepcraftCommand(rob,"@R\r")
 end
 
-function _doReferenceDrive(rob::StepcraftRobot)
+function _doReferenceDrive(rob::StepcraftRobot) #toDO: Prevent endless loop when emergency stop is pressed during reference drive.
   out = stepcraftCommand(rob,"\$H"*rob.params.referenceOrder)
   catchingStepcraftSpam(rob)
   waitForStatus(rob,:isReferenced,false)
