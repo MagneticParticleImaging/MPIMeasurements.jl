@@ -14,7 +14,7 @@ export StepcraftRobot, StepcraftRobotParams
 
   #Attention! Emergency stop does not lead to an error state!
 
-  @enum StepcraftMode PARAMETERS=0 MOVEMENT=1 
+@enum StepcraftMode PARAMETERS=0 MOVEMENT=1 
 
 Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
@@ -37,6 +37,7 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
   baudrate::Int = 115200
 
   statusPause::typeof(1.0u"s") = 0.01u"s"
+  statusTimeout::typeof(1.0u"s") = 60u"s"
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -87,7 +88,7 @@ defaultVelocity(rob::StepcraftRobot) = rob.params.defaultVel # should be impleme
 function _setup(rob::StepcraftRobot)
   sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
   rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
-  set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT)
+  set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT) # TODO COMMENT WHY
   flush(sp)
 
   stopStepcraftSpam(rob)
@@ -102,7 +103,7 @@ function _setup(rob::StepcraftRobot)
 end
 
 function stopStepcraftSpam(rob::StepcraftRobot)
-  #Getting rid of the stepcraft spam. The following command is not in the manual but deactivates the serial position monitoring during movements:
+  #Getting rid of the stepcraft spam. The following stepcraft command is not in the manual but deactivates the serial position monitoring during movements:
   setStepcraftMode(rob,PARAMETERS)
   stepcraftCommand(rob,"#C52,0")
   setStepcraftMode(rob,MOVEMENT)
@@ -127,7 +128,6 @@ function initSpeed(rob::StepcraftRobot)
   setStepcraftMode(rob,PARAMETERS)
 
   #For normal drive
-
   vel = ustrip(uconvert.(u"µm/s",rob.params.defaultVel))
   stepcraftCommand(rob,"#G1,$(Int(round(minimum(vel))))")
   stepcraftCommand(rob,"#G2,$(Int(round(maximum(vel))))")
@@ -263,11 +263,21 @@ end
 
 function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false)
   updateStepcraftStatus(rob)
+
+  T = rob.params.statusTimeout
+  t0 = time()
+
 	while getfield(rob.stepcraftStatus, status) == inverted
 		updateStepcraftStatus(rob)
 		if rob.stepcraftStatus.hasError && status != :hasError
 			error("Stepcraft in error state!")
 		end
+
+    # check timeout
+    if(time()-t0 > T)
+      error("Stepcraft Status didn't change as expected. (Emergency Button pressed?)")
+    end
+
     sleep(ustrip(u"s", rob.params.statusPause))
 	end
 end
