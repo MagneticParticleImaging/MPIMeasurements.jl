@@ -264,7 +264,7 @@ end
 function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false)
   updateStepcraftStatus(rob)
 
-  T = rob.params.statusTimeout
+  timeout = ustrip(u"s", rob.params.statusTimeout)
   t0 = time()
 
 	while getfield(rob.stepcraftStatus, status) == inverted
@@ -274,8 +274,8 @@ function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false
 		end
 
     # check timeout
-    if(time()-t0 > T)
-      error("Stepcraft Status didn't change as expected. (Emergency Button pressed?)")
+    if(time()-t0 > timeout)
+      error("Stepcraft timeout while waiting for status to change.")
     end
 
     sleep(ustrip(u"s", rob.params.statusPause))
