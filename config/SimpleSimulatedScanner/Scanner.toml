@@ -2,51 +2,113 @@
 boreSize = "70mm" # Note: This is later parsed with Unitful
 facility = "My awesome institute"
 manufacturer = "Me, Myself and I"
-name = "MostAwesomeScanner"
+name = "SimpleSimulatedScanner"
 topology = "FFL" # Of course ;)
 gradient = "42T/m" # Note: This is later parsed with Unitful
+datasetStore = "/home/foerger/Documents/DatasetStores/store1"
+defaultSequence = "1DSequence"
+defaultProtocol = "MPIMeasurement"
+producerThreadID = 2
+consumerThreadID = 3
+protocolThreadID = 4
+
 
 [Devices]
 initializationOrder = [
-    "my_daq_id",
-    "my_gauss_id",
-    "collision_module",
-    "my_robot",
-    "my_surveillance",
-    "my_temp"
+  "simulated_gaussmeter",
+  "collision_module_1",
+  "collision_module_2",
+  "collision_module_3",
+  "simulated_robot",
+  "simulation_controller",
+  "my_daq_id",
+  "simulated_tempSensor",
+  "dummy_su",
+  "simulated_amplifier"
 ]
 
 [Devices.my_daq_id]
 deviceType = "SimpleSimulatedDAQ"
-samplesPerPeriod = 1000
-sendFrequency = "25kHz" # Note: This is later parsed with Unitful
+dependencies = [
+  "simulation_controller"
+]
+#ip = "127.0.0.1"
+temperatureRise.tx_main = "10K"
+temperatureRiseSlope.tx_main = "0.005s"
+phaseChange.tx_main  = "0.1°/K"
+amplitudeChange.tx_main  = "0.05mT/K"
 
-[Devices.my_gauss_id]
-deviceType = "DummyGaussMeter"
+[Devices.my_daq_id.tx_main]
+type = "tx"
+channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "0.1V/mT"
+feedback.channelID = "feedback_main"
+feedback.calibration = "10mT/V"
 
-[Devices.my_robot]
+[Devices.my_daq_id.rx_main]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+
+[Devices.my_daq_id.feedback_main]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.simulated_gaussmeter]
+deviceType = "SimulatedGaussMeter"
+
+[Devices.simulated_robot]
 deviceType = "SimulatedRobot"
-dependencies = ["collision_module"]
-axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
+coordinateSystem.axes = "y,z,x"
+coordinateSystem.origin = ["0mm", "0mm", "0mm"]
+dependencies = ["collision_module_1", "collision_module_2", "collision_module_3"]
 
-[Devices.my_robot.coordinateSystem]
-origin = ["125.5mm", "125.5mm", "75.5mm"]
-
-[Devices.collision_module]
-deviceType = "SimpleBoreCollisionModule"
-objGeometry.type = "Circle"
-objGeometry.diameter = "10mm"
-objGeometry.name = "Delta sample"
-scannerDiameter = "118mm"
-clearance = "1mm"
-minMaxBoreAxis = ["-300mm","Inf*mm"]
-
-[Devices.dummy_robot.namedPositions]
+[Devices.simulated_robot.namedPositions]
 origin = ["0mm","0mm","0mm"]
 park = ["300mm","125.5mm","75.5mm"]
 
-[Devices.my_surveillance]
+[Devices.collision_module_1]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "TestKreis"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.collision_module_2]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Rectangle"
+objGeometry.width = "5mm"
+objGeometry.height = "5mm"
+objGeometry.name = "TestRectangle"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.collision_module_3]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Triangle"
+objGeometry.width = "5mm"
+objGeometry.height = "5mm"
+objGeometry.name = "TestTriangle"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.simulation_controller]
+deviceType = "SimulationController"
+initialCoilTemperatures.tx_main = "20.0°C"
+
+[Devices.simulated_tempSensor]
+deviceType = "DummyTemperatureSensor"
+
+[Devices.dummy_su]
 deviceType = "DummySurveillanceUnit"
 
-[Devices.my_temp1]
-deviceType = "DummyTemperatureSensor"
+[Devices.simulated_amplifier]
+deviceType = "SimulatedAmplifier"
