@@ -408,16 +408,17 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     disable(robot)
   end
 
-  daq = getDAQ(scanner)
-  asyncProducer(channel, daq, sequence, prepTx = prepTx)
-
-  if !isnothing(su)
-    disableACPower(su)
+  try
+    daq = getDAQ(scanner)
+    asyncProducer(channel, daq, sequence, prepTx = prepTx)
+  finally
+    if !isnothing(su)
+      disableACPower(su)
+    end
+    for robot in robots
+      enable(robot)
+    end
   end
-  for robot in robots
-    enable(robot)
-  end
- 
 end
 
 # Default Consumer
