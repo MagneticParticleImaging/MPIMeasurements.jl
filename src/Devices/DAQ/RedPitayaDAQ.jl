@@ -120,9 +120,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumAverages::Int = 1
 end
 
-function init(daq::RedPitayaDAQ)
-  @info "Initializing Red Pitaya DAQ with ID `$(daq.deviceID)`."
-
+function _init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips)
@@ -156,8 +154,6 @@ function init(daq::RedPitayaDAQ)
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
   #masterTrigger(daq.rpc, true)
-
-  daq.present = true
 end
 
 neededDependencies(::RedPitayaDAQ) = []
@@ -225,7 +221,6 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 
-  @show channelMapping
   for rp in 1:length(daq.rpc)
     start = (rp - 1) * 4 + 1
     currentPossibleChannels = collect(start:start+3)
@@ -236,7 +231,6 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  @show luts
   setSequenceParams(daq, luts, enableLuts)
 end
 
@@ -447,7 +441,6 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   end
 
   pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
-  @show pass
   passPDMToFastDAC(daq.rpc, pass)
 
   #setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
@@ -565,6 +558,13 @@ vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
 function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+  setTxParamsAmplitudes(daq, amplitudes)
+  setTxParamsPhases(daq, phases)
+end
+function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
+  # Determine the worst case voltage per channel
+  # Note: this would actually need a fourier synthesis with the given signal type,
+  # but I don't think this is necessary
   for (channelID, components_) in amplitudes
     channelVoltage = 0
     for amplitude_ in components_
@@ -577,15 +577,7 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Fl
       error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
     end
   end
-
-  for (channelID, components_) in phases
-    for (componentIdx, phase_) in enumerate(components_)
-      if !isnothing(phase_)
-        phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, phase_)
-      end
-    end
-  end
-
+  
   for (channelID, components_) in amplitudes
     for (componentIdx, amplitude_) in enumerate(components_)
       if !isnothing(amplitude_)
@@ -594,33 +586,35 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Fl
     end
   end
 end
-
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
-  # Determine the worst case voltage per channel
-  # Note: this would actually need a fourier synthesis with the given signal type,
-  # but I don't think this is necessary
-  for (channelID, components_) in amplitudes
-    channelVoltage = 0
-    for amplitude_ in components_
-      channelVoltage += ustrip(u"V", amplitude_)
-    end
-
-    if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
-      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
-    end
-  end
-
+function setTxParamsPhases(daq::RedPitayaDAQ, phases::Dict{String, Vector{Union{Float32, Nothing}}})
   for (channelID, components_) in phases
     for (componentIdx, phase_) in enumerate(components_)
-      phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"rad", phase_))
+      if !isnothing(phase_)
+        phaseDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, phase_)
+      end
     end
   end
+end
+function setTxParamsFrequencies(daq::RedPitayaDAQ, freqs::Dict{String, Vector{Union{Float32, Nothing}}})
+  for (channelID, components_) in freqs
+    for (componentIdx, freq_) in enumerate(components_)
+      if !isnothing(freq_)
+        frequencyDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, freq_)
+      end
+    end
+  end
+end
 
-  for (channelID, components_) in amplitudes
-    for (componentIdx, amplitude_) in enumerate(components_)
-        amplitudeDAC(daq.rpc, channelIdx(daq, channelID), componentIdx, ustrip(u"V", amplitude_))
-    end
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
+  amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
+  phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
+  for (id, amps) in amplitudes
+    amplitudesFloat[id] = ustrip(u"V", amps)
   end
+  for (id, phs) in phases
+    phasesFloat[id] = ustrip(u"rad", phs)
+  end
+  setTxParams(daq, amplitudesFloat, phasesFloat)
 end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)

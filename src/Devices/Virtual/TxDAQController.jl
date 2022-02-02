@@ -61,6 +61,11 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     throw(IllegalStateException(message))
   end
 
+  # Check that we only control four channels, as our RedPitayaDAQs only have 4 signal components atm
+  if length(txCont.controlledChannels) > 4
+    throw(IllegalStateException("Sequence requires controlling of more than four channels, which is currently not implemented."))
+  end
+
   # Check that channels only have one component
   if any(x -> length(x.components) > 1, seqControlledChannel)
     throw(IllegalStateException("Sequence has channel with more than one component. Such a channel cannot be controlled by this controller"))
@@ -80,10 +85,19 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   else 
     txCont.currTx = initTx
   end
-  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq::Sequence)
+  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq)
   txCont.sinLUT = sinLUT
   txCont.cosLUT = cosLUt
   Ω = calcDesiredField(seqControlledChannel)
+
+  # Prepare/Override signal frequency components
+  freqs = [ustrip(u"Hz", txBaseFrequency(seq) / divider(components(channel.seqChannel)[1])) for channel in txCont.controlledChannels]
+  frequencies = Dict{String, Vector{Union{Float32, Nothing}}}()
+  for channel in txCont.controlledChannels
+    frequencies[id(channel.seqChannel)] = freqs
+  end
+  @show frequencies
+  setTxParamsFrequencies(daq, frequencies)
 
   # Start Tx
   su = nothing
