@@ -119,7 +119,13 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     period = currentPeriod(daq)
     uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    controlPhaseDone = doControlStep(txCont, seq, uRef, Ω)
+    # Translate uRef/channelIdx(daq) to order as it is used here
+    mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
+    controlOrderChannelIndices = [channelIdx(daq, id(ch.seqChannel)) for ch in txCont.controlledChannels]
+    controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
+    sortedRef = uRef[:, controlOrderRefIndices, :]
+
+    controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
     sleep(txCont.params.controlPause)
     i += 1

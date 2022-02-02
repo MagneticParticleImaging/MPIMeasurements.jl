@@ -120,7 +120,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumAverages::Int = 1
 end
 
-function _init(daq::RedPitayaDAQ)
+function init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips)
@@ -154,6 +154,7 @@ function _init(daq::RedPitayaDAQ)
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
   #masterTrigger(daq.rpc, true)
+  daq.present = true
 end
 
 neededDependencies(::RedPitayaDAQ) = []
