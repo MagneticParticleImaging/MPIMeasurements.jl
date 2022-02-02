@@ -610,10 +610,10 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
   amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   for (id, amps) in amplitudes
-    amplitudesFloat[id] = ustrip(u"V", amps)
+    amplitudesFloat[id] = map(x-> isnothing(x) ? nothing : ustrip(u"V", x), amps)
   end
   for (id, phs) in phases
-    phasesFloat[id] = ustrip(u"rad", phs)
+    phasesFloat[id] =  map(x-> isnothing(x) ? nothing : ustrip(u"rad", x), phs)
   end
   setTxParams(daq, amplitudesFloat, phasesFloat)
 end
