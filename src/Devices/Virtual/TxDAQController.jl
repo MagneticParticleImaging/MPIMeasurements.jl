@@ -39,7 +39,7 @@ function init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = []
+optionalDependencies(::TxDAQController) = [SurveillanceUnit]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
@@ -86,6 +86,15 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   Ω = calcDesiredField(seqControlledChannel)
 
   # Start Tx
+  su = nothing
+  if hasDependency(txCont, SurveillanceUnit)
+    su = dependency(txCont, SurveillanceUnit)
+  end
+
+  if !isnothing(su)
+    enableACPower(su)
+  end
+
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
   startTx(daq)
 
@@ -100,6 +109,10 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 
     sleep(txCont.params.controlPause)
     i += 1
+  end
+
+  if !isnothing(su)
+    disableACPower(su)
   end
   stopTx(daq)
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
