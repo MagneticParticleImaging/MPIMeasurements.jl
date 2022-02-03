@@ -100,6 +100,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   setTxParamsFrequencies(daq, frequencies)
 
   # Start Tx
+  prepareControl(daq)
   su = nothing
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
