@@ -16,7 +16,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Remember background measurement"
   rememberBGMeas::Bool = false
 end
-function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
   if haskey(dict, "sequence")
     sequence = Sequence(scanner, dict["sequence"])
@@ -103,7 +103,7 @@ function _execute(protocol::MPIMeasurementProtocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
   while !(protocol.finishAcknowledged)
-    handleEvents(protocol) 
+    handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
     sleep(0.05)
   end
@@ -115,19 +115,17 @@ end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
-    @debug "Asking for background measurement."
-    askChoices(protocol, "Press continue when background measurement can be taken", ["Continue"])
-
-    @debug "Setting number of background frames."
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
 
     @debug "Taking background measurement."
     measurement(protocol)
     protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-
-    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
-  else
-    @debug "No background measurement was selected."   
+    if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
   end
 
   @debug "Setting number of foreground frames."
@@ -143,7 +141,7 @@ function measurement(protocol::MPIMeasurementProtocol)
   measState = asyncMeasurement(protocol)
   producer = measState.producer
   consumer = measState.consumer
-  
+
   # Handle events
   while !istaskdone(consumer)
     handleEvents(protocol)
@@ -231,12 +229,12 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.scanner.seqMeasState) 
+  elseif !isnothing(protocol.scanner.seqMeasState)
     framesTotal = protocol.scanner.seqMeasState.numFrames
     framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else 
-    reply = ProgressEvent(0, 0, "N/A", event)  
+  else
+    reply = ProgressEvent(0, 0, "N/A", event)
   end
   put!(protocol.biChannel, reply)
 end

@@ -107,7 +107,11 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
     positions = cartGrid
   else
     bgIdx = round.(Int64, range(1, stop=length(cartGrid)+protocol.params.bgMeas, length=protocol.params.bgMeas ) )
-    bgPos = namedPosition(getRobot(protocol.scanner),"park")
+    robot = getRobot(protocol.scanner)
+    # BreakpointGrid can't handle ScannerCoords directly
+    # But positions are (supposed to) given in ScannerCoords 
+    bgRobotPos = namedPosition(robot,"park")
+    bgPos = toScannerCoords(robot, bgRobotPos).data
     positions = BreakpointGridPositions(cartGrid, bgIdx, bgPos)
   end
   protocol.params.positions = positions
