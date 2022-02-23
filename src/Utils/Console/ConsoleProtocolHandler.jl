@@ -194,21 +194,24 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::DecisionEvent)
   @debug "Handling decision event for message \"$(event.message)\"."
-  options = ["Yes", "No"]
-  menu = TerminalMenus.RadioMenu(options, pagesize=2)
-  choice = TerminalMenus.request("$(event.message):", menu)
+  # options = ["Yes", "No"]
+  # menu = TerminalMenus.RadioMenu(options, pagesize=2)
+  # choice = TerminalMenus.request("$(event.message):", menu)
 
-  if choice == -1
-    @info "Cancelled"
-  else
-    if choice == 1
-      reply = true
-    elseif choice == 2
-      reply = false
-    else
-      @error "Something strange happened! Please check the code!"
-    end
-  end
+  # if choice == -1
+  #   @info "Cancelled"
+  # else
+  #   if choice == 1
+  #     reply = true
+  #   elseif choice == 2
+  #     reply = false
+  #   else
+  #     @error "Something strange happened! Please check the code!"
+  #   end
+  # end
+
+  # TODO: TerminalMenus does not work properly in a threaded environment. Fix later and just return true for now.
+  reply = true
 
   answerEvent = AnswerEvent(reply, event)
   put!(cph.biChannel, answerEvent)
@@ -217,9 +220,12 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::MultipleChoiceEvent)
   @debug "Handling multiple choice event for message \"$(event.message)\"."
-  menu = TerminalMenus.RadioMenu(Vector{String}(event.choices), pagesize=5)
-  reply = TerminalMenus.request("$(event.message):", menu)
-  @debug "The answer is `$(event.choices[reply])`."
+  # menu = TerminalMenus.RadioMenu(Vector{String}(event.choices), pagesize=5)
+  # reply = TerminalMenus.request("$(event.message):", menu)
+  # @debug "The answer is `$(event.choices[reply])`."
+
+  # TODO: TerminalMenus does not work properly in a threaded environment. Fix later and just return true for now.
+  reply = 2
   put!(cph.biChannel, ChoiceAnswerEvent(reply, event))
   return false
 end
