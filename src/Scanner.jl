@@ -182,7 +182,7 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"])
 
-    scanner = new(name, configDir, generalParams, devices, nothing)
+    scanner = new(name, configDir, generalParams, devices)
 
     return scanner
   end

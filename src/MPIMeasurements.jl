@@ -61,9 +61,10 @@ include("Scanner.jl")
 include("Utils/Utils.jl")
 include("Devices/Device.jl")
 
+include("Protocols/Storage/Storage.jl") # Defines stuff needed in devices
 include("Devices/Devices.jl")
 include("Protocols/Protocol.jl")
-include("Utils/Storage.jl") # Depends on MPIScanner
+include("Utils/Storage.jl") # Depends on MPIScanner; TODO: Merge with Protocols/Storage?
 include("Utils/Console/Console.jl")
 
 """
