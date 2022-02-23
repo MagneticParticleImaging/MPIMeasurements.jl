@@ -148,7 +148,7 @@ function executionTask(protocol::Protocol)
       close(protocol.biChannel)
     else
       # Let task fail
-      @debug "An exception has been thrown during execution."
+      @debug "An exception has been thrown during execution. $ex"
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
       throw(ex)
@@ -284,6 +284,7 @@ struct NonInteractive <: ProtocolInteractivity end
 struct Interactive <: ProtocolInteractivity end
 @mustimplement protocolInteractivity(protocol::Protocol)
 
+include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")

@@ -42,6 +42,17 @@ end
 "Check whether the device has a dependency of the given `type`."
 hasDependency(device::Device, type::DataType) = length(dependencies(device, type)) > 0
 
+"Retrieve a single dependency with a certain device ID."
+function dependency(device::Device, dependencyID::String)
+  dependencies_ = dependencies(device)
+  
+  for dependency_ in dependencies
+    if deviceID(dependency_) == dependencyID
+      return dependency_
+    end
+  end
+end
+
 "Retrieve all expected dependencies of a device."
 expectedDependencies(device::Device)::Vector{DataType} = vcat(neededDependencies(device), optionalDependencies(device))
 

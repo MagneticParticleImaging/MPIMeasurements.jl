@@ -58,7 +58,7 @@ end
 export startProtocol
 function startProtocol(cph::ConsoleProtocolHandler)
   try 
-    @info "Execute protocol"
+    @info "Execute protocol with name `$(name(cph.protocol))`"
     cph.biChannel = execute(cph.scanner, cph.protocol)
     if isnothing(cph.biChannel)
       cph.protocolState = PS_UNDEFINED
@@ -137,7 +137,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::Pro
 end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::IllegaleStateEvent)
-  @error "The protocol is in an illegal state."
+  @error "The protocol with name `$(name(protocol))` is in an illegal state."
   cph.protocolState = PS_FAILED
   return true
 end
@@ -184,8 +184,12 @@ function handleNewProgress(cph::ConsoleProtocolHandler, protocol::Protocol, even
 end
 
 function displayProgress(cph::ConsoleProtocolHandler)
-  println("Progress: $(cph.progress.done)")
-  #update!(cph.progressDisplay, cph.progress.done)
+  if !isnothing(cph.progress)
+    println("Progress: $(cph.progress.done)")
+    #update!(cph.progressDisplay, cph.progress.done)
+  else
+    @debug "Something is strange. No progress event has yet been saved."
+  end
 end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::DecisionEvent)
@@ -238,33 +242,33 @@ function tryPauseProtocol(cph::ConsoleProtocolHandler)
 end
 
 function handleSuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::StopEvent)
-  @info "Protocol stopped"
+  @info "Protocol with name `$(name(protocol))` stopped"
   cph.protocolState = PS_PAUSED
   confirmPauseProtocol(cph)
   return false
 end
 
 function handleUnsupportedOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::StopEvent)
-  @info "Protocol can not be stopped"
+  @info "Protocol with name `$(name(protocol))` can not be stopped"
   denyPauseProtocol(cph)
   return false
 end
 
 function handleUnsuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::StopEvent)
-  @info "Protocol failed to be stopped"
+  @info "Protocol with name `$(name(protocol))` failed to be stopped"
   denyPauseProtocol(cph)
   return false
 end
 
 function confirmPauseProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
-  @info "The protocol was paused."
+  @info "The protocol with name `$(name(protocol))` was paused."
   cph.updating = false
 end
 
 function denyPauseProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
-  @warn "Pausing the protocol was denied."
+  @warn "Pausing the protocol with name `$(name(protocol))` was denied."
   cph.updating = false
 end
 
@@ -274,7 +278,7 @@ function tryResumeProtocol(cph::ConsoleProtocolHandler)
 end
 
 function handleSuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::ResumeEvent)
-  @info "Protocol resumed"
+  @info "Protocol with name `$(name(protocol))` resumed"
   cph.protocolState = PS_RUNNING
   confirmResumeProtocol(cph)
   put!(cph.biChannel, ProgressQueryEvent()) # Restart "Main" loop
@@ -282,26 +286,26 @@ function handleSuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protoc
 end
 
 function handleUnsupportedOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::ResumeEvent)
-  @info "Protocol cannot be resumed"
+  @info "Protocol with name `$(name(protocol))` cannot be resumed"
   denyResumeProtocol(cph)
   return false
 end
 
 function handleUnsuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::ResumeEvent)
-  @info "Protocol failed to be resumed"
+  @info "Protocol with name `$(name(protocol))` failed to be resumed"
   denyResumeProtocol(cph)
   return false
 end
 
 function confirmResumeProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
-  @info "Resuming protocol."
+  @info "Resuming protocol with name `$(name(protocol))`."
   cph.updating = false
 end
 
 function denyResumeProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
-  @warn "Resuming the protocol was denied."
+  @warn "Resuming the protocol with name `$(name(protocol))` was denied."
   cph.updating = false
 end
 
@@ -311,18 +315,18 @@ function tryCancelProtocol(cph::ConsoleProtocolHandler)
 end
 
 function handleSuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::CancelEvent)
-  @info "Protocol cancelled"
+  @info "Protocol with name `$(name(protocol))` cancelled"
   cph.protocolState = PS_FAILED
   return true
 end
 
 function handleUnsupportedOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::CancelEvent)
-  @warn "Protocol can not be cancelled"
+  @warn "Protocol with name `$(name(protocol))` can not be cancelled"
   return false
 end
 
 function handleUnsuccessfulOperation(cph::ConsoleProtocolHandler, protocol::Protocol, event::CancelEvent)
-  @warn "Protocol failed to be cancelled"
+  @warn "Protocol with name `$(name(protocol))` failed to be cancelled"
   return false
 end
 
@@ -375,7 +379,7 @@ end
 
 function confirmFinishedProtocol(cph::ConsoleProtocolHandler)
   cph.updating = true
-  @info "Protocol finished!"
+  @info "Confirming that the protocol is finished!"
   cph.updating = false
 end
 
@@ -421,6 +425,7 @@ end
 
 ### MPIMeasurementProtocol ###
 function handleNewProgress(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol, event::ProgressEvent)
+  @debug event
   @info "Asking for new frame $(event.done)"
   dataQuery = DataQueryEvent("FRAME:$(event.done)")
   put!(cph.biChannel, dataQuery)

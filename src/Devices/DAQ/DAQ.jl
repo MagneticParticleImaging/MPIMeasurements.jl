@@ -263,6 +263,7 @@ end
 
 function updateFrameBuffer!(measState::SequenceMeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
+  @warn "" uMeas size(uMeas)
   if !isnothing(uMeas)
     #isNewFrameAvailable, fr = 
     handleNewFrame(measState.type, measState, uMeas)
