@@ -336,17 +336,17 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   end
 
   # Start pipeline
-  @info "Pipeline started"
+  @debug "Pipeline started"
   try
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
-    @info "Attempting reconnect to reset pipeline"
+    @debug "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips)
     masterTrigger(daq.rpc, false)
     daq.rpv = nothing
     rethrow(e)
   end
-  @info "Pipeline finished"
+  @debug "Pipeline finished"
   return endFrame
 end
 
