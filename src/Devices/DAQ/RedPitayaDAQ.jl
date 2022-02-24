@@ -205,33 +205,36 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   daq.acqSeq = isempty(acqSeq) ? nothing : acqSeq
 
 end
+
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
-  luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
-  enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
+  if hasAcyclicElectricalTxChannels(sequence) # The following works only when acyclic channels have been set
+    luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
+    enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
 
-  lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
-  seqChannels = acyclicElectricalTxChannels(sequence)
-  channelMapping = []
-  for channel in seqChannels
-    index = findfirst(x-> id(channel) == x[1], lutChannels)
-    if !isnothing(index)
-      push!(channelMapping, (lutChannels[index][2], channel))
-    else
-      throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
+    lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
+    seqChannels = acyclicElectricalTxChannels(sequence)
+    channelMapping = []
+    for channel in seqChannels
+      index = findfirst(x-> id(channel) == x[1], lutChannels)
+      if !isnothing(index)
+        push!(channelMapping, (lutChannels[index][2], channel))
+      else
+        throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
+      end
     end
-  end
 
-  for rp in 1:length(daq.rpc)
-    start = (rp - 1) * 4 + 1
-    currentPossibleChannels = collect(start:start+3)
-    currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
-    if !isempty(currentMapping)
-      lut = createLUT(start, currentMapping)
-      luts[rp] = lut
+    for rp in 1:length(daq.rpc)
+      start = (rp - 1) * 4 + 1
+      currentPossibleChannels = collect(start:start+3)
+      currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
+      if !isempty(currentMapping)
+        lut = createLUT(start, currentMapping)
+        luts[rp] = lut
+      end
     end
+    daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+    setSequenceParams(daq, luts, enableLuts)
   end
-  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  setSequenceParams(daq, luts, enableLuts)
 end
 
 function createLUT(start, channelMapping)
@@ -487,7 +490,9 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
   @debug "Sometimes a bounds error happens here due to selection being of length 1" selection length(selection) map(x->div(x -1, 2) + 1, rxIDs)
+  @debug "" rxIDs
   for i in map(x->div(x -1, 2) + 1, rxIDs)
+    @debug i
     selection[i] = true
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)

@@ -37,6 +37,8 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
@@ -122,7 +124,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
 
     @debug "Taking background measurement."
     measurement(protocol)
-    protocol.bgMeas = protocol.scanner.seqMeasState.buffer
+    protocol.bgMeas = protocol.seqMeasState.buffer
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
@@ -175,16 +177,16 @@ function measurement(protocol::MPIMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::MPIMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  return protocol.seqMeasState
 end
 
 
@@ -209,14 +211,14 @@ end
 function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.scanner.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.scanner.seqMeasState.numFrames
-        data = protocol.scanner.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.scanner.seqMeasState.buffer
+    data = protocol.seqMeasState.buffer
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -229,9 +231,9 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.scanner.seqMeasState)
-    framesTotal = protocol.scanner.seqMeasState.numFrames
-    framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
+  elseif !isnothing(protocol.seqMeasState)
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
@@ -245,7 +247,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   store = event.datastore
   scanner = protocol.scanner
   params = event.params
-  data = protocol.scanner.seqMeasState.buffer
+  data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas

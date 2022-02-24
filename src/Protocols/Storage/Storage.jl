@@ -28,16 +28,18 @@ end
 ####  Async version  ####
 SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, RegularAsyncMeas())
 
-function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  prepareAsyncMeasurement(scanner, sequence)
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+function asyncMeasurement(protocol::Protocol, sequence::Sequence)
+  scanner_ = scanner(protocol)
+  prepareAsyncMeasurement(protocol, sequence)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  return protocol.seqMeasState
 end
 
-function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  daq = getDAQ(scanner)
+function prepareAsyncMeasurement(protocol::Protocol, sequence::Sequence)
+  scanner_ = scanner(protocol)
+  daq = getDAQ(scanner_)
   numFrames = acqNumFrames(sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
@@ -59,22 +61,23 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
   measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
   measState.channel = channel
 
-  scanner.seqMeasState = measState
+  protocol.seqMeasState = measState
 end
 
-function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
-  su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
+function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence; prepTx = true)
+  scanner_ = scanner(protocol)
+  su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
   if !isnothing(su)
     enableACPower(su)
     # TODO Send expected enable time to SU
   end
-  robots = getRobots(scanner)
+  robots = getRobots(scanner_)
   for robot in robots
     disable(robot)
   end
 
   try
-    daq = getDAQ(scanner)
+    daq = getDAQ(scanner_)
     asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
     if !isnothing(su)
@@ -87,9 +90,10 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
 end
 
 # Default Consumer
-function asyncConsumer(channel::Channel, scanner::MPIScanner)
-  daq = getDAQ(scanner)
-  measState = scanner.seqMeasState
+function asyncConsumer(channel::Channel, protocol::Protocol)
+  scanner_ = scanner(protocol)
+  daq = getDAQ(scanner_)
+  measState = protocol.seqMeasState
 
   @info "Consumer start"
   while isopen(channel) || isready(channel)

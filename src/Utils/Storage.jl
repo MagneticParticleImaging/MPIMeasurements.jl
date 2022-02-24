@@ -44,6 +44,8 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
   fillMDFScanner(mdf, scanner, params)
   fillMDFTracer(mdf, params)
 
+  @debug isBackgroundFrame
+
   fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame)
   fillMDFAcquisition(mdf, scanner, sequence)
   fillMDFCalibration(mdf, positions, params)
@@ -154,7 +156,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
   # /measurement/ subgroup
   numFrames = acqNumFrames(sequence)
 
-  if bgdata == nothing
+  if isnothing(bgdata)
     isBackgroundFrame = zeros(Bool, numFrames)
     data_ = data
   else
