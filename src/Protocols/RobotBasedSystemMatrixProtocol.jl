@@ -183,6 +183,7 @@ function enterExecute(protocol::RobotBasedSystemMatrixProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.restored = false
+  protocol.systemMeasState.currPos = 1
 end
 
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
@@ -368,6 +369,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         if protocol.params.controlTx
           if allowControlLoop
             controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
+            setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
           else
             setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
           end
