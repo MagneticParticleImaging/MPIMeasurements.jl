@@ -1,9 +1,8 @@
 [General]
 name = "1DSequence"
 description = "Precise description."
-targetScanner = "HeadScanner"
+targetScanner = "SimpleRedPitayaScanner"
 baseFrequency = "125.0MHz"
-triggered = false
 
 [Fields]
 
@@ -19,32 +18,13 @@ type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
-divider = 4800
+divider = 5000
 amplitude = ["0.02T"]
 phase = ["0.0rad"]
 waveform = "sine"
 
-
-[Fields.ff]
-safeStartInterval = "0.5s"
-safeEndInterval = "0.5s"
-safeErrorInterval = "0.5s"
-control = false
-decouple = false
-
-
-[Fields.ff.ffx]
-type = "ContinuousElectricalChannel"
-dividerSteps = 3648000
-divider = 18240000
-amplitude = "0.2A"
-offset = "0.4A"
-phase = "0.0rad"
-waveform = "sine"
-
-
 [Acquisition]
-channels = ["rx_main", "rx_side"]
+channels = ["rx_main", "feedback_main"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
 numFrames = 1
