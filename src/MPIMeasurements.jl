@@ -12,6 +12,7 @@ using ProgressMeter
 using InteractiveUtils
 using Graphics: @mustimplement
 using Mmap
+using StringEncodings
 using DocStringExtensions
 import Plots
 

@@ -252,7 +252,7 @@ function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
     error("The scanner has more than one $(string(deviceType)) device. Therefore, a single $(string(deviceType)) cannot be retrieved unambiguously.")
   elseif length(devices) == 0
     return nothing
-  else 
+  else
     return devices[1]
   end
 end
