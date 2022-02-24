@@ -396,11 +396,22 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
+  amps = getDevices(scanner, Amplifier)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+    for amp in amps
+      turnOn(amp)
+    end
+  end
+
   su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
   if !isnothing(su)
     enableACPower(su)
     # TODO Send expected enable time to SU
   end
+  
   robots = getRobots(scanner)
   for robot in robots
     disable(robot)
@@ -415,6 +426,9 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     end
     for robot in robots
       enable(robot)
+    end
+    for amp in amps
+      turnOff(amp)
     end
   end
 end
