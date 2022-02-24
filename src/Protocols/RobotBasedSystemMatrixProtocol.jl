@@ -361,6 +361,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
           turnOn(amp)
         end
         enableACPower(su)
+        disableHeating(su)
       end
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
@@ -433,6 +434,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
       turnOff(amp)
     end
     disableACPower(su)
+    enableHeating(su)
   end
 end
 

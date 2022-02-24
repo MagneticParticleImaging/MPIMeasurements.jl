@@ -409,6 +409,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
   su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
   if !isnothing(su)
     enableACPower(su)
+    disableHeating(su)
     # TODO Send expected enable time to SU
   end
   
@@ -423,6 +424,7 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
   finally
     if !isnothing(su)
       disableACPower(su)
+      enableHeating(su)
     end
     for robot in robots
       enable(robot)
