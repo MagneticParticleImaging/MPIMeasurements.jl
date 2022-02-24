@@ -1,4 +1,4 @@
-export TemperatureSensor, getTemperatureSensors, getTemperatureSensor, numChannels, getTemperatures, getTemperature
+export TemperatureSensor, getTemperatureSensors, getTemperatureSensor, numChannels, getTemperatures, getTemperature, getChannelNames
 
 abstract type TemperatureSensor <: Device end
 
