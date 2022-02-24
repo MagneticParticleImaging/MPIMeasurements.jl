@@ -325,7 +325,12 @@ function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
 end
 
 function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
-  startFrame, endFrame = getFrameTiming(daq)
+  if !isnothing(daq.acqSeq) # This is the case if no acyclic channels haven been set
+    startFrame, endFrame = getFrameTiming(daq)
+  else
+    startFrame = 2
+    endFrame = startFrame+numFrames
+  end
   startTx(daq)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
