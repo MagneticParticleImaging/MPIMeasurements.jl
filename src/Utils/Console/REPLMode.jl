@@ -140,11 +140,14 @@ end
 
 export mpi_mode_enable
 function mpi_mode_enable()
-  initrepl(parse_command, 
-           prompt_text=prompt_string,
-           start_key='|', 
-           mode_name="MPI mode",
-           valid_input_checker=mpi_mode_valid_input_checker,
-           completion_provider=MPICompletionProvider(),
-           startup_text=false)
+  if isdefined(Base, :active_repl)
+    initrepl(parse_command,
+            prompt_text=prompt_string,
+            start_key='|',
+            repl = Base.active_repl,
+            mode_name="MPI mode",
+            valid_input_checker=mpi_mode_valid_input_checker,
+            completion_provider=MPICompletionProvider(),
+            startup_text=false)
+  end
 end
