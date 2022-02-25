@@ -149,6 +149,7 @@ function init(daq::RedPitayaDAQ)
 
   #setACQParams(daq)
   masterTrigger(daq.rpc, false)
+  @debug string(daq.params.triggerMode)
   triggerMode(daq.rpc, string(daq.params.triggerMode))
   ramWriterMode(daq.rpc, "TRIGGERED")
   modeDAC(daq.rpc, "STANDARD")
@@ -349,7 +350,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @debug "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
     masterTrigger(daq.rpc, false)
     daq.rpv = nothing
     rethrow(e)
@@ -494,8 +495,6 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   # Construct view to save bandwidth
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
-  @debug "Sometimes a bounds error happens here due to selection being of length 1" selection length(selection) map(x->div(x -1, 2) + 1, rxIDs)
-  @debug "" rxIDs
   for i in map(x->div(x -1, 2) + 1, rxIDs)
     @debug i
     selection[i] = true
