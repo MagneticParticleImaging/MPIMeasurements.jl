@@ -14,7 +14,7 @@ include("Virtual/Virtual.jl")
 # List our own enums to avoid accidentally converting a different enum
 # Did not list enums like LakeShoreF71GaussMeterConnectionModes atm, because their convert function uses specific strings
 # and not the enum name
-for enum in [:RPTriggerMode]
+for enum in [TriggerMode]
   @eval begin
     T = $enum
     function Base.convert(::Type{T}, x::String)
