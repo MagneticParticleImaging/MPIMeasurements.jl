@@ -263,7 +263,6 @@ end
 
 function updateFrameBuffer!(measState::SequenceMeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
-  @warn "" uMeas size(uMeas)
   if !isnothing(uMeas)
     #isNewFrameAvailable, fr = 
     handleNewFrame(measState.type, measState, uMeas)
@@ -300,7 +299,7 @@ function addFramesFrom(measState::SequenceMeasState, frames::Array{Float32, 4})
   fr = measState.nextFrame
   to = fr + size(frames, 4) - 1
   limit = size(measState.buffer, 4)
-  @info "Add frames $fr to $to to framebuffer with $limit size"
+  @debug "Add frames $fr to $to to framebuffer with $limit size"
   if to <= limit
     measState.buffer[:,:,:,fr:to] = frames
     measState.nextFrame = to + 1

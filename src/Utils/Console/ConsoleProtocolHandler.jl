@@ -15,6 +15,7 @@ Base.@kwdef mutable struct ConsoleProtocolHandler
   dataBGStore::Union{Array{Float32,4}, Nothing} = nothing
   currStudy::Union{MDFv2Study, Nothing} = nothing
   currExperiment::Union{MDFv2Experiment, Nothing} = nothing
+  currTracer::Union{MDFv2Tracer, Nothing} = nothing
 end
 
 function ConsoleProtocolHandler(scanner::MPIScanner, protocol::Protocol)
@@ -65,7 +66,7 @@ function startProtocol(cph::ConsoleProtocolHandler)
       return false
     else
       cph.protocolState = PS_INIT
-      @info "Start event handler"
+      @debug "Start event handler"
       cph.eventHandler = Timer(timer -> eventHandler(cph, timer), 0.0, interval=0.05)
       return true
     end
@@ -110,7 +111,7 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
     end
 
     if cph.protocolState == PS_INIT && !finished
-      @info "Init query"
+      @debug "Init query"
       progressQuery = ProgressQueryEvent()
       put!(channel, progressQuery)
       cph.protocolState = PS_RUNNING
@@ -157,7 +158,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::Pro
   # New Progress noticed
   if isopen(channel) && cph.protocolState == PS_RUNNING
     if isnothing(cph.progress) || cph.progress != event
-      @info "New progress detected"
+      @debug "New progress detected"
       handleNewProgress(cph, protocol, event)
       cph.progress = event
       displayProgress(cph)
@@ -416,7 +417,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::RobotBasedSystemMatr
 end
 
 function handleFinished(cph::ConsoleProtocolHandler, protocol::RobotBasedSystemMatrixProtocol)
-  request = DatasetStoreStorageRequestEvent(cph.mdfstore, getStorageParams(cph))
+  request = DatasetStoreStorageRequestEvent(cph.mdfstore, getStorageMDF(cph))
   put!(cph.biChannel, request)
   return false
 end
@@ -431,8 +432,7 @@ end
 
 ### MPIMeasurementProtocol ###
 function handleNewProgress(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol, event::ProgressEvent)
-  @debug event
-  @info "Asking for new frame $(event.done)"
+  @debug "Asking for new frame $(event.done)"
   dataQuery = DataQueryEvent("FRAME:$(event.done)")
   put!(cph.biChannel, dataQuery)
   return false
@@ -444,7 +444,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtoc
   if startswith(event.query.message, "FRAME") && cph.protocolState == PS_RUNNING
     frame = event.data
     if !isnothing(frame)
-      @info "Received frame"
+      @debug "Received frame"
       #infoMessage(m, "$(m.progress.unit) $(m.progress.done) / $(m.progress.total)", "green")
       #if get_gtk_property(m["cbOnlinePlotting",CheckButtonLeaf], :active, Bool)
       #seq = cph.protocol.params.sequence
@@ -460,7 +460,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtoc
 end
 
 function handleFinished(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol)
-  request = DatasetStoreStorageRequestEvent(cph.mdfstore, getStorageParams(cph))
+  request = DatasetStoreStorageRequestEvent(cph.mdfstore, getStorageMDF(cph))
   put!(cph.biChannel, request)
   return false
 end
@@ -468,4 +468,26 @@ end
 function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol, event::StorageSuccessEvent)
   @info "Data is ready for further operations and can be found at `$(event.filename)`."
   return false
+end
+
+function getStorageMDF(cph::ConsoleProtocolHandler)
+  mdf = defaultMDFv2InMemory()
+  if !isnothing(study(cph))
+    study(mdf, study(cph))
+  end
+
+  if !isnothing(experiment(cph))
+    experiment(mdf, experiment(cph))
+  end
+  
+  scannerOperator(mdf, "TBD")
+
+  # tracerName(mdf, )
+  # tracerBatch(mdf, )
+  # tracerVendor(mdf, )
+  # tracerVolume(mdf, )
+  # tracerConcentration(mdf, )
+  # tracerSolute(mdf, )
+
+  return params
 end

@@ -224,7 +224,7 @@ end
 abstract type StorageRequestEvent <: ProtocolEvent end
 struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
   datastore::DatasetStore
-  params::Dict
+  mdf::MDFv2InMemory
 end
 struct StorageSuccessEvent <: ProtocolEvent
   filename::AbstractString

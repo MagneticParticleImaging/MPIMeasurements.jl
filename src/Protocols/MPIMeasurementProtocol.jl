@@ -99,7 +99,7 @@ function enterExecute(protocol::MPIMeasurementProtocol)
 end
 
 function _execute(protocol::MPIMeasurementProtocol)
-  @info "Measurement protocol started"
+  @debug "Measurement protocol started"
 
   performMeasurement(protocol)
 
@@ -246,13 +246,13 @@ handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protoco
 function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  params = event.params
+  mdf = event.mdf
   data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
   @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

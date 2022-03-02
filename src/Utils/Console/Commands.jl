@@ -244,10 +244,202 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "End protocol."
 ))
 
+# Storage commands
 
+function mpi_mode_study()
+  if check_no_scanner()
+    if isnothing(mpi_repl_mode.activeProtocolHandler.currStudy)
+      mpi_repl_mode.activeProtocolHandler.currStudy = MDFv2Study() # TODO: Auto-generate fields
+    end
+    study = mpi_repl_mode.activeProtocolHandler.currStudy
 
+    options = ["Name: $(studyName(study))", "Description: $(studyDescription(study))"]
+    optionFields = ["name", "description"]
+    menu = TerminalMenus.RadioMenu(options, pagesize=4)
 
+    choice = TerminalMenus.request("Select field to edit (exit with `q`):", menu)
 
+    if choice != -1
+      println("Please enter the new value for the field `$(optionFields[choice])` (press `↵` to confirm; if nothing is entered, the old value is kept): ")
+      value = readline()
+      if value == ""
+        println("The old $(optionFields[choice]) of the study was kept.")
+        return
+      end
+
+      if optionFields[choice] == "name"
+        studyName(study, value)
+        println("The name of the study was set to `$value`.")
+      elseif optionFields[choice] == "description"
+        studyDescription(study, value)
+        println("The description of the study was set to `$value`.")
+      else
+        @error "No valid selection. Please check the code"
+      end
+    end
+  end
+
+  return
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "study",
+  api = mpi_mode_study,
+  description = "Show and set study parameters."
+))
+
+function mpi_mode_experiment()
+  if check_no_scanner()
+    if isnothing(mpi_repl_mode.activeProtocolHandler.currExperiment)
+      mpi_repl_mode.activeProtocolHandler.currExperiment = MDFv2Experiment() # TODO: Auto-generate fields
+    end
+    experiment = mpi_repl_mode.activeProtocolHandler.currExperiment
+
+    options = ["Name: $(experimentName(experiment))", "Description: $(experimentDescription(experiment))", "Subject: $(experimentSubject(experiment))"]
+    optionFields = ["name", "description", "subject"]
+    menu = TerminalMenus.RadioMenu(options, pagesize=4)
+
+    choice = TerminalMenus.request("Select field to edit (exit with `q`):", menu)
+
+    if choice != -1
+      println("Please enter the new value for the field `$(optionFields[choice])` (press `↵` to confirm; if nothing is entered, the old value is kept): ")
+      value = readline()
+      if value == ""
+        println("The old $(optionFields[choice]) of the study was kept.")
+        return
+      end
+
+      if optionFields[choice] == "name"
+        experimentName(experiment, value)
+        println("The name of the experiment was set to `$value`.")
+      elseif optionFields[choice] == "description"
+        experimentDescription(experiment, value)
+        println("The description of the experiment was set to `$value`.")
+      elseif optionFields[choice] == "subject"
+        experimentSubject(experiment, value)
+        println("The subject of the experiment was set to `$value`.")
+      else
+        @error "No valid selection. Please check the code"
+      end
+    end
+  end
+
+  return
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "experiment",
+  api = mpi_mode_experiment,
+  description = "Show and set experiment parameters."
+))
+
+function mpi_mode_tracer(;mode::Union{String, Nothing} = nothing)
+  if check_no_scanner()
+    if isnothing(mpi_repl_mode.activeProtocolHandler.currTracer)
+      mpi_repl_mode.activeProtocolHandler.currTracer = MDFv2Tracer() # TODO: Auto-generate fields
+    end
+    tracers = mpi_repl_mode.activeProtocolHandler.currTracer
+
+    if isnothing(mode) || mode == "list"
+      if !ismissing(tracerName(tracers))
+        for (index, tracerName_) in enumerate(tracerName(tracers))
+          println("Tracer $index:")
+          println("Name           | $(tracerName(tracers)[index])")
+          println("Batch          | $(tracerBatch(tracers)[index])")
+          println("Concentration  | $(tracerConcentration(tracers)[index])")
+          println("Injection time | $(tracerInjectionTime(tracers)[index])")
+          println("Solute         | $(tracerSolute(tracers)[index])")
+          println("Vendor         | $(tracerVendor(tracers)[index])")
+          println("Volume         | $(tracerVolume(tracers)[index])")
+          println("")
+        end
+      else
+        println("There are currently no tracers set.")
+      end
+    elseif mode == "add"
+      println("Please enter the name:")
+      name = readline()
+
+      println("Please enter the batch:")
+      batch = readline()
+
+      println("Please enter the molar concentration of solute per litre:")
+      concentration = nothing
+      while true
+        concentration = tryparse(Float64, readline())
+        if isnothing(concentration)
+          println("The given value `$concentration` could not be parsed to a floating point number.")
+        else
+          break
+        end
+      end
+
+      println("Please enter the UTC time at which tracer injection started in the format `yyyy-mm-dd HH:MM:SS` (leave blank to use current time):")
+      injectionTime = readline()
+      if injectionTime == ""
+        injectionTime = now()
+      else
+        injectionTime = DateTime(injectionTime, "yyyy-mm-dd HH:MM:SS")
+      end
+
+      println("Please enter the solute (leave blank to use `Fe`):")
+      solute = readline()
+      if injectionTime == ""
+        solute = "Fe"
+      end
+
+      println("Please enter the vendor:")
+      vendor = readline()
+
+      println("Please enter the volume:")
+      volume  = nothing
+      while true
+        volume = tryparse(Float64, readline())
+        if isnothing(volume)
+          println("The given value `$volume` could not be parsed to a floating point number.")
+        else
+          break
+        end
+      end
+
+      addTracer(tracers; batch, concentration, injectionTime, name, solute, vendor, volume)
+    elseif mode == "remove"
+      @error "Not yet supported."
+    else
+      println("Unknown mode `$mode`. Please use one of the following: `add`, `remove` or `list`.")
+    end
+  end
+
+  return
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "tracer",
+  api = mpi_mode_tracer,
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :mode,
+    ),
+  ),
+  completions = (input, final, offset, index) -> begin  
+    # Prevent errors with non-activated scanner
+    if isnothing(mpi_repl_mode.activeProtocolHandler) || isnothing(mpi_repl_mode.activeProtocolHandler.scanner)
+      return []
+    end
+
+    modes = ["add", "remove", "list"]
+
+    if input == ""
+      return modes
+    else
+      return [mode for mode in modes if startswith(mode, input)]
+    end
+  end,
+  description = "Show and set tracer parameters."
+))
+
+# Auxiliary commands
 
 function mpi_mode_debug()
   ENV["JULIA_DEBUG"] = "all"
