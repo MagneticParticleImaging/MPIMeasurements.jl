@@ -16,6 +16,7 @@ Base.@kwdef mutable struct ConsoleProtocolHandler
   currStudy::Union{MDFv2Study, Nothing} = nothing
   currExperiment::Union{MDFv2Experiment, Nothing} = nothing
   currTracer::Union{MDFv2Tracer, Nothing} = nothing
+  currOperator::String = "default"
 end
 
 function ConsoleProtocolHandler(scanner::MPIScanner, protocol::Protocol)
@@ -42,6 +43,14 @@ export experiment
 experiment(cph::ConsoleProtocolHandler) = cph.currExperiment
 experiment(cph::ConsoleProtocolHandler, experiment::MDFv2Experiment) = cph.currExperiment = experiment
 
+export tracer
+tracer(cph::ConsoleProtocolHandler) = cph.currTracer
+tracer(cph::ConsoleProtocolHandler, tracer::MDFv2Tracer) = cph.currTracer = tracer
+
+export operator
+operator(cph::ConsoleProtocolHandler) = cph.currOperator
+operator(cph::ConsoleProtocolHandler, operator::String) = cph.currOperator = operator
+
 export initProtocol
 function initProtocol(cph::ConsoleProtocolHandler)
   try 
@@ -60,6 +69,23 @@ export startProtocol
 function startProtocol(cph::ConsoleProtocolHandler)
   try 
     @info "Execute protocol with name `$(name(cph.protocol))`"
+
+    if isUsingMDFStudy(cph.protocol)
+      if isnothing(study(cph))
+        @error "There is currently no study set. Please do so with the command `study` and then re-run `start`."
+        return
+      end
+
+      if isnothing(experiment(cph))
+        @error "There is currently no experiment set. Please do so with the command `experiment` and then re-run `start`."
+        return
+      end
+
+      if isnothing(tracer(cph))
+        @warn "There is currently no tracer set. The protocol will start anyways. If you want to set it, you can do so with the command `tracer`."
+      end
+    end
+
     cph.biChannel = execute(cph.scanner, cph.protocol)
     if isnothing(cph.biChannel)
       cph.protocolState = PS_UNDEFINED
@@ -128,7 +154,7 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
     confirmFinishedProtocol(cph)
     close(timer)
     #showError(ex)
-    throw(ex)
+    rethrow()
   end
 end
 
@@ -467,27 +493,31 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol, event::StorageSuccessEvent)
   @info "Data is ready for further operations and can be found at `$(event.filename)`."
+  put!(cph.biChannel, FinishedAckEvent())
   return false
 end
 
 function getStorageMDF(cph::ConsoleProtocolHandler)
   mdf = defaultMDFv2InMemory()
   if !isnothing(study(cph))
-    study(mdf, study(cph))
+    MPIFiles.study(mdf, study(cph))
+  else
+    @warn "The study has not been set and thus no information on it can be stored. Trying to save the data anyways to not lose it."
   end
 
   if !isnothing(experiment(cph))
-    experiment(mdf, experiment(cph))
+    MPIFiles.experiment(mdf, experiment(cph))
+  else
+    @warn "The experiment has not been set and thus no information on it can be stored. Trying to save the data anyways to not lose it."
+  end
+
+  if !isnothing(tracer(cph))
+    MPIFiles.tracer(mdf, tracer(cph))
+  else
+    @warn "The tracer has not been set and thus no information on it can be stored. You can set it using the command `tracer`. Trying to save the data anyways to not lose it."
   end
   
-  scannerOperator(mdf, "TBD")
+  scannerOperator(mdf, operator(cph))
 
-  # tracerName(mdf, )
-  # tracerBatch(mdf, )
-  # tracerVendor(mdf, )
-  # tracerVolume(mdf, )
-  # tracerConcentration(mdf, )
-  # tracerSolute(mdf, )
-
-  return params
+  return mdf
 end

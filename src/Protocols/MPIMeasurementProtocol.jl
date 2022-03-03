@@ -104,10 +104,18 @@ function _execute(protocol::MPIMeasurementProtocol)
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
+
+  debugCount = 0
+
   while !(protocol.finishAcknowledged)
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
     sleep(0.05)
+
+    if debugCount % 100 == 0
+      @warn "Protocol still running"
+    end
+    debugCount += 1
   end
 
   @info "Protocol finished."
@@ -256,3 +264,6 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
+
+protocolInteractivity(protocol::MPIMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::MPIMeasurementProtocol) = UsingMDFStudy()

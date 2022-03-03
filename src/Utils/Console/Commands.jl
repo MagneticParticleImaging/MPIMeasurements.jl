@@ -248,12 +248,12 @@ push!(mpi_repl_mode.commands, CommandSpec(
 
 function mpi_mode_study()
   if check_no_scanner()
-    if isnothing(mpi_repl_mode.activeProtocolHandler.currStudy)
-      mpi_repl_mode.activeProtocolHandler.currStudy = MDFv2Study() # TODO: Auto-generate fields
+    if isnothing(study(mpi_repl_mode.activeProtocolHandler))
+      study(mpi_repl_mode.activeProtocolHandler, MDFv2Study()) # TODO: Auto-generate fields
     end
-    study = mpi_repl_mode.activeProtocolHandler.currStudy
+    study_ = study(mpi_repl_mode.activeProtocolHandler)
 
-    options = ["Name: $(studyName(study))", "Description: $(studyDescription(study))"]
+    options = ["Name: $(studyName(study_))", "Description: $(studyDescription(study_))"]
     optionFields = ["name", "description"]
     menu = TerminalMenus.RadioMenu(options, pagesize=4)
 
@@ -268,10 +268,10 @@ function mpi_mode_study()
       end
 
       if optionFields[choice] == "name"
-        studyName(study, value)
+        studyName(study_, value)
         println("The name of the study was set to `$value`.")
       elseif optionFields[choice] == "description"
-        studyDescription(study, value)
+        studyDescription(study_, value)
         println("The description of the study was set to `$value`.")
       else
         @error "No valid selection. Please check the code"
@@ -290,12 +290,12 @@ push!(mpi_repl_mode.commands, CommandSpec(
 
 function mpi_mode_experiment()
   if check_no_scanner()
-    if isnothing(mpi_repl_mode.activeProtocolHandler.currExperiment)
-      mpi_repl_mode.activeProtocolHandler.currExperiment = MDFv2Experiment() # TODO: Auto-generate fields
+    if isnothing(experiment(mpi_repl_mode.activeProtocolHandler))
+      experiment(mpi_repl_mode.activeProtocolHandler, MDFv2Experiment()) # TODO: Auto-generate fields
     end
-    experiment = mpi_repl_mode.activeProtocolHandler.currExperiment
+    experiment_ = experiment(mpi_repl_mode.activeProtocolHandler)
 
-    options = ["Name: $(experimentName(experiment))", "Description: $(experimentDescription(experiment))", "Subject: $(experimentSubject(experiment))"]
+    options = ["Name: $(experimentName(experiment_))", "Description: $(experimentDescription(experiment_))", "Subject: $(experimentSubject(experiment_))"]
     optionFields = ["name", "description", "subject"]
     menu = TerminalMenus.RadioMenu(options, pagesize=4)
 
@@ -310,13 +310,13 @@ function mpi_mode_experiment()
       end
 
       if optionFields[choice] == "name"
-        experimentName(experiment, value)
+        experimentName(experiment_, value)
         println("The name of the experiment was set to `$value`.")
       elseif optionFields[choice] == "description"
-        experimentDescription(experiment, value)
+        experimentDescription(experiment_, value)
         println("The description of the experiment was set to `$value`.")
       elseif optionFields[choice] == "subject"
-        experimentSubject(experiment, value)
+        experimentSubject(experiment_, value)
         println("The subject of the experiment was set to `$value`.")
       else
         @error "No valid selection. Please check the code"
@@ -335,10 +335,10 @@ push!(mpi_repl_mode.commands, CommandSpec(
 
 function mpi_mode_tracer(;mode::Union{String, Nothing} = nothing)
   if check_no_scanner()
-    if isnothing(mpi_repl_mode.activeProtocolHandler.currTracer)
-      mpi_repl_mode.activeProtocolHandler.currTracer = MDFv2Tracer() # TODO: Auto-generate fields
+    if isnothing(tracer(mpi_repl_mode.activeProtocolHandler))
+      tracer(mpi_repl_mode.activeProtocolHandler, MDFv2Tracer()) # TODO: Auto-generate fields
     end
-    tracers = mpi_repl_mode.activeProtocolHandler.currTracer
+    tracers = tracer(mpi_repl_mode.activeProtocolHandler)
 
     if isnothing(mode) || mode == "list"
       if !ismissing(tracerName(tracers))
@@ -437,6 +437,29 @@ push!(mpi_repl_mode.commands, CommandSpec(
     end
   end,
   description = "Show and set tracer parameters."
+))
+
+function mpi_mode_operator(;operator::Union{String, Nothing} = nothing)
+  if isnothing(operator)
+    println("Operator: $(mpi_repl_mode.activeProtocolHandler.currOperator))")
+  else
+    operator(mpi_repl_mode.activeProtocolHandler, operator)
+    println("The new operator is `$operator`.")
+  end
+
+  return
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "operator",
+  api = mpi_mode_operator,
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :operator,
+    ),
+  ),
+  description = "Show and set operator."
 ))
 
 # Auxiliary commands

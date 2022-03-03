@@ -273,6 +273,7 @@ handleEvent(protocol::Protocol, event::ProtocolEvent) = put!(biChannel(protocol)
 function handleEvents(protocol::Protocol)
   while isready(protocol.biChannel)
     event = take!(protocol.biChannel)
+    @debug "Protocol event handler received event of type $(typeof(event)) and is now dispatching it."
     handleEvent(protocol, event)
   end
 end
@@ -282,6 +283,14 @@ abstract type ProtocolInteractivity end
 struct NonInteractive <: ProtocolInteractivity end
 struct Interactive <: ProtocolInteractivity end
 @mustimplement protocolInteractivity(protocol::Protocol)
+
+abstract type ProtocolMDFStudyUse end
+struct UsingMDFStudy <: ProtocolMDFStudyUse end
+struct NotUsingMDFStudy <: ProtocolMDFStudyUse end
+@mustimplement protocolMDFStudyUse(protocol::Protocol)
+
+export isUsingMDFStudy
+isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDFStudy
 
 include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")

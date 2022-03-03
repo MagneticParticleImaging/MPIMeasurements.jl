@@ -1,14 +1,23 @@
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, mdf::MDFv2InMemory; bgdata::Union{Array{Float32,4}, Nothing}=nothing)
-	name = studyName(mdf)
-	date = studyDate(mdf)
+	if !ismissing(studyName(mdf))
+		name = studyName(mdf)
+	else
+		name = "n.a."
+	end
+
+	if !isnothing(studyTime(mdf))
+		date = studyTime(mdf)
+	else
+		date = now()
+	end
 
 	study = Study(store, name; date=date)
 
 	fillMDFStudy(mdf, study)
-	fillMDFExperiment(mdf, study, params)
-	fillMDFScanner(mdf, scanner, params)
-	fillMDFTracer(mdf, params)
+	fillMDFExperiment(mdf, study)
+	fillMDFScanner(mdf, scanner)
+	fillMDFTracer(mdf)
 
 	fillMDFMeasurement(mdf, sequence, data, bgdata)
 	fillMDFAcquisition(mdf, scanner, sequence)
@@ -20,26 +29,36 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory)
+														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false)
 
-	if params["storeAsSystemMatrix"]
+	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
 	else
-		name = studyName(mdf)
-		date = studyDate(mdf)
+		if !ismissing(studyName(mdf))
+			name = studyName(mdf)
+		else
+			name = "n.a."
+		end
+
+		if !isnothing(studyTime(mdf))
+			date = studyTime(mdf)
+		else
+			date = now()
+		end
+
 		study = Study(store, name; date=date)
 	end
 
 	fillMDFStudy(mdf, study)
-	fillMDFExperiment(mdf, study, params)
-	fillMDFScanner(mdf, scanner, params)
-	fillMDFTracer(mdf, params)
+	fillMDFExperiment(mdf, study)
+	fillMDFScanner(mdf, scanner)
+	fillMDFTracer(mdf)
 
 	@debug isBackgroundFrame
 
 	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame)
 	fillMDFAcquisition(mdf, scanner, sequence)
-	fillMDFCalibration(mdf, positions, params)
+	fillMDFCalibration(mdf, positions)
 
 	filename = getNewExperimentPath(study)
 
@@ -48,7 +67,7 @@ end
 
 
 
-function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions, params::Dict)
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions)
 
 	# /calibration/ subgroup
 
@@ -87,58 +106,75 @@ end
 
 
 
-function fillMDFScanner(mdf::MDFv2InMemory, scanner::MPIScanner, params::Dict)
+function fillMDFScanner(mdf::MDFv2InMemory, scanner::MPIScanner)
 	# /scanner/ subgroup
-	mdf.scanner = MDFv2Scanner(
-		boreSize = ustrip(u"m", scannerBoreSize(scanner)),
-		facility = scannerFacility(scanner),
-		manufacturer = scannerManufacturer(scanner),
-		name = scannerName(scanner),
-		operator = get(params, "scannerOperator", "default"),
-		topology = scannerTopology(scanner)
-	)
+	MPIFiles.scannerBoreSize(mdf, Float64(ustrip(u"m", scannerBoreSize(scanner))))
+	MPIFiles.scannerFacility(mdf, scannerFacility(scanner))
+	MPIFiles.scannerManufacturer(mdf, scannerManufacturer(scanner))
+	MPIFiles.scannerName(mdf, scannerName(scanner))
+	MPIFiles.scannerTopology(mdf, scannerTopology(scanner))
+
+	if ismissing(scannerOperator(mdf))
+		MPIFiles.scannerOperator(mdf, "default")
+	end
+
 	return
 end
 
 function fillMDFStudy(mdf::MDFv2InMemory, study::Study)
 	# /study/ subgroup
-	mdf.study = MDFv2Study(;
-		description = "n.a.",
-		name = study.name,
-		number = 0, # FIXME: This is never set!!!!!!
-		time = study.date,
-		uuid = study.uuid
-	)
+	if ismissing(studyDescription(mdf))
+		studyDescription(mdf, "n.a.")
+	end
+
+	studyName(mdf, study.name)
+	studyNumber(mdf, 0) # FIXME: This is never set!!!!!!
+	studyTime(mdf, study.date)
+	studyUuid(mdf, study.uuid)
+
 	return
 end
 
-function fillMDFExperiment(mdf::MDFv2InMemory, study::Study, params::Dict)
+function fillMDFExperiment(mdf::MDFv2InMemory, study::Study)
 	# /experiment/ subgroup
 
 	expNum = getNewExperimentNum(study)
 
-	mdf.experiment = MDFv2Experiment(;
-		description = get(params,"experimentDescription","n.a."),
-		isSimulation = false,
-		name = get(params,"experimentName","default"),
-		number = expNum,
-		subject = get(params,"experimentSubject","n.a."),
-		uuid = uuid4()
-	)
+	if ismissing(experimentDescription(mdf))
+		experimentDescription(mdf, "n.a.")
+	end
+
+	experimentIsSimulation(mdf, false) # TODO: Should be true with simulated DAQ scanners
+
+	if ismissing(experimentName(mdf))
+		experimentName(mdf, "default")
+	end
+
+	experimentNumber(mdf, expNum)
+
+	if ismissing(experimentSubject(mdf))
+		experimentSubject(mdf, "n.a.")
+	end
+
+	experimentUuid(mdf, uuid4())
+
 	return
 end
 
-function fillMDFTracer(mdf::MDFv2InMemory, params::Dict)
+function fillMDFTracer(mdf::MDFv2InMemory)
 	# /tracer/ subgroup
-	mdf.tracer = MDFv2Tracer(;
-		batch = get(params,"tracerBatch",["n.a"]),
-		concentration = get(params,"tracerConcentration",[0.0]),
-		injectionTime = [t for t in get(params,"tracerInjectionTime", [Dates.unix2datetime(time())]) ],
-		name = get(params,"tracerName",["n.a"]),
-		solute = get(params,"tracerSolute",["Fe"]),
-		vendor = get(params,"tracerVendor",["n.a"]),
-		volume = get(params,"tracerVolume",[0.0])
-	)
+	if isnothing(MPIFiles.tracer(mdf))
+		MPIFiles.tracer(mdf, defaultMDFv2Tracer())
+		addTracer(MPIFiles.tracer(mdf);
+							batch = "n.a",
+							concentration = 0.0,
+							injectionTime = now(),
+							name = "n.a",
+							solute = "Fe",
+							vendor = "n.a.",
+							volume = 0.0)
+	end
+
 	return
 end
 
@@ -165,7 +201,7 @@ end
 
 function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4}, isBackgroundFrame::Vector{Bool})
 	# /measurement/ subgroup
-	numFrames = size(data,4)
+	numFrames = size(data, 4)
 
 	measData(mdf, data)
 	measIsBackgroundCorrected(mdf, false)
