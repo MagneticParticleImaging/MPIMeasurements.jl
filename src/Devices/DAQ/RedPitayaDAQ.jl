@@ -641,7 +641,7 @@ function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, nu
 end
 
 function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod, acqNumAverages)
-  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
+  u = RedPitayaDAQServer.readPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:]
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:]
