@@ -49,6 +49,7 @@ Base.close(amp::Amplifier) = nothing
 @mustimplement matchingNetwork(amp::Amplifier)::Integer
 @mustimplement matchingNetwork(amp::Amplifier, network::Integer)
 @mustimplement temperature(amp::Amplifier)::typeof(1.0u"°C")
+@mustimplement channelId(amp::Amplifier)
 
 getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
 function getAmplifier(scanner::MPIScanner)

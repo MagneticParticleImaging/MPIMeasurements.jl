@@ -16,6 +16,8 @@ Base.close(su::SurveillanceUnit) = nothing
 @mustimplement getACStatus(su::SurveillanceUnit)
 @mustimplement enableACPower(su::SurveillanceUnit)
 @mustimplement disableACPower(su::SurveillanceUnit)
+@mustimplement enableHeating(su::SurveillanceUnit)
+@mustimplement disableHeating(su::SurveillanceUnit)
 @mustimplement resetDAQ(su::SurveillanceUnit)
 @mustimplement hasResetDAQ(su::SurveillanceUnit) # TODO is this has as in "was reset successfull" or if it has the ability to do so?
 

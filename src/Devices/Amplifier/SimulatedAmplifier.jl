@@ -46,3 +46,4 @@ voltageMode(amp::SimulatedAmplifier, mode::AmplifierVoltageMode) = amp.voltageMo
 matchingNetwork(amp::SimulatedAmplifier) = amp.network
 matchingNetwork(amp::SimulatedAmplifier, network::Integer) = amp.network = network
 temperature(amp::SimulatedAmplifier) = 25.0u"°C"
+channelid(amp::SimulatedAmplifier) = "Test"

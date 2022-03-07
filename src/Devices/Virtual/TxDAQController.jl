@@ -38,7 +38,7 @@ function _init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = []
+optionalDependencies(::TxDAQController) = [SurveillanceUnit]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
@@ -60,6 +60,11 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     throw(IllegalStateException(message))
   end
 
+  # Check that we only control four channels, as our RedPitayaDAQs only have 4 signal components atm
+  if length(txCont.controlledChannels) > 4
+    throw(IllegalStateException("Sequence requires controlling of more than four channels, which is currently not implemented."))
+  end
+
   # Check that channels only have one component
   if any(x -> length(x.components) > 1, seqControlledChannel)
     throw(IllegalStateException("Sequence has channel with more than one component. Such a channel cannot be controlled by this controller"))
@@ -79,12 +84,31 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   else 
     txCont.currTx = initTx
   end
-  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq::Sequence)
+  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq)
   txCont.sinLUT = sinLUT
   txCont.cosLUT = cosLUt
   Ω = calcDesiredField(seqControlledChannel)
 
+  # Prepare/Override signal frequency components
+  freqs = [ustrip(u"Hz", txBaseFrequency(seq) / divider(components(channel.seqChannel)[1])) for channel in txCont.controlledChannels]
+  frequencies = Dict{String, Vector{Union{Float32, Nothing}}}()
+  for channel in txCont.controlledChannels
+    frequencies[id(channel.seqChannel)] = freqs
+  end
+  @show frequencies
+  setTxParamsFrequencies(daq, frequencies)
+
   # Start Tx
+  prepareControl(daq)
+  su = nothing
+  if hasDependency(txCont, SurveillanceUnit)
+    su = dependency(txCont, SurveillanceUnit)
+  end
+
+  if !isnothing(su)
+    enableACPower(su)
+  end
+
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
   startTx(daq)
 
@@ -95,10 +119,20 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     period = currentPeriod(daq)
     uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    controlPhaseDone = doControlStep(txCont, seq, uRef, Ω)
+    # Translate uRef/channelIdx(daq) to order as it is used here
+    mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
+    controlOrderChannelIndices = [channelIdx(daq, id(ch.seqChannel)) for ch in txCont.controlledChannels]
+    controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
+    sortedRef = uRef[:, controlOrderRefIndices, :]
+
+    controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
     sleep(txCont.params.controlPause)
     i += 1
+  end
+
+  if !isnothing(su)
+    disableACPower(su)
   end
   stopTx(daq)
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)

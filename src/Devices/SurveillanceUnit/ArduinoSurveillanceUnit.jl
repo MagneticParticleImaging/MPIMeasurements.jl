@@ -105,6 +105,16 @@ function disableACPower(Arduino::ArduinoSurveillanceUnit)
   checkACQ(Arduino, ACQ)
 end
 
+function enableHeating(ard::ArduinoSurveillanceUnit)
+  ACQ = sendCommand(ard, "ENABLE:HEATING");
+  checkACQ(Arduino, ACQ)
+end
+
+function disableHeating(ard::ArduinoSurveillanceUnit)
+  ACQ = sendCommand(ard, "DISABLE:HEATING");
+  checkACQ(Arduino, ACQ)
+end
+
 # TODO this does not seem to be implemented in external client, check server code
 function NOTAUS(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "NOTAUS");
