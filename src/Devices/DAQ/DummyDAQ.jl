@@ -23,10 +23,8 @@ Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
   # Here for any other internal parameters
 end
 
-function init(daq::DummyDAQ)
-  @debug "Initializing dummy DAQ with ID `$(daq.deviceID)`."
-
-  daq.present = true
+function _init(daq::DummyDAQ)
+  # NOP
 end
 
 neededDependencies(::DummyDAQ) = []

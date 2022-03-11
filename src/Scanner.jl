@@ -69,6 +69,7 @@ function initiateDevices(devicesParams::Dict{String, Any})
       end
 
       DeviceImpl = getConcreteType(Device, deviceType)
+      validateDeviceStruct(DeviceImpl)
       DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
 
       paramsInst = DeviceParamsImpl(params)
@@ -237,6 +238,7 @@ function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
 end
 function getDevices(scanner::MPIScanner, deviceType::String)
   knownDeviceTypes = deepsubtypes(Device)
+  push!(knownDeviceTypes, Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
 end

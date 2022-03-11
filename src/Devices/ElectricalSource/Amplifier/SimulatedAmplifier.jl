@@ -25,15 +25,11 @@ Base.@kwdef mutable struct SimulatedAmplifier <: Amplifier
   network::Integer = 1
 end
 
-function init(amp::SimulatedAmplifier)
-  @debug "Initializing simulated amplifier unit with ID `$(amp.deviceID)`."
-
+function _init(amp::SimulatedAmplifier)
   # Set values given by configuration
 	mode(amp, amp.params.mode)
 	voltageMode(amp, amp.params.voltageMode)
 	matchingNetwork(amp, amp.params.matchingNetwork)
-
-  amp.present = true
 end
 
 checkDependencies(amp::SimulatedAmplifier) = true

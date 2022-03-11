@@ -35,8 +35,7 @@ sendCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = sendCo
 neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureSensor] # could in theory be generic temp sensor
 optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = []
 
-function init(su::ArduinoSurveillanceUnitExternalTemp)
-  @info "Initializing ArduinoSurveillanceUnitExternalTemp with ID $(su.deviceID)"
+function _init(su::ArduinoSurveillanceUnitExternalTemp)
   sp = SerialPort(su.params.portAdress)
   open(sp)
 	set_speed(sp, su.params.baudrate)
@@ -54,7 +53,6 @@ function init(su::ArduinoSurveillanceUnitExternalTemp)
   else    
     throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
   end
-  su.present = true
 end
 
 getTemperatureSensor(su::ArduinoSurveillanceUnitExternalTemp) = dependency(su, ArduinoTemperatureSensor)

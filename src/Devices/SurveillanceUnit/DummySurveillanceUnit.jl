@@ -20,10 +20,8 @@ Base.@kwdef mutable struct DummySurveillanceUnit <: SurveillanceUnit
   acPowerEnabled::Bool = false
 end
 
-function init(su::DummySurveillanceUnit)
-  @debug "Initializing dummy surveillance unit with ID `$(su.deviceID)`."
-
-  su.present = true
+function _init(su::DummySurveillanceUnit)
+  # NOP
 end
 
 neededDependencies(::DummySurveillanceUnit) = []

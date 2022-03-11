@@ -21,10 +21,8 @@ Base.@kwdef mutable struct SimulatedMotor <: Motor
   speed::typeof(1.0u"1/s") = 1.0u"1/s"
 end
 
-function init(motor::SimulatedMotor)
-  @debug "Initializing simulated motor unit with ID `$(motor.deviceID)`."
-
-  motor.present = true
+function _init(motor::SimulatedMotor)
+  # NOP
 end
 
 neededDependencies(::SimulatedMotor) = []

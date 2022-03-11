@@ -65,8 +65,7 @@ Base.@kwdef mutable struct LakeShoreF71GaussMeter <: GaussMeter
   driver::Union{SCPIInstrument, Missing} = missing
 end
 
-function init(gauss::LakeShoreF71GaussMeter)
-  @debug "Initializing LakeShore F71 gaussmeter unit with ID `$(gauss.deviceID)`."
+function _init(gauss::LakeShoreF71GaussMeter)
   if gauss.params.connectionMode == F71_CM_TCP
     gauss.driver = TCPSCPIInstrument(gauss.params.ip, gauss.params.port)
   elseif gauss.params.connectionMode == F71_CM_USB
@@ -79,8 +78,6 @@ function init(gauss::LakeShoreF71GaussMeter)
 
   # Always use Tesla
   command(gauss.driver, "UNIT:FIELD TESLA")
-
-  gauss.present = true
 end
 
 neededDependencies(::LakeShoreF71GaussMeter) = []

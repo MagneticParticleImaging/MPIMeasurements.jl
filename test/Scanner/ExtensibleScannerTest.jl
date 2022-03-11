@@ -4,7 +4,7 @@ Test the flexibility of the scanner instantiation
 The scanner should be composable not only of devices defined within
 MPIMeasurements, but also from the outside.
 """
-@testset "Flexible scanner" begin
+@testset "Extensible scanner" begin
   ### This section can be in a different package, which is not coupled to MPIMeasurements.jl as a dependency
   export FlexibleDAQ, FlexibleDAQParams
   

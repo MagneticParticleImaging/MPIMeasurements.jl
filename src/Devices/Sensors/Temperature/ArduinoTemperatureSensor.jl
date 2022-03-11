@@ -37,9 +37,7 @@ end
 neededDependencies(::ArduinoTemperatureSensor) = []
 optionalDependencies(::ArduinoTemperatureSensor) = []
 
-function init(sensor::ArduinoTemperatureSensor)
-  @info "Initializing ArduinoTemperatureSensor with ID $(sensor.deviceID)"
-
+function _init(sensor::ArduinoTemperatureSensor)
   params = sensor.params
   spTU = SerialPort(params.portAdress)
   open(spTU)
@@ -62,7 +60,6 @@ function init(sensor::ArduinoTemperatureSensor)
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = params.delim, sd = sd)
   sensor.ard = ard
   setMaximumTemps(sensor, params.maxTemps)
-  sensor.present = true
 end
 
 function numChannels(sensor::ArduinoTemperatureSensor)

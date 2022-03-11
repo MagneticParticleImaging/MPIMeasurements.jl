@@ -33,9 +33,8 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   controlledChannels::Vector{ControlledChannel} = []
 end
 
-function init(tx::TxDAQController)
-  @info "Initializing TxDAQController with ID `$(tx.deviceID)`."
-  tx.present = true
+function _init(tx::TxDAQController)
+  # NOP
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
@@ -124,7 +123,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 
     # Translate uRef/channelIdx(daq) to order as it is used here
     mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
-    controlOrderChannelIndices = [channelIdx(daq, id(ch.seqChannel)) for ch in txCont.controlledChannels]
+    controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
     controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
     sortedRef = uRef[:, controlOrderRefIndices, :]
 
@@ -138,6 +137,11 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     disableACPower(su)
   end
   stopTx(daq)
+
+  if !controlPhaseDone
+    error("TxDAQController $(deviceID(txCont)) could not control.")
+  end
+
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
   return txFromMatrix(txCont, txCont.currTx)
 end

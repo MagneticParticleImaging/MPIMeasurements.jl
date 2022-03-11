@@ -1,4 +1,4 @@
-export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, checkDependencies
+export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, _init, checkDependencies
 
 abstract type VirtualDevice <: Device end
 
@@ -10,20 +10,29 @@ automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
+function validateDeviceStruct(device::Type{<:Device})
+  requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
+  missingFields = [x for x in requiredFields if !in(x, fieldnames(device))]
+  if length(missingFields) > 0
+    msg = "Device struct $(string(device)) is missing the required fields " * join(missingFields, ", ", " and ")
+    throw(ScannerConfigurationError(msg))
+  end
+end
+
 "Retrieve the ID of a device."
-deviceID(device::Device) = :deviceID in fieldnames(typeof(device)) ? device.deviceID : error("The device struct for `$(typeof(device))` must have a field `deviceID`.")
+deviceID(device::Device) = device.deviceID 
 
 "Retrieve the parameters of a device."
-params(device::Device) = :params in fieldnames(typeof(device)) ? device.params : error("The device struct for `$(typeof(device))` must have a field `params`.")
+params(device::Device) = device.params
 
 "Check whether the device is optional."
-isOptional(device::Device) = :optional in fieldnames(typeof(device)) ? device.optional : error("The device struct for `$(typeof(device))` must have a field `optional`.")
+isOptional(device::Device) = device.optional
 
 "Check whether the device is present."
-isPresent(device::Device) = :present in fieldnames(typeof(device)) ? device.present : error("The device struct for `$(typeof(device))` must have a field `present`.")
+isPresent(device::Device) = device.present
 
 "Retrieve the dependencies of a device."
-dependencies(device::Device) = :dependencies in fieldnames(typeof(device)) ? device.dependencies : error("The device struct for `$(typeof(device))` must have a field `dependencies`.")
+dependencies(device::Device) = device.dependencies
 
 "Retrieve all dependencies of a certain type."
 dependencies(device::Device, type::DataType) = [dependency for dependency in values(dependencies(device)) if dependency isa type]
@@ -67,9 +76,28 @@ function isExpectedDependency(device::Device, dependency::Device)
   return false
 end
 
-@mustimplement init(device::Device)
+@mustimplement _init(device::Device)
 @mustimplement neededDependencies(device::Device)::Vector{DataType}
 @mustimplement optionalDependencies(device::Device)::Vector{DataType}
+
+function init(device::Device)
+  @info "Initializing $(typeof(device)) with ID `$(deviceID(device))`"
+  
+  # Only init a device if all dependencies are present
+  uninitDependencies = []
+  for dev in values(dependencies(device)) # Should only be of type <: Device at this point
+    if !isPresent(dev)
+      push!(uninitDependencies, deviceID(dev))
+    end
+  end
+  if length(uninitDependencies) > 0
+    msg = "Initialization order error: The device $(deviceID(device)) cannot be initialized because it depends on the uninitialized devices " * join(uninitDependencies, ", ", " and ")
+    throw(ScannerConfigurationError(msg))
+  end
+
+  _init(device)
+  device.present = true
+end
 
 function checkDependencies(device::Device)
   # Check if all needed dependencies are assigned

@@ -53,10 +53,8 @@ defaultVelocity(rob::Robot) = nothing # should be implemented for a robot that c
 @mustimplement _isReferenced(rob::Robot)
 @mustimplement _getPosition(rob::Robot)
 
-function init(rob::Robot)
-  @debug "Initializing robot with ID `$(rob.deviceID)`."
+function _init(rob::Robot)
   setup(rob)
-  rob.present = true
 end
 
 neededDependencies(::Robot) = []
@@ -87,6 +85,7 @@ include("SimulatedRobot.jl")
 include("IgusRobot.jl")
 include("IselRobot.jl")
 include("BrukerRobot.jl")
+include("StepcraftRobot.jl")
 
 function gotoPos(rob::Robot, pos_name::AbstractString, args...)
   if haskey(namedPositions(rob), pos_name)

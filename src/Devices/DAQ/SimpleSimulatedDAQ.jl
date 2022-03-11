@@ -57,10 +57,8 @@ Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
   currentPeriod::Int64 = 1
 end
 
-function init(daq::SimpleSimulatedDAQ)
-  @debug "Initializing simple simulated DAQ with ID `$(daq.deviceID)`."
-
-  daq.present = true
+function _init(daq::SimpleSimulatedDAQ)
+  # NOP
 end
 
 neededDependencies(::SimpleSimulatedDAQ) = [SimulationController]

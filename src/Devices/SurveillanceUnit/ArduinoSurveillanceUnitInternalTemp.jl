@@ -34,8 +34,7 @@ end
 neededDependencies(::ArduinoSurveillanceUnitInternalTemp) = []
 optionalDependencies(::ArduinoSurveillanceUnitInternalTemp) = []
 
-function init(su::ArduinoSurveillanceUnitInternalTemp)
-  @info "Initializing ArduinoSurveillanceUnit with ID $(su.deviceID)"
+function _init(su::ArduinoSurveillanceUnitInternalTemp)
   sp = SerialPort(su.params.portAdress)
   open(sp)
 	set_speed(sp, su.params.baudrate)
@@ -53,7 +52,6 @@ function init(su::ArduinoSurveillanceUnitInternalTemp)
   else    
     throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
   end
-  su.present = true
 end
 
 sendCommand(su::ArduinoSurveillanceUnitInternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 

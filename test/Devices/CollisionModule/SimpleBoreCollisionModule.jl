@@ -1,4 +1,57 @@
-#TODO: write more tests
+function deviceTest(cm::SimpleBoreCollisionModule)
+  @testset "$(string(typeof(cm)))" begin
+    params = cm.params
+    
+    @test MPIMeasurements.collisionModuleType(cm) == MPIMeasurements.PositionCollisionType()
+    
+    # Check x-Axis
+    xmin = params.minMaxBoreAxis[1]
+    xmax = params.minMaxBoreAxis[2]
+    mid= middle(max(xmin, nextfloat(typemin(Float64)) * 1u"mm" ), min(xmax, prevfloat(typemax(Float64)) * 1u"mm"))
+    @test checkCoords(cm, [mid, 0.0u"mm", 0.0u"mm"])
+    @test checkCoords(cm, [xmin, 0.0u"mm", 0.0u"mm"])
+    @test checkCoords(cm, [xmax, 0.0u"mm", 0.0u"mm"])
+    @test xmin == -Inf*1u"mm" || !checkCoords(cm, [xmin - 0.01u"mm", 0.0u"mm", 0.0u"mm"])
+    @test xmax == Inf*1u"mm" || !checkCoords(cm, [xmax + 0.01u"mm", 0.0u"mm", 0.0u"mm"])
+    @test checkCoords(cm, [xmin + 0.01u"mm", 0.0u"mm", 0.0u"mm"]) # x-Axis does not consider clearance
+    @test checkCoords(cm, [xmax - 0.01u"mm", 0.0u"mm", 0.0u"mm"]) # nor objGeometry
+
+    # Check Y-Z Plane
+    @test !checkCoords(cm, [0.0u"mm", params.scannerDiameter, 0.0u"mm"])
+    @test !checkCoords(cm, [0.0u"mm", 0.0u"mm", params.scannerDiameter])
+    @test !checkCoords(cm, [0.0u"mm", params.scannerDiameter + 0.1u"mm", 0.0u"mm"])
+    @test !checkCoords(cm, [0.0u"mm", 0.0u"mm", params.scannerDiameter + 0.1u"mm"])
+    checkYZPlane(cm, params.objGeometry)
+
+  end
+end
+
+function checkYZPlane(cm::SimpleBoreCollisionModule, geo::Circle)
+  params = cm.params
+  total = params.scannerDiameter/2 - params.clearance.distance - geo.diameter/2
+  if geo.diameter < params.scannerDiameter - params.clearance.distance
+    trig = sin(deg2rad(45))/sin(deg2rad(90))
+    factor = 0.0
+    pos = [0.0u"mm", factor * total * trig, factor * total * trig]
+    @test checkCoords(cm, pos)
+    factor = 0.5
+    pos = [0.0u"mm", factor * total * trig, factor * total * trig]
+    @test checkCoords(cm, pos)
+    factor = 1.0
+    pos = [0.0u"mm", factor * total * trig, factor * total * trig]
+    @test checkCoords(cm, pos)
+    factor = 1.1
+    pos = [0.0u"mm", factor * total * trig, factor * total * trig]
+    @test !checkCoords(cm, pos)
+  end
+end
+
+function checkYZPlane(cm::SimpleBoreCollisionModule, geo::Rectangle)
+ # T.T
+end
+
+function checkYZPlane(cm::SimpleBoreCollisionModule, geo::Triangle)
+end
 
 @testset "Testing SimpleBoreCollisionModule" begin
 
@@ -66,6 +119,7 @@ end
 
 
 end
+
 
 
 

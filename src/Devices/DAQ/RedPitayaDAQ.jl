@@ -114,7 +114,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumAverages::Int = 1
 end
 
-function init(daq::RedPitayaDAQ)
+function _init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips)
@@ -649,7 +649,7 @@ function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, nu
 end
 
 function readDataPeriods(daq::RedPitayaDAQ, numPeriods, startPeriod, acqNumAverages)
-  u = RedPitayaDAQServer.readDataPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
+  u = RedPitayaDAQServer.readPeriods(daq.rpc, startPeriod, numPeriods, acqNumAverages, useCalibration = true)
 
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:]
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:]

@@ -10,12 +10,16 @@ defaultSequence = "SimpleSimulatedSequence"
 
 [Devices]
 initializationOrder = [
-  "my_daq_id",
   "simulated_gaussmeter",
   "collision_module_1",
+  "collision_module_2",
+  "collision_module_3",
   "simulated_robot",
-  "sequence_controller",
-  "simulation_controller"
+  "simulation_controller",
+  "my_daq_id",
+  "simulated_tempSensor",
+  "dummy_su",
+  "simulated_amplifier"
 ]
 
 [Devices.my_daq_id]
@@ -56,7 +60,7 @@ deviceType = "SimulatedGaussMeter"
 deviceType = "SimulatedRobot"
 coordinateSystem.axes = "y,z,x"
 coordinateSystem.origin = ["0mm", "0mm", "0mm"]
-dependencies = ["collision_module_1"]
+dependencies = ["collision_module_1", "collision_module_2", "collision_module_3"]
 
 [Devices.collision_module_1]
 deviceType = "SimpleBoreCollisionModule"
@@ -67,15 +71,35 @@ objGeometry.name = "TestKreis"
 clearance = "2mm"
 minMaxBoreAxis = ["-300mm","Inf*mm"]
 
-[Devices.sequence_controller]
-deviceType = "SequenceController"
-dependencies = [
-  "my_daq_id"
-]
-saveInterval = "0.5s"
-maxControlSteps = 5
+[Devices.collision_module_2]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Rectangle"
+objGeometry.width = "5mm"
+objGeometry.height = "5mm"
+objGeometry.name = "TestRectangle"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
+
+[Devices.collision_module_3]
+deviceType = "SimpleBoreCollisionModule"
+scannerDiameter = "200mm"
+objGeometry.type = "Triangle"
+objGeometry.width = "5mm"
+objGeometry.height = "5mm"
+objGeometry.name = "TestTriangle"
+clearance = "2mm"
+minMaxBoreAxis = ["-300mm","Inf*mm"]
 
 [Devices.simulation_controller]
 deviceType = "SimulationController"
 initialCoilTemperatures.tx_main = "20.0°C"
 
+[Devices.simulated_tempSensor]
+deviceType = "DummyTemperatureSensor"
+
+[Devices.dummy_su]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.simulated_amplifier]
+deviceType = "SimulatedAmplifier"
