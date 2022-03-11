@@ -16,7 +16,7 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocolParams <: ProtocolPar
   "Remember background measurement"
   rememberBGMeas::Bool = false
 end
-function MechanicalMPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+function MechanicalMPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
   if haskey(dict, "sequence")
     sequence = Sequence(scanner, dict["sequence"])
@@ -37,42 +37,47 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
   biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  mechCont::Union{MechanicsController, Nothing} = nothing
 end
 
 function requiredDevices(protocol::MechanicalMPIMeasurementProtocol)
-  result = [MechanicsController]
-  if hasElectricalTxChannels(protocol.params.sequence) # TODO: Acquisition is always needed... is it?
-    push!(result, AbstractDAQ)
-    if protocol.params.controlTx
-      push!(result, TxDAQController)
-    end
+  result = [AbstractDAQ, MechanicsController]
+  if protocol.params.controlTx
+    push!(result, TxDAQController)
   end
+
   return result
 end
 
 function _init(protocol::MechanicalMPIMeasurementProtocol)
+  @debug "Initializing protocol $(name(protocol))."
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
-  if protocol.params.controlTx && hasElectricalTxChannels(protocol.params.sequence)
-    controllers = getDevices(protocol.scanner, TxDAQController)
-    if length(controllers) > 1
-      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
-    end
-    protocol.txCont = controllers[1]
+  if protocol.params.controlTx
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
     protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
+
+  if hasMechanicalTxChannels(protocol.params.sequence)
+    @debug "The sequence has mechanical channels. Now setting them up."
+    protocol.mechCont = getDevice(protocol.scanner, MechanicsController)
+    setup(protocol.mechCont, protocol.params.sequence)
+  end
+
   protocol.bgMeas = zeros(Float32,0,0,0,0)
 
   return nothing
@@ -100,15 +105,17 @@ function enterExecute(protocol::MechanicalMPIMeasurementProtocol)
 end
 
 function _execute(protocol::MechanicalMPIMeasurementProtocol)
-  @info "Measurement protocol started"
+  @debug "Measurement protocol started"
 
-  #performMeasurement(protocol) # Note: Uncommented for testing
+  performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
+
+  debugCount = 0
+
   while !(protocol.finishAcknowledged)
-    handleEvents(protocol) 
+    handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
-    sleep(0.05)
   end
 
   @info "Protocol finished."
@@ -118,19 +125,17 @@ end
 
 function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
-    @debug "Asking for background measurement."
-    askChoices(protocol, "Press continue when background measurement can be taken", ["Continue"])
-
-    @debug "Setting number of background frames."
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
 
     @debug "Taking background measurement."
     measurement(protocol)
-    protocol.bgMeas = protocol.scanner.seqMeasState.buffer
-
-    askChoices(protocol, "Press continue when foreground measurement can be taken", ["Continue"])
-  else
-    @debug "No background measurement was selected."   
+    protocol.bgMeas = protocol.seqMeasState.buffer
+    if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
   end
 
   @debug "Setting number of foreground frames."
@@ -146,7 +151,7 @@ function measurement(protocol::MechanicalMPIMeasurementProtocol)
   measState = asyncMeasurement(protocol)
   producer = measState.producer
   consumer = measState.consumer
-  
+
   # Handle events
   while !istaskdone(consumer)
     handleEvents(protocol)
@@ -180,16 +185,16 @@ function measurement(protocol::MechanicalMPIMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::MechanicalMPIMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  return protocol.seqMeasState
 end
 
 
@@ -214,14 +219,14 @@ end
 function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.scanner.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.scanner.seqMeasState.numFrames
-        data = protocol.scanner.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.scanner.seqMeasState.buffer
+    data = protocol.seqMeasState.buffer
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -234,12 +239,12 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::Progress
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.scanner.seqMeasState) 
-    framesTotal = protocol.scanner.seqMeasState.numFrames
-    framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
+  elseif !isnothing(protocol.seqMeasState)
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else 
-    reply = ProgressEvent(0, 0, "N/A", event)  
+  else
+    reply = ProgressEvent(0, 0, "N/A", event)
   end
   put!(protocol.biChannel, reply)
 end
@@ -249,13 +254,16 @@ handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::FinishedAckEvent)
 function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  params = event.params
-  data = protocol.scanner.seqMeasState.buffer
+  mdf = event.mdf
+  data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
   @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
+
+protocolInteractivity(protocol::MechanicalMPIMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::MechanicalMPIMeasurementProtocol) = UsingMDFStudy()

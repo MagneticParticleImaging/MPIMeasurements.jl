@@ -18,7 +18,7 @@ Base.@kwdef mutable struct MechanicsController <: VirtualDevice
   dependencies::Dict{String, Union{Device, Missing}}
 
 
-
+  controlledChannels::Union{Vector{MechanicalTxChannel}, Nothing} = nothing
 end
 
 function init(tx::MechanicsController)
@@ -30,16 +30,16 @@ neededDependencies(::MechanicsController) = []
 optionalDependencies(::MechanicsController) = [AbstractDAQ, Motor, Robot]
 
 function setup(mechCont::MechanicsController, seq::Sequence)
-  channels = mechanicalTxChannels(seq)
+  mechCont.controlledChannels = mechanicalTxChannels(seq)
 
-  for channel in channels
+  for channel in mechCont.controlledChannels
     device_ = dependency(mechCont, id(channel))
 
     if doesRotationMovement(channel) && !(device_ isa Motor)
       throw(ScannerConfigurationError("The rotation channel with id `$(id(channel))` has a corresponding device which is not of type `Motor`."))
     end
     if doesRotationMovement(channel)
-      @debug "Setting up motor"
+      @debug "Setting up rotation motor"
       # Setup motor
     end
 
@@ -47,7 +47,7 @@ function setup(mechCont::MechanicsController, seq::Sequence)
       throw(ScannerConfigurationError("The translation channel with id `$(id(channel))` has a corresponding device which is not of type `Robot`."))
     end
     if doesTranslationMovement(channel)
-      @debug "Setting up motor"
+      @debug "Setting up translation robot"
       # Setup robot
     end
   end

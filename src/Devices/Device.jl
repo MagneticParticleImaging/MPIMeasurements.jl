@@ -55,7 +55,7 @@ hasDependency(device::Device, type::DataType) = length(dependencies(device, type
 function dependency(device::Device, dependencyID::String)
   dependencies_ = dependencies(device)
   
-  for dependency_ in dependencies
+  for (dependencyIDLoop, dependency_) in dependencies_
     if deviceID(dependency_) == dependencyID
       return dependency_
     end

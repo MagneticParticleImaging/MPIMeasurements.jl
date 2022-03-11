@@ -60,6 +60,7 @@ function initProtocol(cph::ConsoleProtocolHandler)
     return true
   catch e
     @error e
+    rethrow()
     #showError(e)
     return false
   end
@@ -85,6 +86,8 @@ function startProtocol(cph::ConsoleProtocolHandler)
         @warn "There is currently no tracer set. The protocol will start anyways. If you want to set it, you can do so with the command `tracer`."
       end
     end
+
+    init(cph.protocol)
 
     cph.biChannel = execute(cph.scanner, cph.protocol)
     if isnothing(cph.biChannel)

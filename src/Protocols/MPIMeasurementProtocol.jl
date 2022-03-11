@@ -63,11 +63,7 @@ function _init(protocol::MPIMeasurementProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
-    controllers = getDevices(protocol.scanner, TxDAQController)
-    if length(controllers) > 1
-      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
-    end
-    protocol.txCont = controllers[1]
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
     protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
@@ -110,12 +106,6 @@ function _execute(protocol::MPIMeasurementProtocol)
   while !(protocol.finishAcknowledged)
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
-    sleep(0.05)
-
-    if debugCount % 100 == 0
-      @warn "Protocol still running"
-    end
-    debugCount += 1
   end
 
   @info "Protocol finished."
