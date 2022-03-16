@@ -340,7 +340,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # Start pipeline
   @debug "Pipeline started"
   try
-    @show currentWP(daq.rpc)
+    @debug currentWP(daq.rpc)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
@@ -410,7 +410,7 @@ function setup(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
-  @info "Setup tx"
+  @debug "Setup tx"
   periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
@@ -453,7 +453,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 function setupRx(daq::RedPitayaDAQ)
-  @info "Setup rx"
+  @debug "Setup rx"
   decimation!(daq.rpc, daq.decimation)
   samplesPerPeriod!(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
   periodsPerFrame!(daq.rpc, daq.acqPeriodsPerFrame)
@@ -515,13 +515,13 @@ end
 function startTx(daq::RedPitayaDAQ)
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
-  @info "Started tx"
+  @debug "Started tx"
 end
 
 function stopTx(daq::RedPitayaDAQ)
   masterTrigger!(daq.rpc, false)
   serverMode!(daq.rpc, CONFIGURATION)
-  @info "Stopped tx"
+  @debug "Stopped tx"
 end
 
 function prepareControl(daq::RedPitayaDAQ)
@@ -530,7 +530,7 @@ end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
-  @info "Preparing amplitude and phase"
+  @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   for channel in periodicElectricalTxChannels(sequence)

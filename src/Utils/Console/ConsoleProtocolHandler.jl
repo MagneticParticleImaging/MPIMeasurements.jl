@@ -500,6 +500,49 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtoc
   return false
 end
 
+### MechanicalMPIMeasurementProtocol ###
+function handleNewProgress(cph::ConsoleProtocolHandler, protocol::MechanicalMPIMeasurementProtocol, event::ProgressEvent)
+  @debug "Asking for new frame $(event.done)"
+  dataQuery = DataQueryEvent("FRAME:$(event.done)")
+  put!(cph.biChannel, dataQuery)
+  return false
+end
+
+function handleEvent(cph::ConsoleProtocolHandler, protocol::MechanicalMPIMeasurementProtocol, event::DataAnswerEvent)
+  channel = cph.biChannel
+  # We were waiting on the last buffer request
+  if startswith(event.query.message, "FRAME") && cph.protocolState == PS_RUNNING
+    frame = event.data
+    if !isnothing(frame)
+      @debug "Received frame"
+      #infoMessage(m, "$(m.progress.unit) $(m.progress.done) / $(m.progress.total)", "green")
+      #if get_gtk_property(m["cbOnlinePlotting",CheckButtonLeaf], :active, Bool)
+      #seq = cph.protocol.params.sequence
+      #deltaT = ustrip(u"s", dfCycle(seq) / rxNumSamplesPerPeriod(seq))
+      #updateData(cph.rawDataWidget, frame, deltaT)
+      #end
+    end
+    # Ask for next progress
+    progressQuery = ProgressQueryEvent()
+    put!(channel, progressQuery)
+  end
+  return false
+end
+
+function handleFinished(cph::ConsoleProtocolHandler, protocol::MechanicalMPIMeasurementProtocol)
+  request = DatasetStoreStorageRequestEvent(cph.mdfstore, getStorageMDF(cph))
+  put!(cph.biChannel, request)
+  return false
+end
+
+function handleEvent(cph::ConsoleProtocolHandler, protocol::MechanicalMPIMeasurementProtocol, event::StorageSuccessEvent)
+  @info "Data is ready for further operations and can be found at `$(event.filename)`."
+  put!(cph.biChannel, FinishedAckEvent())
+  return false
+end
+
+
+
 function getStorageMDF(cph::ConsoleProtocolHandler)
   mdf = defaultMDFv2InMemory()
   if !isnothing(study(cph))

@@ -3,8 +3,6 @@ export MechanicalMPIMeasurementProtocol, MechanicalMPIMeasurementProtocolParams
 Parameters for the MechanicalMPIMeasurementProtocol
 """
 Base.@kwdef mutable struct MechanicalMPIMeasurementProtocolParams <: ProtocolParams
-  "Foreground frames to measure. Overwrites sequence frames"
-  fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
   bgFrames::Int64 = 1
   "If set the tx amplitude and phase will be set with control steps"
@@ -39,7 +37,8 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 
-  bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
+  bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
+  steppedMeas::Vector{Array{Float32, 4}} = []
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
@@ -78,7 +77,7 @@ function _init(protocol::MechanicalMPIMeasurementProtocol)
     setup(protocol.mechCont, protocol.params.sequence)
   end
 
-  protocol.bgMeas = zeros(Float32,0,0,0,0)
+  protocol.bgMeas = zeros(Float32, 0, 0, 0, 0)
 
   return nothing
 end
@@ -105,13 +104,11 @@ function enterExecute(protocol::MechanicalMPIMeasurementProtocol)
 end
 
 function _execute(protocol::MechanicalMPIMeasurementProtocol)
-  @debug "Measurement protocol started"
+  @debug "Mechanical measurement protocol started"
 
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
-
-  debugCount = 0
 
   while !(protocol.finishAcknowledged)
     handleEvents(protocol)
@@ -124,6 +121,9 @@ function _execute(protocol::MechanicalMPIMeasurementProtocol)
 end
 
 function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
+  # Clear possible old MPIMeasurements
+  protocol.steppedMeas = []
+
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
@@ -138,11 +138,19 @@ function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
     end
   end
 
-  @debug "Setting number of foreground frames."
-  acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  #@debug "Setting number of foreground frames."
+  #acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
-  measurement(protocol)
+
+  mechCont = getDevice(scanner(protocol), MechanicsController)
+  totalNumberOfSteps_ = totalNumberOfSteps(mechCont)
+  for stepNumber in 1:totalNumberOfSteps_
+    @info "Starting measurement step $stepNumber of $totalNumberOfSteps_."
+    measurement(protocol)
+    push!(protocol.steppedMeas, protocol.seqMeasState.buffer)
+    doStep(mechCont)
+  end
 end
 
 function measurement(protocol::MechanicalMPIMeasurementProtocol)
@@ -255,13 +263,20 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DatasetS
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
-  data = protocol.seqMeasState.buffer
+
+  measSize = collect(size(protocol.seqMeasState.buffer))
+  measSize[4] = length(protocol.steppedMeas)
+  data = Array{Float32, 4}(undef, Tuple(measSize))
+  
+  for (frameIdx, meas) in enumerate(protocol.steppedMeas)
+    data[:, :, :, frameIdx] = meas # Note: Assumes one frame per measurement
+  end
+
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
   filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
-  @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
