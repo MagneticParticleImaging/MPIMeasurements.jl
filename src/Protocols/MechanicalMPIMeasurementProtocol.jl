@@ -138,8 +138,8 @@ function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
     end
   end
 
-  #@debug "Setting number of foreground frames."
-  #acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  @debug "Setting number of foreground frames."
+  acqNumFrames(protocol.params.sequence, 1) #TODO: Do we need to make this more flexible?
 
   @debug "Starting foreground measurement."
 
@@ -231,7 +231,7 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DataQuer
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
     if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
-        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
+      data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
     data = protocol.seqMeasState.buffer
@@ -271,6 +271,8 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DatasetS
   for (frameIdx, meas) in enumerate(protocol.steppedMeas)
     data[:, :, :, frameIdx] = meas # Note: Assumes one frame per measurement
   end
+
+  @warn data
 
   bgdata = nothing
   if length(protocol.bgMeas) > 0

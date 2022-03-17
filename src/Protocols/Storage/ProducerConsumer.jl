@@ -19,7 +19,7 @@ function prepareAsyncMeasurement(protocol::Protocol, sequence::Sequence)
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
   # TODO implement properly with only RxMeasurementChannels
-  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)
+  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames) # TODO: Change to Array{Float32, 4}(undef, rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)?
   #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
   avgBuffer = nothing
   if frameAverage > 1
