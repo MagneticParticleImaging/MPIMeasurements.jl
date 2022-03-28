@@ -281,3 +281,7 @@ function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
 
   return all( abs.(newTx) .<  ustrip.(u"V", [channel.daqChannel.limitPeak for channel in txCont.controlledChannels]) ) && maximum( deviation ) < 0.2
 end
+
+function close(txCont::TxDAQController)
+  # NOP
+end
