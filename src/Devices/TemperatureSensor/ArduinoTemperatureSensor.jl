@@ -118,3 +118,4 @@ function getMaximumTemps(sensor::ArduinoTemperatureSensor)
     println(sendCommand(sensor.ard, "GET:MAXTEMPS"))
 end
 
+close(sensor::ArduinoTemperatureSensor) = close(sensor.ard)
