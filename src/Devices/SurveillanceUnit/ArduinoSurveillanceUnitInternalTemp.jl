@@ -30,6 +30,7 @@ Base.@kwdef mutable struct ArduinoSurveillanceUnitInternalTemp <: ArduinoSurveil
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
 
+Base.close(su::ArduinoSurveillanceUnitInternalTemp) = close(su.ard)
 
 neededDependencies(::ArduinoSurveillanceUnitInternalTemp) = []
 optionalDependencies(::ArduinoSurveillanceUnitInternalTemp) = []

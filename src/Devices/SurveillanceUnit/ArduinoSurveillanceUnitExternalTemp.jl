@@ -30,6 +30,8 @@ Base.@kwdef mutable struct ArduinoSurveillanceUnitExternalTemp <: ArduinoSurveil
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
 
+Base.close(su::ArduinoSurveillanceUnitExternalTemp) = close(su.ard)
+
 sendCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 
 
 neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureSensor] # could in theory be generic temp sensor
