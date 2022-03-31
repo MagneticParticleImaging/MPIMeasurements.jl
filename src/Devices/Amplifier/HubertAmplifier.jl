@@ -98,6 +98,7 @@ function turnOn(amp::HubertAmplifier)
 	input = UInt8[0x03, 0x35, 0x01]
 	ack   = UInt8[0x01]
 	_hubertSerial(amp.driver, input, ack)
+	sleep(0.2)
 	return nothing
 end
 

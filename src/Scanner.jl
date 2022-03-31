@@ -398,6 +398,11 @@ function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
 end
 
 function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
+  robots = getRobots(scanner)
+  for robot in robots
+    disable(robot)
+  end
+
   amps = getDevices(scanner, Amplifier)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
@@ -413,24 +418,19 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     enableACPower(su)
     # TODO Send expected enable time to SU
   end
-  
-  robots = getRobots(scanner)
-  for robot in robots
-    disable(robot)
-  end
 
   try
     daq = getDAQ(scanner)
     asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
+    for amp in amps
+      turnOff(amp)
+    end
     if !isnothing(su)
       disableACPower(su)
     end
     for robot in robots
       enable(robot)
-    end
-    for amp in amps
-      turnOff(amp)
     end
   end
 end

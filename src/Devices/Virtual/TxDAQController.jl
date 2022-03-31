@@ -38,7 +38,7 @@ function _init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = [SurveillanceUnit]
+optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
@@ -105,6 +105,19 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     su = dependency(txCont, SurveillanceUnit)
   end
 
+  amps = []
+  if hasDependency(txCont, Amplifier)
+    amps = dependencies(txCont, Amplifier)
+  end
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
+    amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
+    for amp in amps
+      turnOn(amp)
+    end
+  end
+
   if !isnothing(su)
     enableACPower(su)
   end
@@ -131,10 +144,13 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     i += 1
   end
 
+  stopTx(daq)
+  for amp in amps
+    turnOff(amp)
+  end
   if !isnothing(su)
     disableACPower(su)
   end
-  stopTx(daq)
 
   if !controlPhaseDone
     error("TxDAQController $(deviceID(txCont)) could not control.")
@@ -221,6 +237,7 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
 
       a = 2*sum(uVolt.*txCont.cosLUT[:,e])
       b = 2*sum(uVolt.*txCont.sinLUT[:,e])
+      @show sqrt(a^2 + b^2)
 
       Γ[d,e] = c*(b+im*a)
     end
