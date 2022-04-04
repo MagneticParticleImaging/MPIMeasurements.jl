@@ -46,14 +46,14 @@ function _init(sensor::ArduinoTemperatureSensor)
   #set_flow_control(spTU,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
   sleep(2) # TODO why this sleep?
   flush(spTU)
-  write(spTU, "!ConnectionEstablished*#")
+  write(spTU, "!VERSION*#")
   response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
   @info response
-  if(!(response == "ArduinoTemperatureUnitV2") ) 
+  if(!(response == "TEMPBOX:3") ) 
       close(spTU)
       throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
     else
-      @info "Connection to ArduinoTU established."        
+      @info "Connection to ArduinoTempBox established."        
   end
 
   sd = SerialDevice(spTU, params.pause_ms, params.timeout_ms, params.delim, params.delim)
