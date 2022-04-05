@@ -7,6 +7,7 @@ Base.@kwdef struct HubertAmplifierParams <: DeviceParams
 	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
 	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
 	matchingNetwork::Integer = 1
+	warmUpDelay::Float64 = 0.2
 end
 
 HubertAmplifierParams(dict::Dict) = params_from_dict(HubertAmplifierParams, dict)
@@ -98,7 +99,7 @@ function turnOn(amp::HubertAmplifier)
 	input = UInt8[0x03, 0x35, 0x01]
 	ack   = UInt8[0x01]
 	_hubertSerial(amp.driver, input, ack)
-	sleep(0.2)
+	sleep(amp.params.warmUpDelay)
 	return nothing
 end
 
