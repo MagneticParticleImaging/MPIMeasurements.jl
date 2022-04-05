@@ -148,12 +148,27 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     @error "Exception during control loop"
     @error ex
   finally
-    stopTx(daq)
-    @sync for amp in amps
-      @async turnOff(amp)
+    try 
+      stopTx(daq)
+    catch ex
+      @error "Could not stop tx"
+      @error ex
     end
-    if !isnothing(su)
-      disableACPower(su)
+    @sync for amp in amps
+      @async try 
+        turnOff(amp)
+      catch ex
+        @error "Could not turn off amplifier $(deviceID(amp))"
+        @error ex
+      end
+    end
+    try
+      if !isnothing(su)
+        disableACPower(su)
+      end
+    catch ex
+      @error "Could not disable AC power"
+      @error ex
     end
   end
   
