@@ -104,6 +104,10 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
   end
+  
+  if !isnothing(su)
+    enableACPower(su)
+  end
 
   amps = []
   if hasDependency(txCont, Amplifier)
@@ -113,13 +117,9 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     # Only enable amps that amplify a channel of the current sequence
     txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
     amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
-    for amp in amps
-      turnOn(amp)
+    @sync for amp in amps
+      @async turnOn(amp)
     end
-  end
-
-  if !isnothing(su)
-    enableACPower(su)
   end
 
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
@@ -127,31 +127,36 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 
   controlPhaseDone = false
   i = 1
-  while !controlPhaseDone && i <= txCont.params.maxControlSteps
-    @info "CONTROL STEP $i"
-    period = currentPeriod(daq)
-    uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
+  try
+    while !controlPhaseDone && i <= txCont.params.maxControlSteps
+      @info "CONTROL STEP $i"
+      period = currentPeriod(daq)
+      uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    # Translate uRef/channelIdx(daq) to order as it is used here
-    mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
-    controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
-    controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
-    sortedRef = uRef[:, controlOrderRefIndices, :]
+      # Translate uRef/channelIdx(daq) to order as it is used here
+      mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
+      controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
+      controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
+      sortedRef = uRef[:, controlOrderRefIndices, :]
 
-    controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
+      controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
-    sleep(txCont.params.controlPause)
-    i += 1
+      sleep(txCont.params.controlPause)
+      i += 1
+    end
+  catch ex
+    @error "Exception during control loop"
+    @error ex
+  finally
+    stopTx(daq)
+    @sync for amp in amps
+      @async turnOff(amp)
+    end
+    if !isnothing(su)
+      disableACPower(su)
+    end
   end
-
-  stopTx(daq)
-  for amp in amps
-    turnOff(amp)
-  end
-  if !isnothing(su)
-    disableACPower(su)
-  end
-
+  
   if !controlPhaseDone
     error("TxDAQController $(deviceID(txCont)) could not control.")
   end

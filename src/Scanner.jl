@@ -402,29 +402,28 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
   for robot in robots
     disable(robot)
   end
-
-  amps = getDevices(scanner, Amplifier)
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
-    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-    for amp in amps
-      turnOn(amp)
-    end
-  end
-
   su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
   if !isnothing(su)
     enableACPower(su)
     # TODO Send expected enable time to SU
   end
 
+  amps = getDevices(scanner, Amplifier)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+    @sync for amp in amps
+      @async turnOn(amp)
+    end
+  end
+
   try
     daq = getDAQ(scanner)
     asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
-    for amp in amps
-      turnOff(amp)
+    @sync for amp in amps
+      @async turnOff(amp)
     end
     if !isnothing(su)
       disableACPower(su)
