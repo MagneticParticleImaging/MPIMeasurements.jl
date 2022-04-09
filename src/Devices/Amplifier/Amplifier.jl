@@ -61,6 +61,24 @@ function getAmplifier(scanner::MPIScanner)
   end
 end
 
+function getRequiredAmplifier(scanner::MPIScanner, sequence::Sequence)
+  return getRequiredAmplifier(getAmplifier(scanner), sequence)
+end
+function getRequiredAmplifier(device::Device, sequence::Sequence)
+  if hasDependency(device, Amplifier)
+    return getRequiredAmplifier(dependencies(device, Amplifier), sequence)
+  end
+  return []
+end
+function getRequiredAmplifier(amps::Vector{Amplifier}, sequence::Sequence)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+  end
+  return amps
+end
+
 """
 Sets the amplifier to current mode.
 """

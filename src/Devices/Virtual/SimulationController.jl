@@ -9,16 +9,7 @@ end
 SimulationControllerParams(dict::Dict) = params_from_dict(SimulationControllerParams, dict)
 
 Base.@kwdef mutable struct SimulationController <: VirtualDevice
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::SimulationControllerParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields SimulationControllerParams
 
   "Current coil temperatures mapped by the tx channel IDs."
   coilTemperatures::Union{Dict{String, typeof(1.0u"°C")}, Nothing} = nothing

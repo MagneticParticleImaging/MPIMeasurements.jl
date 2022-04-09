@@ -20,16 +20,7 @@ end
 ArduinoTemperatureSensorParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorParams, dict)
 
 Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::ArduinoTemperatureSensorParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String,Union{Device,Missing}}
+  @add_device_fields ArduinoTemperatureSensorParams
 
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end

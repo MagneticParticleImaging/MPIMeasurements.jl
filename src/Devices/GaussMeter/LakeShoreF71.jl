@@ -51,16 +51,7 @@ LakeShoreF71GaussMeterParams(dict::Dict) = params_from_dict(LakeShoreF71GaussMet
  
 """
 Base.@kwdef mutable struct LakeShoreF71GaussMeter <: GaussMeter
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::LakeShoreF71GaussMeterParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields LakeShoreF71GaussMeterParams
 
   driver::Union{SCPIInstrument, Missing} = missing
 end

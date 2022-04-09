@@ -55,16 +55,7 @@ mutable struct  StepcraftStatus
 end
 
 Base.@kwdef mutable struct StepcraftRobot <: Robot
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::StepcraftRobotParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields StepcraftRobotParams
 
   "Current state of the robot"
   state::RobotState = INIT

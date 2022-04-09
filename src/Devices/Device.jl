@@ -19,6 +19,22 @@ function validateDeviceStruct(device::Type{<:Device})
   end
 end
 
+
+macro add_device_fields(paramType)
+  return esc(quote 
+    #"Unique device ID for this device as defined in the configuration."
+    deviceID::String
+    #"Parameter struct for this devices read from the configuration."
+    params::$(paramType)
+    #"Flag if the device is optional."
+	  optional::Bool = false
+    #"Flag if the device is present."
+    present::Bool = false
+    #"Vector of dependencies for this device."
+    dependencies::Dict{String,Union{Device,Missing}}
+  end)
+end
+
 "Retrieve the ID of a device."
 deviceID(device::Device) = device.deviceID 
 

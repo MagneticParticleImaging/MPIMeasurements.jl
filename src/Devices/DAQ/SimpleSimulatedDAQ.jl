@@ -17,16 +17,7 @@ function SimpleSimulatedDAQParams(dict::Dict{String, Any})
 end
 
 Base.@kwdef mutable struct SimpleSimulatedDAQ <: AbstractDAQ
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::SimpleSimulatedDAQParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields SimpleSimulatedDAQParams
 
   # The following fields are only used for the simulation state!
   # The desired values for phase and amplitude are left within the sequence controller.

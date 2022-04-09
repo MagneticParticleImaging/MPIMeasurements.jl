@@ -16,16 +16,7 @@ end
 
 ArduinoSurveillanceUnitInternalTempParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempParams, dict)
 Base.@kwdef mutable struct ArduinoSurveillanceUnitInternalTemp <: ArduinoSurveillanceUnit
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::ArduinoSurveillanceUnitInternalTempParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String,Union{Device,Missing}}
+  @add_device_fields ArduinoSurveillanceUnitInternalTempParams
 
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
