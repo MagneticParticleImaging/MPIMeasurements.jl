@@ -34,12 +34,7 @@ function getConcreteType(supertype_::DataType, type::String)
       foundImplementation = Implementation
     end
   end
-
-  if !isnothing(foundImplementation)
-    return foundImplementation
-  else
-    error("The type implied by the string `$type` could not be retrieved since its device struct was not found.")
-  end
+  return foundImplementation
 end
 
 """
@@ -69,8 +64,15 @@ function initiateDevices(devicesParams::Dict{String, Any})
       end
 
       DeviceImpl = getConcreteType(Device, deviceType)
+      if isnothing(DeviceImpl)
+        error("The type implied by the string `$type` could not be retrieved since its device struct was not found.")
+      end
       validateDeviceStruct(DeviceImpl)
-      DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+      
+      DeviceParamsImpl = getFittingDeviceParamsType(params, deviceType)
+      if isnothing(DeviceParamsImpl)
+        error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
+      end
 
       paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
@@ -101,6 +103,31 @@ function initiateDevices(devicesParams::Dict{String, Any})
   end
 
   return devices
+end
+
+function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
+  paramKeys = Symbol.(keys(params))
+  
+  tempDeviceParams = []
+  paramsRoot = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+  push!(tempDeviceParams, paramsRoot)
+  push!(tempDeviceParams, deepsubtypes(paramsRoot))
+  
+  fittingDeviceParams = []
+  for paramType in tempDeviceParams
+    for constructor in methods(paramType)
+      if issubset(paramKeys, Base.kwarg_decl(constructor))
+        push!(fittingDeviceParams, paramType)
+        break
+      end
+    end
+  end
+
+  if length(fittingDeviceParams) == 1
+    return fittingDeviceParams[1]
+  else 
+    return nothing
+  end
 end
 
 """
@@ -418,10 +445,14 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     end
   end
 
+  endFrame = nothing
   try
     daq = getDAQ(scanner)
-    asyncProducer(channel, daq, sequence, prepTx = prepTx)
+    endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
+    if isnothing(endFrame)
+      endSequence(daq, endFrame)
+    end
     @sync for amp in amps
       @async turnOff(amp)
     end
