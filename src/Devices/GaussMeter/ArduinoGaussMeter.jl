@@ -1,8 +1,8 @@
-export ArduinoGaussMeter
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
-Base.@kwdef struct ArduinoGaussMeterDirectParams <: DeviceParams
-  portAdress::String
+Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
+  portAddress::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
 
@@ -11,14 +11,14 @@ Base.@kwdef struct ArduinoGaussMeterDirectParams <: DeviceParams
   pause_ms::Int = 30
   timeout_ms::Int = 1000
   delim::String = "#"
-  baudrate::Integer = 115200
+  baudrate::Integer = 9600
   ndatabits::Integer = 8
   parity::SPParity = SP_PARITY_NONE
   nstopbits::Integer = 1
 end
 ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDirectParams, dict)
 
-Base.@kwdef struct ArduinoGaussMeterPoolParams <: DeviceParams
+Base.@kwdef struct ArduinoGaussMeterPoolParams <: ArduinoGaussMeterParams
   position::Int64
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
@@ -33,26 +33,26 @@ Base.@kwdef struct ArduinoGaussMeterPoolParams <: DeviceParams
   parity::SPParity = SP_PARITY_NONE
   nstopbits::Integer = 1
 end
-ArduinoGaussMeterPoolParams(dict::Dict) = params_from_dict(ArduinoGaussMeterPoolsParams, dict)
+ArduinoGaussMeterPoolParams(dict::Dict) = params_from_dict(ArduinoGaussMeterPoolParams, dict)
 
 Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino, Nothing} = nothing
 end
 
-neededDependencies(::ArduinoTemperatureSensor) = []
-optionalDependencies(::ArduinoTemperatureSensor) = [SerialPortPool]
+neededDependencies(::ArduinoGaussMeter) = []
+optionalDependencies(::ArduinoGaussMeter) = [SerialPortPool]
 
-function _init(ard::ArduinoGaussMeter)
-  params = ard.params
-  sp = initSerialPort(ard, params)
+function _init(gauss::ArduinoGaussMeter)
+  params = gauss.params
+  sp = initSerialPort(gauss, params)
   sd = SerialDevice(sp, params.pause_ms, params.timeout_ms, params.delim, params.delim)
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = params.delim, sd = sd)
-  sensor.ard = ard
+  gauss.ard = ard
 end
 
-function initSerialPort(ard::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
-  spTU = SerialPort(params.portAdress)
+function initSerialPort(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
+  spTU = SerialPort(params.portAddress)
   open(spTU)
   set_speed(spTU, params.baudrate)
   set_frame(spTU,ndatabits=params.ndatabits,parity=params.parity,nstopbits=params.nstopbits)
@@ -60,7 +60,7 @@ function initSerialPort(ard::ArduinoGaussMeter, params::ArduinoGaussMeterDirectP
   write(spTU, "!VERSION*#")
   response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
   @info response
-  if(!(response == "HALLSENS:1") ) 
+  if(!(startswith(response, "HALLSENS:1")) ) 
       close(spTU)
       throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
     else
@@ -69,18 +69,18 @@ function initSerialPort(ard::ArduinoGaussMeter, params::ArduinoGaussMeterDirectP
   return spTU
 end
 
-function initSerialPort(ard::ArduinoGaussMeter, params::ArduinoGaussMeterPoolParams)
+function initSerialPort(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterPoolParams)
   pool = nothing
-  if hasDependency(ard, SerialPortPool)
-    pool = dependency(ard, SerialPortPool)
-    sp = getSerialPort(pool, "!VERSION*#", "HALLSENS:1", params.baudrate, ndatabits=params.ndatabits,parity=params.parity,nstopbits=params.nstopbits)
+  if hasDependency(gauss, SerialPortPool)
+    pool = dependency(gauss, SerialPortPool)
+    sp = getSerialPort(pool, "!VERSION*#", "HALLSENS:1:$(params.position)#", params.baudrate, ndatabits=params.ndatabits,parity=params.parity,nstopbits=params.nstopbits)
     if isnothing(sp)
-      throw(ScannerConfigurationError("Device $(deviceID(ard)) found no fitting serial port."))
+      throw(ScannerConfigurationError("Device $(deviceID(gauss)) found no fitting serial port."))
     end
     return sp
   else
-    throw(ScannerConfigurationError("Device $(deviceID(ard)) requires a SerialPortPool dependency but has none."))
+    throw(ScannerConfigurationError("Device $(deviceID(gauss)) requires a SerialPortPool dependency but has none."))
   end
 end
 
-close(ard::ArduinoGaussMeter) = close(ard.ard)
+close(gauss::ArduinoGaussMeter) = close(gauss.ard)

@@ -65,16 +65,15 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
       DeviceImpl = getConcreteType(Device, deviceType)
       if isnothing(DeviceImpl)
-        error("The type implied by the string `$type` could not be retrieved since its device struct was not found.")
+        error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
       end
       validateDeviceStruct(DeviceImpl)
       
-      DeviceParamsImpl = getFittingDeviceParamsType(params, deviceType)
-      if isnothing(DeviceParamsImpl)
+      paramsInst = getFittingDeviceParamsType(params, deviceType)
+      if isnothing(paramsInst)
         error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
       end
 
-      paramsInst = DeviceParamsImpl(params)
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
       throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
@@ -107,19 +106,25 @@ end
 
 function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
   paramKeys = Symbol.(keys(params))
-  
   tempDeviceParams = []
   paramsRoot = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
   push!(tempDeviceParams, paramsRoot)
-  push!(tempDeviceParams, deepsubtypes(paramsRoot))
+  length(deepsubtypes(paramsRoot)) == 0 || push!(tempDeviceParams, deepsubtypes(paramsRoot)...)
   
   fittingDeviceParams = []
   for paramType in tempDeviceParams
-    for constructor in methods(paramType)
-      if issubset(paramKeys, Base.kwarg_decl(constructor))
-        push!(fittingDeviceParams, paramType)
-        break
-      end
+    #Can't easily see default values for fields -> Just try out all types 
+    #for constructor in methods(paramType)
+    #  if issubset(paramKeys, Base.kwarg_decl(constructor))
+    #    push!(fittingDeviceParams, paramType)
+    #    break
+    #  end
+    #end
+    try
+      tempParams = paramType(params)
+      push!(fittingDeviceParams, tempParams)
+    catch ex
+      # NOP
     end
   end
 
