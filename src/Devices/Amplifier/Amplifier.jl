@@ -53,7 +53,7 @@ Base.close(amp::Amplifier) = nothing
 
 getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
 function getAmplifier(scanner::MPIScanner)
-  amplifiers = getGaussMeters(scanner)
+  amplifiers = getAmplifiers(scanner)
   if length(amplifiers) > 1
     error("The scanner has more than one amplifier device. Therefore, a single amplifier cannot be retrieved unambiguously.")
   else

@@ -46,7 +46,7 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(devicesParams::Dict{String, Any})
+function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
@@ -95,9 +95,17 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
   # Initiate all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
-    init(devices[deviceID])
-    if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
-      @error "The device with ID `$deviceID` should be present but isn't."
+    try
+      init(devices[deviceID])
+      if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+        @error "The device with ID `$deviceID` should be present but isn't."
+      end
+    catch e
+      if !robust
+        throw(e)
+      else
+        @warn e 
+      end
     end
   end
 
@@ -219,7 +227,7 @@ mutable struct MPIScanner
 
   Initialize a scanner by its name.
   """
-  function MPIScanner(name::AbstractString)
+  function MPIScanner(name::AbstractString; robust=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     filename = nothing
@@ -241,7 +249,7 @@ mutable struct MPIScanner
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
-    devices = initiateDevices(params["Devices"])
+    devices = initiateDevices(params["Devices"], robust = robust)
 
     scanner = new(name, configDir, generalParams, devices, nothing)
 
@@ -290,7 +298,7 @@ Retrieve all devices of a specific `deviceType`. Returns an empty vector if none
 function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
-    if typeof(device) <: deviceType
+    if typeof(device) <: deviceType && isPresent(device)
       push!(matchingDevices, device)
     end
   end
