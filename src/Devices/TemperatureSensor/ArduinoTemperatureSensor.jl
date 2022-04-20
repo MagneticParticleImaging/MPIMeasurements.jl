@@ -5,6 +5,7 @@ Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
   numSensors::Int
   maxTemps::Vector{Int}
   selectSensors::Vector{Int}
+  groupSensors::Vector{Int}
   nameSensors::Vector{String}
 
   commandStart::String = "!"
@@ -58,12 +59,18 @@ function numChannels(sensor::ArduinoTemperatureSensor)
 end
 
 function getChannelNames(sensor::ArduinoTemperatureSensor)
-  if length(sensor.params.selectSensors) == length(sensor.params.nameSensors)
+  if length(sensor.params.selectSensors) == length(sensor.params.nameSensors) #This should be detected during construction
     return sensor.params.nameSensors[sensor.params.selectSensors]
   else 
     return []
   end
 end
+
+function getChannelGroups(sensor::ArduinoTemperatureSensor)
+  return sensor.params.groupSensors[sensor.params.selectSensors]
+end
+
+
 
 function getTemperatures(sensor::ArduinoTemperatureSensor; names::Bool=false)
   temp = retrieveTemps(sensor)
