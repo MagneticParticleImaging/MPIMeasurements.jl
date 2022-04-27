@@ -46,10 +46,27 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     disable(robot)
   end
 
+  amps = getDevices(scanner, Amplifier)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+    @sync for amp in amps
+      @async turnOn(amp)
+    end
+  end
+  
+  endFrame = nothing
   try
     daq = getDAQ(scanner_)
-    asyncProducer(channel, daq, sequence, prepTx = prepTx)
+    endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
+    if isnothing(endFrame)
+      endSequence(daq, endFrame)
+    end
+    @sync for amp in amps
+      @async turnOff(amp)
+    end
     if !isnothing(su)
       disableACPower(su)
     end
