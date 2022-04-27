@@ -25,3 +25,9 @@ export getTemperatures
 
 export getTemperature
 @mustimplement getTemperature(sensor::TemperatureSensor, channel::Int)
+
+export getChannelNames
+@mustimplement getChannelNames(sensor::TemperatureSensor)
+
+export getChannelGroups
+@mustimplement getChannelGroups(sensor::TemperatureSensor)

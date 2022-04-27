@@ -5,6 +5,7 @@ Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
   numSensors::Int
   maxTemps::Vector{Int}
   selectSensors::Vector{Int}
+  groupSensors::Vector{Int}
   nameSensors::Vector{String}
 
   commandStart::String = "!"
@@ -20,16 +21,7 @@ end
 ArduinoTemperatureSensorParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorParams, dict)
 
 Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::ArduinoTemperatureSensorParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String,Union{Device,Missing}}
+  @add_device_fields ArduinoTemperatureSensorParams
 
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
@@ -46,14 +38,14 @@ function _init(sensor::ArduinoTemperatureSensor)
   #set_flow_control(spTU,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
   sleep(2) # TODO why this sleep?
   flush(spTU)
-  write(spTU, "!ConnectionEstablished*#")
+  write(spTU, "!VERSION*#")
   response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
   @info response
-  if(!(response == "ArduinoTemperatureUnitV2") ) 
+  if(!(response == "TEMPBOX:3") ) 
       close(spTU)
       throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
     else
-      @info "Connection to ArduinoTU established."        
+      @info "Connection to ArduinoTempBox established."        
   end
 
   sd = SerialDevice(spTU, params.pause_ms, params.timeout_ms, params.delim, params.delim)
@@ -68,12 +60,18 @@ end
 
 export getChannelNames
 function getChannelNames(sensor::ArduinoTemperatureSensor)
-  if length(sensor.params.selectSensors) == length(sensor.params.nameSensors)
+  if length(sensor.params.selectSensors) == length(sensor.params.nameSensors) #This should be detected during construction
     return sensor.params.nameSensors[sensor.params.selectSensors]
   else 
     return []
   end
 end
+
+function getChannelGroups(sensor::ArduinoTemperatureSensor)
+  return sensor.params.groupSensors[sensor.params.selectSensors]
+end
+
+
 
 function getTemperatures(sensor::ArduinoTemperatureSensor; names::Bool=false)
   temp = retrieveTemps(sensor)
@@ -119,3 +117,4 @@ function getMaximumTemps(sensor::ArduinoTemperatureSensor)
     println(sendCommand(sensor.ard, "GET:MAXTEMPS"))
 end
 
+close(sensor::ArduinoTemperatureSensor) = close(sensor.ard)

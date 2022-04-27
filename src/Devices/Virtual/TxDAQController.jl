@@ -38,7 +38,7 @@ function _init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = [SurveillanceUnit]
+optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
@@ -106,9 +106,22 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
   end
-
+  
   if !isnothing(su)
     enableACPower(su)
+  end
+
+  amps = []
+  if hasDependency(txCont, Amplifier)
+    amps = dependencies(txCont, Amplifier)
+  end
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
+    amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
+    @sync for amp in amps
+      @async turnOn(amp)
+    end
   end
 
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
@@ -116,28 +129,51 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 
   controlPhaseDone = false
   i = 1
-  while !controlPhaseDone && i <= txCont.params.maxControlSteps
-    @info "CONTROL STEP $i"
-    period = currentPeriod(daq)
-    uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
+  try
+    while !controlPhaseDone && i <= txCont.params.maxControlSteps
+      @info "CONTROL STEP $i"
+      period = currentPeriod(daq)
+      uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
 
-    # Translate uRef/channelIdx(daq) to order as it is used here
-    mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
-    controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
-    controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
-    sortedRef = uRef[:, controlOrderRefIndices, :]
+      # Translate uRef/channelIdx(daq) to order as it is used here
+      mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
+      controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
+      controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
+      sortedRef = uRef[:, controlOrderRefIndices, :]
 
-    controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
+      controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
-    sleep(txCont.params.controlPause)
-    i += 1
+      sleep(txCont.params.controlPause)
+      i += 1
+    end
+  catch ex
+    @error "Exception during control loop"
+    @error ex
+  finally
+    try 
+      stopTx(daq)
+    catch ex
+      @error "Could not stop tx"
+      @error ex
+    end
+    @sync for amp in amps
+      @async try 
+        turnOff(amp)
+      catch ex
+        @error "Could not turn off amplifier $(deviceID(amp))"
+        @error ex
+      end
+    end
+    try
+      if !isnothing(su)
+        disableACPower(su)
+      end
+    catch ex
+      @error "Could not disable AC power"
+      @error ex
+    end
   end
-
-  if !isnothing(su)
-    disableACPower(su)
-  end
-  stopTx(daq)
-
+  
   if !controlPhaseDone
     error("TxDAQController $(deviceID(txCont)) could not control.")
   end
@@ -223,6 +259,7 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
 
       a = 2*sum(uVolt.*txCont.cosLUT[:,e])
       b = 2*sum(uVolt.*txCont.sinLUT[:,e])
+      @show sqrt(a^2 + b^2)
 
       Γ[d,e] = c*(b+im*a)
     end
@@ -282,4 +319,8 @@ function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
   @info "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
 
   return all( abs.(newTx) .<  ustrip.(u"V", [channel.daqChannel.limitPeak for channel in txCont.controlledChannels]) ) && maximum( deviation ) < 0.2
+end
+
+function close(txCont::TxDAQController)
+  # NOP
 end

@@ -6,8 +6,6 @@ export getCycletime, resetArduino, enableACPower, disableACPower, NOTAUS
 
 abstract type ArduinoSurveillanceUnit <: SurveillanceUnit end
 
-Base.close(su::ArduinoSurveillanceUnit) = close(serialDevice(su).sp)
-
 # TODO maybe return true if command was Received
 # Should ACQ be ACK?
 function checkACQ(ard::ArduinoSurveillanceUnit, reply)

@@ -22,3 +22,4 @@ cmdStart(ard::SimpleArduino) = ard.commandStart
 cmdEnd(ard::SimpleArduino) = ard.commandEnd
 cmdDelim(ard::SimpleArduino) = ard.delim
 serialDevice(ard::SimpleArduino) = ard.sd
+close(ard::SimpleArduino) = close(ard.sd)

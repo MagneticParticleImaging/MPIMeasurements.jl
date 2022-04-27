@@ -87,7 +87,7 @@ Close the serial port of the serial device `sd`. The optional `delete` keyword
 argument triggers a call to `sp_free_port` in the C library if set to `true`.
 """
 function Base.close(sd::SerialDevice; delete::Bool=false)
-	sd.sp = close(sd.sp,delete=delete)
+	sd.sp = close(sd.sp)
 	return sd
 end
 

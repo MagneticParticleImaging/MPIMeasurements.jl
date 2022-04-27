@@ -333,7 +333,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
   su = getSurveillanceUnit(protocol.scanner)
-  amps = getDevices(scanner, Amplifier)
+  amps = getDevices(protocol.scanner, Amplifier)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
@@ -350,20 +350,24 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
   @sync begin
     # Prepare Robot/Sample
-    timeMove = @elapsed moveAbs(robot, pos) 
-    
+    @async begin 
+      timeMove = @elapsed moveAbs(robot, pos) 
+    end
+
     # Prepare DAQ
     @async timePrepDAQ = @elapsed begin
       allowControlLoop = mod1(calib.currPos, 11) == 1  
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
+      
       # The following tasks can only be started after the finalizer and mostly only in this order
       suTask = @async begin
         # TODO Could be done in parallel
-        for amp in amps
-          turnOn(amp)
-        end
         enableACPower(su)
+        @sync for amp in amps
+          @async turnOn(amp)
+        end
       end
+
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
           acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
@@ -406,7 +410,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     #safety = getSafety(protocol.scanner)
     daq = getDAQ(protocol.scanner)
     su = getSurveillanceUnit(protocol.scanner)
-    amps = getDevices(scanner, Amplifier)
+    amps = getDevices(protocol.scanner, Amplifier)
     if !isempty(amps)
       # Only enable amps that amplify a channel of the current sequence
       channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
@@ -431,10 +435,10 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   start, endFrame = getFrameTiming(daq) 
   calib.producerFinalizer = @async begin
     endSequence(daq, endFrame)
-    for amp in amps
-      turnOff(amp)
-    end
     disableACPower(su)
+    @sync for amp in amps
+      @async turnOff(amp)
+    end
   end
 end
 

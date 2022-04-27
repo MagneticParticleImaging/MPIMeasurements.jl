@@ -270,13 +270,8 @@ function endSequence(daq::RedPitayaDAQ, endFrame)
   endSample = (endFrame + 1) * sampPerFrame
   wp = currentWP(daq.rpc)
   # Wait for sequence to finish
-  numQueries = 0
-    while wp < endSample
-      sampleDiff = endSample - wp
-      waitTime = (sampleDiff / (125e6/daq.decimation))
-      sleep(waitTime) # Queries are expensive, try to sleep to minimize amount of queries
-      numQueries += 1
-      wp = currentWP(daq.rpc)
+  while wp < endSample
+    wp = currentWP(daq.rpc)
   end
   stopTx(daq)
 end
@@ -521,7 +516,18 @@ end
 function stopTx(daq::RedPitayaDAQ)
   masterTrigger!(daq.rpc, false)
   serverMode!(daq.rpc, CONFIGURATION)
+  clearTx!(daq)
   @debug "Stopped tx"
+end
+
+function clearTx!(daq::RedPitayaDAQ)
+  batch = ScpiBatch()
+  for channel = 1:2*length(daq.rpc)
+    for comp = 1:4
+      push!(batch, amplitudeDAC! => (channel, comp, 0.0))
+    end
+  end
+  execute!(daq.rpc, batch)
 end
 
 function prepareControl(daq::RedPitayaDAQ)

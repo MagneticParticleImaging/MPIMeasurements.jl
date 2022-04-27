@@ -9,16 +9,7 @@ end
 DummyDAQParams(dict::Dict) = params_from_dict(DummyDAQParams, dict)
 
 Base.@kwdef mutable struct DummyDAQ <: AbstractDAQ
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::DummyDAQParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields DummyDAQParams
 
   # Here for any other internal parameters
 end

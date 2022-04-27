@@ -6,16 +6,7 @@ end
 DummyTemperatureSensorParams(dict::Dict) = params_from_dict(DummyTemperatureSensorParams, dict)
 
 Base.@kwdef mutable struct DummyTemperatureSensor <: TemperatureSensor
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::DummyTemperatureSensorParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields DummyTemperatureSensorParams
 end
 
 function _init(sensor::DummyTemperatureSensor)
@@ -27,6 +18,8 @@ optionalDependencies(::DummyTemperatureSensor) = []
 
 Base.close(sensor::DummyTemperatureSensor) = nothing
 
-numChannels(sensor::DummyTemperatureSensor) = 1
-getTemperatures(sensor::DummyTemperatureSensor) = [42u"°C"]
+numChannels(sensor::DummyTemperatureSensor) = 50
+getTemperatures(sensor::DummyTemperatureSensor) = [(30+i+0.4*randn())*u"°C" for i=1:numChannels(sensor)]
 getTemperature(sensor::DummyTemperatureSensor, channel::Int)::typeof(1u"°C") = 42u"°C"
+getChannelNames(sensor::DummyTemperatureSensor) = ["channel $i" for i=1:numChannels(sensor)]
+getChannelGroups(sensor::DummyTemperatureSensor) = floor.(Int,(0:(numChannels(sensor)-1)) ./ numChannels(sensor) * 5 .+ 1)

@@ -7,21 +7,13 @@ Base.@kwdef struct HubertAmplifierParams <: DeviceParams
 	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
 	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
 	matchingNetwork::Integer = 1
+	warmUpDelay::Float64 = 0.2
 end
 
 HubertAmplifierParams(dict::Dict) = params_from_dict(HubertAmplifierParams, dict)
 
 Base.@kwdef mutable struct HubertAmplifier <: Amplifier
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::HubertAmplifierParams
-	"Flag if the device is optional."
-	optional::Bool = false
-	"Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+	@add_device_fields HubertAmplifierParams
 
   driver::Union{SerialPort, Missing} = missing
 end
@@ -98,6 +90,7 @@ function turnOn(amp::HubertAmplifier)
 	input = UInt8[0x03, 0x35, 0x01]
 	ack   = UInt8[0x01]
 	_hubertSerial(amp.driver, input, ack)
+	sleep(amp.params.warmUpDelay)
 	return nothing
 end
 

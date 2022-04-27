@@ -34,12 +34,7 @@ function getConcreteType(supertype_::DataType, type::String)
       foundImplementation = Implementation
     end
   end
-
-  if !isnothing(foundImplementation)
-    return foundImplementation
-  else
-    error("The type implied by the string `$type` could not be retrieved since its device struct was not found.")
-  end
+  return foundImplementation
 end
 
 """
@@ -51,7 +46,7 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(devicesParams::Dict{String, Any})
+function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
@@ -69,10 +64,16 @@ function initiateDevices(devicesParams::Dict{String, Any})
       end
 
       DeviceImpl = getConcreteType(Device, deviceType)
+      if isnothing(DeviceImpl)
+        error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
+      end
       validateDeviceStruct(DeviceImpl)
-      DeviceParamsImpl = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
 
-      paramsInst = DeviceParamsImpl(params)
+      paramsInst = getFittingDeviceParamsType(params, deviceType)
+      if isnothing(paramsInst)
+        error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
+      end
+
       devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
     else
       throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
@@ -94,13 +95,52 @@ function initiateDevices(devicesParams::Dict{String, Any})
 
   # Initiate all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
-    init(devices[deviceID])
-    if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
-      @error "The device with ID `$deviceID` should be present but isn't."
+    try
+      init(devices[deviceID])
+      if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+        @error "The device with ID `$deviceID` should be present but isn't."
+      end
+    catch e
+      if !robust
+        throw(e)
+      else
+        @warn e
+      end
     end
   end
 
   return devices
+end
+
+function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
+  paramKeys = Symbol.(keys(params))
+  tempDeviceParams = []
+  paramsRoot = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
+  push!(tempDeviceParams, paramsRoot)
+  length(deepsubtypes(paramsRoot)) == 0 || push!(tempDeviceParams, deepsubtypes(paramsRoot)...)
+
+  fittingDeviceParams = []
+  for paramType in tempDeviceParams
+    #Can't easily see default values for fields -> Just try out all types
+    #for constructor in methods(paramType)
+    #  if issubset(paramKeys, Base.kwarg_decl(constructor))
+    #    push!(fittingDeviceParams, paramType)
+    #    break
+    #  end
+    #end
+    try
+      tempParams = paramType(params)
+      push!(fittingDeviceParams, tempParams)
+    catch ex
+      # NOP
+    end
+  end
+
+  if length(fittingDeviceParams) == 1
+    return fittingDeviceParams[1]
+  else
+    return nothing
+  end
 end
 
 """
@@ -159,7 +199,7 @@ mutable struct MPIScanner
 
   Initialize a scanner by its name.
   """
-  function MPIScanner(name::AbstractString)
+  function MPIScanner(name::AbstractString; robust=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     filename = nothing
@@ -181,7 +221,7 @@ mutable struct MPIScanner
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
-    devices = initiateDevices(params["Devices"])
+    devices = initiateDevices(params["Devices"], robust = robust)
 
     scanner = new(name, configDir, generalParams, devices)
 
@@ -230,7 +270,7 @@ Retrieve all devices of a specific `deviceType`. Returns an empty vector if none
 function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
   matchingDevices = Vector{Device}()
   for (deviceID, device) in scanner.devices
-    if typeof(device) <: deviceType
+    if typeof(device) <: deviceType && isPresent(device)
       push!(matchingDevices, device)
     end
   end
