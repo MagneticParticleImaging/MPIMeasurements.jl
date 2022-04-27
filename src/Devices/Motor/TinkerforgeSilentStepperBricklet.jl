@@ -1,6 +1,6 @@
-export TinkerforgeSilentStepperBrickParams, TinkerforgeSilentStepperBrick
+export TinkerforgeSilentStepperBrickletV2Params, TinkerforgeSilentStepperBrickletV2
 
-Base.@kwdef struct TinkerforgeSilentStepperBrickParams <: DeviceParams
+Base.@kwdef struct TinkerforgeSilentStepperBrickletV2Params <: DeviceParams
   host::IPAddr = ip"127.0.0.1"
   port::Integer = 4223
   uid::String
@@ -14,27 +14,27 @@ Base.@kwdef struct TinkerforgeSilentStepperBrickParams <: DeviceParams
   #allowedVoltageDrop
   stallThreshold::Integer = 20000
 end
-TinkerforgeSilentStepperBrickParams(dict::Dict) = params_from_dict(TinkerforgeSilentStepperBrickParams, dict)
+TinkerforgeSilentStepperBrickletV2Params(dict::Dict) = params_from_dict(TinkerforgeSilentStepperBrickletV2Params, dict)
 
-Base.@kwdef mutable struct TinkerforgeSilentStepperBrick <: TinkerforgeStepperMotor
-  @add_device_fields TinkerforgeSilentStepperBrickParams
+Base.@kwdef mutable struct TinkerforgeSilentStepperBrickletV2 <: TinkerforgeStepperMotor
+  @add_device_fields TinkerforgeSilentStepperBrickletV2Params
 
-  deviceInternal::Union{PyTinkerforge.BrickSilentStepper, Missing} = missing
+  deviceInternal::Union{PyTinkerforge.BrickletSilentStepperV2, Missing} = missing
   ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 
   stallSum = 0
 end
 
-function init(motor::TinkerforgeSilentStepperBrick)
+function init(motor::TinkerforgeSilentStepperBrickletV2)
   @debug "Initializing Tinkerforge silent stepper unit with ID `$(motor.deviceID)`."
 
   motor.ipcon = PyTinkerforge.IPConnection()
   PyTinkerforge.connect(motor.ipcon, motor.params.host, motor.params.port)
-  motor.deviceInternal = PyTinkerforge.BrickSilentStepper(motor.params.uid, motor.ipcon)
+  motor.deviceInternal = PyTinkerforge.BrickletSilentStepperV2(motor.params.uid, motor.ipcon)
 
   # connect the all_data callback to catch relevant motor information and stop on an error
   # motor.brick.set_all_data_period(100)  # /ms, return values every x milliseconds
-  # motor.brick.register_callback(tinkerforge.brick_silent_stepper.BrickSilentStepper.CALLBACK_ALL_DATA, allDataCallback)
+  # motor.brick.register_callback(tinkerforge.brick_silent_stepper.BrickletSilentStepperV2.CALLBACK_ALL_DATA, allDataCallback)
 
   # TODO: Move velocity to function of RPM
   PyTinkerforge.set_max_velocity(motor.deviceInternal, ustrip(u"s^-1", motor.params.velocity))  # /steps per s, max velocity in steps per second, depends on step_resolution
@@ -46,12 +46,12 @@ function init(motor::TinkerforgeSilentStepperBrick)
   return
 end
 
-neededDependencies(::TinkerforgeSilentStepperBrick) = []
-optionalDependencies(::TinkerforgeSilentStepperBrick) = []
-Base.close(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.disconnect(motor.ipcon)
-isTinkerforgeDevice(::TinkerforgeSilentStepperBrick) = true
+neededDependencies(::TinkerforgeSilentStepperBrickletV2) = []
+optionalDependencies(::TinkerforgeSilentStepperBrickletV2) = []
+Base.close(motor::TinkerforgeSilentStepperBrickletV2) = PyTinkerforge.disconnect(motor.ipcon)
+isTinkerforgeDevice(::TinkerforgeSilentStepperBrickletV2) = true
 
-enable(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.enable(motor.deviceInternal)
-disable(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.disable(motor.deviceInternal)
-isEnabled(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.is_enabled(motor.deviceInternal)
-stop(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.stop(motor.deviceInternal)
+enable(motor::TinkerforgeSilentStepperBrickletV2) = PyTinkerforge.enable(motor.deviceInternal)
+disable(motor::TinkerforgeSilentStepperBrickletV2) = PyTinkerforge.disable(motor.deviceInternal)
+isEnabled(motor::TinkerforgeSilentStepperBrickletV2) = PyTinkerforge.is_enabled(motor.deviceInternal)
+stop(motor::TinkerforgeSilentStepperBrickletV2) = PyTinkerforge.stop(motor.deviceInternal)
