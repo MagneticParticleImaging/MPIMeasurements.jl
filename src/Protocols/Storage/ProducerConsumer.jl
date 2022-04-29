@@ -46,7 +46,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     disable(robot)
   end
 
-  amps = getDevices(scanner, Amplifier)
+  amps = getAmplifiers(scanner_)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
