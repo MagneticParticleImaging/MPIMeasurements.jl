@@ -433,6 +433,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
                                        "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
       end
       waveform_ = uppercase(fromWaveform(waveform_[1]))
+      waveform_ = instances(SignalType)[findall(waveform_ .== string.(instances(SignalType)))[1]]
       signalTypeDAC!(daq.rpc, channelIdx_, waveform_)
     else
       throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
