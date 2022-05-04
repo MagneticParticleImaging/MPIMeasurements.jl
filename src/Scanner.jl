@@ -348,7 +348,7 @@ end
 
 Constructor for a sequence of `name` from `configDir`.
 """
-function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
+function Sequence(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "Sequences", name*".toml")
   if !isfile(path)
     error("Sequence $(path) not available!")
@@ -361,7 +361,7 @@ end
 
 Constructor for a sequence of `name` from the configuration directory specified for the scanner.
 """
-MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
+Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
 
 function getTransferFunctionList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "TransferFunctions")
