@@ -81,7 +81,7 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
   end
 
   # Set dependencies for all devices
-  for device in values(devices)
+  for device in Base.values(devices)
     for dependencyID in keys(dependencies(device))
       device.dependencies[dependencyID] = devices[dependencyID]
     end
@@ -102,7 +102,7 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
       end
     catch e
       if !robust
-        throw(e)
+        rethrow()
       else
         @warn e
       end

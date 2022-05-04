@@ -274,7 +274,7 @@ function mpi_mode_study()
         studyDescription(study_, value)
         println("The description of the study was set to `$value`.")
       else
-        @error "No valid selection. Please check the code"
+        @error "No valid selection. Please check the code."
       end
     end
   end
@@ -319,7 +319,7 @@ function mpi_mode_experiment()
         experimentSubject(experiment_, value)
         println("The subject of the experiment was set to `$value`.")
       else
-        @error "No valid selection. Please check the code"
+        @error "No valid selection. Please check the code."
       end
     end
   end
@@ -439,12 +439,12 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Show and set tracer parameters."
 ))
 
-function mpi_mode_operator(;operator::Union{String, Nothing} = nothing)
-  if isnothing(operator)
-    println("Operator: $(mpi_repl_mode.activeProtocolHandler.currOperator))")
+function mpi_mode_operator(;operator_::Union{String, Nothing} = nothing)
+  if isnothing(operator_)
+    println("Operator: $(mpi_repl_mode.activeProtocolHandler.currOperator)")
   else
-    operator(mpi_repl_mode.activeProtocolHandler, operator)
-    println("The new operator is `$operator`.")
+    operator(mpi_repl_mode.activeProtocolHandler, operator_)
+    println("The new operator is `$operator_`.")
   end
 
   return
@@ -456,7 +456,7 @@ push!(mpi_repl_mode.commands, CommandSpec(
   option_specs = Dict{String, OptionSpec}(
     "default" => OptionSpec(
       name = "default",
-      api = :operator,
+      api = :operator_,
     ),
   ),
   description = "Show and set operator."

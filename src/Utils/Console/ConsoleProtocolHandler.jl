@@ -73,13 +73,13 @@ function startProtocol(cph::ConsoleProtocolHandler)
 
     if isUsingMDFStudy(cph.protocol)
       if isnothing(study(cph))
-        @error "There is currently no study set. Please do so with the command `study` and then re-run `start`."
-        return
+        @warn "There is currently no study set. A default study is used for now. Please change to suitable values with the command `study`."
+        study(cph, defaultMDFv2Study())
       end
 
       if isnothing(experiment(cph))
-        @error "There is currently no experiment set. Please do so with the command `experiment` and then re-run `start`."
-        return
+        @warn "There is currently no experiment set. A default experiment is used for now. Please change to suitable values with the command `experiment`."
+        experiment(cph, defaultMDFv2Experiment())
       end
 
       if isnothing(tracer(cph))

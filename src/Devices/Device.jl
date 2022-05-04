@@ -51,7 +51,7 @@ isPresent(device::Device) = device.present
 dependencies(device::Device) = device.dependencies
 
 "Retrieve all dependencies of a certain type."
-dependencies(device::Device, type::DataType) = [dependency for dependency in values(dependencies(device)) if dependency isa type]
+dependencies(device::Device, type::DataType) = [dependency for dependency in Base.values(dependencies(device)) if dependency isa type]
 
 "Retrieve a single dependency of a certain type and error if there are more dependencies."
 function dependency(device::Device, type::DataType)
@@ -101,7 +101,7 @@ function init(device::Device)
   
   # Only init a device if all dependencies are present
   uninitDependencies = []
-  for dev in values(dependencies(device)) # Should only be of type <: Device at this point
+  for dev in Base.values(dependencies(device)) # Should only be of type <: Device at this point
     if !isPresent(dev)
       push!(uninitDependencies, deviceID(dev))
     end
