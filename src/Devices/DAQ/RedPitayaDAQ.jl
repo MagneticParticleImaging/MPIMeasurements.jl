@@ -86,16 +86,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
 end
 
 Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::RedPitayaDAQParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields RedPitayaDAQParams
 
   "Reference to the Red Pitaya cluster"
   rpc::Union{RedPitayaCluster, Nothing} = nothing
@@ -103,7 +94,9 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 
   rxChanIDs::Vector{String} = []
   refChanIDs::Vector{String} = []
+  # Sequence and Ramping
   acqSeq::Union{Vector{AbstractSequence}, Nothing} = nothing
+  rampingChannel::Vector{Int64} = []
   samplesPerStep::Int32 = 0
   decimation::Int32 = 64
   samplingPoints::Int = 1
@@ -204,6 +197,8 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
   luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
   enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
 
+  setRampingParams(daq, sequence)
+
   lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
   seqChannels = acyclicElectricalTxChannels(sequence)
   channelMapping = []
@@ -227,6 +222,33 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
   end
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
   setSequenceParams(daq, luts, enableLuts)
+end
+
+function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
+  daq.rampingChannel = []
+  txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  batch = ScpiBatch()
+  for field in fields(sequence)
+    rampUp = ustrip(u"s", safeStartInterval(field))
+    rampDown = ustrip(u"s", safeEndInterval(field))
+    if rampUp != rampDown
+      throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
+    end
+    if rampUp != 0.0
+      for channel in periodicElectricalTxChannels(field)
+        index = findfirst(x -> id(channel) == x[1], txChannels)
+        if !isnothing(index)
+          idx = txChannels[index][2].channelIdx
+          push!(batch, rampingDAC! => (idx, rampUp))
+          push!(batch, enableRamping! => (idx, true))
+          push!(daq.rampingChannel, idx)
+        else
+          throw(ScannerConfigurationError("No txSlow channel defined for Field channel $(id(channel))"))
+        end    
+      end
+    end
+  end
+  execute!(daq.rpc, batch)
 end
 
 function createLUT(start, channelMapping)
@@ -328,12 +350,18 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # Start pipeline
   @info "Pipeline started"
   try
-    @show currentWP(daq.rpc)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
+    for ch in daq.rampingChannel
+      enableRampDown!(daq.rpc, ch, true)
+    end
   catch e
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips)
     if serverMode(daq.rpc) == ACQUISITION
+      for ch in daq.rampingChannel
+        enableRampDown!(daq.rpc, ch, true)
+      end
+      # TODO wait
       masterTrigger!(daq.rpc, false)
       serverMode!(daq.rpc, CONFIGURATION)
     end    
@@ -416,21 +444,12 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     for (idx, component) in enumerate(components(channel))
       freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
       frequencyDAC!(daq.rpc, channelIdx_, idx, freq)
-    end
-
-    # In the Red Pitaya, the signal type can only be set per channel
-    waveform_ = unique([waveform(component) for component in components(channel)])
-    if length(waveform_) == 1
-      if !isWaveformAllowed(daq, id(channel), waveform_[1])
+      if !isWaveformAllowed(daq, id(channel), waveform(component))
         throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
                                        "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
       end
-      waveform_ = uppercase(fromWaveform(waveform_[1]))
-      signalTypeDAC!(daq.rpc, channelIdx_, waveform_)
-    else
-      throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
-                                       "defines different waveforms in its components. This is not supported "*
-                                       "by the Red Pitaya."))
+      waveform_ = uppercase(fromWaveform(waveform(component)))
+      signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
     end
   end
 
@@ -507,8 +526,8 @@ end
 
 function stopTx(daq::RedPitayaDAQ)
   masterTrigger!(daq.rpc, false)
-  serverMode!(daq.rpc, CONFIGURATION)
   clearTx!(daq)
+  serverMode!(daq.rpc, CONFIGURATION)
   @info "Stopped tx"
 end
 
@@ -519,11 +538,16 @@ function clearTx!(daq::RedPitayaDAQ)
       push!(batch, amplitudeDAC! => (channel, comp, 0.0))
     end
   end
+  for channel in daq.rampingChannel
+    push!(batch, enableRampDown! => (channel, false))
+    push!(batch, enableRamping! => (channel, false))
+  end
   execute!(daq.rpc, batch)
 end
 
-function prepareControl(daq::RedPitayaDAQ)
+function prepareControl(daq::RedPitayaDAQ, seq::Sequence)
   clearSequences!(daq.rpc)
+  setRampingParams(daq, seq)
 end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
