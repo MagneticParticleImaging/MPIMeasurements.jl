@@ -138,8 +138,6 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
     end
   end
 
-  @warn fittingDeviceParams
-
   if length(fittingDeviceParams) == 1
     return fittingDeviceParams[1]
   else
