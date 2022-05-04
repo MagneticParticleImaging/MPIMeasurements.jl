@@ -120,7 +120,7 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
   length(deepsubtypes(paramsRoot)) == 0 || push!(tempDeviceParams, deepsubtypes(paramsRoot)...)
 
   fittingDeviceParams = []
-  for paramType in tempDeviceParams
+  for (i, paramType) in enumerate(tempDeviceParams)
     #Can't easily see default values for fields -> Just try out all types
     #for constructor in methods(paramType)
     #  if issubset(paramKeys, Base.kwarg_decl(constructor))
@@ -132,9 +132,13 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
       tempParams = paramType(params)
       push!(fittingDeviceParams, tempParams)
     catch ex
-      # NOP
+      if i == length(tempDeviceParams) # Only throw error if no other param structs are left
+        rethrow()
+      end
     end
   end
+
+  @warn fittingDeviceParams
 
   if length(fittingDeviceParams) == 1
     return fittingDeviceParams[1]
