@@ -65,6 +65,7 @@ include("Devices/Device.jl")
 include("Protocols/Storage/MDF.jl") # Defines stuff needed in devices
 include("Protocols/Storage/MeasurementState.jl")
 include("Devices/Devices.jl")
+include("Sequences/Sequence.jl")
 include("Protocols/Protocol.jl")
 include("Protocols/Storage/ProducerConsumer.jl") # Depends on MPIScanner and Protocols
 include("Utils/Console/Console.jl")
