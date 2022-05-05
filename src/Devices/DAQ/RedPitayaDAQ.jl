@@ -350,6 +350,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # Start pipeline
   @info "Pipeline started"
   try
+    @show rampingStatus(daq.rpc)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
     for ch in daq.rampingChannel
       enableRampDown!(daq.rpc, ch, true)
@@ -528,6 +529,9 @@ function stopTx(daq::RedPitayaDAQ)
   masterTrigger!(daq.rpc, false)
   clearTx!(daq)
   serverMode!(daq.rpc, CONFIGURATION)
+  for channel in daq.rampingChannel
+    enableRamping!(daq.rpc, channel, false)
+  end
   @info "Stopped tx"
 end
 
@@ -540,7 +544,7 @@ function clearTx!(daq::RedPitayaDAQ)
   end
   for channel in daq.rampingChannel
     push!(batch, enableRampDown! => (channel, false))
-    push!(batch, enableRamping! => (channel, false))
+    #push!(batch, enableRamping! => (channel, false))
   end
   execute!(daq.rpc, batch)
 end

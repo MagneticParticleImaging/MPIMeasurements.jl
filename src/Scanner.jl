@@ -453,8 +453,8 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
+    for amp in amps
+      turnOn(amp)
     end
   end
 
@@ -466,8 +466,8 @@ function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence
     if isnothing(endFrame)
       endSequence(daq, endFrame)
     end
-    @sync for amp in amps
-      @async turnOff(amp)
+    for amp in amps
+      turnOff(amp)
     end
     if !isnothing(su)
       disableACPower(su)
