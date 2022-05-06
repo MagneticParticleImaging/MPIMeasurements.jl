@@ -63,6 +63,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
   finally
     daq = getDAQ(scanner_)
     if isnothing(endFrame)
+      # TODO: This will always fail due to `nothing+1` in https://github.com/MagneticParticleImaging/MPIMeasurements.jl/blob/89dfd35d05893eeebd8b9fa2203ab51b33094808/src/Devices/DAQ/RedPitayaDAQ.jl#L261
       endSequence(daq, endFrame)
     end
     @sync for amp in amps
