@@ -327,7 +327,10 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   @debug "Pipeline started"
   try
     @debug currentWP(daq.rpc)
-    readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
+    #readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
+    @warn "This is the hack suggested by Niklas"
+    chunk = readPipelinedSamples(rpu, startSample, samplesToRead, chunkSize = chunkSize) # HACK!!!
+    put!(channel, SampleChunk(chunk, [])) # HACK!!!
   catch e
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
