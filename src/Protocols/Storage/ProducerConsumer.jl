@@ -61,6 +61,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     daq = getDAQ(scanner_)
     endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
+    daq = getDAQ(scanner_)
     if isnothing(endFrame)
       endSequence(daq, endFrame)
     end

@@ -154,18 +154,20 @@ function measurement(protocol::MPIMeasurementProtocol)
   ex = nothing
   if Base.istaskfailed(producer)
     @error "Producer failed"
-    stack = Base.catch_stack(producer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
-    ex = stack[1]
+    currExceptions = current_exceptions(producer)
+    for stack in currExceptions
+      showerror(stdout, stack[:exception], stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
   end
   if Base.istaskfailed(consumer)
     @error "Consumer failed"
-    stack = Base.catch_stack(consumer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
+    currExceptions = current_exceptions(producer)
+    for stack in currExceptions
+      showerror(stdout, stack[:exception], stack[:backtrace])
+    end
     if isnothing(ex)
-      ex = stack[1]
+      ex = currExceptions[1][:exception]
     end
   end
   if !isnothing(ex)
