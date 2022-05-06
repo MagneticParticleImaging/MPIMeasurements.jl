@@ -174,9 +174,10 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::ExceptionEvent)
   @error "Protocol exception"
-  stack = Base.catch_stack(protocol.executeTask)[1]
-  @error stack[1]
-  @error stacktrace(stack[2])
+  currExceptions = current_exceptions(protocol.executeTask)
+  for stack in currExceptions
+    showerror(stdout, stack[:exception], stack[:backtrace])
+  end
   #showError(stack[1])
   cph.protocolState = PS_FAILED
   return true

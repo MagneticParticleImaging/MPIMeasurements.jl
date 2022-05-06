@@ -224,30 +224,32 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	numSamplingPoints_ = rxNumSamplingPoints(sequence)
 
 	# /acquisition/ subgroup
-	acqGradient(mdf, acqGradient(sequence))
-	acqNumAverages(mdf, acqNumAverages(sequence))
-	acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
-	acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
-	acqOffsetField(mdf, acqOffsetField(sequence))
-	acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime)
+	#acqGradient(mdf, acqGradient(sequence)) # TODO: Impelent in Sequence
+	#MPIFiles.acqGradient(mdf, ustrip.(u"T/m", scannerGradient(scanner)))
+
+	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
+	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
+	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
+	MPIFiles.acqOffsetField(mdf, acqOffsetField(sequence))
+	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime)
 
 	# /acquisition/drivefield/ subgroup
-	dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
-	dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
-	dfDivider(mdf, dfDivider(sequence))
-	dfNumChannels(mdf, dfNumChannels(sequence))
-	dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
-	dfStrength(mdf, ustrip.(u"T", dfStrength(sequence)))
-	dfWaveform(mdf, fromWaveform.(dfWaveform(sequence)))
+	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
+	MPIFiles.dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
+	MPIFiles.dfDivider(mdf, dfDivider(sequence))
+	MPIFiles.dfNumChannels(mdf, dfNumChannels(sequence))
+	MPIFiles.dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
+	MPIFiles.dfStrength(mdf, ustrip.(u"T", dfStrength(sequence)))
+	MPIFiles.dfWaveform(mdf, fromWaveform.(dfWaveform(sequence)))
 
 	# /acquisition/receiver/ subgroup
-	rxBandwidth(mdf, ustrip(u"Hz", rxBandwidth(sequence)))
+	MPIFiles.rxBandwidth(mdf, ustrip(u"Hz", rxBandwidth(sequence)))
 	convFactor = zeros(2,numRxChannels_)
 	convFactor[1,:] .= 1.0
-	rxDataConversionFactor(mdf, convFactor)
-	rxNumChannels(mdf, numRxChannels_)
-	rxNumSamplingPoints(mdf, numSamplingPoints_)
-	rxUnit(mdf, "V")
+	MPIFiles.rxDataConversionFactor(mdf, convFactor)
+	MPIFiles.rxNumChannels(mdf, numRxChannels_)
+	MPIFiles.rxNumSamplingPoints(mdf, numSamplingPoints_)
+	MPIFiles.rxUnit(mdf, "V")
 
 	# transferFunction
 	if hasTransferFunction(scanner)
@@ -255,8 +257,8 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 		freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
 		tf_ =  TransferFunction(scanner)
 		tf = tf_[freq,1:numRxChannels_]
-		rxTransferFunction(mdf, tf)
-		rxInductionFactor(mdf, tf_.inductionFactor)
+		MPIFiles.rxTransferFunction(mdf, tf)
+		MPIFiles.rxInductionFactor(mdf, tf_.inductionFactor)
 	end
 
 end
