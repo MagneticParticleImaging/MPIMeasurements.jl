@@ -345,8 +345,8 @@ function acqNumPeriodsPerFrame(sequence::Sequence)
     end
     return first(numPeriods)
   else
-    channels = electricalTxChannels(sequence)
-    return round(Int64, lcm(dfDivider(sequence))/minimum(dfDivider(sequence)))
+    #channels = electricalTxChannels(sequence)
+    return sequence.acquisition.numPeriodsPerFrame # round(Int64, lcm(dfDivider(sequence))/minimum(dfDivider(sequence)))
   end
 end
 
@@ -491,7 +491,14 @@ export rxNumChannels
 rxNumChannels(sequence::Sequence) = length(rxChannels(sequence))
 
 export rxNumSamplingPoints
-rxNumSamplingPoints(sequence::Sequence) = round(Int64, upreferred(rxSamplingRate(sequence)*dfCycle(sequence)))
+function rxNumSamplingPoints(sequence::Sequence)
+  result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
+  if !isinteger(result)
+    throw(ScannerConfigurationError("The selected combination of divider and decimation results in non-integer sampling points."))
+  end
+
+  return Int64(result)
+end
 
 export rxNumSamplesPerPeriod
 rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
