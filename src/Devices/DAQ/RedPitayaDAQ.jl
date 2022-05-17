@@ -222,7 +222,9 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
       lut = createLUT(start, currentMapping)
+      enableLut = createEnableLUT(start, channelMapping)
       luts[rp] = lut
+      enableLuts[rp] = enableLut
     end
   end
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
@@ -252,6 +254,28 @@ function createLUT(start, channelMapping)
   end
   return lut
 end
+
+
+function createEnableLUT(start, channelMapping)
+  channelMapping = sort(channelMapping, by = x -> x[1].channelIdx)
+  enableLutValues = []
+  enableLutIdx = []
+  for (lutChannel, seqChannel) in channelMapping
+    tempValues = MPIFiles.enableValues(seqChannel)
+    push!(enableLutValues, tempValues)
+    push!(enableLutIdx, lutChannel.channelIdx)
+  end
+
+  # Idx from 1 to 4
+  enableLutIdx = (enableLutIdx .- start) .+ 1
+  # Fill skipped channels with false, assumption: size of all enableLutValues is equal
+  enableLut = zeros(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
+  for (i, enableLutIndex) in enumerate(enableLutIdx)
+    enableLut[enableLutIndex, :] = enableLutValues[i]
+  end
+  return enableLut
+end
+
 
 function prepareSequence(daq::RedPitayaDAQ, sequence::Sequence)
   if !isnothing(daq.acqSeq)
