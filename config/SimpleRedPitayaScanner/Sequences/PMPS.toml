@@ -1,5 +1,5 @@
 [General]
-name = "1DSequence"
+name = "PMPS"
 description = "Precise description."
 targetScanner = "HeadScanner"
 baseFrequency = "125.0MHz"
