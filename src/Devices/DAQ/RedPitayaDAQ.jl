@@ -529,7 +529,7 @@ function stopTx(daq::RedPitayaDAQ)
   masterTrigger!(daq.rpc, false)
   clearTx!(daq)
   serverMode!(daq.rpc, CONFIGURATION)
-  for channel in daq.rampingChannel
+  for channel in 1:2*length(daq.rpc)
     enableRamping!(daq.rpc, channel, false)
   end
   @info "Stopped tx"
