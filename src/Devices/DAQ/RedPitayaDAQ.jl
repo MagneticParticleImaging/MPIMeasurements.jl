@@ -435,11 +435,12 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
 
     offsetVolts = offset(channel)*calibration(daq, id(channel))
     offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-    #jumpSharpnessDAC(daq.rpc, channelIdx_, daq.params.jumpSharpness) # TODO: Can we determine this somehow from the sequence?
 
     for (idx, component) in enumerate(components(channel))
       freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
       frequencyDAC!(daq.rpc, channelIdx_, idx, freq)
+      @info "set jump sharpness to " component.jumpSharpness
+      jumpSharpnessDAC!(daq.rpc, channelIdx_, component.jumpSharpness) 
     end
 
     # In the Red Pitaya, the signal type can only be set per channel
