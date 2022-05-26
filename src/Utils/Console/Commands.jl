@@ -69,7 +69,6 @@ function mpi_mode_activate(;scannerName_::Union{String, Nothing} = nothing)
     global mpi_repl_mode.activeProtocolHandler = ConsoleProtocolHandler(scannerName_)
   else
     println("A scanner has already been activated. Please deactivate first.")
-    # Handle shutdown of old protocol handler
   end
 
   return
@@ -114,6 +113,7 @@ function mpi_mode_deactivate()
     if !isnothing(MPIMeasurements.mpi_repl_mode.activeProtocolHandler.biChannel)
       endProtocol(mpi_repl_mode.activeProtocolHandler)
     end
+    close(mpi_repl_mode.activeProtocolHandler)
     mpi_repl_mode.activeProtocolHandler = nothing
   else
     println("No scanner active and thus nothing is done.")
