@@ -22,6 +22,12 @@ Base.@kwdef mutable struct MPIREPLMode
   commands::Vector{CommandSpec} = Vector{CommandSpec}()
 end
 
+function Base.close(mpiMode::MPIREPLMode)
+  if !isnothing(mpiMode.activeProtocolHandler)
+    close(mpiMode.activeProtocolHandler)
+  end
+end
+
 mpi_repl_mode = MPIREPLMode()
 
 include("Commands.jl")
