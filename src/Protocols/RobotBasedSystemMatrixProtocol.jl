@@ -348,9 +348,9 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
   @sync begin
     # Prepare Robot/Sample
-    @async begin 
+    #@async begin 
       timeMove = @elapsed moveAbs(robot, pos) 
-    end
+    #end
 
     # Prepare DAQ
     @async timePrepDAQ = @elapsed begin
@@ -358,13 +358,6 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
       timeFinalizer = @elapsed wait(calib.producerFinalizer)
       
       # The following tasks can only be started after the finalizer and mostly only in this order
-      suTask = @async begin
-        # TODO Could be done in parallel
-        enableACPower(su)
-        @sync for amp in amps
-          @async turnOn(amp)
-        end
-      end
 
       timeFrameChange = @elapsed begin 
         if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
@@ -375,9 +368,6 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
           protocol.restored = false
         end
       end
-
-      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
-      timeWaitSU = @elapsed wait(suTask)
       # TODO check again if controlLoop can be run while robot is active
       timeTx = @elapsed begin 
         if protocol.params.controlTx
@@ -386,11 +376,23 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
             setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
           else
             setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
+            setRampingParams(daq, protocol.params.sequence)
           end
         else
           prepareTx(daq, protocol.params.sequence)
         end
       end
+
+      suTask = @async begin
+        # TODO Could be done in parallel
+        enableACPower(su)
+        @sync for amp in amps
+          @async turnOn(amp)
+        end
+      end
+      timeWaitSU = @elapsed wait(suTask)
+      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
+
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
