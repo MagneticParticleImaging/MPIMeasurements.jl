@@ -1,6 +1,5 @@
 export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
        setTxParamsAll, disconnect
-using RedPitayaDAQServer
 
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
@@ -152,6 +151,70 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 
 #### Sequence ####
+function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
+  setRampingParameter(daq, sequence)
+  setAcyclicParameter(daq, acyclicElectricalTxChannels(sequence))
+end
+
+function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
+  daq.rampingChannel = []
+  txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  batch = ScpiBatch()
+  for field in fields(sequence)
+    rampUp = ustrip(u"s", safeStartInterval(field))
+    rampDown = ustrip(u"s", safeEndInterval(field))
+    if rampUp != rampDown
+      throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
+    end
+    if rampUp != 0.0
+      for channel in periodicElectricalTxChannels(field)
+        index = findfirst(x -> id(channel) == x[1], txChannels)
+        if !isnothing(index)
+          idx = txChannels[index][2].channelIdx
+          push!(batch, rampingDAC! => (idx, rampUp))
+          push!(batch, enableRamping! => (idx, true))
+          push!(daq.rampingChannel, idx)
+        else
+          throw(ScannerConfigurationError("No tx channel defined for field channel $(id(channel))"))
+        end    
+      end
+    end
+  end
+  execute!(daq.rpc, batch)
+end
+
+function setAcyclicParameter(daq, channel::Nothing)
+  # NOP
+end
+
+function setAcyclicParameter(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
+  luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
+  enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
+
+  lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
+  channelMapping = []
+  for channel in seqChannels
+    index = findfirst(x-> id(channel) == x[1], lutChannels)
+    if !isnothing(index)
+      push!(channelMapping, (lutChannels[index][2], channel))
+    else
+      throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
+    end
+  end
+
+  for rp in 1:length(daq.rpc)
+    start = (rp - 1) * 4 + 1
+    currentPossibleChannels = collect(start:start+3)
+    currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
+    if !isempty(currentMapping)
+      lut = createLUT(start, currentMapping)
+      luts[rp] = lut
+    end
+  end
+  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+  setSequenceParams(daq, luts, enableLuts)
+end
+
 function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{Float64}}}, enableLuts::Vector{Union{Nothing, Array{Bool}}})
   if length(luts) != length(daq.rpc)
     throw(DimensionMismatch("$(length(luts)) LUTs do not match $(length(daq.rpc)) RedPitayas"))
@@ -189,67 +252,9 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       # PauseSequence()
     end
   end
-
   daq.acqSeq = isempty(acqSeq) ? nothing : acqSeq
-
-end
-function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
-  luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
-  enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
-
-  setRampingParams(daq, sequence)
-
-  lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
-  seqChannels = acyclicElectricalTxChannels(sequence)
-  channelMapping = []
-  for channel in seqChannels
-    index = findfirst(x-> id(channel) == x[1], lutChannels)
-    if !isnothing(index)
-      push!(channelMapping, (lutChannels[index][2], channel))
-    else
-      throw(ScannerConfigurationError("No txSlow Channel defined for Field channel $(id(channel))"))
-    end
-  end
-
-  for rp in 1:length(daq.rpc)
-    start = (rp - 1) * 4 + 1
-    currentPossibleChannels = collect(start:start+3)
-    currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
-    if !isempty(currentMapping)
-      lut = createLUT(start, currentMapping)
-      luts[rp] = lut
-    end
-  end
-  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  setSequenceParams(daq, luts, enableLuts)
 end
 
-function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
-  daq.rampingChannel = []
-  txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
-  batch = ScpiBatch()
-  for field in fields(sequence)
-    rampUp = ustrip(u"s", safeStartInterval(field))
-    rampDown = ustrip(u"s", safeEndInterval(field))
-    if rampUp != rampDown
-      throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
-    end
-    if rampUp != 0.0
-      for channel in periodicElectricalTxChannels(field)
-        index = findfirst(x -> id(channel) == x[1], txChannels)
-        if !isnothing(index)
-          idx = txChannels[index][2].channelIdx
-          push!(batch, rampingDAC! => (idx, rampUp))
-          push!(batch, enableRamping! => (idx, true))
-          push!(daq.rampingChannel, idx)
-        else
-          throw(ScannerConfigurationError("No txSlow channel defined for Field channel $(id(channel))"))
-        end    
-      end
-    end
-  end
-  execute!(daq.rpc, batch)
-end
 
 function createLUT(start, channelMapping)
   channelMapping = sort(channelMapping, by = x -> x[1].channelIdx)
@@ -334,7 +339,12 @@ function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
 end
 
 function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
-  startFrame, endFrame = getFrameTiming(daq)
+  if !isnothing(daq.acqSeq) # This is the case if no acyclic channels haven been set
+    startFrame, endFrame = getFrameTiming(daq)
+  else
+    startFrame = 2
+    endFrame = startFrame+numFrames
+  end
   startTx(daq)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
@@ -348,16 +358,16 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   end
 
   # Start pipeline
-  @info "Pipeline started"
+  @debug "Pipeline started"
   try
-    @show rampingStatus(daq.rpc)
+    @debug currentWP(daq.rpc)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
     for ch in daq.rampingChannel
       enableRampDown!(daq.rpc, ch, true)
     end
   catch e
     @info "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
     if serverMode(daq.rpc) == ACQUISITION
       for ch in daq.rampingChannel
         enableRampDown!(daq.rpc, ch, true)
@@ -365,11 +375,11 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
       # TODO wait
       masterTrigger!(daq.rpc, false)
       serverMode!(daq.rpc, CONFIGURATION)
-    end    
+    end
     daq.rpv = nothing
     rethrow(e)
   end
-  @info "Pipeline finished"
+  @debug "Pipeline finished"
   return endFrame
 end
 
@@ -427,7 +437,7 @@ function setup(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
-  @info "Setup tx"
+  @debug "Setup tx"
   periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
@@ -449,19 +459,9 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
         throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
                                        "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
       end
-      waveform_ = uppercase(fromWaveform(waveform(component)))
       signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
     end
-  end
-
-  pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
-  passPDMToFastDAC!(daq.rpc, pass)
-
-  #setSequenceParams(daq, sequence) # This might need to be removed for calibration measurement time savings
-end
-
-function setupRx(daq::RedPitayaDAQ)
-  @info "Setup rx"
+  @debug "Setup rx"
   decimation!(daq.rpc, daq.decimation)
   samplesPerPeriod!(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
   periodsPerFrame!(daq.rpc, daq.acqPeriodsPerFrame)
@@ -501,6 +501,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
   for i in map(x->div(x -1, 2) + 1, rxIDs)
+    @debug i
     selection[i] = true
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
@@ -522,7 +523,7 @@ end
 function startTx(daq::RedPitayaDAQ)
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
-  @info "Started tx"
+  @debug "Started tx"
 end
 
 function stopTx(daq::RedPitayaDAQ)
@@ -532,7 +533,7 @@ function stopTx(daq::RedPitayaDAQ)
   for channel in 1:2*length(daq.rpc)
     enableRamping!(daq.rpc, channel, false)
   end
-  @info "Stopped tx"
+  @debug "Stopped tx"
 end
 
 function clearTx!(daq::RedPitayaDAQ)
@@ -556,7 +557,7 @@ end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
-  @info "Preparing amplitude and phase"
+  @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   for channel in periodicElectricalTxChannels(sequence)
@@ -608,7 +609,7 @@ function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vecto
       error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
     end
   end
-  
+
   batch = ScpiBatch()
   for (channelID, components_) in amplitudes
     for (componentIdx, amplitude_) in enumerate(components_)
@@ -660,7 +661,7 @@ currentPeriod(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentPeriod(daq.rpc)
 function readData(daq::RedPitayaDAQ, startFrame::Integer, numFrames::Integer, numBlockAverages::Integer=1)
   u = RedPitayaDAQServer.readData(daq.rpc, startFrame, numFrames, numBlockAverages, 1, useCalibration = true)
 
-  @info "size u in readData: $(size(u))" 
+  @info "size u in readData: $(size(u))"
   uMeas = u[:,channelIdx(daq, daq.rxChanIDs),:,:]u"V"
   uRef = u[:,channelIdx(daq, daq.refChanIDs),:,:]u"V"
 
@@ -692,15 +693,6 @@ numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
 numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
-
-
-
-
-
-
-
-
-
 
 
 ######## OLD #########

@@ -37,15 +37,17 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   seqControlledChannel = getControlledChannel(seq)
   missingControlDef = []
   txCont.controlledChannels = []
+
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
     if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
       push!(missingControlDef, name)
-    else 
+    else
       push!(txCont.controlledChannels, ControlledChannel(seqChannel, daqChannel))
     end
   end
+  
   if length(missingControlDef) > 0
     message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
     throw(IllegalStateException(message))

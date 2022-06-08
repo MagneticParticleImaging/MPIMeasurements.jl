@@ -1,11 +1,13 @@
 #include("SerialDevices/SerialDevices.jl")
 include("Utils/UtilDevices.jl")
-include("Amplifier/Amplifier.jl")
 include("DAQ/DAQ.jl")
+include("Display/Display.jl")
+include("ElectricalSource/ElectricalSource.jl")
 include("GaussMeter/GaussMeter.jl")
+include("Motor/Motor.jl")
 include("Robots/Robots.jl")
 include("SurveillanceUnit/SurveillanceUnit.jl")
-include("TemperatureSensor/TemperatureSensor.jl")
+include("Sensors/Sensors.jl")
 include("Virtual/Virtual.jl")
 
 

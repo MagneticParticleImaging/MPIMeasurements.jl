@@ -159,6 +159,8 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   else
     protocol.txCont = nothing
   end
+
+  return nothing
 end
 
 function checkPositions(protocol::RobotBasedSystemMatrixProtocol)
@@ -591,12 +593,11 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
   else
     store = event.datastore
     scanner = protocol.scanner
-    params = event.params
+    params = event.params # TODO: this will error
     data = protocol.systemMeasState.signals
     positions = protocol.systemMeasState.positions
     isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    params["storeAsSystemMatrix"] = protocol.params.saveAsSystemMatrix
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params)
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params; saveAsstoreAsSystemMatrix=protocol.params.saveAsSystemMatrix)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end

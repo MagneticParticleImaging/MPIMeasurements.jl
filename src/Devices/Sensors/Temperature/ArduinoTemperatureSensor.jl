@@ -58,6 +58,7 @@ function numChannels(sensor::ArduinoTemperatureSensor)
   return length(sensor.params.selectSensors)
 end
 
+export getChannelNames
 function getChannelNames(sensor::ArduinoTemperatureSensor)
   if length(sensor.params.selectSensors) == length(sensor.params.nameSensors) #This should be detected during construction
     return sensor.params.nameSensors[sensor.params.selectSensors]
