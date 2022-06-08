@@ -331,6 +331,15 @@ defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol
 """
     $(SIGNATURES)
 
+Retrieve a list of all device IDs available for the scanner.
+"""
+function getDeviceIDs(scanner::MPIScanner)
+  return keys(scanner.devices)
+end
+
+"""
+    $(SIGNATURES)
+
 Retrieve a list of all sequences available for the scanner.
 """
 function getSequenceList(scanner::MPIScanner)

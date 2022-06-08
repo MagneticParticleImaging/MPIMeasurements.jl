@@ -462,6 +462,24 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Show and set operator."
 ))
 
+function mpi_mode_device(;device_id_::Union{String, Nothing} = nothing)
+  
+
+  return
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "device",
+  api = mpi_mode_device,
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :device_id_,
+    ),
+  ),
+  description = "Enter mode to interact with devices."
+))
+
 # Auxiliary commands
 
 function mpi_mode_debug()

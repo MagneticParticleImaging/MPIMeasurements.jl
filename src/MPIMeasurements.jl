@@ -82,6 +82,7 @@ function __init__()
   end
 
   mpi_mode_enable()
+  device_mode_enable()
   atexit(() -> close(mpi_repl_mode)) # Make sure that an activated scanner is always closed
 end
 
