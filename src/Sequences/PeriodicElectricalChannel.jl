@@ -3,7 +3,7 @@
 export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel
 
 "Component of an electrical channel with periodic base function."
-Base.@kwdef struct PeriodicElectricalComponent <: ElectricalComponent
+Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
   divider::Integer
@@ -13,12 +13,14 @@ Base.@kwdef struct PeriodicElectricalComponent <: ElectricalComponent
   phase::Vector{typeof(1.0u"rad")}
   "Waveform of the component."
   waveform::Waveform = WAVEFORM_SINE
+  "Jump sharpness for rectangular waveforms."
+  jumpSharpness::Float64 = 0.0
 end
 
 "Sweepable component of an electrical channel with periodic base function.
 Note: Does not allow for changes in phase since this would make the switch
 between frequencies difficult."
-Base.@kwdef struct SweepElectricalComponent <: ElectricalComponent
+Base.@kwdef mutable struct SweepElectricalComponent <: ElectricalComponent
   "Divider of the component."
   divider::Vector{Integer}
   "Amplitude (peak) of the channel for each divider in the sweep. Must have the same dimension as `divider`."
@@ -85,6 +87,8 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Periodi
 
     @assert length(amplitude) == length(phase) "The length of amplitude and phase must match."
 
+    jumpSharpness = get(component, "jumpSharpness", 0.0)
+
     if divider isa Vector
       push!(splattingDict[:components],
             SweepElectricalComponent(divider=divider,
@@ -96,7 +100,8 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Periodi
                                         divider=divider,
                                         amplitude=amplitude,
                                         phase=phase,
-                                        waveform=waveform))
+                                        waveform=waveform,
+                                        jumpSharpness=jumpSharpness))
     end
   end
   return PeriodicElectricalChannel(;splattingDict...)
@@ -123,8 +128,18 @@ phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.ph
 phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
 phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
 
-export waveform
+export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform
+waveform!(component::ElectricalComponent, value) = component.waveform = value
+
+function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
+  index = findfirst(x -> id(x) == componentId, channel.components)
+  if !isnothing(index)
+    waveform!(channel.components[index], value)
+  else
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+  end
+end
 
 export id
 id(component::PeriodicElectricalComponent) = component.id

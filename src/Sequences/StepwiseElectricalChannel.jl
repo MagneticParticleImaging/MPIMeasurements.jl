@@ -8,12 +8,15 @@ Base.@kwdef struct StepwiseElectricalChannel <: AcyclicElectricalTxChannel
   divider::Integer
   "Values corresponding to the individual steps."
   values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+  "TBD"
+  enable::Vector{Bool}
 end
 
 channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseElectricalChannel}, channelDict::Dict{String, Any})
   divider = channelDict["divider"]
+  enable = haskey(channelDict, "enable") ? channelDict["enable"] : Bool[]
   values = uparse.(channelDict["values"])
   if eltype(values) <: Unitful.Current
     values = values .|> u"A"
@@ -29,10 +32,13 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Stepwis
     error("The divider $(divider) needs to be a multiple of the $(length(values))")
   end
 
-  return StepwiseElectricalChannel(;id=channelID, divider, values)
+  return StepwiseElectricalChannel(;id=channelID, divider, values, enable)
 end
 
 values(channel::StepwiseElectricalChannel) = channel.values
 
 cycleDuration(channel::StepwiseElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = upreferred(channel.divider/baseFrequency)
 stepsPerCycle(channel::StepwiseElectricalChannel) = length(channel.values)
+
+enableValues(channel::StepwiseElectricalChannel) = 
+     isempty(channel.enable) ? ones(Bool, length(channel.values)) : channel.enable
