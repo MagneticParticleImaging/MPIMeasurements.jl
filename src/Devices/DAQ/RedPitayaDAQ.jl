@@ -4,11 +4,10 @@ export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, con
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
-
   "IPs of the Red Pitayas"
   ips::Vector{String}
   "Trigger mode of the Red Pitayas. Default: `EXTERNAL`."
-  triggerMode::TriggerMode = EXTERNAL
+  triggerMode::RedPitayaDAQServer.TriggerMode = EXTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   calibFFCurrentToVolt::Vector{Float32}

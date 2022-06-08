@@ -253,7 +253,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
     bgdata = protocol.bgMeas
   end
   filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
-  @show filename
+  @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
