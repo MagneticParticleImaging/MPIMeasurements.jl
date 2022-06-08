@@ -252,8 +252,7 @@ export periodicElectricalTxChannels
 periodicElectricalTxChannels(sequence::Sequence)::Vector{PeriodicElectricalChannel} = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 export acyclicElectricalTxChannels
-acyclicElectricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} =
-  [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: StepwiseElectricalChannel || typeof(channel) <: ContinuousElectricalChannel]
+acyclicElectricalTxChannels(sequence::Sequence)::Vector{AcyclicElectricalTxChannel} = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: AcyclicElectricalTxChannel]
 
 export continuousElectricalTxChannels
 continuousElectricalTxChannels(sequence::Sequence) = [channel for channel in electricalTxChannels(sequence) if isContinuous(channel)]

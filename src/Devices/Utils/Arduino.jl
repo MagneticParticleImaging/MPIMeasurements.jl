@@ -12,6 +12,11 @@ function sendCommand(ard::Arduino, cmdString::String)
   return query(serialDevice(ard), cmd)
 end
 
+function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
+  cmd = cmdStart(ard) * cmdString * cmdEnd(ard) * cmdDelim(ard)
+  return query!(serialDevice(ard), cmd, data)
+end
+
 Base.@kwdef struct SimpleArduino <: Arduino
   commandStart::String = "!"
   commandEnd::String = "*"

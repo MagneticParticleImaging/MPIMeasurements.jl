@@ -83,4 +83,11 @@ function initSerialPort(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterPoolP
   end
 end
 
+function getXYZValues(gauss::ArduinoGaussMeter)
+  data = Array{Int16}(undef, 3)
+  sendCommand(gauss.ard, "DATA", data)
+  #TODO
+  return data
+end
+
 close(gauss::ArduinoGaussMeter) = close(gauss.ard)
