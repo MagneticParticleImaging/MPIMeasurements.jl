@@ -126,12 +126,15 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       while !done
         done = rampUpDone(daq.rpc)
       end
+      @warn "Ramping status" rampingStatus(daq.rpc)
+      
       @info "Read periods"
       period = currentPeriod(daq)
       uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
       for ch in daq.rampingChannel
         enableRampDown!(daq.rpc, ch, true)
       end
+      
       # Translate uRef/channelIdx(daq) to order as it is used here
       mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
       controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
@@ -144,9 +147,14 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       while !done
         done = rampDownDone(daq.rpc)
       end
-
-      stopTx(daq)
-      setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+      masterTrigger!(daq.rpc, false)
+      for channel in daq.rampingChannel
+        enableRampDown!(daq.rpc, channel, false)
+      end
+      # These reset the amplitude, phase and ramping, so we only reset trigger here
+      #stopTx(daq) 
+      #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+      
       sleep(txCont.params.controlPause)
       i += 1
     end

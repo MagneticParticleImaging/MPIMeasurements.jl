@@ -36,13 +36,13 @@ function _init(su::ArduinoSurveillanceUnitExternalTemp)
 	# set_flow_control(sp,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
   sleep(2)
   flush(sp)
-  write(sp, "!ConnectionEstablished*#")
+  write(sp, "!VERSION*#")
   response = readuntil(sp, Vector{Char}(su.params.delim), su.params.timeout_ms);
   @info response
-  if (response == "ArduinoSurveillanceV1" || response == "ArduinoSurveillanceV2"  )
+  if (response == "SURVBOX:3#")
     @info "Connection to ArduinoSurveillanceUnit established"
     sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
-    su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = su.params.delim, sd = sd)
+    su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = "", sd = sd)
   else    
     throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
   end
