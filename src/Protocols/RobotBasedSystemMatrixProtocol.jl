@@ -435,10 +435,10 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   start, endFrame = getFrameTiming(daq) 
   calib.producerFinalizer = @async begin
     endSequence(daq, endFrame)
-    disableACPower(su)
     @sync for amp in amps
       @async turnOff(amp)
     end
+    disableACPower(su)
   end
 end
 
