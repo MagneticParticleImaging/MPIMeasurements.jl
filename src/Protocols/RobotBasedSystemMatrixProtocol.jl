@@ -567,6 +567,7 @@ end
 
 function resume(protocol::RobotBasedSystemMatrixProtocol)
   protocol.stopped = false
+  protocol.restored = true
   # OperationSuccessfulEvent is put when it actually leaves the stop loop
 end
 
