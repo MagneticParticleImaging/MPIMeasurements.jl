@@ -141,7 +141,9 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     if askChoices(protocol, "Press continue when background measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
-    moveAbs(rob, namedPosition(robot, "park"))
+    enable(rob)
+    moveAbs(rob, namedPosition(rob, "park"))
+    disable(rob)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
     measurement(protocol)
     protocol.bgMeas = protocol.scanner.seqMeasState.buffer
@@ -150,7 +152,9 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     end    
   end
 
+  enable(rob)
   moveAbs(rob, protocol.params.fgPos)
+  disable(rob)
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
   measurement(protocol)
 end

@@ -273,6 +273,7 @@ struct Interactive <: ProtocolInteractivity end
 
 include("DAQMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
+include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
 include("ContinousMeasurementProtocol.jl")
