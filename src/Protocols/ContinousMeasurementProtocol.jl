@@ -31,6 +31,9 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
   biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+
+
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   stopped::Bool = false
   cancelled::Bool = false
@@ -166,10 +169,10 @@ function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
+  return protocol.seqMeasState
 end
 
 
