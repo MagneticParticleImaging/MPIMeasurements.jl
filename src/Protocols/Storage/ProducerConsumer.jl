@@ -61,19 +61,38 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     daq = getDAQ(scanner_)
     endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
-    daq = getDAQ(scanner_)
-    if isnothing(endFrame)
-      # TODO: This will always fail due to `nothing+1` in https://github.com/MagneticParticleImaging/MPIMeasurements.jl/blob/89dfd35d05893eeebd8b9fa2203ab51b33094808/src/Devices/DAQ/RedPitayaDAQ.jl#L261
-      endSequence(daq, endFrame)
+    try
+      daq = getDAQ(scanner_)
+      if !isnothing(endFrame)
+        endSequence(daq, endFrame)
+      end
+    catch ex
+      @error "Could not stop tx"
+      @error ex
+    end 
+    for amp in amps
+      try
+        turnOff(amp)
+      catch ex
+        @error "Could not turn off amplifier $(deviceID(amp))"
+        @error ex
+      end
     end
-    @sync for amp in amps
-      @async turnOff(amp)
-    end
-    if !isnothing(su)
-      disableACPower(su)
+    try 
+      if !isnothing(su)
+        disableACPower(su)
+      end
+    catch ex
+      @error "Could not disable su"
+      @error ex
     end
     for robot in robots
-      enable(robot)
+      try
+        enable(robot)
+      catch ex
+        @error "Could not turn off roboter $(deviceID(robot))"
+        @error ex 
+      end
     end
   end
 end
