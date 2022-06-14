@@ -478,6 +478,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     for (idx, component) in enumerate(components(channel))
       freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
       frequencyDAC!(daq.rpc, channelIdx_, idx, freq)
+      waveform_ = uppercase(fromWaveform(waveform(component)))
       if !isWaveformAllowed(daq, id(channel), waveform(component))
         throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
                                        "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
@@ -485,6 +486,13 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
       signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
     end
   end
+  
+  pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
+  passPDMToFastDAC!(daq.rpc, pass)
+
+end
+
+function setupRx(daq::RedPitayaDAQ)
   @debug "Setup rx"
   decimation!(daq.rpc, daq.decimation)
   samplesPerPeriod!(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
