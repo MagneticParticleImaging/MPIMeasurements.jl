@@ -142,9 +142,6 @@ function sequenceFromTOML(filename::AbstractString)
   splattingDict[:description] = general["description"]
   splattingDict[:targetScanner] = general["targetScanner"]
   splattingDict[:baseFrequency] = uparse(general["baseFrequency"])
-  if haskey(general, "triggered")
-    splattingDict[:triggered] = general["triggered"]
-  end
 
   # Fields
   splattingDict[:fields] = fieldDictToFields(sequenceDict["Fields"])
