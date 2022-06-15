@@ -156,7 +156,7 @@ function measurement(protocol::MPIMeasurementProtocol)
     @error "Producer failed"
     currExceptions = current_exceptions(producer)
     for stack in currExceptions
-      showerror(stdout, stack[:exception], stack[:backtrace])
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
     end
     ex = currExceptions[1][:exception]
   end
@@ -164,7 +164,7 @@ function measurement(protocol::MPIMeasurementProtocol)
     @error "Consumer failed"
     currExceptions = current_exceptions(producer)
     for stack in currExceptions
-      showerror(stdout, stack[:exception], stack[:backtrace])
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
     end
     if isnothing(ex)
       ex = currExceptions[1][:exception]
