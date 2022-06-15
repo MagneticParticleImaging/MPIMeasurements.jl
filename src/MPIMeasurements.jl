@@ -14,7 +14,6 @@ using Graphics: @mustimplement
 using Mmap
 using StringEncodings
 using DocStringExtensions
-import Plots
 
 using ReplMaker
 import REPL

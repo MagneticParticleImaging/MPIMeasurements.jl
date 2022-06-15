@@ -483,6 +483,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
       end
       signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
     end
+  end
   @debug "Setup rx"
   decimation!(daq.rpc, daq.decimation)
   samplesPerPeriod!(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
