@@ -153,17 +153,19 @@ function measurement(protocol::MPIMeasurementProtocol)
   # Check tasks
   ex = nothing
   if Base.istaskfailed(producer)
-    @error "Producer failed"
     currExceptions = current_exceptions(producer)
-    for stack in currExceptions
+    @error "Producer failed" exception = (currExceptions[end][:exception], currExceptions[end][:backtrace])
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
       @error stack[:exception] trace = stacktrace(stack[:backtrace])
     end
     ex = currExceptions[1][:exception]
   end
   if Base.istaskfailed(consumer)
-    @error "Consumer failed"
     currExceptions = current_exceptions(producer)
-    for stack in currExceptions
+    @error "Consumer failed" exception = (currExceptions[end][:exception], currExceptions[end][:backtrace])
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
       @error stack[:exception] trace = stacktrace(stack[:backtrace])
     end
     if isnothing(ex)
