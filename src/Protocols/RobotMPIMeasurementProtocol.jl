@@ -180,7 +180,7 @@ function measurement(protocol::RobotMPIMeasurementProtocol)
   ex = nothing
   if Base.istaskfailed(producer)
     currExceptions = current_exceptions(producer)
-    @error "Producer failed" exception = (currExceptions[end][:exception], currExceptions[end][:backtrace])
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
     for i in 1:length(currExceptions) - 1
       stack = currExceptions[i]
       @error stack[:exception] trace = stacktrace(stack[:backtrace])
@@ -189,7 +189,7 @@ function measurement(protocol::RobotMPIMeasurementProtocol)
   end
   if Base.istaskfailed(consumer)
     currExceptions = current_exceptions(producer)
-    @error "Consumer failed" exception = (currExceptions[end][:exception], currExceptions[end][:backtrace])
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
     for i in 1:length(currExceptions) - 1
       stack = currExceptions[i]
       @error stack[:exception] trace = stacktrace(stack[:backtrace])
