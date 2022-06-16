@@ -1,7 +1,7 @@
 export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       setTxParamsAll, disconnect
+       setTxParamsAll, disconnect, RampingMode, NONE, HOLD, STARTUP
 
-@enum RampingMode NONE, HOLD, STARTUP
+@enum RampingMode NONE HOLD STARTUP
 
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
@@ -240,6 +240,16 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   end
   daq.samplesPerStep = result[3]
 
+  result = execute!(daq.rpc) do batch
+    for i = 1:2*length(daq.rpc)
+      @add_batch batch rampingDAC(daq.rpc, i)
+    end
+  end
+  rampTime = maximum(result)
+  samplingRate = 125e6/dec
+  timePerStep = sampPerStep/samplingRate
+  rampingSteps = Int64(ceil(rampTime/timePerStep))
+  fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
 
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
@@ -248,7 +258,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       enable = enableLuts[i]
       if !isnothing(lut)
         seqChan!(rp, size(lut, 1))
-        rpSeq = rpSequence(daq.rpc[i], lut, enable, daq.acqNumFrames*daq.acqNumFrameAverages, daq.params.rampingMode)
+        rpSeq = rpSequence(daq.rpc[i], lut, enable, daq.acqNumFrames*daq.acqNumFrameAverages, daq.params.rampingMode, rampingSteps, fractionSteps)
         acqSeq[i] = rpSeq
         sequence!(rp, rpSeq)
       else
@@ -259,17 +269,18 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   daq.acqSeq = isempty(acqSeq) ? nothing : acqSeq
 end
 
-function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, Array{Bool}}, repetitions::Integer, mode::RampingMode)
-  result = execute!(rp) do batch
-    @add_batch batch decimation(rp)
-    @add_batch batch samplesPerStep(rp)
-    @add_batch batch rampingDAC(rp, 1)
-    @add_batch batch rampingDAC(rp, 2)
+function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, Array{Bool}}, repetitions::Integer, mode::RampingMode, rampingSteps, fractionSteps)
+  seq = nothing
+  if mode == NONE
+    seq = RedPitayaDAQServer.ConstantRampingSequence(lut, repetitions, 0.0, rampingSteps, enable)
+  else if mode == HOLD
+    seq = RedPitayaDAQServer.HoldBorderRampingSequence(lut, repetitions, rampingSteps + fractionSteps, enable)
+  else if mode == STARTUP
+    seq = RedPitayaDAQServer.StartUpSequence(lut, repetitions, rampingSteps + fractionSteps, fractionSteps, enable)
+  else 
+    ScannerConfigurationError("Ramping mode $mode is not yet implemented.")
   end
-  dec = result[1]
-  sampPerStep = result[2]
-  rampTime = max(result[1], result[2])
-
+  return seq
 end
 
 
