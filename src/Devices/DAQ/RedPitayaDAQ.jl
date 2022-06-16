@@ -95,7 +95,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   refChanIDs::Vector{String} = []
   # Sequence and Ramping
   acqSeq::Union{Vector{AbstractSequence}, Nothing} = nothing
-  rampingChannel::Set{Int64} = []
+  rampingChannel::Set{Int64} = Set()
   samplesPerStep::Int32 = 0
   decimation::Int32 = 64
   samplingPoints::Int = 1
@@ -151,7 +151,7 @@ function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
-  daq.rampingChannel = []
+  daq.rampingChannel = Set()
   # Create mapping from field to channel
   txChannels = [channel for channel in daq.params.channels if channel[2] isa TxChannelParams]
   idxMap = Dict{String, Union{Int64, Nothing}}()
