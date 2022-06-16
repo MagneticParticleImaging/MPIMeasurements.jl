@@ -130,6 +130,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       end
       @warn "Ramping status" rampingStatus(daq.rpc)
       
+      sleep(txCont.params.controlPause)
+
       @info "Read periods"
       period = currentPeriod(daq)
       uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
@@ -157,7 +159,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       #stopTx(daq) 
       #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
       
-      sleep(txCont.params.controlPause)
       i += 1
     end
   catch ex
