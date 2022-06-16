@@ -129,12 +129,6 @@ function _init(daq::RedPitayaDAQ)
     end
   end
 
-  try
-    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, 2, :)
-  catch e
-    @error e
-  end
-
   if serverMode(daq.rpc) == ACQUISITION
     masterTrigger!(daq.rpc, false)
     serverMode!(daq.rpc, CONFIGURATION)
@@ -159,6 +153,7 @@ end
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   daq.rampingChannel = []
   txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  
   execute!(daq.rpc) do batch
     for field in fields(sequence)
       rampUp = ustrip(u"s", safeStartInterval(field))
@@ -167,7 +162,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
         throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
       end
       if rampUp != 0.0
-        for channel in periodicElectricalTxChannels(field)
+        for channel in electricalTxChannels(field)
           index = findfirst(x -> id(channel) == x[1], txChannels)
           if !isnothing(index)
             idx = txChannels[index][2].channelIdx
@@ -273,9 +268,9 @@ function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, A
   seq = nothing
   if mode == NONE
     seq = RedPitayaDAQServer.ConstantRampingSequence(lut, repetitions, 0.0, rampingSteps, enable)
-  else if mode == HOLD
+  elseif mode == HOLD
     seq = RedPitayaDAQServer.HoldBorderRampingSequence(lut, repetitions, rampingSteps + fractionSteps, enable)
-  else if mode == STARTUP
+  elseif mode == STARTUP
     seq = RedPitayaDAQServer.StartUpSequence(lut, repetitions, rampingSteps + fractionSteps, fractionSteps, enable)
   else 
     ScannerConfigurationError("Ramping mode $mode is not yet implemented.")
