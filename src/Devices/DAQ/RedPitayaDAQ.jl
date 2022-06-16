@@ -95,7 +95,7 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   refChanIDs::Vector{String} = []
   # Sequence and Ramping
   acqSeq::Union{Vector{AbstractSequence}, Nothing} = nothing
-  rampingChannel::Vector{Int64} = []
+  rampingChannel::Set{Int64} = []
   samplesPerStep::Int32 = 0
   decimation::Int32 = 64
   samplingPoints::Int = 1
@@ -256,7 +256,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   daq.samplesPerStep = result[3]
 
   result = execute!(daq.rpc) do batch
-    for i = 1:2*length(daq.rpc)
+    for i in daq.rampingChannel
       @add_batch batch rampingDAC(daq.rpc, i)
     end
   end
