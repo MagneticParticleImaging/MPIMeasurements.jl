@@ -19,11 +19,15 @@ using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length
 
 using Reexport
 @reexport using MPIFiles
-import MPIFiles: hasKeyAndValue
+import MPIFiles: hasKeyAndValue, 
+    acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
+    acqNumFrames, acqNumAverages,
+    dfBaseFrequency, dfCycle, dfDivider, dfNumChannels, dfPhase, dfStrength, dfWaveform,
+    rxBandwidth, rxNumChannels, rxNumSamplingPoints
 
 using RedPitayaDAQServer
 import PyTinkerforge
