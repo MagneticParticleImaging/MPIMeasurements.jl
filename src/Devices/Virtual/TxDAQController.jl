@@ -152,9 +152,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
         done = rampDownDone(daq.rpc)
       end
       masterTrigger!(daq.rpc, false)
-      for channel in daq.rampingChannel
-        enableRampDown!(daq.rpc, channel, false)
-      end
       # These reset the amplitude, phase and ramping, so we only reset trigger here
       #stopTx(daq) 
       #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)

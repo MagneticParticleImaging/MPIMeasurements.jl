@@ -621,10 +621,6 @@ function clearTx!(daq::RedPitayaDAQ)
         @add_batch batch amplitudeDAC!(daq.rpc, channel, comp, 0.0)
       end
     end
-    for channel in daq.rampingChannel
-      @add_batch batch enableRampDown!(daq.rpc, channel, false)
-      #push!(batch, enableRamping! => (channel, false))
-    end
   end
 end
 
