@@ -27,7 +27,7 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
 end
 
-Base.@kwdef struct RedPitayaLUTChannelParams <: DAQChannelParams
+Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
@@ -152,6 +152,7 @@ end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   daq.rampingChannel = []
+  # Collect all 
   txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
   
   execute!(daq.rpc) do batch
@@ -548,7 +549,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
-  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
   daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
 
   # Construct view to save bandwidth
