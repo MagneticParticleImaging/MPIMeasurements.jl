@@ -152,29 +152,48 @@ end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   daq.rampingChannel = []
-  # Collect all 
-  txChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  # Create mapping from field to channel
+  txChannels = [channel for channel in daq.params.channels if channel[2] isa TxChannelParams]
+  idxMap = Dict{String, Union{Int64, Nothing}}()
+  for channel in txChannels
+    m = nothing
+    idx = channel[2].channelIdx
+    if channel[2] isa RedPitayaTxChannelParams
+      m = idx
+    elseif channel[2] isa RedPitayaLUTChannelParams
+      # Map to fast DAC
+      if (idx - 1) % 4 < 1
+        m = Int64(ceil((idx + 1)/2))
+      end
+    end
+    idxMap[channel[1]] = m
+  end
   
-  execute!(daq.rpc) do batch
-    for field in fields(sequence)
-      rampUp = ustrip(u"s", safeStartInterval(field))
-      rampDown = ustrip(u"s", safeEndInterval(field))
-      if rampUp != rampDown
-        throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
-      end
-      if rampUp != 0.0
-        for channel in electricalTxChannels(field)
-          index = findfirst(x -> id(channel) == x[1], txChannels)
-          if !isnothing(index)
-            idx = txChannels[index][2].channelIdx
-            @add_batch batch rampingDAC!(daq.rpc, idx, rampUp)
-            @add_batch batch enableRamping!(daq.rpc, idx, true)
-            push!(daq.rampingChannel, idx)
-          else
-            throw(ScannerConfigurationError("No tx channel defined for field channel $(id(channel))"))
-          end    
+  # Get max ramp time for each channel
+  rampMap = Dict{Int64, Float64}()
+  for field in fields(sequence)
+    rampUp = ustrip(u"s", safeStartInterval(field))
+    rampDown = ustrip(u"s", safeEndInterval(field))
+    if rampUp != rampDown
+      throw(ScannerConfigurationError("Field $(id(field)) has different ramp-up and ramp-down intervals which is not supported."))
+    end
+    if rampUp != 0.0
+      for channel in electricalTxChannels(field)
+        if !haskey(idxMap, id(channel))
+          throw(ScannerConfigurationError("No tx channel defined for field channel $(id(channel))"))
         end
+        idx = idxMap[id(channel)]
+        rampMap[idx] = max(get(rampMap, idx, 0.0), rampUp)
       end
+    end
+  end
+
+  # Set ramp time per channel
+  execute!(daq.rpc) do batch
+    for (idx, val) in rampMap
+      @add_batch batch rampingDAC!(daq.rpc, idx, val)
+      @add_batch batch enableRamping!(daq.rpc, idx, true)
+      push!(daq.rampingChannel, idx)
     end
   end
 end
