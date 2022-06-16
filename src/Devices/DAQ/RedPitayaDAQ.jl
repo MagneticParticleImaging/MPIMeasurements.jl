@@ -595,16 +595,14 @@ end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
 function startTx(daq::RedPitayaDAQ)
-  execute!(daq.rpc) do batch
-    @add_batch batch serverMode!(daq.rpc, ACQUISITION)
-    @add_batch batch masterTrigger!(daq.rpc, true)
-  end
+  serverMode!(daq.rpc, ACQUISITION)
+  masterTrigger!(daq.rpc, true)
   @debug "Started tx"
 end
 
 function stopTx(daq::RedPitayaDAQ)
+  masterTrigger!(daq.rpc, false)
   execute!(daq.rpc) do batch
-    @add_batch batch masterTrigger!(daq.rpc, false)
     @add_batch batch serverMode!(daq.rpc, CONFIGURATION)
     for channel in 1:2*length(daq.rpc)
       @add_batch batch enableRamping!(daq.rpc, channel, false)
