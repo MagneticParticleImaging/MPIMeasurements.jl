@@ -177,6 +177,8 @@ Base.@kwdef struct MPIScannerGeneral
   consumerThreadID::Int32 = 3
   "Thread ID of the producer thread."
   protocolThreadID::Int32 = 4
+  "Thread ID of the dedicated serial port thread"
+  serialThreadID::Int32 = 2
 end
 
 abstract type AsyncBuffer end

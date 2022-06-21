@@ -46,7 +46,7 @@ end
 mutable struct SystemMatrixRobotMeas
   task::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
-  producerFinalizer::Union{Task, Nothing}
+  producer::Union{Task, Nothing}
   #store::DatasetStore # Do we need this?
   positions::GridPositions
   currPos::Int
@@ -264,7 +264,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
     
     if protocol.stopped
       wait(calib.consumer)
-      wait(calib.producerFinalizer)
+      wait(calib.producer)
       @info "Stop calibration loop"
       finished = false
       break
@@ -278,7 +278,7 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol)
 
     if calib.currPos > numPos
       wait(calib.consumer)
-      wait(calib.producerFinalizer)
+      wait(calib.producer)
       stopTx(daq)
       disableACPower(su)
       enable(robot)
@@ -348,51 +348,52 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
   @sync begin
     # Prepare Robot/Sample
-    #@async begin 
+    @tspawnat protocol.scanner.generalParams.serialThreadID begin 
       timeMove = @elapsed moveAbs(robot, pos) 
-    #end
+    end
 
     # Prepare DAQ
-    @async timePrepDAQ = @elapsed begin
-      allowControlLoop = mod1(calib.currPos, 11) == 1  
-      timeFinalizer = @elapsed wait(calib.producerFinalizer)
-      
-      # The following tasks can only be started after the finalizer and mostly only in this order
-
-      timeFrameChange = @elapsed begin 
-        if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-          acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
-          acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
-          setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
-          setSequenceParams(daq, protocol.params.sequence)
-          protocol.restored = false
-        end
-      end
-      # TODO check again if controlLoop can be run while robot is active
-      timeTx = @elapsed begin 
-        if protocol.params.controlTx
-          if allowControlLoop
-            controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
-            setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
-          else
-            setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
-            setRampingParams(daq, protocol.params.sequence)
+    @async begin
+      timeFinalizer = @elapsed wait(calib.producer)
+      timePrepDAQ = @elapsed @tspawnat protocol.scanner.generalParams.producerThreadID begin
+        allowControlLoop = mod1(calib.currPos, 11) == 1  
+        # The following tasks can only be started after the finalizer and mostly only in this order
+        timeFrameChange = @elapsed begin 
+          if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
+            acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
+            acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+            setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
+            setSequenceParams(daq, protocol.params.sequence)
+            protocol.restored = false
           end
-        else
-          prepareTx(daq, protocol.params.sequence)
         end
-      end
 
-      suTask = @async begin
-        # TODO Could be done in parallel
-        enableACPower(su)
-        @sync for amp in amps
-          @async turnOn(amp)
+        # TODO check again if controlLoop can be run while robot is active
+        timeTx = @elapsed begin 
+          if protocol.params.controlTx
+            if allowControlLoop
+              controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
+              setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
+            else
+              setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
+              setRampingParams(daq, protocol.params.sequence)
+            end
+          else
+            prepareTx(daq, protocol.params.sequence)
+          end
         end
-      end
-      timeWaitSU = @elapsed wait(suTask)
-      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
 
+        suTask = @async begin
+          # TODO Could be done in parallel
+          @sync for amp in amps
+            @async turnOn(amp)
+          end
+          enableACPower(su)
+        end
+
+        timeWaitSU = @elapsed wait(suTask)
+        timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
+      end
     end
 
     @async timeConsumer = @elapsed wait(calib.consumer)
@@ -422,8 +423,8 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
-    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
-    while !istaskdone(producer)
+    calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
+    while !istaskdone(calib.producer)
       handleEvents(protocol)
       # Dont want to throw cancel here
       sleep(0.05)
@@ -433,7 +434,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
 
   @show timeEnableSlowDAC
   start, endFrame = getFrameTiming(daq) 
-  calib.producerFinalizer = @async begin
+  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID begin
     endSequence(daq, endFrame)
     @sync for amp in amps
       @async turnOff(amp)
