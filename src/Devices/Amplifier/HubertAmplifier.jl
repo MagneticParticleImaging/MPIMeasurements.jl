@@ -53,7 +53,6 @@ end
 
 function _hubertSerial(sp::SerialPort, input::Array{UInt8}) #for querys
 	write(sp, input)
-	sleep(0.2)	#Huberts needs at least 100ms
 	answer_utf = readuntil(sp, '\n', 1.0)
 	#@show answer_utf
 	answer_hex = encode(answer_utf, "UTF-8")	#using StringEncodings
