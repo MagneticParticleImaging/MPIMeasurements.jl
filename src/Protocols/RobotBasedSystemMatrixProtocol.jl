@@ -380,15 +380,15 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
             end
           else
             prepareTx(daq, protocol.params.sequence)
+            setRampingParams(daq, protocol.params.sequence)
           end
         end
 
         suTask = @async begin
-          # TODO Could be done in parallel
+          enableACPower(su)
           @sync for amp in amps
             @async turnOn(amp)
           end
-          enableACPower(su)
         end
 
         timeWaitSU = @elapsed wait(suTask)
