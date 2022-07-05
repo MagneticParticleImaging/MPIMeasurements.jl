@@ -31,6 +31,9 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
   biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+
+
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   stopped::Bool = false
   cancelled::Bool = false
@@ -137,19 +140,23 @@ function measurement(protocol::ContinousMeasurementProtocol)
   # Check tasks
   ex = nothing
   if Base.istaskfailed(producer)
-    @error "Producer failed"
-    stack = Base.catch_stack(producer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
-    ex = stack[1]
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
   end
-  if  Base.istaskfailed(consumer)
-    @error "Consumer failed"
-    stack = Base.catch_stack(consumer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
+  if Base.istaskfailed(consumer)
+    currExceptions = current_exceptions(producer)
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
     if isnothing(ex)
-      ex = stack[1]
+      ex = currExceptions[1][:exception]
     end
   end
   if !isnothing(ex)
@@ -166,10 +173,10 @@ function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
+  return protocol.seqMeasState
 end
 
 

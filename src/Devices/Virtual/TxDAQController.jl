@@ -130,6 +130,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       end
       @warn "Ramping status" rampingStatus(daq.rpc)
       
+      sleep(txCont.params.controlPause)
+
       @info "Read periods"
       period = currentPeriod(daq)
       uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
@@ -150,14 +152,10 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
         done = rampDownDone(daq.rpc)
       end
       masterTrigger!(daq.rpc, false)
-      for channel in daq.rampingChannel
-        enableRampDown!(daq.rpc, channel, false)
-      end
       # These reset the amplitude, phase and ramping, so we only reset trigger here
       #stopTx(daq) 
       #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
       
-      sleep(txCont.params.controlPause)
       i += 1
     end
   catch ex

@@ -150,7 +150,7 @@ function executionTask(protocol::Protocol)
       @debug "An exception has been thrown during execution. $ex"
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
-      throw(ex)
+      rethrow()
     end
   end
 
