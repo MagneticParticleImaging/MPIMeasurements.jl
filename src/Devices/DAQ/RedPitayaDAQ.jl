@@ -186,8 +186,8 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     if !isnothing(lut)
       numSeqChan!(rp, size(lut, 1))
       #TODO IMPLEMENT SHORTER RAMP DOWN TIMING FOR SYSTEM MATRIX
-      ramping = RedPitayaDAQServer.computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
-      rpSeq = ArbitrarySequence(lut, enableLUT, daq.acqNumFrames*daq.acqNumFrameAverages, ramping..., ramping...)
+      #ramping = RedPitayaDAQServer.computeRamping(daq.rpc, size(lut, 2), daq.params.ffRampUpTime, daq.params.ffRampUpFraction)
+      rpSeq = ArbitrarySequence(lut, enableLUT, daq.acqNumFrames*daq.acqNumFrameAverages, 0, 0, 0, 0)
       push!(acqSeq, rpSeq)
       appendSequence!(rp, rpSeq)
       # TODO enableLuts not yet implemented
