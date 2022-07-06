@@ -129,7 +129,7 @@ function device_mode_enable()
   if isdefined(Base, :active_repl)
     initrepl(parse_device_command,
             prompt_text=prompt_string_device,
-            start_key="\\C-d",
+            start_key="\\M-m",
             repl = Base.active_repl,
             mode_name="Device mode",
             valid_input_checker=device_mode_valid_input_checker,
