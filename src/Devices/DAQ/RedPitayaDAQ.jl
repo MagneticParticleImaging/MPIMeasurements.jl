@@ -146,8 +146,9 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
-  setRampingParameter(daq, sequence)
-  setAcyclicParameter(daq, acyclicElectricalTxChannels(sequence))
+  setRampingParams(daq, sequence)
+  setAcyclicParams(daq, acyclicElectricalTxChannels(sequence))
+  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
 end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
@@ -198,11 +199,11 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   end
 end
 
-function setAcyclicParameter(daq, channel::Nothing)
+function setAcyclicParams(daq, channel::Nothing)
   # NOP
 end
 
-function setAcyclicParameter(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
+function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
   luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
   enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
 
@@ -228,7 +229,6 @@ function setAcyclicParameter(daq, seqChannels::Vector{AcyclicElectricalTxChannel
       enableLuts[rp] = enableLut
     end
   end
-  daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
   setSequenceParams(daq, luts, enableLuts)
 end
 
@@ -250,7 +250,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqPeriodsPerPatch)
   result = execute!(daq.rpc) do batch
     @add_batch batch samplesPerStep!(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
-    @add_batch batch clearSequences!(daq.rpc)
+    @add_batch batch clearSequence!(daq.rpc)
     @add_batch batch samplesPerStep(daq.rpc)
   end
   daq.samplesPerStep = result[3]
@@ -304,7 +304,7 @@ function createLUT(start, channelMapping)
   lutValues = []
   lutIdx = []
   for (lutChannel, seqChannel) in channelMapping
-    tempValues = MPIFiles.values(seqChannel)
+    tempValues = values(seqChannel)
     if !isnothing(lutChannel.calibration)
       tempValues = tempValues.*lutChannel.calibration
     end
@@ -329,7 +329,7 @@ function createEnableLUT(start, channelMapping)
   enableLutValues = []
   enableLutIdx = []
   for (lutChannel, seqChannel) in channelMapping
-    tempValues = MPIFiles.enableValues(seqChannel)
+    tempValues = enableValues(seqChannel)
     push!(enableLutValues, tempValues)
     push!(enableLutIdx, lutChannel.channelIdx)
   end
