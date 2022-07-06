@@ -20,6 +20,8 @@ end
 neededDependencies(::MechanicsController) = []
 optionalDependencies(::MechanicsController) = [AbstractDAQ, Motor, Robot]
 
+Base.close(mechCont::MechanicsController) = nothing
+
 function setup(mechCont::MechanicsController, seq::Sequence)
   mechCont.sequence = seq
   controlledChannels = mechanicalTxChannels(seq)
