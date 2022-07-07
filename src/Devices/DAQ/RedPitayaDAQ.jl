@@ -163,7 +163,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
-      if (idx - 1) % 4 < 1
+      if (idx - 1) % 4 < 2
         m = Int64(ceil((idx + 1)/2))
       end
     end
@@ -337,7 +337,7 @@ function createEnableLUT(start, channelMapping)
   # Idx from 1 to 4
   enableLutIdx = (enableLutIdx .- start) .+ 1
   # Fill skipped channels with false, assumption: size of all enableLutValues is equal
-  enableLut = zeros(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
+  enableLut = ones(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
   for (i, enableLutIndex) in enumerate(enableLutIdx)
     enableLut[enableLutIndex, :] = enableLutValues[i]
   end
