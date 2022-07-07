@@ -56,15 +56,15 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     end
   end
   
-  endFrame = nothing
+  endSample = nothing
   try
     daq = getDAQ(scanner_)
-    endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
+    endSample = asyncProducer(channel, daq, sequence, prepTx = prepTx)
   finally
     try
       daq = getDAQ(scanner_)
-      if !isnothing(endFrame)
-        endSequence(daq, endFrame)
+      if !isnothing(endSample)
+        endSequence(daq, endSample)
       end
     catch ex
       @error "Could not stop tx"

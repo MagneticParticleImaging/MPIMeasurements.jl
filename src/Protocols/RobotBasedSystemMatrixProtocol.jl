@@ -393,7 +393,6 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         end
       end
       timeWaitSU = @elapsed wait(suTask)
-      timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
 
     end
 

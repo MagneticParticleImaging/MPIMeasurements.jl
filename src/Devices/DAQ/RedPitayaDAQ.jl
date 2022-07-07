@@ -344,20 +344,7 @@ function createEnableLUT(start, channelMapping)
   return enableLut
 end
 
-
-function prepareSequence(daq::RedPitayaDAQ, sequence::Sequence)
-  if !isnothing(daq.acqSeq)
-    @info "Preparing sequence"
-    success = all(prepareSequences!(daq.rpc))
-    if !success
-      @warn "Failed to prepare sequence"
-    end
-  end
-end
-
-function endSequence(daq::RedPitayaDAQ, endFrame)
-  sampPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
-  endSample = (endFrame + 1) * sampPerFrame
+function endSequence(daq::RedPitayaDAQ, endSample)
   wp = currentWP(daq.rpc)
   # Wait for sequence to finish
   while wp < endSample
@@ -366,12 +353,11 @@ function endSequence(daq::RedPitayaDAQ, endFrame)
   stopTx(daq)
 end
 
-function getFrameTiming(daq::RedPitayaDAQ)
+function getTiming(daq::RedPitayaDAQ)
   # TODO How to signal end of sequences without any LUTs
-  startSample = RedPitayaDAQServer.start(daq.acqSeq[1]) * daq.samplesPerStep
-  startFrame = div(startSample, samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
-  endFrame = div((length(daq.acqSeq[1]) * daq.samplesPerStep), samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc))
-  return startFrame, endFrame
+  timing = seqTiming(daq.acqSeq[1])
+  sampleTiming = (start=timing.start * daq.samplesPerStep, down=timing.down * daq.samplesPerStep, finish=timing.finish * daq.samplesPerStep)
+  return sampleTiming
 end
 
 #### Producer/Consumer ####
@@ -404,16 +390,17 @@ function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
 end
 
 function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
+  # TODO How to signal end of sequences without any LUTs
+  timing = nothing
   if !isnothing(daq.acqSeq) # This is the case if no acyclic channels haven been set
-    startFrame, endFrame = getFrameTiming(daq)
+    timing = getTiming(daq)
   else
-    startFrame = 2
-    endFrame = startFrame+numFrames
+    timing = (start=2, down=startFrame+numFrames, finish=startFrame+numFrames)
   end
   startTx(daq)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
-  startSample = startFrame * samplesPerFrame
+  startSample = timing.start
   samplesToRead = samplesPerFrame * numFrames
   chunkSize = Int(ceil(0.1 * (125e6/daq.decimation)))
 
@@ -427,9 +414,6 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   try
     @debug currentWP(daq.rpc)
     readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
-    for ch in daq.rampingChannel
-      enableRampDown!(daq.rpc, ch, true)
-    end
   catch e
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
@@ -445,7 +429,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
     rethrow(e)
   end
   @debug "Pipeline finished"
-  return endFrame
+  return timing.finish
 end
 
 
