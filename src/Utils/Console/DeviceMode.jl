@@ -110,7 +110,7 @@ function _completionsDevice(input, final, offset, index)
     if isnothing(command_.completions)
       possible = []
     else
-      possible = command_.completionsDevice(join(splittedCommand[2:end], " "), final, offset, index)
+      possible = command_.completions(join(splittedCommand[2:end], " "), final, offset, index)
     end
   else
     possible = [command for command in extended_device_commands() if startswith(command, input)]
