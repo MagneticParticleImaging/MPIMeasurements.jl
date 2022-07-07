@@ -215,7 +215,7 @@ end
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
     type = pop!(channelDict, "type")
-    knownChannels = concreteSubtypes(TxChannel)
+    knownChannels = MPIFiles.concreteSubtypes(TxChannel)
     index = findfirst(x -> x == type, string.(knownChannels))
     if !isnothing(index) 
       createFieldChannel(channelID, knownChannels[index], channelDict)
