@@ -213,16 +213,15 @@ function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; p
   end
   if prepSeq
       setSequenceParams(daq, sequence)
-      prepareSequence(daq, sequence)
   end
   
   numFrames = acqNumFrames(sequence) * acqNumFrameAverages(sequence)
-  endFrame = startProducer(channel, daq, numFrames)
+  endSample = startProducer(channel, daq, numFrames)
   
   if endSeq
-    endSequence(daq, endFrame)
+    endSequence(daq, endSample)
   end
-  return endFrame
+  return endSample
 end
 
 function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
