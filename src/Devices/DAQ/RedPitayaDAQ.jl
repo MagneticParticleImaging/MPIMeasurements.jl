@@ -328,6 +328,9 @@ function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
     if p.status.overwritten || p.status.corrupted
         @warn "RedPitaya $i lost data"
     end
+    if p.status.stepsLost
+      @warn "RedPitaya $i lost sequence steps"
+    end
 end
 end
 
