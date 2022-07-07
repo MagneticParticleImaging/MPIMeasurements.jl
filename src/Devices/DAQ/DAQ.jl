@@ -207,7 +207,7 @@ calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelI
 @mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
 @mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
 
-function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true, endSeq = true)
+function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true)
   if prepTx
       prepareTx(daq, sequence)
   end
@@ -217,10 +217,6 @@ function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; p
   
   numFrames = acqNumFrames(sequence) * acqNumFrameAverages(sequence)
   endSample = startProducer(channel, daq, numFrames)
-  
-  if endSeq
-    endSequence(daq, endSample)
-  end
   return endSample
 end
 

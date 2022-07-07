@@ -423,7 +423,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   @info "Starting Measurement"
   timeEnableSlowDAC = @elapsed begin
     calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol)
-    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false, endSeq = false)
+    producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false)
     while !istaskdone(producer)
       handleEvents(protocol)
       # Dont want to throw cancel here

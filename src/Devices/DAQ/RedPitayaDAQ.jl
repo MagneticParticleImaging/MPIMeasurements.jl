@@ -253,16 +253,16 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     @add_batch batch clearSequence!(daq.rpc)
     @add_batch batch samplesPerStep(daq.rpc)
   end
-  daq.samplesPerStep = result[3]
+  daq.samplesPerStep = result[3][1]
 
   result = execute!(daq.rpc) do batch
     for i in daq.rampingChannel
       @add_batch batch rampingDAC(daq.rpc, i)
     end
   end
-  rampTime = maximum(result)
-  samplingRate = 125e6/dec
-  timePerStep = sampPerStep/samplingRate
+  rampTime = maximum([maximum(filter(!isnothing, x)) for x in result])
+  samplingRate = 125e6/daq.decimation
+  timePerStep = daq.samplesPerStep/samplingRate
   rampingSteps = Int64(ceil(rampTime/timePerStep))
   fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
 
@@ -413,7 +413,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   @debug "Pipeline started"
   try
     @debug currentWP(daq.rpc)
-    readPipelinedSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
+    readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
     daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
