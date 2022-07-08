@@ -61,3 +61,5 @@ push!(device_repl_mode.commands, CommandSpec(
   api = device_mode_deactivate,
   description = "Dectivate current device."
 ))
+
+include("Devices/Devices.jl")

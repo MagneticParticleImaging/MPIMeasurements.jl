@@ -14,6 +14,7 @@ using Graphics: @mustimplement
 using Mmap
 using StringEncodings
 using DocStringExtensions
+using MacroTools
 
 using ReplMaker
 import REPL
@@ -37,7 +38,7 @@ const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Pus
 export addConfigurationPath
 addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
 
-# circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
+# Circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
 """
 Abstract type for all protocols
 
