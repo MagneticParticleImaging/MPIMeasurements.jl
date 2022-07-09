@@ -1,4 +1,19 @@
 @devicecommand function update(rp::RedPitayaDAQ, tag::String)
-  @warn "Update not yet implemented"
+  update!(rp, tag)
+  return nothing
+end
+
+@devicecommand function update(rp::RedPitayaDAQ)
+  options = listReleaseTags()
+  menu = RadioMenu(options, pagesize=4)
+
+  choice = request("Please choose the release tag for the update:", menu)
+
+  if choice != -1
+    update!(rp, options[choice])
+  else
+    println("Update canceled.")
+  end
+  
   return nothing
 end

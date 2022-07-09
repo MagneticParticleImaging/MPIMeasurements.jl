@@ -130,26 +130,36 @@ function get_device_command(command::String)
   end
 
   # ... then check device-specific commands (iterate supertypes except for the type itself and Any)
-  device = getDevice(mpi_repl_mode.activeProtocolHandler.scanner, device_repl_mode.activeDeviceID)
-  matchingCommands = Vector{DeviceCommand}()
-  for type in supertypes(typeof(device))[2:end-1]
-    deviceCommands = get(device_repl_mode.deviceCommands, type, nothing)
-    if !isnothing(deviceCommands)
-      append!(matchingCommands, [command_ for command_ in deviceCommands if command_.name == command])
+  if !isnothing(device_repl_mode.activeDeviceID)
+    device = getDevice(mpi_repl_mode.activeProtocolHandler.scanner, device_repl_mode.activeDeviceID)
+    matchingCommands = Vector{DeviceCommand}()
+    for type in supertypes(typeof(device))[2:end-1]
+      deviceCommands = get(device_repl_mode.deviceCommands, type, nothing)
+      if !isnothing(deviceCommands)
+        append!(matchingCommands, [command_ for command_ in deviceCommands if command_.name == command])
+      end
+    end
+
+    if length(matchingCommands) > 0
+      return matchingCommands
     end
   end
 
-  if length(matchingCommands) > 0
-    return matchingCommands
-  else
-    return nothing
-  end
+  return nothing
 end
 
 function parse_device_command(command::String)
-  splittedCommand = convert(Vector{String}, split(command, " "))
+  splittedCommandUnparsed = [elem for elem in flatten(split.(split(command, "[", keepempty=false), "]", keepempty=false))]
+  splittedCommandUnparsed = convert.(String, splittedCommandUnparsed)
+  splittedCommand = convert(Vector{Any}, convert.(String, split(splittedCommandUnparsed[1], " ", keepempty=false)))
+  
+  for elem in splittedCommandUnparsed[2:end]
+    tmpSplit = split(elem, ", ")
+    tmpSplit = collect(flatten(split.(tmpSplit, ",", keepempty=false)))
+    push!(splittedCommand, tryuparse.(tmpSplit))
+  end
 
-  spec = get_device_command(splittedCommand[1])
+  spec = get_device_command(String(splittedCommand[1]))
 
   if !isnothing(spec)
     if eltype(spec) == DeviceCommand
@@ -163,7 +173,7 @@ function parse_device_command(command::String)
         activeDevice = getDevice(mpi_repl_mode.activeProtocolHandler.scanner, device_repl_mode.activeDeviceID)
         selectedCommand.fun(activeDevice, Tuple(splittedCommand[2:end])...)
       end
-    elseif eltype(spec) == CommandSpec
+    elseif typeof(spec) == CommandSpec
       if length(splittedCommand) > 1
         if !isnothing(spec.option_specs)
           if haskey(spec.option_specs, splittedCommand[2])
@@ -177,6 +187,9 @@ function parse_device_command(command::String)
       else
         spec.api()
       end
+    else
+      # NOP
+      #@warn "None of the two possible types matched. Element type is `$(eltype(spec))`."
     end
   else
     print("Command `$(splittedCommand[1])` cannot be found.")

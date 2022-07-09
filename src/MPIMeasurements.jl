@@ -3,6 +3,7 @@ module MPIMeasurements
 using UUIDs
 using Mmap: settings
 using Base: Integer
+import Base.Iterators: flatten
 using ThreadPools
 using Sockets
 using Dates

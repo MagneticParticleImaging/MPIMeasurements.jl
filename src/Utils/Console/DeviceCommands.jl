@@ -50,9 +50,7 @@ push!(device_repl_mode.commands, CommandSpec(
 ))
 
 function device_mode_deactivate()
-  if check_no_scanner()
-    device_repl_mode.activeDeviceID = nothing
-  end
+  device_repl_mode.activeDeviceID = nothing
 end
 
 push!(device_repl_mode.commands, CommandSpec(
@@ -60,6 +58,33 @@ push!(device_repl_mode.commands, CommandSpec(
   short_name = "deac",
   api = device_mode_deactivate,
   description = "Dectivate current device."
+))
+
+function device_mode_mpi()
+  enter_mode!("MPI mode")
+
+  return
+end
+
+push!(device_repl_mode.commands, CommandSpec(
+  canonical_name = "mpi",
+  api = device_mode_mpi,
+  description = "Enter mode to interact with devices."
+))
+
+# Auxiliary commands
+
+push!(device_repl_mode.commands, CommandSpec(
+  canonical_name = "debug",
+  api = mpi_mode_debug,
+  description = "Set to debug mode."
+))
+
+push!(device_repl_mode.commands, CommandSpec(
+  canonical_name = "exit",
+  synonyms = ["exit()"],
+  api = mpi_mode_exit,
+  description = "Exit Julia."
 ))
 
 include("Devices/Devices.jl")

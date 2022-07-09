@@ -463,7 +463,7 @@ push!(mpi_repl_mode.commands, CommandSpec(
 ))
 
 function mpi_mode_device(;device_id_::Union{String, Nothing} = nothing)
-  
+  enter_mode!("Device mode")
 
   return
 end
