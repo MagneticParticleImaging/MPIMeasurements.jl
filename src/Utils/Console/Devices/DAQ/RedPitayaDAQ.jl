@@ -5,9 +5,9 @@ end
 
 @devicecommand function update(rp::RedPitayaDAQ)
   options = listReleaseTags()
-  menu = RadioMenu(options, pagesize=4)
+  menu = TerminalMenus.RadioMenu(options, pagesize=4)
 
-  choice = request("Please choose the release tag for the update:", menu)
+  choice = TerminalMenus.request("Please choose the release tag for the update:", menu)
 
   if choice != -1
     update!(rp, options[choice])
