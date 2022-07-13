@@ -113,33 +113,26 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
 end
 
 function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
-  paramKeys = Symbol.(keys(params))
   tempDeviceParams = []
   paramsRoot = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
   push!(tempDeviceParams, paramsRoot)
   length(deepsubtypes(paramsRoot)) == 0 || push!(tempDeviceParams, deepsubtypes(paramsRoot)...)
 
   fittingDeviceParams = []
+  lastException = nothing
   for (i, paramType) in enumerate(tempDeviceParams)
-    #Can't easily see default values for fields -> Just try out all types
-    #for constructor in methods(paramType)
-    #  if issubset(paramKeys, Base.kwarg_decl(constructor))
-    #    push!(fittingDeviceParams, paramType)
-    #    break
-    #  end
-    #end
     try
       tempParams = paramType(params)
       push!(fittingDeviceParams, tempParams)
     catch ex
-      if i == length(tempDeviceParams) # Only throw error if no other param structs are left
-        rethrow()
-      end
+      lastException = ex
     end
   end
 
   if length(fittingDeviceParams) == 1
     return fittingDeviceParams[1]
+  elseif length(fittingDeviceParams) == 0 && !isnothing(lastException)
+    throw(lastException)
   else
     return nothing
   end
