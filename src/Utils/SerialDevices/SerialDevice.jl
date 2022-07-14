@@ -71,6 +71,10 @@ function receive(sd::SerialDevice)
 	return readstring(sd.sp)
 end
 
+function receive(sd::SerialDevice, array::AbstractArray)
+	return read!(sd.sp, array)
+end
+
 """
 Send querry to serial device and receive device answer. Returns a String
 """
@@ -80,6 +84,14 @@ function query(sd::SerialDevice,cmd::String)
 	out = readuntil(sd.sp, Vector{Char}(sd.delim_read), sd.timeout_ms)
 	flush(sd.sp)
 	return rstrip(out,Vector{Char}(sd.delim_read))
+end
+
+function query!(sd::SerialDevice, cmd::String, data::AbstractArray)
+	flush(sd.sp)
+	send(sd,string(cmd,sd.delim_write))
+	receive(sd, data)
+	flush(sd.sp)
+	return data
 end
 
 """

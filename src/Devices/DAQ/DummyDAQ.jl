@@ -195,10 +195,6 @@ function setSequenceParams(daq::DummyDAQ, sequence::Sequence)
     # NOP
 end
 
-function prepareSequence(daq::DummyDAQ, sequence::Sequence)
-    # NOP
-end
-
 
 function endSequence(daq::DummyDAQ, endFrame)
     # NOP

@@ -3,6 +3,7 @@ module MPIMeasurements
 using UUIDs
 using Mmap: settings
 using Base: Integer
+import Base.Iterators: flatten
 using ThreadPools
 using Sockets
 using Dates
@@ -14,17 +15,21 @@ using Graphics: @mustimplement
 using Mmap
 using StringEncodings
 using DocStringExtensions
-import Plots
+using MacroTools
 
 using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length
 
 using Reexport
 @reexport using MPIFiles
-import MPIFiles: hasKeyAndValue
+import MPIFiles: hasKeyAndValue, 
+    acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
+    acqNumFrames, acqNumAverages,
+    dfBaseFrequency, dfCycle, dfDivider, dfNumChannels, dfPhase, dfStrength, dfWaveform,
+    rxBandwidth, rxNumChannels, rxNumSamplingPoints
 
 using RedPitayaDAQServer
 import PyTinkerforge
@@ -34,7 +39,7 @@ const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Pus
 export addConfigurationPath
 addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
 
-# circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
+# Circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
 """
 Abstract type for all protocols
 
@@ -82,6 +87,8 @@ function __init__()
   end
 
   mpi_mode_enable()
+  device_mode_enable()
+  atexit(() -> close(mpi_repl_mode)) # Make sure that an activated scanner is always closed
 end
 
 end # module

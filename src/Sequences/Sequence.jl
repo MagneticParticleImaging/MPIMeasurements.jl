@@ -142,9 +142,6 @@ function sequenceFromTOML(filename::AbstractString)
   splattingDict[:description] = general["description"]
   splattingDict[:targetScanner] = general["targetScanner"]
   splattingDict[:baseFrequency] = uparse(general["baseFrequency"])
-  if haskey(general, "triggered")
-    splattingDict[:triggered] = general["triggered"]
-  end
 
   # Fields
   splattingDict[:fields] = fieldDictToFields(sequenceDict["Fields"])
@@ -218,7 +215,7 @@ end
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
     type = pop!(channelDict, "type")
-    knownChannels = concreteSubtypes(TxChannel)
+    knownChannels = MPIFiles.concreteSubtypes(TxChannel)
     index = findfirst(x -> x == type, string.(knownChannels))
     if !isnothing(index) 
       createFieldChannel(channelID, knownChannels[index], channelDict)
@@ -242,18 +239,36 @@ targetScanner(sequence::Sequence) = sequence.targetScanner
 export baseFrequency
 baseFrequency(sequence::Sequence) = sequence.baseFrequency
 
+channels(field::MagneticField) = field.channels
+channels(field::MagneticField, T::Type{<:TxChannel}) = [channel for channel in channels(field) if typeof(channel) <: T]
+
+export safeStartInterval
+safeStartInterval(field::MagneticField) = field.safeStartInterval
+export safeTransitionInterval
+safeTransitionInterval(field::MagneticField) = field.safeTransitionInterval
+export safeEndInterval
+safeEndInterval(field::MagneticField) = field.safeEndInterval
+export safeErrorInterval
+safeErrorInterval(field::MagneticField) = field.safeErrorInterval
+
+control(field::MagneticField) = field.control
+decouple(field::MagneticField) = field.decouple
+
 export electricalTxChannels
-electricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: ElectricalTxChannel]
+electricalTxChannels(field::MagneticField) = channels(field, ElectricalTxChannel)
+electricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} = [channel for field in sequence.fields for channel in electricalTxChannels(field)]
 
 export mechanicalTxChannels
-mechanicalTxChannels(sequence::Sequence)::Vector{MechanicalTxChannel} = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: MechanicalTxChannel]
+mechanicalTxChannels(field::MagneticField) = channels(field, MechanicalTxChannel)
+mechanicalTxChannels(sequence::Sequence)::Vector{MechanicalTxChannel} = [channel for field in sequence.fields for channel in mechanicalTxChannels(field)]
 
 export periodicElectricalTxChannels
-periodicElectricalTxChannels(sequence::Sequence)::Vector{PeriodicElectricalChannel} = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicElectricalChannel)
+periodicElectricalTxChannels(sequence::Sequence)::Vector{PeriodicElectricalChannel} = [channel for field in sequence.fields for channel in periodicElectricalTxChannels(field)]
 
 export acyclicElectricalTxChannels
-acyclicElectricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} =
-  [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: StepwiseElectricalChannel || typeof(channel) <: ContinuousElectricalChannel]
+acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
+acyclicElectricalTxChannels(sequence::Sequence)::Vector{AcyclicElectricalTxChannel} = [channel for field in sequence.fields for channel in acyclicElectricalTxChannels(field)]
 
 export continuousElectricalTxChannels
 continuousElectricalTxChannels(sequence::Sequence) = [channel for channel in electricalTxChannels(sequence) if isContinuous(channel)]
@@ -291,9 +306,13 @@ hasContinuousMechanicalTxChannels(sequence::Sequence) = any(isContinuous.(mechan
 export hasStepwiseMechanicalChannels
 hasStepwiseMechanicalChannels(sequence::Sequence) = any(isStepwise.(mechanicalTxChannels(sequence)))
 
+export fields
+fields(sequence::Sequence) = sequence.fields
+
 export id
 id(channel::TxChannel) = channel.id
 id(channel::RxChannel) = channel.id
+id(field::MagneticField) = field.id
 
 # Enable sorting of stepwise channels by their step priority
 # TODO: This currently blocks sorting for other properties
@@ -456,10 +475,10 @@ function dfWaveform(sequence::Sequence) # TODO: How do we integrate the mechanic
 end
 
 export needsControl
-needsControl(sequence::Sequence) = any([field.control for field in sequence.fields])
+needsControl(sequence::Sequence) = any([control(field) for field in fields(sequence)])
 
 export needsDecoupling
-needsDecoupling(sequence::Sequence) = any([field.decouple for field in sequence.fields])
+needsDecoupling(sequence::Sequence) = any([decouple(field) for field in fields(sequence)])
 
 export needsControlOrDecoupling
 needsControlOrDecoupling(sequence::Sequence) = needsControl(sequence) || needsDecoupling(sequence)

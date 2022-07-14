@@ -150,7 +150,7 @@ function executionTask(protocol::Protocol)
       @debug "An exception has been thrown during execution. $ex"
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
-      throw(ex)
+      rethrow()
     end
   end
 
@@ -294,6 +294,7 @@ isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDF
 
 include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
+include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
 include("ContinousMeasurementProtocol.jl")

@@ -1,8 +1,10 @@
-export MPIMeasurementProtocol, MPIMeasurementProtocolParams
+export RobotMPIMeasurementProtocol, RobotMPIMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the RobotMPIMeasurementProtocol
 """
-Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
+Base.@kwdef mutable struct RobotMPIMeasurementProtocolParams <: ProtocolParams
+  "Foreground position"
+  fgPos::Union{ScannerCoords, Nothing} = nothing
   "Foreground frames to measure. Overwrites sequence frames"
   fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
@@ -16,24 +18,24 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Remember background measurement"
   rememberBGMeas::Bool = false
 end
-function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
+function RobotMPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
   sequence = nothing
   if haskey(dict, "sequence")
     sequence = Sequence(scanner, dict["sequence"])
     dict["sequence"] = sequence
     delete!(dict, "sequence")
   end
-  params = params_from_dict(MPIMeasurementProtocolParams, dict)
+  params = params_from_dict(RobotMPIMeasurementProtocolParams, dict)
   params.sequence = sequence
   return params
 end
-MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
+RobotMPIMeasurementProtocolParams(dict::Dict) = params_from_dict(RobotMPIMeasurementProtocolParams, dict)
 
-Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
+Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
   name::AbstractString
   description::AbstractString
   scanner::MPIScanner
-  params::MPIMeasurementProtocolParams
+  params::RobotMPIMeasurementProtocolParams
   biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
   executeTask::Union{Task, Nothing} = nothing
 
@@ -47,33 +49,55 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   txCont::Union{TxDAQController, Nothing} = nothing
 end
 
-function requiredDevices(protocol::MPIMeasurementProtocol)
-  result = [AbstractDAQ]
+function requiredDevices(protocol::RobotMPIMeasurementProtocol)
+  result = [AbstractDAQ, Robot]
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
   return result
 end
 
-function _init(protocol::MPIMeasurementProtocol)
+function _init(protocol::RobotMPIMeasurementProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
+  if isnothing(protocol.params.fgPos)
+    throw(IllegalStateException("Protocol requires a foreground position"))
+  end
+  if !checkPositions(protocol)
+    throw(IllegalStateException("Protocol has an illegal foreground position"))
+  end
+
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
-    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
+    controllers = getDevices(protocol.scanner, TxDAQController)
+    if length(controllers) > 1
+      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
+    end
+    protocol.txCont = controllers[1]
     protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
-
-  return nothing
 end
 
-function timeEstimate(protocol::MPIMeasurementProtocol)
+function checkPositions(protocol::RobotMPIMeasurementProtocol)
+  rob = getRobot(protocol.scanner)
+  valid = true
+  if hasDependency(rob, AbstractCollisionModule)
+    cms = dependencies(rob, AbstractCollisionModule)
+    for cm in cms
+      valid &= all(checkCoords(cm, protocol.params.fgPos))
+    end
+  end
+  valid &= checkAxisRange(rob, toRobotCoords(rob, protocol.params.fgPos))
+  return valid
+end
+
+function timeEstimate(protocol::RobotMPIMeasurementProtocol)
   est = "Unknown"
   if !isnothing(protocol.params.sequence)
     params = protocol.params
@@ -88,60 +112,62 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
   return est
 end
 
-function enterExecute(protocol::MPIMeasurementProtocol)
+function enterExecute(protocol::RobotMPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
 end
 
-function _execute(protocol::MPIMeasurementProtocol)
-  @debug "Measurement protocol started"
+function _execute(protocol::RobotMPIMeasurementProtocol)
+  @info "Measurement protocol started"
+  if !isReferenced(getRobot(protocol.scanner))
+    throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
+  end
 
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
-
-  debugCount = 0
-
   while !(protocol.finishAcknowledged)
-    handleEvents(protocol)
+    handleEvents(protocol) 
     protocol.cancelled && throw(CancelException())
+    sleep(0.05)
   end
 
   @info "Protocol finished."
   close(protocol.biChannel)
-  @debug "Protocol channel closed after execution."
 end
 
-function performMeasurement(protocol::MPIMeasurementProtocol)
+function performMeasurement(protocol::RobotMPIMeasurementProtocol)
+  rob = getRobot(protocol.scanner)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
-    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+    if askChoices(protocol, "Press continue when background measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
+    enable(rob)
+    moveAbs(rob, namedPosition(rob, "park"))
+    disable(rob)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
-
-    @debug "Taking background measurement."
     measurement(protocol)
     protocol.bgMeas = protocol.seqMeasState.buffer
-    if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
+    if askChoices(protocol, "Press continue when foreground measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
       throw(CancelException())
-    end
+    end    
   end
 
-  @debug "Setting number of foreground frames."
+  enable(rob)
+  moveAbs(rob, protocol.params.fgPos)
+  disable(rob)
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
-
-  @debug "Starting foreground measurement."
   measurement(protocol)
 end
 
-function measurement(protocol::MPIMeasurementProtocol)
+function measurement(protocol::RobotMPIMeasurementProtocol)
   # Start async measurement
   protocol.measuring = true
   measState = asyncMeasurement(protocol)
   producer = measState.producer
   consumer = measState.consumer
-
+  
   # Handle events
   while !istaskdone(consumer)
     handleEvents(protocol)
@@ -178,49 +204,49 @@ function measurement(protocol::MPIMeasurementProtocol)
 
 end
 
-function asyncMeasurement(protocol::MPIMeasurementProtocol)
-  scanner_ = scanner(protocol)
+function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
+  scanner = protocol.scanner
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  prepareAsyncMeasurement(scanner, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
   return protocol.seqMeasState
 end
 
 
-function cleanup(protocol::MPIMeasurementProtocol)
+function cleanup(protocol::RobotMPIMeasurementProtocol)
   # NOP
 end
 
-function stop(protocol::MPIMeasurementProtocol)
+function stop(protocol::RobotMPIMeasurementProtocol)
   put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
 end
 
-function resume(protocol::MPIMeasurementProtocol)
+function resume(protocol::RobotMPIMeasurementProtocol)
    put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
 end
 
-function cancel(protocol::MPIMeasurementProtocol)
+function cancel(protocol::RobotMPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
 end
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
+function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
-        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.protocol.seqMeasState.numFrames
+        data = protocol.protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.seqMeasState.buffer
+    data = protocol.protocol.seqMeasState.buffer
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -229,35 +255,32 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
 end
 
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
+function handleEvent(protocol::RobotMPIMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.seqMeasState)
-    framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
+  elseif !isnothing(protocol.protocol.seqMeasState) 
+    framesTotal = protocol.protocol.seqMeasState.numFrames
+    framesDone = min(protocol.protocol.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else
-    reply = ProgressEvent(0, 0, "N/A", event)
+  else 
+    reply = ProgressEvent(0, 0, "N/A", event)  
   end
   put!(protocol.biChannel, reply)
 end
 
-handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+handleEvent(protocol::RobotMPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
+function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  mdf = event.mdf
-  data = protocol.seqMeasState.buffer
+  params = event.params
+  data = protocol.protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
-  @info "The measurement was saved at `$filename`."
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
+  @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
-
-protocolInteractivity(protocol::MPIMeasurementProtocol) = Interactive()
-protocolMDFStudyUse(protocol::MPIMeasurementProtocol) = UsingMDFStudy()

@@ -35,6 +35,8 @@ function ConsoleProtocolHandler(scanner::String, protocol::String)
   return ConsoleProtocolHandler(scanner_, Protocol(protocol, scanner))
 end
 
+Base.close(cph::ConsoleProtocolHandler) = close(cph.scanner)
+
 export study
 study(cph::ConsoleProtocolHandler) = cph.currStudy
 study(cph::ConsoleProtocolHandler, study::MDFv2Study) = cph.currStudy = study

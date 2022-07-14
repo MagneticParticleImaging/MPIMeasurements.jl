@@ -10,6 +10,8 @@ automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
+Base.close(device::Device) = @warn "The device type `$(typeof(device))` has no `close` function defined."
+
 function validateDeviceStruct(device::Type{<:Device})
   requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
   missingFields = [x for x in requiredFields if !in(x, fieldnames(device))]
@@ -18,7 +20,6 @@ function validateDeviceStruct(device::Type{<:Device})
     throw(ScannerConfigurationError(msg))
   end
 end
-
 
 macro add_device_fields(paramType)
   return esc(quote 

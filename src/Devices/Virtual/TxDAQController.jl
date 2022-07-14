@@ -92,7 +92,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   setTxParamsFrequencies(daq, frequencies)
 
   # Start Tx
-  prepareControl(daq)
+  prepareControl(daq, seq)
   su = nothing
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
@@ -116,25 +116,46 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
 
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-  startTx(daq)
 
   controlPhaseDone = false
   i = 1
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
+      startTx(daq)
+      # Wait Start
+      done = false
+      while !done
+        done = rampUpDone(daq.rpc)
+      end
+      @warn "Ramping status" rampingStatus(daq.rpc)
+      
+      sleep(txCont.params.controlPause)
+
+      @info "Read periods"
       period = currentPeriod(daq)
       uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
-
+      for ch in daq.rampingChannel
+        enableRampDown!(daq.rpc, ch, true)
+      end
+      
       # Translate uRef/channelIdx(daq) to order as it is used here
       mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
       controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
       controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
       sortedRef = uRef[:, controlOrderRefIndices, :]
-
       controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
-      sleep(txCont.params.controlPause)
+      # Wait End
+      done = false
+      while !done
+        done = rampDownDone(daq.rpc)
+      end
+      masterTrigger!(daq.rpc, false)
+      # These reset the amplitude, phase and ramping, so we only reset trigger here
+      #stopTx(daq) 
+      #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+      
       i += 1
     end
   catch ex
