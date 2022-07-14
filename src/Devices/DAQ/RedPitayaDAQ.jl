@@ -12,7 +12,7 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   calibFFCurrentToVolt::Vector{Float32}
-  calibIntToVolt::Array{Float32}
+  #calibIntToVolt::Array{Float32}
   ffRampUpFraction::Float32 = 1.0 # TODO RampUp + RampDown, could be a Union of Float or Vector{Float} and then if Vector [1] is up and [2] down
   ffRampUpTime::Float32 = 0.1 # and then the actual ramping could be a param of RedPitayaDAQ
   passPDMToFastDAC::Vector{Bool}
@@ -127,11 +127,11 @@ function _init(daq::RedPitayaDAQ)
     end
   end
 
-  try
-    daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, 2, :)
-  catch e
-    @error e
-  end
+  # try
+  #   daq.params.calibIntToVolt = reshape(daq.params.calibIntToVolt, 2, :)
+  # catch e
+  #   @error e
+  # end
 
   if serverMode(daq.rpc) == ACQUISITION
     masterTrigger!(daq.rpc, false)
