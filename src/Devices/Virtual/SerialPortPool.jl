@@ -70,12 +70,10 @@ end
 
 function descriptionMap()
   result = Dict{String, String}()
-  ports = sp_list_ports()
-  for port in unsafe_wrap(Array, ports, 64, own=false)
-    port == C_NULL && return result
-    result[sp_get_port_description(port)] = sp_get_port_name(port)
+  ports = get_port_list()
+  for port in ports
+    result[LibSerialPort.sp_get_port_description(SerialPort(port))] = port
   end
-  sp_free_port_list(ports)
   return result
 end
 
