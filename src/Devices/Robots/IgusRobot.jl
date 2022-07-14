@@ -35,7 +35,7 @@ const MODES = Dict(
 Base.@kwdef struct IgusRobotParams <: DeviceParams
   defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10.0u"mm/s"]
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500.0]]u"mm"
-  ip::IPAddr = ip"192.168.1.3"
+  ip::IPAddr = ip"192.168.8.2"
   port::Int = 1111
   keepSocketOpen::Bool = true
   stepsPermm::Int = 100
@@ -85,7 +85,7 @@ function _moveAbs(rob::IgusRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
-			throw(Error("Timeout: Movement not completed in expected time"))
+			throw(RobotTimeoutError("Timeout: Movement not completed in expected time"))
         end
     end
     @debug "Finished movement at x=$(getPosition(rob)[1])"
@@ -108,7 +108,7 @@ function _moveRel(rob::IgusRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
 		sleep(0.05)
         waittime += 0.05u"s"
 		if (waittime > dist[1] / speed[1] + rob.params.timeout) 
-			throw(Error("Timeout: Movement not completed in expected time"))
+			throw(RobotTimeoutError(rob, "Timeout: Movement not completed in expected time"))
         end
     end
     @debug "Finished relative movement"
@@ -116,7 +116,7 @@ end
 
 function _enable(rob::IgusRobot)
     if (getSdoObject(rob, DIGITAL_INPUTS) & (1 << 22)) == 0
-        throw(Error("Enable ist nicht gesetzt, bitte D7 im Webinterface aktivieren"))
+        throw(RobotError(rob, "Enable ist nicht gesetzt, bitte D7 im Webinterface aktivieren"))
     end
     
 
@@ -195,7 +195,7 @@ function _doReferenceDrive(rob::IgusRobot)
         waittime += 0.1u"s"
         if waittime > abs(diff(axisRange(rob)[1])[1]) / rob.params.homVelSwitch + rob.params.timeout
             sleep(0.05)
-            throw(Error("Timeout: Reference drive not completed in expected time!"))
+            throw(RobotTimeoutError(rob, "Timeout: Reference drive not completed in expected time!"))
         end
     end
 
@@ -257,19 +257,19 @@ function readModbusTelegram(telegram::Vector{UInt8})
     if telegram[7] == 0xab
         errCode = telegram[9]
 		if errCode == 1
-			throw(Error("Fehler im Antwort-Telegram: Ungültiger Funktions-Code")) # Sollte nicht auftreten, ist in createModbusTelegram hart eincodiert
+			throw(RobotError(rob, "Fehler im Antwort-Telegram: Ungültiger Funktions-Code")) # Sollte nicht auftreten, ist in createModbusTelegram hart eincodiert
         elseif errCode == 2
-			throw(Error("Fehler im Antwort-Telegram: Ungültige Daten-Adresse"))
+			throw(RobotError(rob, "Fehler im Antwort-Telegram: Ungültige Daten-Adresse"))
 		elseif errCode == 3
-			throw(Error("Fehler im Antwort-Telegram: Ungültiger Daten-Wert"))
+			throw(ERobotError(rob, "Fehler im Antwort-Telegram: Ungültiger Daten-Wert"))
         elseif errCode == 4
-			throw(Error("Fehler im Antwort-Telegram: Geräte Fehler"))
+			throw(RobotError(rob, "Fehler im Antwort-Telegram: Geräte Fehler"))
         elseif errCode == 5
-            throw(Error("Fehler im Antwort-Telegram: Bestätigung. (Verarbeitung dauert noch, Nachricht aber erhalten)"))
+            throw(RobotError(rob, "Fehler im Antwort-Telegram: Bestätigung. (Verarbeitung dauert noch, Nachricht aber erhalten)"))
 		elseif errCode == 6
-			throw(Error("Fehler im Antwort-Telegram: Server ausgelastet"))
+			throw(RobotError(rob, "Fehler im Antwort-Telegram: Server ausgelastet"))
         else
-			throw(Error("Unbekannter Fehler im Antworttelegramm"))
+			throw(RobotError(rob, "Unbekannter Fehler im Antworttelegramm"))
         end
         return nothing
 

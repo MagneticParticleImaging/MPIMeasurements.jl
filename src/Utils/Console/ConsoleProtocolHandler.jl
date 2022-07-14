@@ -167,7 +167,7 @@ function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::Pro
 end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::Protocol, event::IllegaleStateEvent)
-  @error "The protocol with name `$(name(protocol))` is in an illegal state."
+  @error "The protocol with name `$(name(protocol))` is in an illegal state. The message is `$(event.message)`"
   cph.protocolState = PS_FAILED
   return true
 end
