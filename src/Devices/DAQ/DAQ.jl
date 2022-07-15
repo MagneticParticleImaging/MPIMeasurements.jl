@@ -1,7 +1,7 @@
 import Base: setindex!, getindex
 
 export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxChannelSettings, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
-       createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
+       createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, readData,
        numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
        DAQ, readDataPeriod, currentPeriod, getDAQ, getDAQs,
        channelIdx, limitPeak, sinkImpedance, allowedWaveforms, isWaveformAllowed,

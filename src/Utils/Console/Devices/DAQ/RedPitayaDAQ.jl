@@ -17,3 +17,9 @@ end
   
   return nothing
 end
+
+@devicecommand function calibrate(rp::RedPitayaDAQ)
+  # adc offset korrigieren -> 
+  
+  return nothing
+end

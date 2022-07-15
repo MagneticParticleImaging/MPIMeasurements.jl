@@ -30,6 +30,9 @@ end
 
 mpi_repl_mode = MPIREPLMode()
 
+export getLastMeasData
+getLastMeasData() = getMeasurements(mpi_repl_mode.activeProtocolHandler.lastSavedFile)
+
 include("Commands.jl")
 
 default_commands() = [command.canonical_name for command in mpi_repl_mode.commands]

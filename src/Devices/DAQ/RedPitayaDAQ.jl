@@ -145,8 +145,13 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
+  prepareTx(daq, sequence) # Prepare all channels here, since they would otherwise not be set if they are uncontrolled
   setRampingParams(daq, sequence)
-  setAcyclicParams(daq, acyclicElectricalTxChannels(sequence))
+
+  acyclicSeqChannels = acyclicElectricalTxChannels(sequence)
+  if !isempty(acyclicSeqChannels)
+    setAcyclicParams(daq, acyclicSeqChannels)
+  end
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
 end
 
@@ -240,8 +245,12 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   end
   # Restrict to sequences of equal length, not a requirement of RedPitayaDAQServer, but of MPIMeasurements for simplicity
   sizes = map(x-> size(x, 2) , filter(!isnothing, luts))
-  if minimum(sizes) != maximum(sizes)
-    throw(DimensionMismatch("LUTs do not have equal amount of steps"))
+  if !isempty(sizes)
+    if minimum(sizes) != maximum(sizes)
+      throw(DimensionMismatch("LUTs do not have equal amount of steps"))
+    end
+  else
+    @debug "There are no LUTs to set."
   end
 
   @info "Set sequence params"
@@ -263,7 +272,11 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   samplingRate = 125e6/daq.decimation
   timePerStep = daq.samplesPerStep/samplingRate
   rampingSteps = Int64(ceil(rampTime/timePerStep))
-  fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
+  if isempty(sizes)
+    fractionSteps = Int64(ceil(daq.params.rampingFraction * 1)) # TODO: @Niklas: Does this make sense?
+  else
+    fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
+  end
 
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
@@ -391,10 +404,12 @@ end
 function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # TODO How to signal end of sequences without any LUTs
   timing = nothing
-  if !isnothing(daq.acqSeq) # This is the case if no acyclic channels haven been set
+  if !isnothing(daq.acqSeq)
+    @warn daq.acqSeq
     timing = getTiming(daq)
-  else
-    timing = (start=2, down=startFrame+numFrames, finish=startFrame+numFrames)
+  else # This is the case if no acyclic channels haven been set
+    startFrame = currentFrame(daq)
+    timing = (start=2, down=startFrame+numFrames, finish=startFrame+numFrames) # TODO: Why start with 2?
   end
   startTx(daq)
 
@@ -630,10 +645,9 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
 
     allAmps[name] = amps
-
     allPhases[name] = phases
-
   end
+
   setTxParams(daq, allAmps, allPhases)
 end
 

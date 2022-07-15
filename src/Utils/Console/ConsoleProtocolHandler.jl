@@ -17,6 +17,8 @@ Base.@kwdef mutable struct ConsoleProtocolHandler
   currExperiment::Union{MDFv2Experiment, Nothing} = nothing
   currTracer::Union{MDFv2Tracer, Nothing} = nothing
   currOperator::String = "default"
+  makeLastMeasurementAvailable::Bool = true
+  lastSavedFile::Union{MPIFile, Nothing} = nothing
 end
 
 function ConsoleProtocolHandler(scanner::MPIScanner, protocol::Protocol)
@@ -499,6 +501,10 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::MPIMeasurementProtocol, event::StorageSuccessEvent)
   @info "Data is ready for further operations and can be found at `$(event.filename)`."
+  if cph.makeLastMeasurementAvailable
+    cph.lastSavedFile = MPIFile(event.filename)
+    @info "The data was made available and can be accessed using `getLastMeasData()`."
+  end
   put!(cph.biChannel, FinishedAckEvent())
   return false
 end
@@ -540,10 +546,13 @@ end
 
 function handleEvent(cph::ConsoleProtocolHandler, protocol::MechanicalMPIMeasurementProtocol, event::StorageSuccessEvent)
   @info "Data is ready for further operations and can be found at `$(event.filename)`."
+  if cph.makeLastMeasurementAvailable
+    cph.lastSavedFile = MPIFile(event.filename)
+    @info "The data was made available and can be accessed using `getLastMeasData()`."
+  end
   put!(cph.biChannel, FinishedAckEvent())
   return false
 end
-
 
 
 function getStorageMDF(cph::ConsoleProtocolHandler)

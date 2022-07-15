@@ -244,8 +244,8 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 
 	# /acquisition/receiver/ subgroup
 	MPIFiles.rxBandwidth(mdf, ustrip(u"Hz", rxBandwidth(sequence)))
-	convFactor = zeros(2,numRxChannels_)
-	convFactor[1,:] .= 1.0
+	convFactor = zeros(2, numRxChannels_)
+	convFactor[1, :] .= 1.0
 	MPIFiles.rxDataConversionFactor(mdf, convFactor)
 	MPIFiles.rxNumChannels(mdf, numRxChannels_)
 	MPIFiles.rxNumSamplingPoints(mdf, numSamplingPoints_)

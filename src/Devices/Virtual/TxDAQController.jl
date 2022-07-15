@@ -195,6 +195,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 end
 
 getControlledChannel(seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+getUncontrolledChannel(seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
   amplitudes = Dict{String, Vector{Union{Float32, Nothing}}}()
