@@ -1,20 +1,22 @@
-export ArduinoSurveillanceUnitInternalTemp, ArduinoSurveillanceUnitInternalTempParams
+export ArduinoSurveillanceUnitInternalTemp, ArduinoSurveillanceUnitInternalTempParams, ArduinoSurveillanceUnitInternalTempParams, ArduinoSurveillanceUnitInternalTempPortParams, ArduinoSurveillanceUnitInternalTempPoolParams
 
-Base.@kwdef struct ArduinoSurveillanceUnitInternalTempParams <: DeviceParams
+abstract type ArduinoSurveillanceUnitInternalTempParams <: DeviceParams end
+
+Base.@kwdef struct ArduinoSurveillanceUnitInternalTempPortParams <: DeviceParams
   portAdress::String
-  commandStart::String = "!"
-  commandEnd::String = "*"
-
-  pause_ms::Int = 30
-  timeout_ms::Int = 500
-  delim::String = "#"
-  baudrate::Integer = 9600
-  ndatabits::Integer = 8
-  parity::SPParity = SP_PARITY_NONE
-  nstopbits::Integer = 1
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
 end
+ArduinoSurveillanceUnitInternalTempPortParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempPortParams, dict)
 
-ArduinoSurveillanceUnitInternalTempParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempParams, dict)
+
+Base.@kwdef struct ArduinoSurveillanceUnitInternalTempPoolParams <: DeviceParams
+  description::String
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
+end
+ArduinoSurveillanceUnitInternalTempPoolParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempPoolParams, dict)
+
 Base.@kwdef mutable struct ArduinoSurveillanceUnitInternalTemp <: ArduinoSurveillanceUnit
   @add_device_fields ArduinoSurveillanceUnitInternalTempParams
 
@@ -27,23 +29,30 @@ neededDependencies(::ArduinoSurveillanceUnitInternalTemp) = []
 optionalDependencies(::ArduinoSurveillanceUnitInternalTemp) = []
 
 function _init(su::ArduinoSurveillanceUnitInternalTemp)
-  sp = SerialPort(su.params.portAdress)
-  open(sp)
-	set_speed(sp, su.params.baudrate)
-	set_frame(sp, ndatabits=su.params.ndatabits, parity=su.params.parity, nstopbits=su.params.nstopbits)
-	# set_flow_control(sp,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
-  sleep(2)
-  flush(sp)
-  write(sp, "!ConnectionEstablished*#")
-  response = readuntil(sp, Vector{Char}(su.params.delim), su.params.timeout_ms);
-  @info response
-  if (response == "ArduinoSurveillanceV1" || response == "ArduinoSurveillanceV2"  )
-    @info "Connection to ArduinoSurveillanceUnit established"
-    sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
-    su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = su.params.delim, sd = sd)
-  else    
-    throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
-  end
+  throw(ScannerConfigurationError("ArduinoSurveillanceUnitInternalTemp is not yet implemented"))
+  params = gauss.params
+  sd = initSerialDevice(su, params)
+  @info "Connection to ArduinoSurveillanceUnit established."        
+  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
+  su.ard = ard
+
+  #sp = SerialPort(su.params.portAdress)
+  #open(sp)
+	#set_speed(sp, su.params.baudrate)
+	#set_frame(sp, ndatabits=su.params.ndatabits, parity=su.params.parity, nstopbits=su.params.nstopbits)
+	## set_flow_control(sp,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
+  #sleep(2)
+  #flush(sp)
+  #write(sp, "!ConnectionEstablished*#")
+  #response = readuntil(sp, Vector{Char}(su.params.delim), su.params.timeout_ms);
+  #@info response
+  #if (response == "ArduinoSurveillanceV1" || response == "ArduinoSurveillanceV2"  )
+  #  @info "Connection to ArduinoSurveillanceUnit established"
+  #  sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
+  #  su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = su.params.delim, sd = sd)
+  #else    
+  #  throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+  #end
 end
 
 sendCommand(su::ArduinoSurveillanceUnitInternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 

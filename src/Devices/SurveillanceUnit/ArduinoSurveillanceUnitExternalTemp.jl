@@ -1,20 +1,23 @@
-export ArduinoSurveillanceUnitExternalTemp, ArduinoSurveillanceUnitExternalTempParams
+export ArduinoSurveillanceUnitExternalTemp, ArduinoSurveillanceUnitExternalTempParams, ArduinoSurveillanceUnitExternalTempPortParams, ArduinoSurveillanceUnitExternalTempPoolParams
 
-Base.@kwdef struct ArduinoSurveillanceUnitExternalTempParams <: DeviceParams
+abstract type ArduinoSurveillanceUnitExternalTempParams <: DeviceParams end
+
+Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPortParams <: DeviceParams
   portAdress::String
-  commandStart::String = "!"
-  commandEnd::String = "*"
-
-  pause_ms::Int = 30
-  timeout_ms::Int = 500
-  delim::String = "#"
-  baudrate::Integer = 9600
-  ndatabits::Integer = 8
-  parity::SPParity = SP_PARITY_NONE
-  nstopbits::Integer = 1
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
 end
+ArduinoSurveillanceUnitExternalTempPortParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitExternalTempPortParams, dict)
 
-ArduinoSurveillanceUnitExternalTempParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitExternalTempParams, dict)
+
+Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPoolParams <: DeviceParams
+  description::String
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
+end
+ArduinoSurveillanceUnitExternalTempPoolParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitExternalTempPoolParams, dict)
+
+
 Base.@kwdef mutable struct ArduinoSurveillanceUnitExternalTemp <: ArduinoSurveillanceUnit
   @add_device_fields ArduinoSurveillanceUnitExternalTempParams
 
@@ -26,27 +29,41 @@ Base.close(su::ArduinoSurveillanceUnitExternalTemp) = close(su.ard)
 sendCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 
 
 neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureSensor] # could in theory be generic temp sensor
-optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = []
+optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = [SerialPortPool]
 
 function _init(su::ArduinoSurveillanceUnitExternalTemp)
-  sp = SerialPort(su.params.portAdress)
-  open(sp)
-	set_speed(sp, su.params.baudrate)
-	set_frame(sp, ndatabits=su.params.ndatabits, parity=su.params.parity, nstopbits=su.params.nstopbits)
-	# set_flow_control(sp,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
-  sleep(2)
-  flush(sp)
-  write(sp, "!VERSION*#")
-  response = readuntil(sp, Vector{Char}(su.params.delim), su.params.timeout_ms);
-  @info response
-  if (response == "SURVBOX:3#")
-    @info "Connection to ArduinoSurveillanceUnit established"
-    sd = SerialDevice(sp, su.params.pause_ms, su.params.timeout_ms, su.params.delim, su.params.delim)
-    su.ard = SimpleArduino(;commandStart = su.params.commandStart, commandEnd = su.params.commandEnd, delim = "", sd = sd)
-  else    
-    throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+  params = gauss.params
+  sd = initSerialDevice(su, params)
+  @info "Connection to ArduinoSurveillanceUnit established."        
+  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
+  su.ard = ard
+end
+
+function initSerialDevice(su::ArduinoSurveillanceUnitExternalTemp, params::ArduinoSurveillanceUnitExternalTempPortParams)
+  sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
+  checkSerialDevice(gauss, sd)
+  return sd
+end
+
+function initSerialDevice(su::ArduinoSurveillanceUnitExternalTemp, params::ArduinoSurveillanceUnitExternalTempPoolParams)
+  sd = initSerialDevice(su, params.description)
+  checkSerialDevice(su, sd)
+  return sd
+end
+
+function checkSerialDevice(su::ArduinoSurveillanceUnitExternalTemp, sd::SerialDevice)
+  try
+    reply = query(sd, "!VERSION*")
+    if !(startswith(reply, "SURVBOX:3"))
+        close(sd)
+        throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+    end
+    return sd
+  catch e
+    throw(ScannerConfigurationError("Could not verify if connected to correct device"))
   end
 end
+
 
 getTemperatureSensor(su::ArduinoSurveillanceUnitExternalTemp) = dependency(su, ArduinoTemperatureSensor)
 

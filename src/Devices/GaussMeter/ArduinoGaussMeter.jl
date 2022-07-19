@@ -43,48 +43,37 @@ optionalDependencies(::ArduinoGaussMeter) = [SerialPortPool]
 function _init(gauss::ArduinoGaussMeter)
   params = gauss.params
   sd = initSerialDevice(gauss, params)
+  @info "Connection to ArduinoGaussMeter established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   gauss.ard = ard
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
   sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
-  response = query(sd, "!VERSION*")
-  @debug response
-  if(!(startswith(response, "HALLSENS:1")) ) 
-      close(sd)
-      throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
-    else
-      @info "Connection to ArduinoTempBox established."        
-  end
+  checkSerialDevice(gauss, sd)
   return sd
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterPoolParams)
-  pool = nothing
-  if hasDependency(gauss, SerialPortPool)
-    pool = dependency(gauss, SerialPortPool)
-    sd = getSerialDevice(pool, "!VERSION*", "HALLSENS:1:$(params.position)"; serial_device_splatting(params)...)
-    if isnothing(sd)
-      throw(ScannerConfigurationError("Device $(deviceID(gauss)) found no fitting serial port."))
-    end
-    return sd
-  else
-    throw(ScannerConfigurationError("Device $(deviceID(gauss)) requires a SerialPortPool dependency but has none."))
-  end
+  return initSerialDevice(gauss, "!VERSION*", "HALLSENS:1:$(params.position)")
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDescriptionParams)
-  pool = nothing
-  if hasDependency(gauss, SerialPortPool)
-    pool = dependency(gauss, SerialPortPool)
-    sd = getSerialDevice(pool, params.description; serial_device_splatting(params)...)
-    if isnothing(sd)
-      throw(ScannerConfigurationError("Device $(deviceID(gauss)) found no fitting serial port."))
+  sd = initSerialDevice(gauss, params.description)
+  checkSerialDevice(gauss, sd)
+  return sd
+end
+
+function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
+  try
+    reply = query(sd, "!VERSION*")
+    if !(startswith(reply, "HALLSENS:1"))
+        close(sd)
+        throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
     end
     return sd
-  else
-    throw(ScannerConfigurationError("Device $(deviceID(gauss)) requires a SerialPortPool dependency but has none."))
+  catch e
+    throw(ScannerConfigurationError("Could not verify if connected to correct device"))
   end
 end
 

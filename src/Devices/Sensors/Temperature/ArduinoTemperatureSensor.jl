@@ -1,6 +1,8 @@
-export ArduinoTemperatureSensor, ArduinoTemperatureSensorParams
-# TODO comment relevant Arduino code once added to project
-Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
+export ArduinoTemperatureSensor, ArduinoTemperatureSensorParams, ArduinoTemperatureSensorPortParams, ArduinoTemperatureSensorPoolParams
+
+abstract type ArduinoTemperatureSensorParams <: DeviceParams end
+
+Base.@kwdef struct ArduinoTemperatureSensorPortParams <: DeviceParams
   portAdress::String
   numSensors::Int
   maxTemps::Vector{Int}
@@ -8,17 +10,24 @@ Base.@kwdef struct ArduinoTemperatureSensorParams <: DeviceParams
   groupSensors::Vector{Int}
   nameSensors::Vector{String}
 
-  commandStart::String = "!"
-  commandEnd::String = "*"
-  pause_ms::Int = 30
-  timeout_ms::Int = 1000
-  delim::String = "#"
-  baudrate::Integer = 115200
-  ndatabits::Integer = 8
-  parity::SPParity = SP_PARITY_NONE
-  nstopbits::Integer = 1
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
 end
-ArduinoTemperatureSensorParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorParams, dict)
+ArduinoTemperatureSensorPortParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorPortParams, dict)
+
+Base.@kwdef struct ArduinoTemperatureSensorPoolParams <: DeviceParams
+  description::String
+  numSensors::Int
+  maxTemps::Vector{Int}
+  selectSensors::Vector{Int}
+  groupSensors::Vector{Int}
+  nameSensors::Vector{String}
+
+  @add_serial_device_fields '#'
+  @add_arduino_fields "!" "*"
+end
+ArduinoTemperatureSensorPoolParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorPoolParams, dict)
+
 
 Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
   @add_device_fields ArduinoTemperatureSensorParams
@@ -31,27 +40,37 @@ optionalDependencies(::ArduinoTemperatureSensor) = []
 
 function _init(sensor::ArduinoTemperatureSensor)
   params = sensor.params
-  spTU = SerialPort(params.portAdress)
-  open(spTU)
-  set_speed(spTU, params.baudrate)
-  set_frame(spTU,ndatabits=params.ndatabits,parity=params.parity,nstopbits=params.nstopbits)
-  #set_flow_control(spTU,rts=rts,cts=cts,dtr=dtr,dsr=dsr,xonxoff=xonxoff)
-  sleep(2) # TODO why this sleep?
-  flush(spTU)
-  write(spTU, "!VERSION*#")
-  response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
-  @info response
-  if(!(response == "TEMPBOX:3") ) 
-      close(spTU)
-      throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
-    else
-      @info "Connection to ArduinoTempBox established."        
-  end
-
-  sd = SerialDevice(spTU, params.pause_ms, params.timeout_ms, params.delim, params.delim)
-  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = params.delim, sd = sd)
+  params = gauss.params
+  sd = initSerialDevice(su, params)
+  @info "Connection to ArduinoTempBox established."        
+  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   sensor.ard = ard
   setMaximumTemps(sensor, params.maxTemps)
+end
+
+function initSerialDevice(sensor::ArduinoTemperatureSensor, params::ArduinoTemperatureSensorPortParams)
+  sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
+  checkSerialDevice(sensor, sd)
+  return sd
+end
+
+function initSerialDevice(sensor::ArduinoTemperatureSensor, params::ArduinoTemperatureSensorPoolParams)
+  sd = initSerialDevice(sensor, params.description)
+  checkSerialDevice(sensor, sd)
+  return sd
+end
+
+function checkSerialDevice(sensor::ArduinoTemperatureSensor, sd::SerialDevice)
+  try
+    reply = query(sd, "!VERSION*")
+    if !(startswith(reply, "TEMPBOX:3"))
+        close(sd)
+        throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+    end
+    return sd
+  catch e
+    throw(ScannerConfigurationError("Could not verify if connected to correct device"))
+  end
 end
 
 function numChannels(sensor::ArduinoTemperatureSensor)
