@@ -4,8 +4,8 @@ export getSerialDevices, resolvedSymlink
 
 macro add_serial_device_fields(delim)
 	return esc(quote
-		delim_read::Char = $delim
-		delim_write::Char = $delim
+		delim_read::Union{Char, Nothing} = $delim
+		delim_write::Union{Char, Nothing} = $delim
   	baudrate::Integer
   	ndatabits::Integer = 8
   	parity::SPParity = SP_PARITY_NONE
@@ -39,15 +39,15 @@ mutable struct SerialDevice
 	sp::SerialPort
 	portName::String
 	timeout_ms::Int
-	delim_read::Char
-	delim_write::Char
+	delim_read::Union{Char, Nothing}
+	delim_write::Union{Char, Nothing}
 end
 
-function SerialDevice(port::SerialPort, portName::String; delim_read::Char, delim_write::Char, timeout_ms = 1000)
+function SerialDevice(port::SerialPort, portName::String; delim_read::Union{Char, Nothing}, delim_write::Union{Char, Nothing}, timeout_ms = 1000)
 	return SerialDevice(port, portName, timeout_ms, delim_read, delim_write)	
 end
 
-function SerialDevice(port::String; baudrate::Integer, delim_read::Char, delim_write::Char, timeout_ms = 1000, ndatabits::Integer = 8,
+function SerialDevice(port::String; baudrate::Integer, delim_read::Union{Char, Nothing}, delim_write::Union{Char, Nothing}, timeout_ms = 1000, ndatabits::Integer = 8,
 	parity::SPParity = SP_PARITY_NONE, nstopbits::Integer = 1)
 	sp = SerialPort(port)
 	open(sp)
@@ -86,7 +86,10 @@ end
 Send command string to serial device.
 """
 function send(sd::SerialDevice,cmd::String)
-	out = string(cmd, sd.delim_write)
+	out = cmd
+	if !isnothing(sd.delim_write)
+		out = string(cmd, sd.delim_write)
+	end
 	@debug "$(sd.portName) sent: $out"
 	write(sd.sp,out)
 	# Wait for all data to be transmitted

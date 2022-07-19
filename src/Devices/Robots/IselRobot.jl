@@ -29,7 +29,9 @@ const iselErrorCodes = Dict(
 "=" => "von dieser Steuerung nicht benutzt"
 )
 
-Base.@kwdef struct IselRobotParams <: DeviceParams
+abstract type IselRobotParams <: DeviceParams end
+
+Base.@kwdef struct IselRobotPortParams <: DeviceParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
   defaultRefVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
@@ -40,19 +42,36 @@ Base.@kwdef struct IselRobotParams <: DeviceParams
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
   stepsPermm::Float64 = 100
 
-  serial_port::String = "/dev/ttyUSB0"
-  pause_ms::Int = 200
-  timeout_ms::Int = 40000
-  delim_read::String = "\r"
-  delim_write::String = "\r"
-  baudrate::Int = 9600
+  serial_port::String
+  @add_serial_device_fields nothing
+
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
   movementOrder::String = "zyx"
   coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
 end
+IselRobotPortParams(dict::Dict) = params_from_dict(IselRobotPortParams, prepareRobotDict(dict))
 
-IselRobotParams(dict::Dict) = params_from_dict(IselRobotParams, prepareRobotDict(dict))
+Base.@kwdef struct IselRobotPoolParams <: DeviceParams
+  axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
+  defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
+  defaultRefVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
+  invertAxes::Vector{Bool} = [false, false, false]
+
+  minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
+  minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
+  minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
+  stepsPermm::Float64 = 100
+
+  description::String
+  @add_serial_device_fields nothing
+
+  namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
+  referenceOrder::String = "zyx"
+  movementOrder::String = "zyx"
+  coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
+end
+IselRobotPoolParams(dict::Dict) = params_from_dict(IselRobotPoolParams, prepareRobotDict(dict))
 
 Base.@kwdef mutable struct IselRobot <: Robot
   @add_device_fields IselRobotParams
@@ -89,10 +108,19 @@ function _getPosition(robot::IselRobot)
   return steps2mm.(pos, robot.params.stepsPermm)
 end
 
+function initSerialDevice(rob::IselRobot, params::IselRobotPortParams)
+  sd = SerialDevice(params.serial_port; serial_device_splatting(params)...)
+  return sd
+end
+
+function initSerialDevice(rob::IselRobot, params::IselRobotPoolParams)
+  sd = initSerialDevice(rob, params.description)
+  return sd
+end
+
 
 function _setup(rob::IselRobot)
-  sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
-  rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
+  rob.sd = initSerialDevice(rob, rob.params)
 
   # TODO: verify the way to identify the controller version 
   if queryIsel(rob, "@0Id 1600,1600,1600,1600") == "5"
@@ -400,16 +428,8 @@ end
 """ queryIsel(sd::SerialDevice,cmd::String) """
 function queryIsel(rob::IselRobot, cmd::String, byteLength=1)
   sd = rob.sd
-  @debug "queryIsel: " cmd
-
-  flush(sd.sp)
-  send(sd, cmd)
-  i, c = LibSerialPort.sp_blocking_read(sd.sp.ref, byteLength, sd.timeout_ms)
-  if i != byteLength
-    error("Isel Robot did not respond!")
-  end
-  out = String(c)
-  flush(sd.sp)
+  out = zeros(UInt8, byteLength)
+  query!(sd, cmd, out)
   return out
 end
 
