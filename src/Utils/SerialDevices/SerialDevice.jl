@@ -87,7 +87,7 @@ Send command string to serial device.
 """
 function send(sd::SerialDevice,cmd::String)
 	out = string(cmd, sd.delim_write)
-	@info "$(sd.portName) sent: $out"
+	@debug "$(sd.portName) sent: $out"
 	write(sd.sp,out)
 	# Wait for all data to be transmitted
 	sp_drain(sd.sp)
