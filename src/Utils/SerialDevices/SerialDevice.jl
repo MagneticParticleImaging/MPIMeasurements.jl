@@ -105,7 +105,7 @@ Read out current content of the output buffer of the serial devive. Returns a St
 """
 function receive(sd::SerialDevice)
 	set_read_timeout(sd.sp, sd.timeout_ms/1000)
-	return read(sd.sp, String)
+	return readuntil(sd.sp, sd.delim_read)
 end
 
 function receive(sd::SerialDevice, array::AbstractArray)
@@ -134,7 +134,7 @@ Send querry to serial device and receive device answer. Returns a String
 """
 function query(sd::SerialDevice,cmd::String)
 	send(sd,cmd)
-	out = readuntil(sd.sp, sd.delim_read)
+	out = receive(sd)
 	# Discard remaining data
 	sp_flush(sd.sp, SP_BUF_INPUT)
 	return out
