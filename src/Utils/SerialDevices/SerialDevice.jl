@@ -94,6 +94,12 @@ function send(sd::SerialDevice,cmd::String)
 	return nothing
 end
 
+function send(sd::SerialDevice, cmd::Vector{UInt8})
+	write(sd.sp, cmd)
+	sp_drain(sd.sp)
+	return nothing
+end
+
 """
 Read out current content of the output buffer of the serial devive. Returns a String.
 """
