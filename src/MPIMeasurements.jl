@@ -63,8 +63,9 @@ abstract type Device end
 
 include("Sequences/Sequence.jl")
 include("Scanner.jl")
-include("Utils/Utils.jl")
 include("Devices/Device.jl")
+include("Utils/Utils.jl")
+
 
 include("Protocols/Storage/MDF.jl") # Defines stuff needed in devices
 include("Protocols/Storage/MeasurementState.jl")
