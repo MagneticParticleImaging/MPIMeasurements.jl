@@ -2,7 +2,7 @@ export ArduinoSurveillanceUnitExternalTemp, ArduinoSurveillanceUnitExternalTempP
 
 abstract type ArduinoSurveillanceUnitExternalTempParams <: DeviceParams end
 
-Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPortParams <: DeviceParams
+Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPortParams <: ArduinoSurveillanceUnitExternalTempParams
   portAdress::String
   @add_serial_device_fields '#'
   @add_arduino_fields "!" "*"
@@ -10,7 +10,7 @@ end
 ArduinoSurveillanceUnitExternalTempPortParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitExternalTempPortParams, dict)
 
 
-Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPoolParams <: DeviceParams
+Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPoolParams <: ArduinoSurveillanceUnitExternalTempParams
   description::String
   @add_serial_device_fields '#'
   @add_arduino_fields "!" "*"

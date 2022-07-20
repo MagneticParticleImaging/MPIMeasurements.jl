@@ -2,7 +2,7 @@ export ArduinoTemperatureSensor, ArduinoTemperatureSensorParams, ArduinoTemperat
 
 abstract type ArduinoTemperatureSensorParams <: DeviceParams end
 
-Base.@kwdef struct ArduinoTemperatureSensorPortParams <: DeviceParams
+Base.@kwdef struct ArduinoTemperatureSensorPortParams <: ArduinoTemperatureSensorParams
   portAdress::String
   numSensors::Int
   maxTemps::Vector{Int}
@@ -15,7 +15,7 @@ Base.@kwdef struct ArduinoTemperatureSensorPortParams <: DeviceParams
 end
 ArduinoTemperatureSensorPortParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorPortParams, dict)
 
-Base.@kwdef struct ArduinoTemperatureSensorPoolParams <: DeviceParams
+Base.@kwdef struct ArduinoTemperatureSensorPoolParams <: ArduinoTemperatureSensorParams
   description::String
   numSensors::Int
   maxTemps::Vector{Int}
