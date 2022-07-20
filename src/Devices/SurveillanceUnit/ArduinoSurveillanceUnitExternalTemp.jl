@@ -32,7 +32,7 @@ neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureS
 optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = [SerialPortPool]
 
 function _init(su::ArduinoSurveillanceUnitExternalTemp)
-  params = gauss.params
+  params = su.params
   sd = initSerialDevice(su, params)
   @info "Connection to ArduinoSurveillanceUnit established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
@@ -41,7 +41,7 @@ end
 
 function initSerialDevice(su::ArduinoSurveillanceUnitExternalTemp, params::ArduinoSurveillanceUnitExternalTempPortParams)
   sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
-  checkSerialDevice(gauss, sd)
+  checkSerialDevice(su, sd)
   return sd
 end
 
@@ -56,7 +56,7 @@ function checkSerialDevice(su::ArduinoSurveillanceUnitExternalTemp, sd::SerialDe
     reply = query(sd, "!VERSION*")
     if !(startswith(reply, "SURVBOX:3"))
         close(sd)
-        throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+        throw(ScannerConfigurationError(string("Connected to wrong Device ", reply)))
     end
     return sd
   catch e

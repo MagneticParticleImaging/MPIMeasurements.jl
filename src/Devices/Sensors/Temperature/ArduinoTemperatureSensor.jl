@@ -3,7 +3,7 @@ export ArduinoTemperatureSensor, ArduinoTemperatureSensorParams, ArduinoTemperat
 abstract type ArduinoTemperatureSensorParams <: DeviceParams end
 
 Base.@kwdef struct ArduinoTemperatureSensorPortParams <: ArduinoTemperatureSensorParams
-  portAdress::String
+  portAddress::String
   numSensors::Int
   maxTemps::Vector{Int}
   selectSensors::Vector{Int}
@@ -40,8 +40,7 @@ optionalDependencies(::ArduinoTemperatureSensor) = []
 
 function _init(sensor::ArduinoTemperatureSensor)
   params = sensor.params
-  params = gauss.params
-  sd = initSerialDevice(su, params)
+  sd = initSerialDevice(sensor, params)
   @info "Connection to ArduinoTempBox established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   sensor.ard = ard
@@ -65,7 +64,7 @@ function checkSerialDevice(sensor::ArduinoTemperatureSensor, sd::SerialDevice)
     reply = query(sd, "!VERSION*")
     if !(startswith(reply, "TEMPBOX:3"))
         close(sd)
-        throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
+        throw(ScannerConfigurationError(string("Connected to wrong Device ", reply)))
     end
     return sd
   catch e
