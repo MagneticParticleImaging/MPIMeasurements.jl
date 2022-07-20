@@ -97,7 +97,11 @@ function _hubertSetStartupParameters(amp::HubertAmplifier)
 	return nothing
 end
 
-state(amp::HubertAmplifier) = @error "Getting the current activation state of the amplifier is not yet supported."
+function state(amp::HubertAmplifier)
+	input = UInt8[0x02, 0x10]
+	output = zeros(UInt8, 1)
+	return _hubertSerial!(amp, input, output)
+end
 
 function turnOn(amp::HubertAmplifier)
 	@info "Amplifier $(amp.deviceID) enabled"
