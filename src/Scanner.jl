@@ -122,7 +122,7 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
   lastException = nothing
   for (i, paramType) in enumerate(tempDeviceParams)
     try
-      tempParams = paramType(params)
+      tempParams = paramType(copy(params))
       push!(fittingDeviceParams, tempParams)
     catch ex
       lastException = ex
