@@ -36,7 +36,7 @@ Base.@kwdef mutable struct ArduinoTemperatureSensor <: TemperatureSensor
 end
 
 neededDependencies(::ArduinoTemperatureSensor) = []
-optionalDependencies(::ArduinoTemperatureSensor) = []
+optionalDependencies(::ArduinoTemperatureSensor) = [SerialPortPool]
 
 function _init(sensor::ArduinoTemperatureSensor)
   params = sensor.params
