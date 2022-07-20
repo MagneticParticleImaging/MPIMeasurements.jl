@@ -45,8 +45,11 @@ end
 
 function getSerialDevice(pool::SerialPortPool, description::String; kwargs...)
   portMap = descriptionMap()
-  if haskey(portMap, description)
-    port = portMap[description]
+  fittingPorts = filter(contains(description), keys(portMap))
+  if length(fittingPorts) > 1
+    throw(ScannerConfigurationError("Can not unambiguously find a port for description $description"))
+  elseif length(fittingPorts) == 1
+    port = portMap[first(fittingPorts)]
     if in(port, pool.activePool)
       try
         sd = SerialDevice(port; kwargs...)
