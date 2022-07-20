@@ -3,7 +3,7 @@ export ArduinoSurveillanceUnitExternalTemp, ArduinoSurveillanceUnitExternalTempP
 abstract type ArduinoSurveillanceUnitExternalTempParams <: DeviceParams end
 
 Base.@kwdef struct ArduinoSurveillanceUnitExternalTempPortParams <: ArduinoSurveillanceUnitExternalTempParams
-  portAdress::String
+  portAddress::String
   @add_serial_device_fields '#'
   @add_arduino_fields "!" "*"
 end
