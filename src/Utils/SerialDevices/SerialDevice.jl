@@ -90,7 +90,7 @@ function send(sd::SerialDevice,cmd::String)
 	if !isnothing(sd.delim_write)
 		out = string(cmd, sd.delim_write)
 	end
-	@debug "$(sd.portName) sent: $out"
+	@info "$(sd.portName) sent: $out"
 	write(sd.sp,out)
 	# Wait for all data to be transmitted
 	sp_drain(sd.sp)
@@ -136,6 +136,7 @@ end
 Send querry to serial device and receive device answer. Returns a String
 """
 function query(sd::SerialDevice,cmd)
+	sp_flush(sd.sp, SP_BUF_INPUT)
 	send(sd,cmd)
 	out = receive(sd)
 	# Discard remaining data
@@ -144,6 +145,7 @@ function query(sd::SerialDevice,cmd)
 end
 
 function query!(sd::SerialDevice, cmd, data::AbstractArray; delimited::Bool=false)
+	sp_flush(sd.sp, SP_BUF_INPUT)
 	send(sd,cmd)
 	if delimited
 		receiveDelimited(sd, data)
