@@ -49,7 +49,7 @@ function _init(sensor::ArduinoTemperatureSensor)
   end
 
   sd = SerialDevice(spTU, params.pause_ms, params.timeout_ms, params.delim, params.delim)
-  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = params.delim, sd = sd)
+  ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, delim = "" , sd = sd)
   sensor.ard = ard
   setMaximumTemps(sensor, params.maxTemps)
 end
