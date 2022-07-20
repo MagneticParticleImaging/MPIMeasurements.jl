@@ -135,7 +135,7 @@ end
 """
 Send querry to serial device and receive device answer. Returns a String
 """
-function query(sd::SerialDevice,cmd::String)
+function query(sd::SerialDevice,cmd)
 	send(sd,cmd)
 	out = receive(sd)
 	# Discard remaining data
@@ -143,7 +143,7 @@ function query(sd::SerialDevice,cmd::String)
 	return out
 end
 
-function query!(sd::SerialDevice, cmd::String, data::AbstractArray; delimited::Bool=false)
+function query!(sd::SerialDevice, cmd, data::AbstractArray; delimited::Bool=false)
 	send(sd,cmd)
 	if delimited
 		receiveDelimited(sd, data)
