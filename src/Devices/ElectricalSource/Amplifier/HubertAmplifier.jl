@@ -1,7 +1,7 @@
 export HubertAmplifier, HubertAmplifierParams
 abstract type HubertAmplifierParams <: DeviceParams end
 
-Base.@kwdef struct HubertAmplifierPortParams <: DeviceParams
+Base.@kwdef struct HubertAmplifierPortParams <: HubertAmplifierParams
 	channelID::String
 	port::String
 	@add_serial_device_fields nothing
@@ -12,7 +12,7 @@ Base.@kwdef struct HubertAmplifierPortParams <: DeviceParams
 end
 HubertAmplifierPortParams(dict::Dict) = params_from_dict(HubertAmplifierPortParams, dict)
 
-Base.@kwdef struct HubertAmplifierPoolParams <: DeviceParams
+Base.@kwdef struct HubertAmplifierPoolParams <: HubertAmplifierParams
 	channelID::String
 	description::String
 	@add_serial_device_fields nothing
