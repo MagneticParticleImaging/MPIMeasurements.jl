@@ -100,7 +100,6 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   decimation::Int32 = 64
   samplingPoints::Int = 1
   sampleAverages::Int = 1
-  acqPeriodsPerFrame::Int = 1
   acqPeriodsPerPatch::Int = 1
   acqNumFrames::Int = 1
   acqNumFrameAverages::Int = 1
@@ -147,8 +146,8 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
   setRampingParams(daq, sequence)
-  setAcyclicParams(daq, acyclicElectricalTxChannels(sequence))
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
+  setAcyclicParams(daq, acyclicElectricalTxChannels(sequence))
 end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
@@ -254,7 +253,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
 
   @info "Set sequence params"
 
-  stepsPerRepetition = div(daq.acqPeriodsPerFrame, daq.acqPeriodsPerPatch)
+  stepsPerRepetition = div(periodsPerFrame(daq.rpc), daq.acqPeriodsPerPatch)
   result = execute!(daq.rpc) do batch
     @add_batch batch samplesPerStep!(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
     @add_batch batch clearSequence!(daq.rpc)
@@ -535,11 +534,11 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   end
 end
 
-function setupRx(daq::RedPitayaDAQ)
+function setupRx(daq::RedPitayaDAQ, decimation, samplesPerPeriod, periodsPerFrame)
   @debug "Setup rx"
-  decimation!(daq.rpc, daq.decimation) # Only command with network communication here
-  samplesPerPeriod!(daq.rpc, daq.samplingPoints * daq.acqNumAverages)
-  periodsPerFrame!(daq.rpc, daq.acqPeriodsPerFrame)
+  decimation!(daq.rpc, decimation) # Only command with network communication here
+  samplesPerPeriod!(daq.rpc, samplesPerPeriod)
+  periodsPerFrame!(daq.rpc, periodsPerFrame)
   #numSlowADCChan(daq.rpc, 4) # Not used as far as I know
 end
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
@@ -559,8 +558,6 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   daq.acqNumFrames = acqNumFrames(sequence)
   daq.acqNumFrameAverages = acqNumFrameAverages(sequence)
   daq.acqNumAverages = acqNumAverages(sequence)
-  daq.samplingPoints = rxNumSamplesPerPeriod(sequence)
-  daq.acqPeriodsPerFrame = acqNumPeriodsPerFrame(sequence)
 
   daq.rxChanIDs = []
   for channel in rxChannels(sequence)
@@ -581,17 +578,15 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
 
-  setupRx(daq)
+  setupRx(daq, daq.decimation, rxNumSamplesPerPeriod(sequence) * daq.acqNumAverages, acqNumPeriodsPerFrame(sequence))
 end
 function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsPerFrame, numFrames; numFrameAverage=1, numAverages=1)
   daq.decimation = decimation
-  daq.samplingPoints = numSamplesPerPeriod
-  daq.acqPeriodsPerFrame = numPeriodsPerFrame
   daq.acqNumFrames = numFrames
   daq.acqNumFrameAverages = numFrameAverage
   daq.acqNumAverages = numAverages
   daq.rpv = nothing
-  setupRx(daq)
+  setupRx(daq, decimation, numSamplesPerPeriod * daq.acqNumAverages, numPeriodsPerFrame)
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
