@@ -147,7 +147,12 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
   setRampingParams(daq, sequence)
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
-  setAcyclicParams(daq, acyclicElectricalTxChannels(sequence))
+  acyclic = acyclicElectricalTxChannels(sequence)
+  if length(acyclic) > 0
+    setAcyclicParams(daq, acyclic)
+  else
+    setPeriodicParams(daq)
+  end
 end
 
 function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
@@ -198,8 +203,18 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   end
 end
 
-function setAcyclicParams(daq, channel::Nothing)
-  # NOP
+function setPeriodicParams(daq)
+  # Atm sequences with no acyclic params have 1 period per patch -> periodsPerFrame patches
+  # Alternative solution could be 1 patch per frame, but then measurements would again be multiples of frames
+  # Or divide the frame in a number of patches based on the ramping time
+  luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
+  enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
+  for i = 1:length(daq.rpc)
+    luts[i] = createEmptyLUT(periodsPerFrame(daq.rpc))
+    enableLuts[i] = createEmptyEnable(periodsPerFrame(daq.rpc))
+  end
+  @warn "HIIIIIIIIIIIIIIIIiii"
+  setSequenceParams(daq, luts, enableLuts)
 end
 
 function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
@@ -304,11 +319,14 @@ function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, A
   return seq
 end
 
+function createEmptyLUT(numValues::Integer)
+  return zeros(Float32, 2, numValues)
+end
 
 function createEmptyLUT(seqChannels::Vector{AcyclicElectricalTxChannel})
   # Assumption: size of all lutValues is equal, checked during sending to RP
   # RedPitaya server bug for more than two channel atm
-  return zeros(Float32, 2, size(values(seqChannels[1]), 1))
+  return createEmptyLUT(size(values(seqChannels[1]), 1))
 end
 
 function createLUT!(lut::Array{Float32}, start, channelMapping)
@@ -335,9 +353,13 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
   return lut
 end
 
+function createEmptyEnable(numValues::Integer)
+  return ones(Bool, 2, numValues)
+end
+
 function createEmptyEnable(seqChannels::Vector{AcyclicElectricalTxChannel})
     # Assumption: size of all enableValues is equal, checked during sending to RP
-    return ones(Bool, 2, size(values(seqChannels[1]), 1))
+    return createEmptyEnable(size(values(seqChannels[1]), 1))
 end
 
 function createEnableLUT!(enableLut::Array{Bool}, start, channelMapping)
@@ -410,8 +432,6 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   timing = nothing
   if !isnothing(daq.acqSeq) # This is the case if no acyclic channels haven been set
     timing = getTiming(daq)
-  else
-    timing = (start=2, down=startFrame+numFrames, finish=startFrame+numFrames)
   end
   startTx(daq)
 
