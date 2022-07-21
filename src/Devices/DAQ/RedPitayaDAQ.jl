@@ -207,6 +207,7 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
   luts = Array{Union{Nothing, Array{Float64}}}(nothing, length(daq.rpc))
   enableLuts = Array{Union{Nothing, Array{Bool}}}(nothing, length(daq.rpc))
 
+  # Pair LUT/txSlow Channel with acyclic seq channel
   lutChannels = [channel for channel in daq.params.channels if channel[2] isa RedPitayaLUTChannelParams]
   channelMapping = []
   for channel in seqChannels
@@ -218,16 +219,22 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
     end
   end
 
+  # Prepare base value & enable arrays
+  emptyLUT = createEmptyLUT(seqChannels)
+  emptyEnable = createEmptyEnable(seqChannels)
+  # Insert each RP value & enable "values" into the respective arrays
   for rp in 1:length(daq.rpc)
+    rpLut = copy(emptyLUT)
+    rpEnable = copy(emptyEnable)
     start = (rp - 1) * 4 + 1
     currentPossibleChannels = collect(start:start+3)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
-      lut = createLUT(start, currentMapping)
-      enableLut = createEnableLUT(start, channelMapping)
-      luts[rp] = lut
-      enableLuts[rp] = enableLut
+      createLUT!(rpLut, start, currentMapping)
+      createEnableLUT!(rpEnable, start, channelMapping)
     end
+    luts[rp] = rpLut
+    enableLuts[rp] = rpEnable
   end
   setSequenceParams(daq, luts, enableLuts)
 end
@@ -299,7 +306,13 @@ function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, A
 end
 
 
-function createLUT(start, channelMapping)
+function createEmptyLUT(seqChannels::Vector{AcyclicElectricalTxChannel})
+  # Assumption: size of all lutValues is equal, checked during sending to RP
+  # RedPitaya server bug for more than two channel atm
+  return zeros(Float32, 2, size(values(seqChannels[1]), 1))
+end
+
+function createLUT!(lut::Array{Float32}, start, channelMapping)
   channelMapping = sort(channelMapping, by = x -> x[1].channelIdx)
   lutValues = []
   lutIdx = []
@@ -316,15 +329,19 @@ function createLUT(start, channelMapping)
   # Idx from 1 to 4
   lutIdx = (lutIdx.-start).+1
   # Fill skipped channels with 0.0, assumption: size of all lutValues is equal
-  lut = zeros(Float32, maximum(lutIdx), size(lutValues[1], 1))
+  #lut = zeros(Float32, maximum(lutIdx), size(lutValues[1], 1))
   for (i, lutIndex) in enumerate(lutIdx)
     lut[lutIndex, :] = lutValues[i]
   end
   return lut
 end
 
+function createEmptyEnable(seqChannels::Vector{AcyclicElectricalTxChannel})
+    # Assumption: size of all enableValues is equal, checked during sending to RP
+    return ones(Bool, 2, size(values(seqChannels[1]), 1))
+end
 
-function createEnableLUT(start, channelMapping)
+function createEnableLUT!(enableLut::Array{Bool}, start, channelMapping)
   channelMapping = sort(channelMapping, by = x -> x[1].channelIdx)
   enableLutValues = []
   enableLutIdx = []
@@ -336,8 +353,8 @@ function createEnableLUT(start, channelMapping)
 
   # Idx from 1 to 4
   enableLutIdx = (enableLutIdx .- start) .+ 1
-  # Fill skipped channels with false, assumption: size of all enableLutValues is equal
-  enableLut = ones(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
+  # Fill skipped channels with true, assumption: size of all enableLutValues is equal
+  #enableLut = ones(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
   for (i, enableLutIndex) in enumerate(enableLutIdx)
     enableLut[enableLutIndex, :] = enableLutValues[i]
   end
