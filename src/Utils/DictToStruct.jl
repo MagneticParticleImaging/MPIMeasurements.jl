@@ -46,8 +46,41 @@ function dict_to_splatting(dict::Dict)
   return splattingDict
 end
 
+function dict_to_splatting(type::DataType, dict::Dict)
+  splattingDict = Dict{Symbol, Any}()
+  for (key, value) in dict
+    if value isa Dict # Do we need recursion here?
+      specializedType = nothing
+      doSpecialize = true
+      for (subkey, subvalue) in value
+        value[subkey] = tryuparse.(subvalue) # Convert with Unitful if applicable
+
+        if isnothing(specializedType)
+          specializedType = typeof(value[subkey])
+        elseif typeof(value[subkey]) != specializedType
+          doSpecialize = false
+        end
+      end
+
+      # Check if the types are equal and we can convert the dict to a more specialized version
+      if doSpecialize
+        value = convert(Dict{String, specializedType}, value)
+      end
+    else
+      if fieldtype(type, Symbol(key)) == String
+        value = String(value)
+      else 
+        value = tryuparse.(value) # Convert with Unitful if applicable
+      end
+    end
+    splattingDict[Symbol(key)] = value
+  end
+
+  return splattingDict
+end
+
 function params_from_dict(type::DataType, dict::Dict)
-  splattingDict = dict_to_splatting(dict)
+  splattingDict = dict_to_splatting(type, dict)
   
   try
     return type(;splattingDict...)

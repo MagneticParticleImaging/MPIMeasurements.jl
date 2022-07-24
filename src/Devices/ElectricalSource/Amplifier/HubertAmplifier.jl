@@ -1,31 +1,41 @@
 export HubertAmplifier, HubertAmplifierParams
+abstract type HubertAmplifierParams <: DeviceParams end
 
-Base.@kwdef struct HubertAmplifierParams <: DeviceParams
+Base.@kwdef struct HubertAmplifierPortParams <: HubertAmplifierParams
 	channelID::String
-	port::String = "/dev/ttyUSB1"
-	baudrate::Integer = 9600
+	port::String
+	@add_serial_device_fields nothing
 	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
 	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
 	matchingNetwork::Integer = 1
 	warmUpDelay::Float64 = 0.2
 end
+HubertAmplifierPortParams(dict::Dict) = params_from_dict(HubertAmplifierPortParams, dict)
 
-HubertAmplifierParams(dict::Dict) = params_from_dict(HubertAmplifierParams, dict)
+Base.@kwdef struct HubertAmplifierPoolParams <: HubertAmplifierParams
+	channelID::String
+	description::String
+	@add_serial_device_fields nothing
+	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
+	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
+	matchingNetwork::Integer = 1
+	warmUpDelay::Float64 = 0.2
+end
+HubertAmplifierPoolParams(dict::Dict) = params_from_dict(HubertAmplifierPoolParams, dict)
+
 
 Base.@kwdef mutable struct HubertAmplifier <: Amplifier
 	@add_device_fields HubertAmplifierParams
 
-  driver::Union{SerialPort, Missing} = missing
+  driver::Union{SerialDevice, Missing} = missing
 end
 
 function _init(amp::HubertAmplifier)
 	@warn "The code for the Hubert amplifier has not yet been tested within MPIMeasurements!"
 
-	amp.driver = SerialPort(amp.params.port)
-	open(amp.driver)
-	set_speed(amp.driver, amp.params.baudrate)
+	amp.driver = initSerialDevice(amp, amp.params)
 
-	_hubertSetStartupParameters(amp.driver)
+	_hubertSetStartupParameters(amp)
 
 	# Set values given by configuration
 	mode(amp, amp.params.mode)
@@ -33,14 +43,24 @@ function _init(amp::HubertAmplifier)
 	matchingNetwork(amp, amp.params.matchingNetwork)
 end
 
+function initSerialDevice(amp::HubertAmplifier, params::HubertAmplifierPortParams)
+  sd = SerialDevice(params.port; serial_device_splatting(params)...)
+  return sd
+end
+
+function initSerialDevice(amp::HubertAmplifier, params::HubertAmplifierPoolParams)
+  return initSerialDevice(amp, params.description)
+end
+
 checkDependencies(amp::HubertAmplifier) = true
 
 Base.close(amp::HubertAmplifier) = close(amp.driver)
 
 # main communication function
-function _hubertSerial(sp::SerialPort, input::Array{UInt8}, ack::Array{UInt8})
+function _hubertSerial(amp::HubertAmplifier, input::Array{UInt8}, ack::Array{UInt8})
 
-	answer_hex = _hubertSerial(sp, input)
+	output = zeros(UInt8, size(input))
+	answer_hex = _hubertSerial!(amp, input, output)
 
 	if answer_hex == ack
 		@debug "Hubert acknowleged: '$(answer_hex)' set."
@@ -51,18 +71,12 @@ function _hubertSerial(sp::SerialPort, input::Array{UInt8}, ack::Array{UInt8})
 	return nothing
 end
 
-function _hubertSerial(sp::SerialPort, input::Array{UInt8}) #for querys
-	write(sp, input)
-	sleep(0.2)	#Huberts needs at least 100ms
-	answer_utf = readuntil(sp, '\n', 1.0)
-	#@show answer_utf
-	answer_hex = encode(answer_utf, "UTF-8")	#using StringEncodings
-	flush(sp)
-
-	return answer_hex
+function _hubertSerial!(amp::HubertAmplifier, input::Array{UInt8}, output::Array{UInt8}) #for querys
+	query!(amp.driver, input, output)
+	return output
 end
 
-function _hubertSetStartupParameters(sp::SerialPort)
+function _hubertSetStartupParameters(amp::HubertAmplifier)
 	# EINschaltparameter - werde nur beim Einschalten aktualisiert 
 	input = UInt8[	0x0B, 0x2E, #setzten der erw. Einstellung auf einmal
 					0x00,		#1. Strommessbereich: high 00, low 01 - use high! 		
@@ -83,7 +97,11 @@ function _hubertSetStartupParameters(sp::SerialPort)
 	return nothing
 end
 
-state(amp::HubertAmplifier) = @error "Getting the current activation state of the amplifier is not yet supported."
+function state(amp::HubertAmplifier)
+	input = UInt8[0x02, 0x10]
+	output = zeros(UInt8, 1)
+	return _hubertSerial!(amp, input, output)
+end
 
 function turnOn(amp::HubertAmplifier)
 	@info "Amplifier $(amp.deviceID) enabled"
@@ -159,7 +177,8 @@ end
 
 function temperature(amp::HubertAmplifier)
 	input = UInt8[0x02, 0x04]
-	hex = _hubertSerial(amp.driver, input)
+	output = zeros(UInt8, 1)
+	hex = _hubertSerial!(amp, input, output)
 	return Int(hex[1])
 end
 
