@@ -213,7 +213,6 @@ function setPeriodicParams(daq)
     luts[i] = createEmptyLUT(periodsPerFrame(daq.rpc))
     enableLuts[i] = createEmptyEnable(periodsPerFrame(daq.rpc))
   end
-  @warn "HIIIIIIIIIIIIIIIIiii"
   setSequenceParams(daq, luts, enableLuts)
 end
 
@@ -280,21 +279,23 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   end
   daq.samplesPerStep = result[3][1]
 
-  result = execute!(daq.rpc) do batch
-    for i in daq.rampingChannel
-      @add_batch batch rampingDAC(daq.rpc, i)
-    end
-  end
-  rampTime = maximum([maximum(filter(!isnothing, x)) for x in result])
-  samplingRate = 125e6/daq.decimation
-  timePerStep = daq.samplesPerStep/samplingRate
-  rampingSteps = Int64(ceil(rampTime/timePerStep))
-  if isempty(sizes)
-    fractionSteps = Int64(ceil(daq.params.rampingFraction * 1)) # TODO: @Niklas: Does this make sense?
+  rampingSteps = 0
+  fractionSteps = 0
+  if isempty(daq.rampingChannel)
+    rampingSteps = 1
+    fractionSteps = 0
   else
+    result = execute!(daq.rpc) do batch
+      for i in daq.rampingChannel
+        @add_batch batch rampingDAC(daq.rpc, i)
+      end
+    end
+    rampTime = maximum([maximum(filter(!isnothing, x)) for x in result])
+    samplingRate = 125e6/daq.decimation
+    timePerStep = daq.samplesPerStep/samplingRate
+    rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
   end
-
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
     @async begin
@@ -316,7 +317,7 @@ end
 function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, Array{Bool}}, repetitions::Integer, mode::RampingMode, rampingSteps, fractionSteps)
   seq = nothing
   if mode == NONE
-    seq = RedPitayaDAQServer.ConstantRampingSequence(lut, repetitions, 0.0, rampingSteps, enable)
+    seq = RedPitayaDAQServer.ConstantRampingSequence(lut, repetitions, Float32(0.0), rampingSteps, enable)
   elseif mode == HOLD
     seq = RedPitayaDAQServer.HoldBorderRampingSequence(lut, repetitions, rampingSteps + fractionSteps, enable)
   elseif mode == STARTUP
