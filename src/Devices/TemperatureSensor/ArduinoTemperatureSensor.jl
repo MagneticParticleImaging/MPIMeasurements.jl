@@ -41,7 +41,7 @@ function _init(sensor::ArduinoTemperatureSensor)
   write(spTU, "!VERSION*#")
   response=readuntil(spTU, Vector{Char}(params.delim), params.timeout_ms);
   @info response
-  if(!(response == "TEMPBOX:3") ) 
+  if(!(response == "TEMPBOX:3#") ) 
       close(spTU)
       throw(ScannerConfigurationError(string("Connected to wrong Device", response)))
     else
