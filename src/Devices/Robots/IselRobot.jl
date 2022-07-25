@@ -43,7 +43,7 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   stepsPermm::Float64 = 100
 
   serial_port::String
-  @add_serial_device_fields nothing
+  @add_serial_device_fields '\r'
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -64,7 +64,7 @@ Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   stepsPermm::Float64 = 100
 
   description::String
-  @add_serial_device_fields nothing
+  @add_serial_device_fields '\r'
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -430,7 +430,7 @@ function queryIsel(rob::IselRobot, cmd::String, byteLength=1)
   sd = rob.sd
   out = zeros(UInt8, byteLength)
   query!(sd, cmd, out)
-  return out
+  return String(out)
 end
 
 """ `readIOInput(robot::IselRobot)` returns an `Array{Bool,1}` of the 1-8 input slots"""

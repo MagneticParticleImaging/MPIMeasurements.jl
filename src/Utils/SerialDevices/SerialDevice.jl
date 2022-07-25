@@ -43,11 +43,11 @@ mutable struct SerialDevice
 	delim_write::Union{Char, Nothing}
 end
 
-function SerialDevice(port::SerialPort, portName::String; delim_read::Union{Char, Nothing}, delim_write::Union{Char, Nothing}, timeout_ms = 1000)
+function SerialDevice(port::SerialPort, portName::String; delim_read::Union{Char, Nothing} = nothing, delim_write::Union{Char, Nothing} = nothing, timeout_ms = 1000)
 	return SerialDevice(port, portName, timeout_ms, delim_read, delim_write)	
 end
 
-function SerialDevice(port::String; baudrate::Integer, delim_read::Union{Char, Nothing}, delim_write::Union{Char, Nothing}, timeout_ms = 1000, ndatabits::Integer = 8,
+function SerialDevice(port::String; baudrate::Integer, delim_read::Union{Char, Nothing} = nothing, delim_write::Union{Char, Nothing} = nothing, timeout_ms = 1000, ndatabits::Integer = 8,
 	parity::SPParity = SP_PARITY_NONE, nstopbits::Integer = 1)
 	sp = SerialPort(port)
 	open(sp)
