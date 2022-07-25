@@ -59,7 +59,7 @@ Base.close(amp::HubertAmplifier) = close(amp.driver)
 # main communication function
 function _hubertSerial(amp::HubertAmplifier, input::Array{UInt8}, ack::Array{UInt8})
 
-	output = zeros(UInt8, size(input))
+	output = zeros(UInt8, size(ack))
 	answer_hex = _hubertSerial!(amp, input, output)
 
 	if answer_hex == ack
@@ -89,11 +89,11 @@ function _hubertSetStartupParameters(amp::HubertAmplifier)
 					0x00,		#8. Limit Control: current 00, voltage 01
 					0x09]		#9. Betriebsspann. mid: 05, high: 09 - do not use auto (01)!
 	ack = UInt8[0x2e]
-	_hubertSerial(sp, input, ack)
+	_hubertSerial(amp, input, ack)
 	sleep(0.1)
 	input = UInt8[0x03, 0x5D, 0x00] #sensing needs to be off (otherwise DC offset) - but Huberts jumps straight to Overvoltage after Interlock.
 	ack = UInt8[0x5D]
-	_hubertSerial(sp, input, ack)
+	_hubertSerial(amp, input, ack)
 	return nothing
 end
 
@@ -107,7 +107,7 @@ function turnOn(amp::HubertAmplifier)
 	@info "Amplifier $(amp.deviceID) enabled"
 	input = UInt8[0x03, 0x35, 0x01]
 	ack   = UInt8[0x01]
-	_hubertSerial(amp.driver, input, ack)
+	_hubertSerial(amp, input, ack)
 	sleep(amp.params.warmUpDelay)
 	return nothing
 end
@@ -117,7 +117,7 @@ function turnOff(amp::HubertAmplifier)
 	@info "Amplifier $(amp.deviceID) disabled"
 	input = UInt8[0x03, 0x35, 0x00]
 	ack   = UInt8[0x00]
-	_hubertSerial(amp.driver, input, ack)
+	_hubertSerial(amp, input, ack)
 	return nothing
 end
 
@@ -136,7 +136,7 @@ function mode(amp::HubertAmplifier, mode::AmplifierMode)
 	end
 
 	ack = UInt8[0x2A]
-	_hubertSerial(amp.driver, input, ack)
+	_hubertSerial(amp, input, ack)
 
 	return nothing
 end
@@ -155,7 +155,7 @@ function voltageMode(amp::HubertAmplifier, mode::AmplifierVoltageMode)
 	end
 
 	ack = UInt8[0x54]
-	_hubertSerial(amp.driver, input, ack)
+	_hubertSerial(amp, input, ack)
 
 	return nothing
 end
@@ -167,7 +167,7 @@ function matchingNetwork(amp::HubertAmplifier, network::Integer)
 	if network >= 1 && network <= 7
 		input = UInt8[0x03, 0x29, UInt8(network)]
 		ack = UInt8[network]
-		_hubertSerial(amp.driver, input, ack)
+		_hubertSerial(amp, input, ack)
 	else
 		throw(ScannerConfigurationError("Hubert: '$(network)' is not a RC-Network {1...7}."))
 	end

@@ -99,6 +99,7 @@ end
 
 function send(sd::SerialDevice, cmd::Vector{UInt8})
 	write(sd.sp, cmd)
+	@debug "$(sd.portName) sent: $cmd"
 	sp_drain(sd.sp)
 	return nothing
 end
