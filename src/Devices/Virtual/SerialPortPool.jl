@@ -1,10 +1,19 @@
-export SerialPortPool, SerialPortPoolParams
+export SerialPortPool, SerialPortPoolParams, SerialPortPoolListedParams, SerialPortPoolBlacklistParams
 
-Base.@kwdef struct SerialPortPoolParams <: DeviceParams
+abstract type SerialPortPoolParams <: DeviceParams end 
+
+Base.@kwdef struct SerialPortPoolListedParams <: SerialPortPoolParams
   addressPool::Vector{String}
   timeout_ms::Integer = 1000
 end
-SerialPortPoolParams(dict::Dict) = params_from_dict(SerialPortPoolParams, dict)
+SerialPortPoolListedParams(dict::Dict) = params_from_dict(SerialPortPoolListedParams, dict)
+
+Base.@kwdef struct SerialPortPoolBlacklistParams <: SerialPortPoolParams
+  blacklist::Vector{String}
+  timeout_ms::Integer = 1000
+end
+SerialPortPoolBlacklistParams(dict::Dict) = params_from_dict(SerialPortPoolBlacklistParams, dict)
+
 
 Base.@kwdef mutable struct SerialPortPool <: Device
   @add_device_fields SerialPortPoolParams
@@ -15,7 +24,15 @@ neededDependencies(::SerialPortPool) = []
 optionalDependencies(::SerialPortPool) = []
 
 function _init(pool::SerialPortPool)
-  pool.activePool = pool.params.addressPool
+  pool.activePool = initPool(pool.params)
+end
+
+function initPool(params::SerialPortPoolListedParams)
+  return params.addressPool
+end
+
+function initPool(params::SerialPortPoolBlacklistParams)
+  return filter(x->!in(x, params.blacklist), get_port_list())  
 end
 
 function getSerialDevice(pool::SerialPortPool, queryStr::String, reply::String; kwargs...)
