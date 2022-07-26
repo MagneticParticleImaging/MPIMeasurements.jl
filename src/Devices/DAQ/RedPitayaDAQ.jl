@@ -649,7 +649,7 @@ function clearTx!(daq::RedPitayaDAQ)
 end
 
 function prepareControl(daq::RedPitayaDAQ, seq::Sequence)
-  clearSequences!(daq.rpc)
+  clearSequence!(daq.rpc)
   setRampingParams(daq, seq)
 end
 
