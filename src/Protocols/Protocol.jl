@@ -16,7 +16,6 @@ macro add_protocol_fields(paramType)
     params::$(paramType)
     description::AbstractString
     scanner::MPIScanner
-    params::MPIMeasurementProtocolParams
     biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
     executeTask::Union{Task, Nothing} = nothing
   end)
