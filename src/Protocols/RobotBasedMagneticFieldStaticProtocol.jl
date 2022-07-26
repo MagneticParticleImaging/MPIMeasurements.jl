@@ -10,17 +10,12 @@ end
 RobotBasedMagneticFieldStaticProtocolParams(dict::Dict) = createRobotBasedProtocolParams(RobotBasedMagneticFieldStaticProtocolParams, dict)
 
 Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocol <: RobotBasedProtocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::RobotBasedMagneticFieldStaticProtocolParams
+  @add_protocol_fields RobotBasedMagneticFieldStaticProtocolParams
 
-  biChannel::BidirectionalChannel{ProtocolEvent}
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
 
-  executeTask::Union{Task, Nothing} = nothing
   measurement::Union{MagneticFieldMeasurement, Missing} = missing
   filename::Union{AbstractString, Missing} = missing
   safetyTask::Union{Task, Nothing} = nothing

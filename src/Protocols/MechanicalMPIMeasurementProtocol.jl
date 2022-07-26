@@ -28,12 +28,7 @@ end
 MechanicalMPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MechanicalMPIMeasurementProtocolParams, dict)
 
 Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::MechanicalMPIMeasurementProtocolParams
-  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
-  executeTask::Union{Task, Nothing} = nothing
+  @add_protocol_fields MechanicalMPIMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 

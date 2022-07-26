@@ -59,13 +59,7 @@ mutable struct SystemMatrixRobotMeas
 end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::RobotBasedSystemMatrixProtocolParams
-  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
-  
-  executeTask::Union{Task, Nothing} = nothing
+  @add_protocol_fields RobotBasedSystemMatrixProtocolParams
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   txCont::Union{TxDAQController, Nothing} = nothing
   stopped::Bool = false

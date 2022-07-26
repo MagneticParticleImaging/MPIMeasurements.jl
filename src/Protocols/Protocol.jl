@@ -1,4 +1,4 @@
-export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
+export  Protocol, ProtocolParams, name, description, scanner, params, add_protocol_fields, runProtocol,
         init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
@@ -9,6 +9,18 @@ abstract type ProtocolParams end
 
 export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
 @enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
+
+macro add_protocol_fields(paramType)
+  return esc(quote
+    name::AbstractString
+    params::$(paramType)
+    description::AbstractString
+    scanner::MPIScanner
+    params::MPIMeasurementProtocolParams
+    biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
+    executeTask::Union{Task, Nothing} = nothing
+  end)
+end
 
 name(protocol::Protocol)::AbstractString = protocol.name
 description(protocol::Protocol)::AbstractString = protocol.description
