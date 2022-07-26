@@ -127,6 +127,41 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Dectivate current scanner."
 ))
 
+function mpi_mode_attach(scanner::MPIScanner)
+  mpi_repl_mode.activeProtocolHandler = ConsoleProtocolHandler(scanner)
+end
+
+function mpi_mode_attach(;variable::String)
+  sym = Symbol(variable)
+  mpi_mode_attach(Main.eval(sym))
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "attach",
+  short_name = "att",
+  api = mpi_mode_attach,
+  description = "Attach to a given scanner.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :variable,
+    ),
+  )
+))
+
+function mpi_mode_detach()
+  temp = mpi_repl_mode.activeProtocolHandler 
+  mpi_repl_mode.activeProtocolHandler = nothing
+  return temp
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "detach",
+  short_name = "detach",
+  api = mpi_mode_detach,
+  description = "Detach the current scanner.",
+))
+
 function check_protocol_available(protocolName_::String)
   if !(protocolName_ in getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner))
     println("The selected protocol `$protocolName_` is not available. Please check the spelling or use `init` without an argument to select from a list.")
