@@ -463,17 +463,39 @@ push!(mpi_repl_mode.commands, CommandSpec(
 ))
 
 # Auxiliary commands
-
-function mpi_mode_debug()
-  ENV["JULIA_DEBUG"] = "all"
-  println("Debug mode activated.")
-  return
+function mpi_mode_debug(debug::Bool)
+  if debug
+    ENV["JULIA_DEBUG"] = "all"
+    println("Debug mode activated.")
+  else
+    ENV["JULIA_DEBUG"] = ""
+    println("Debug mode deactivated.")
+  end
+end
+function mpi_mode_debug(;debug_flag::String = "")
+  debug = false
+  if debug_flag == ""
+    if haskey(ENV, "JULIA_DEBUG")
+      debug = !(ENV["JULIA_DEBUG"] == "all")
+    else
+      debug = true
+    end
+  else
+    debug = parse(Bool, debug_flag)
+  end
+  mpi_mode_debug(debug)
 end
 
 push!(mpi_repl_mode.commands, CommandSpec(
   canonical_name = "debug",
   api = mpi_mode_debug,
-  description = "Set to debug mode."
+  description = "Enable/disable to debug mode.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :debug_flag,
+    ),
+  )
 ))
 
 function mpi_mode_exit()
