@@ -509,6 +509,44 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Exit Julia."
 ))
 
+function mpi_mode_help(cmd::String)
+  command = get_command(cmd)
+  if isnothing(command)
+    println("Unknown command: $cmd")
+  else
+    names = filter(!isnothing, vcat(command.short_name, command.synonyms))
+    options = ""
+    if !isempty(names)
+      synonyms = join(names, ", ", " and ")
+      options = " (or " * synonyms * ")"
+    end
+    println(command.canonical_name*options*":")
+    println(command.description)
+  end
+end
+
+function mpi_mode_help(;cmd::String="")
+  if cmd == ""
+    for command in mpi_repl_mode.commands
+      mpi_mode_help(command.canonical_name)
+      println()
+    end
+  else
+    mpi_mode_help(cmd)
+  end
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "help",
+  api = mpi_mode_help,
+  description = "Display help. Optionally specify a command name to display help for.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :cmd,
+    ),
+  )
+))
 # Base.@kwdef struct CommandSpec
 #   canonical_name::String
 #   short_name::Union{Nothing, String} = nothing
