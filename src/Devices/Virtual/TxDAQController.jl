@@ -144,9 +144,11 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
       controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
       sortedRef = uRef[:, controlOrderRefIndices, :]
+      @info "Performing control step"
       controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
       # Wait End
+      @info "Waiting for end."
       done = false
       while !done
         done = rampDownDone(daq.rpc)

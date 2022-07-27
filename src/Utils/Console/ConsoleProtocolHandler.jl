@@ -17,7 +17,7 @@ Base.@kwdef mutable struct ConsoleProtocolHandler
   currExperiment::Union{MDFv2Experiment, Nothing} = nothing
   currTracer::Union{MDFv2Tracer, Nothing} = nothing
   currOperator::String = "default"
-  makeLastMeasurementAvailable::Bool = true
+  makeLastMeasurementAvailable::Bool = false
   lastSavedFile::Union{MPIFile, Nothing} = nothing
 end
 
