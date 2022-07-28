@@ -162,6 +162,101 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Detach the current scanner.",
 ))
 
+function mpi_mode_device(device::String)
+  return getDevice(mpi_repl_mode.activeProtocolHandler.scanner, device)
+end
+
+function mpi_mode_device(device::Nothing)
+  device = ""
+  options = deviceID.(getDevices(mpi_repl_mode.activeProtocolHandler.scanner, Device))
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose device:", menu)
+  if choice != -1
+    device = options[choice]
+  else
+    println("Device selection canceled.")
+    return
+  end
+  return mpi_mode_device(device)
+end
+
+function mpi_mode_protocol(protocol::String)
+  return Protocol(protocol, mpi_repl_mode.activeProtocolHandler.scanner)
+end
+
+function mpi_mode_protocol(protocol::Nothing)
+  protocol = ""
+  options = getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner)
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose protocol:", menu)
+  if choice != -1
+    protocol = options[choice]
+  else
+    println("Protocol selection canceled.")
+    return
+  end
+  return mpi_mode_protocol(protocol)
+end
+
+function mpi_mode_sequence(sequence::String)
+  return Sequence(mpi_repl_mode.activeProtocolHandler.scanner, sequence)
+end
+
+function mpi_mode_sequence(sequence::Nothing)
+  seq = ""
+  options = getSequenceList(mpi_repl_mode.activeProtocolHandler.scanner)
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose sequence:", menu)
+  if choice != -1
+    seq = options[choice]
+  else
+    println("Sequence selection canceled.")
+    return
+  end
+  return mpi_mode_sequence(seq)
+end
+
+function mpi_mode_get(;getter::String)
+  if !isnothing(mpi_repl_mode.activeProtocolHandler)
+    parts = split(getter, " ")
+    type = parts[1]
+    value = nothing
+    if length(parts) > 1
+      value = String(parts[2])
+    end
+    if lowercase(type) == "device"
+      return mpi_mode_device(value)
+    elseif lowercase(type) == "protocol"
+      return mpi_mode_protocol(value)
+    elseif lowercase(type) == "params"
+      return mpi_repl_mode.activeProtocolHandler.protocol.params
+    elseif lowercase(type) == "sequence"
+      return mpi_mode_sequence(value)
+    elseif lowercase(type) == "scanner"
+      return mpi_repl_mode.activeProtocolHandler.scanner
+    else
+      println("Unknown option: $type")
+      return nothing
+    end
+  else
+    println("No attached scanner")
+    return nothing
+  end
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "get",
+  short_name = "get",
+  api = mpi_mode_get,
+  description = "Get a device, protocol, protocol parameter, sequence of the attached scanner or the scanner itself. Access value with 'ans' afterwards",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :getter,
+    ),
+  )
+))
+
 function check_protocol_available(protocolName_::String)
   if !(protocolName_ in getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner))
     println("The selected protocol `$protocolName_` is not available. Please check the spelling or use `init` without an argument to select from a list.")

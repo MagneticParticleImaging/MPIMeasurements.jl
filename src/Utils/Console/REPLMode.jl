@@ -69,11 +69,13 @@ function parse_command(command::String)
   if !isnothing(spec)
     if length(splittedCommand) > 1
       if !isnothing(spec.option_specs)
-        if haskey(spec.option_specs, splittedCommand[2])
-          spec.api(;Dict{Symbol, Any}(spec.option_specs[splittedCommand[2]].api => splittedCommand[3])...)
-        else
-          spec.api(;Dict{Symbol, Any}(spec.option_specs["default"].api => splittedCommand[2])...)
+        args = Dict{Symbol, Any}()
+        cmdArgs = splittedCommand[2:end]
+        parse_options!(args, spec.option_specs, cmdArgs)
+        if isempty(args)
+          args[spec.option_specs["default"].api] = join(cmdArgs, " ")
         end
+        spec.api(;args...)
       else
         println("No additional parameters allowed for command `$(spec.canonical_name)`.")
       end
@@ -82,6 +84,16 @@ function parse_command(command::String)
     end
   else
     print("Command `$(splittedCommand[1])` cannot be found.")
+  end
+end
+
+function parse_options!(args::Dict{Symbol, Any}, option_specs::Dict{String, OptionSpec}, cmdArgs::Vector{String})
+  # Assumption: Parameter have an arity of one: param value param value ...
+  # Otherwise need to add arity information
+  for i = 1:Int64(div(length(cmdArgs), 2))
+    if haskey(option_specs, cmdArgs[(2*i)-1])
+      args[option_specs[cmdArgs[(2*i) -1]].api] = cmdArgs[2*i]
+    end
   end
 end
 
