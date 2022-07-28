@@ -312,10 +312,10 @@ function performCalibration(protocol::RobotBasedSystemMatrixProtocol, pos)
     rethrow(ex)
   end
 
-  diffTime = protocol.params.waitTime - timePreparing
-  if diffTime > 0.0
-    sleep(diffTime)
-  end
+  #diffTime = protocol.params.waitTime - timePreparing
+  #if diffTime > 0.0
+  #  sleep(diffTime)
+  #end
 
   disable(robot)
 
@@ -348,7 +348,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
 
   @sync begin
     # Prepare Robot/Sample
-    @tspawnat protocol.scanner.generalParams.serialThreadID begin 
+    moveRobot = @tspawnat protocol.scanner.generalParams.serialThreadID begin 
       timeMove = @elapsed moveAbs(robot, pos) 
     end
 
@@ -356,7 +356,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
     @async begin
       timeFinalizer = @elapsed wait(calib.producer)
       timePrepDAQ = @elapsed @tspawnat protocol.scanner.generalParams.producerThreadID begin
-        allowControlLoop = mod1(calib.currPos, 11) == 1  
+        allowControlLoop = mod1(calib.currPos, 11) == 1  || protocol.restored
         # The following tasks can only be started after the finalizer and mostly only in this order
         timeFrameChange = @elapsed begin 
           if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
@@ -385,6 +385,11 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         end
 
         suTask = @async begin
+          wait(moveRobot)
+          diffTime = protocol.params.waitTime - timeMove
+          if diffTime > 0.0
+            sleep(diffTime)
+          end
           enableACPower(su)
           @sync for amp in amps
             @async turnOn(amp)
