@@ -32,12 +32,7 @@ end
 RobotMPIMeasurementProtocolParams(dict::Dict) = params_from_dict(RobotMPIMeasurementProtocolParams, dict)
 
 Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::RobotMPIMeasurementProtocolParams
-  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
-  executeTask::Union{Task, Nothing} = nothing
+  @add_protocol_fields RobotMPIMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 

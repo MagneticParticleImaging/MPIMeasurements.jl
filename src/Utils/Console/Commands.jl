@@ -127,6 +127,136 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Dectivate current scanner."
 ))
 
+function mpi_mode_attach(scanner::MPIScanner)
+  mpi_repl_mode.activeProtocolHandler = ConsoleProtocolHandler(scanner)
+end
+
+function mpi_mode_attach(;variable::String)
+  sym = Symbol(variable)
+  mpi_mode_attach(Main.eval(sym))
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "attach",
+  short_name = "att",
+  api = mpi_mode_attach,
+  description = "Attach to a given scanner.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :variable,
+    ),
+  )
+))
+
+function mpi_mode_detach()
+  temp = mpi_repl_mode.activeProtocolHandler 
+  mpi_repl_mode.activeProtocolHandler = nothing
+  return temp
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "detach",
+  short_name = "detach",
+  api = mpi_mode_detach,
+  description = "Detach the current scanner.",
+))
+
+function mpi_mode_device(device::String)
+  return getDevice(mpi_repl_mode.activeProtocolHandler.scanner, device)
+end
+
+function mpi_mode_device(device::Nothing)
+  device = ""
+  options = deviceID.(getDevices(mpi_repl_mode.activeProtocolHandler.scanner, Device))
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose device:", menu)
+  if choice != -1
+    device = options[choice]
+  else
+    println("Device selection canceled.")
+    return
+  end
+  return mpi_mode_device(device)
+end
+
+function mpi_mode_protocol(protocol::String)
+  return Protocol(protocol, mpi_repl_mode.activeProtocolHandler.scanner)
+end
+
+function mpi_mode_protocol(protocol::Nothing)
+  protocol = ""
+  options = getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner)
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose protocol:", menu)
+  if choice != -1
+    protocol = options[choice]
+  else
+    println("Protocol selection canceled.")
+    return
+  end
+  return mpi_mode_protocol(protocol)
+end
+
+function mpi_mode_sequence(sequence::String)
+  return Sequence(mpi_repl_mode.activeProtocolHandler.scanner, sequence)
+end
+
+function mpi_mode_sequence(sequence::Nothing)
+  seq = ""
+  options = getSequenceList(mpi_repl_mode.activeProtocolHandler.scanner)
+  menu = REPL.TerminalMenus.RadioMenu(options, pagesize=8)
+  choice = REPL.TerminalMenus.request("Choose sequence:", menu)
+  if choice != -1
+    seq = options[choice]
+  else
+    println("Sequence selection canceled.")
+    return
+  end
+  return mpi_mode_sequence(seq)
+end
+
+function mpi_mode_get(;getter::String)
+  if !isnothing(mpi_repl_mode.activeProtocolHandler)
+    parts = split(getter, " ")
+    type = parts[1]
+    value = nothing
+    if length(parts) > 1
+      value = String(parts[2])
+    end
+    if lowercase(type) == "device"
+      return mpi_mode_device(value)
+    elseif lowercase(type) == "protocol"
+      return mpi_mode_protocol(value)
+    elseif lowercase(type) == "params"
+      return mpi_repl_mode.activeProtocolHandler.protocol.params
+    elseif lowercase(type) == "sequence"
+      return mpi_mode_sequence(value)
+    elseif lowercase(type) == "scanner"
+      return mpi_repl_mode.activeProtocolHandler.scanner
+    else
+      println("Unknown option: $type")
+      return nothing
+    end
+  else
+    println("No attached scanner")
+    return nothing
+  end
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "get",
+  short_name = "get",
+  api = mpi_mode_get,
+  description = "Get a device, protocol, protocol parameter, sequence of the attached scanner or the scanner itself. Access value with 'ans' afterwards",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :getter,
+    ),
+  )
+))
+
 function check_protocol_available(protocolName_::String)
   if !(protocolName_ in getProtocolList(mpi_repl_mode.activeProtocolHandler.scanner))
     println("The selected protocol `$protocolName_` is not available. Please check the spelling or use `init` without an argument to select from a list.")
@@ -481,17 +611,39 @@ push!(mpi_repl_mode.commands, CommandSpec(
 ))
 
 # Auxiliary commands
-
-function mpi_mode_debug()
-  ENV["JULIA_DEBUG"] = "all"
-  println("Debug mode activated.")
-  return
+function mpi_mode_debug(debug::Bool)
+  if debug
+    ENV["JULIA_DEBUG"] = "all"
+    println("Debug mode activated.")
+  else
+    ENV["JULIA_DEBUG"] = ""
+    println("Debug mode deactivated.")
+  end
+end
+function mpi_mode_debug(;debug_flag::String = "")
+  debug = false
+  if debug_flag == ""
+    if haskey(ENV, "JULIA_DEBUG")
+      debug = !(ENV["JULIA_DEBUG"] == "all")
+    else
+      debug = true
+    end
+  else
+    debug = parse(Bool, debug_flag)
+  end
+  mpi_mode_debug(debug)
 end
 
 push!(mpi_repl_mode.commands, CommandSpec(
   canonical_name = "debug",
   api = mpi_mode_debug,
-  description = "Set to debug mode."
+  description = "Enable/disable to debug mode.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :debug_flag,
+    ),
+  )
 ))
 
 function mpi_mode_exit()
@@ -505,6 +657,44 @@ push!(mpi_repl_mode.commands, CommandSpec(
   description = "Exit Julia."
 ))
 
+function mpi_mode_help(cmd::String)
+  command = get_command(cmd)
+  if isnothing(command)
+    println("Unknown command: $cmd")
+  else
+    names = filter(!isnothing, vcat(command.short_name, command.synonyms))
+    options = ""
+    if !isempty(names)
+      synonyms = join(names, ", ", " and ")
+      options = " (or " * synonyms * ")"
+    end
+    println(command.canonical_name*options*":")
+    println(command.description)
+  end
+end
+
+function mpi_mode_help(;cmd::String="")
+  if cmd == ""
+    for command in mpi_repl_mode.commands
+      mpi_mode_help(command.canonical_name)
+      println()
+    end
+  else
+    mpi_mode_help(cmd)
+  end
+end
+
+push!(mpi_repl_mode.commands, CommandSpec(
+  canonical_name = "help",
+  api = mpi_mode_help,
+  description = "Display help. Optionally specify a command name to display help for.",
+  option_specs = Dict{String, OptionSpec}(
+    "default" => OptionSpec(
+      name = "default",
+      api = :cmd,
+    ),
+  )
+))
 # Base.@kwdef struct CommandSpec
 #   canonical_name::String
 #   short_name::Union{Nothing, String} = nothing

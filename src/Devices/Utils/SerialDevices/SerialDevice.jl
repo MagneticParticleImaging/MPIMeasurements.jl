@@ -41,6 +41,8 @@ mutable struct SerialDevice
 	timeout_ms::Int
 	delim_read::Union{Char, Nothing}
 	delim_write::Union{Char, Nothing}
+	sdLock::ReentrantLock
+	SerialDevice(sp, portName, timeout_ms, delim_read, delim_write) = new(sp, portName, timeout_ms, delim_read, delim_write, ReentrantLock())
 end
 
 function SerialDevice(port::SerialPort, portName::String; delim_read::Union{Char, Nothing} = nothing, delim_write::Union{Char, Nothing} = nothing, timeout_ms = 1000)
@@ -86,76 +88,111 @@ end
 Send command string to serial device.
 """
 function send(sd::SerialDevice,cmd::String)
-	out = cmd
-	if !isnothing(sd.delim_write)
-		out = string(cmd, sd.delim_write)
+	lock(sd.sdLock)
+	try
+		out = cmd
+		if !isnothing(sd.delim_write)
+			out = string(cmd, sd.delim_write)
+		end
+		@debug "$(sd.portName) sent: $out"
+		write(sd.sp,out)
+		# Wait for all data to be transmitted
+		sp_drain(sd.sp)
+		return nothing
+	finally
+		unlock(sd.sdLock)
 	end
-	@info "$(sd.portName) sent: $out"
-	write(sd.sp,out)
-	# Wait for all data to be transmitted
-	sp_drain(sd.sp)
-	return nothing
 end
 
 function send(sd::SerialDevice, cmd::Vector{UInt8})
-	write(sd.sp, cmd)
-	@debug "$(sd.portName) sent: $cmd"
-	sp_drain(sd.sp)
-	return nothing
+	lock(sd.sdLock)
+	try
+		write(sd.sp, cmd)
+		@debug "$(sd.portName) sent: $cmd"
+		sp_drain(sd.sp)
+		return nothing
+	finally
+		unlock(sd.sdLock)
+	end
 end
 
 """
 Read out current content of the output buffer of the serial devive. Returns a String.
 """
 function receive(sd::SerialDevice)
-	set_read_timeout(sd.sp, sd.timeout_ms/1000)
-	return readuntil(sd.sp, sd.delim_read)
+	lock(sd.sdLock)
+	try
+		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		return readuntil(sd.sp, sd.delim_read)
+	finally
+		unlock(sd.sdLock)
+	end
 end
 
 function receive(sd::SerialDevice, array::AbstractArray)
-	set_read_timeout(sd.sp, sd.timeout_ms/1000)
-	return read!(sd.sp, array)
+	lock(sd.sdLock)
+	try
+		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		return read!(sd.sp, array)
+	finally
+		unlock(sd.sdLock)
+	end
 end
 
 function receiveDelimited(sd::SerialDevice, array::AbstractArray)
-	set_read_timeout(sd.sp, sd.timeout_ms/1000)
-	buf = IOBuffer()
-	done = false
-	while bytesavailable(sd.sp) > 0 || !done
-		c = read(sd.sp, 1)
-		if c[1] == UInt8(sd.delim_read)
-			done = true
-			break
+	lock(sd.sdLock)
+	try
+		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		buf = IOBuffer()
+		done = false
+		while bytesavailable(sd.sp) > 0 || !done
+			c = read(sd.sp, 1)
+			if c[1] == UInt8(sd.delim_read)
+				done = true
+				break
+			end
+			write(buf, c)
 		end
-		write(buf, c)
+		seekstart(buf)
+		read!(buf, array)
+	finally
+		unlock(sd.sdLock)
 	end
-	seekstart(buf)
-	read!(buf, array)
 end
 
 """
 Send querry to serial device and receive device answer. Returns a String
 """
 function query(sd::SerialDevice,cmd)
-	sp_flush(sd.sp, SP_BUF_INPUT)
-	send(sd,cmd)
-	out = receive(sd)
-	# Discard remaining data
-	sp_flush(sd.sp, SP_BUF_INPUT)
-	return out
+	lock(sd.sdLock)
+	try
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		send(sd,cmd)
+		out = receive(sd)
+		# Discard remaining data
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		return out
+	finally
+		unlock(sd.sdLock)
+	end
 end
 
 function query!(sd::SerialDevice, cmd, data::AbstractArray; delimited::Bool=false)
-	sp_flush(sd.sp, SP_BUF_INPUT)
-	send(sd,cmd)
-	if delimited
-		receiveDelimited(sd, data)
-	else 
-		receive(sd, data)
+	lock(sd.sdLock)
+	try
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		send(sd,cmd)
+		if delimited
+			receiveDelimited(sd, data)
+		else 
+			receive(sd, data)
+		end
+		# Discard remaining data
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		return data
+	finally
+		unlock(sd.sdLock)
 	end
-	# Discard remaining data
-	sp_flush(sd.sp, SP_BUF_INPUT)
-	return data
 end
 
 """

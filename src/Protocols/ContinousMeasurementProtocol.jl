@@ -24,12 +24,7 @@ end
 ContinousMeasurementProtocolParams(dict::Dict) = params_from_dict(ContinousMeasurementProtocolParams, dict)
 
 Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::ContinousMeasurementProtocolParams
-  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
-  executeTask::Union{Task, Nothing} = nothing
+  @add_protocol_fields ContinousMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 

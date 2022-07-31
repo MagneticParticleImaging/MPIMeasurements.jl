@@ -296,6 +296,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
   end
+  
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
     @async begin
@@ -428,6 +429,9 @@ function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
   for (i, p) in enumerate(perfs)
     if p.status.overwritten || p.status.corrupted
         @warn "RedPitaya $i lost data"
+    end
+    if p.status.stepsLost
+      @warn "RedPitaya $i lost sequence steps"
     end
 end
 end
