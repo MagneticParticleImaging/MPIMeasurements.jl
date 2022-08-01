@@ -94,7 +94,6 @@ end
 
 function enableACPower(Arduino::ArduinoSurveillanceUnit)
   ACQ = sendCommand(Arduino, "ENABLE:AC");
-  sleep(0.5)
   checkACQ(Arduino, ACQ)
 end
 
