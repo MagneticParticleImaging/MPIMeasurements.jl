@@ -25,6 +25,4 @@ Base.@kwdef mutable struct AcquisitionSettings
   numAverages::Integer = 1
   "Number of frames to average blockwise."
   numFrameAverages::Integer = 1
-  "Flag for background measurement"
-  isBackground::Bool = false
 end
