@@ -55,11 +55,9 @@ function sequenceFromTOML(filename::AbstractString)
 
   splattingDict = Dict{Symbol, Any}()
 
-  # Main section
-  splattingDict[:name] = general["name"]
-  splattingDict[:description] = general["description"]
-  splattingDict[:targetScanner] = general["targetScanner"]
-  splattingDict[:baseFrequency] = uparse(general["baseFrequency"])
+  # General
+  generalSplattingDict = dict_to_splatting(GeneralSettings, general)
+  splattingDict[:general] = GeneralSettings(; generalSplattingDict...)
 
   # Fields
   splattingDict[:fields] = fieldDictToFields(sequenceDict["Fields"])
