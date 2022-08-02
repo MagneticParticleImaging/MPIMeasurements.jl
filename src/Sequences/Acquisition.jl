@@ -6,6 +6,9 @@ Base.@kwdef struct RxChannel
   id::AbstractString
 end
 
+id(channel::RxChannel) = channel.id
+
+
 "Settings for acquiring the sequence."
 Base.@kwdef mutable struct AcquisitionSettings
   "Receive channels that are used in the sequence."
