@@ -58,7 +58,7 @@ function _init(rob::Robot)
 end
 
 neededDependencies(::Robot) = []
-optionalDependencies(::Robot) = [AbstractCollisionModule]
+optionalDependencies(::Robot) = [AbstractCollisionModule, SerialPortPool]
 
 # can be overwritten, but does not have to be
 state(rob::Robot) = rob.state
