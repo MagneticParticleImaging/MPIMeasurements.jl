@@ -16,7 +16,7 @@ function toDict(value)
   return toDict!(dict, value)
 end
 
-function toDict!(dict::Dict{String, Any}, value)
+function toDict!(dict, value)
   for field in fieldnames(typeof(value))
     dict[String(field)] = toDictValue(getproperty(value, field))
   end
