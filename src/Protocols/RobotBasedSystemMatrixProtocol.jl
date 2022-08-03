@@ -369,15 +369,13 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
           if protocol.params.controlTx
             if allowControlLoop
               controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
-              setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
             else
               setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
-              setRampingParams(daq, protocol.params.sequence)
             end
           else
             prepareTx(daq, protocol.params.sequence)
-            setRampingParams(daq, protocol.params.sequence)
           end
+          setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
         end
 
         suTask = @async begin
