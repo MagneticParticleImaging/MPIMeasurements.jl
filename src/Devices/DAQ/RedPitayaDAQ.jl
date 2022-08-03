@@ -444,7 +444,6 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # TODO How to signal end of sequences without any LUTs
   timing = nothing
   if !isnothing(daq.acqSeq)
-    @warn daq.acqSeq
     timing = getTiming(daq)
   end
   startTx(daq)

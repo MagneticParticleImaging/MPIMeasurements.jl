@@ -393,7 +393,6 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         end
 
         timeWaitSU = @elapsed wait(suTask)
-        timeSeq = @elapsed prepareSequence(daq, protocol.params.sequence)
       end
     end
 
@@ -434,9 +433,9 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
   close(channel)
 
   @show timeEnableSlowDAC
-  start, endFrame = getFrameTiming(daq) 
+  timing = getTiming(daq) 
   calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID begin
-    endSequence(daq, endFrame)
+    endSequence(daq, timing.finish)
     @sync for amp in amps
       @async turnOff(amp)
     end
