@@ -59,8 +59,6 @@ function toDict!(dict, channel::TxChannel)
   return dict
 end
 
-toDictValue(channel::TxChannel) = toDict(channel)
-
 include("PeriodicElectricalChannel.jl")
 include("StepwiseElectricalChannel.jl")
 include("ContinuousElectricalChannel.jl")

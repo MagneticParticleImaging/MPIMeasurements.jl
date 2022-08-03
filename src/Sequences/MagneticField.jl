@@ -75,8 +75,6 @@ function toDict!(dict, field::MagneticField)
   return dict
 end
 
-toDictValue(field::MagneticField) = toDict(field)
-
 function toDict!(dict, fields::Vector{MagneticField})
   for field in fields
     dict[id(field)] = toDictValue(field)

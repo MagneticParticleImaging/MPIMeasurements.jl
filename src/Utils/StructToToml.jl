@@ -23,7 +23,13 @@ function toDict!(dict, value)
   return dict
 end
 
-toDictValue(x) = x
+function toDictValue(x)
+  if fieldcount(typeof(x)) > 0
+    return toDict(x)
+  else
+    return x
+  end
+end
 toDictValue(x::T) where {T<:Quantity} = filter(!isspace, (string(x)))
 toDictValue(x::T) where {T<:Enum} = string(x)
 toDictValue(x::Array) = toDictValue.(x)
