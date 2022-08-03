@@ -144,7 +144,6 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
-  prepareTx(daq, sequence) # Prepare all channels here, since they would otherwise not be set if they are uncontrolled
   setRampingParams(daq, sequence)
   daq.acqPeriodsPerPatch = acqNumPeriodsPerPatch(sequence)
   acyclic = acyclicElectricalTxChannels(sequence)
