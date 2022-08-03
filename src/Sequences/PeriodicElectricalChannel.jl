@@ -138,3 +138,25 @@ end
 
 export id
 id(component::PeriodicElectricalComponent) = component.id
+
+function toDict!(dict, component::ElectricalComponent)
+  for field in [x for x in fieldnames(typeof(component)) if !in(x, [:id])]
+    dict[String(field)] = toDictValue(getproperty(component, field))
+  end
+  return dict
+end
+
+toDictValue(component::ElectricalComponent) = toDict(component)
+
+function toDict!(dict, channel::PeriodicElectricalChannel)
+  for field in [x for x in fieldnames(typeof(channel)) if !in(x, [:id, :components])]
+    dict[String(field)] = toDictValue(getproperty(channel, field))
+  end
+  for component in components(channel)
+    dict[id(component)] = toDictValue(component)
+  end
+  dict["type"] = string(typeof(channel))
+  return dict
+end
+
+toDictValue(channel::PeriodicElectricalChannel) = toDict(channel)

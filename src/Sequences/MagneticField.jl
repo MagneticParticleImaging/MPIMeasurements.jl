@@ -64,3 +64,22 @@ periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicEle
 
 export acyclicElectricalTxChannels
 acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
+
+function toDict!(dict, field::MagneticField)
+  for structField in [x for x in fieldnames(typeof(field)) if !in(x, [:id, :channels])]
+    dict[String(structField)] = toDictValue(getproperty(field, structField))
+  end
+  for channel in channels(field)
+    dict[id(channel)] = toDictValue(channel)
+  end
+  return dict
+end
+
+toDictValue(field::MagneticField) = toDict(field)
+
+function toDict!(dict, fields::Vector{MagneticField})
+  for field in fields
+    dict[id(field)] = toDictValue(field)
+  end
+  return dict
+end

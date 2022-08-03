@@ -8,6 +8,7 @@ end
 
 id(channel::RxChannel) = channel.id
 
+toDictValue(channel::RxChannel) = id(channel)
 
 "Settings for acquiring the sequence."
 Base.@kwdef mutable struct AcquisitionSettings

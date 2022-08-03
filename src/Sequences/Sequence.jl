@@ -44,6 +44,9 @@ end
 
 function toDict!(dict, seq::Sequence)
   dict["General"] = toDict(seq.general)
+  dict["Fields"] = toDict(seq.fields)
+  dict["Acquisition"] = toDict(seq.acquisition)
+  return dict
 end
 
 export sequenceFromTOML

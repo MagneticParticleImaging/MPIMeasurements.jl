@@ -51,6 +51,15 @@ cycleDuration(::T, var) where T <: TxChannel = error("The method has not been im
 export id
 id(channel::TxChannel) = channel.id
 
+function toDict!(dict, channel::TxChannel)
+  for field in [x for x in fieldnames((typeof(channel))) if x != :id]
+    dict[String(field)] = toDictValue(getproperty(channel, field))
+  end
+  dict["type"] = string(typeof(channel))
+  return dict
+end
+
+toDictValue(channel::TxChannel) = toDict(channel)
 
 include("PeriodicElectricalChannel.jl")
 include("StepwiseElectricalChannel.jl")
