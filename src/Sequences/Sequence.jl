@@ -414,3 +414,21 @@ rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
 
 export rxChannels
 rxChannels(sequence::Sequence) = sequence.acquisition.channels
+
+for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
+  ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel]
+  @eval begin
+    @generated function ==(x::$T, y::$T)
+      fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]
+      # If else case needs to be implemented, take care to avoid stack overflow/infinite recursion!
+      if !isempty(fieldEqualities)
+        temp = fieldEqualities[1]
+        for i = 2:length(fieldEqualities)
+          temp = Expr(:&&, temp, fieldEqualities[i])
+        end
+        return temp
+      end
+    end
+  end
+end
