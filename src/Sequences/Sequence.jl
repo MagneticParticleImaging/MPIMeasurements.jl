@@ -52,7 +52,11 @@ end
 export sequenceFromTOML
 function sequenceFromTOML(filename::AbstractString)
   sequenceDict = TOML.parsefile(filename)
+  return sequenceFromDict(copy(sequenceDict))
+end
 
+export sequenceFromDict
+function sequenceFromDict(sequenceDict::Dict{String, Any})
   general = sequenceDict["General"]
   acquisition = sequenceDict["Acquisition"]
 
@@ -147,16 +151,16 @@ function createFieldChannel(channelID::AbstractString, channelDict::Dict{String,
 end
 
 export name
-name(sequence::Sequence) = sequence.name
+name(sequence::Sequence) = sequence.general.name
 
 export description
-description(sequence::Sequence) = sequence.description
+description(sequence::Sequence) = sequence.general.description
 
 export targetScanner
-targetScanner(sequence::Sequence) = sequence.targetScanner
+targetScanner(sequence::Sequence) = sequence.general.targetScanner
 
 export baseFrequency
-baseFrequency(sequence::Sequence) = sequence.baseFrequency
+baseFrequency(sequence::Sequence) = sequence.general.baseFrequency
 
 export fields
 fields(sequence::Sequence) = sequence.fields

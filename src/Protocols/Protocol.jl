@@ -78,6 +78,14 @@ function Protocol(protocolName::AbstractString, scanner::MPIScanner)
   return Protocol(protocolDict, scanner)
 end
 
+function toDict!(dict, protocol::Protocol)
+  dict["type"] = string(typeof(protocol))
+  dict["description"] = description(protocol)
+  dict["targetScanner"] = name(scanner(protocol))
+  toDict!(dict, params(protocol))
+  return dict
+end
+
 Protocol(protocolName::AbstractString, scannerName::AbstractString) = Protocol(protocolName, MPIScanner(scannerName))
 Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protocol(protocolDict, MPIScanner(scannerName))
 

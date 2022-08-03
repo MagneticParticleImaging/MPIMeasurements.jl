@@ -367,6 +367,14 @@ Constructor for a sequence of `name` from the configuration directory specified 
 """
 Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
 
+function Sequence(scanner::MPIScanner, dict::Dict)
+  sequence = sequenceFromDict(dict)
+  if name(scanner) == targetScanner(sequence)
+    return sequence
+  end
+  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner"))
+end
+
 function getTransferFunctionList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "TransferFunctions")
   if isdir(path)
