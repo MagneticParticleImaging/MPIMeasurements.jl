@@ -24,5 +24,6 @@ function toDict!(dict, value)
 end
 
 toDictValue(x) = x
-toDictValue(x::T) where {T<:Quantity} = strip(string(x))
+toDictValue(x::T) where {T<:Quantity} = filter(!isspace, (string(x)))
+toDictValue(x::T) where {T<:Enum} = string(x)
 toDictValue(x::Array) = toDictValue.(x)
