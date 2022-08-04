@@ -1,7 +1,7 @@
 name = "MPIMeasurements"
 uuid = "a874a27a-e9a7-503d-98b6-bf61df4bb725"
 authors = ["Tobias Knopp <tobias@knoppweb.de>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
@@ -46,10 +46,10 @@ HDF5 = "0.10,0.11,0.12,0.13,0.14,0.15,0.16"
 IniFile = "0.5"
 Interpolations = "0.13"
 LibSerialPort = "0.5.2"
-MPIFiles = "0.12.0"
+MPIFiles = "0.12.4"
 ProgressMeter = "1.5"
 PyTinkerforge = "2.1.29"
-RedPitayaDAQServer = "0.5.0"
+RedPitayaDAQServer = "0.5.1"
 Reexport = "0.2, 1.0"
 ReplMaker = "0.2.7"
 StringEncodings = "0.3.5"
