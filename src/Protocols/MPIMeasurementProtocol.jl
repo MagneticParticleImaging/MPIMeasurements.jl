@@ -157,7 +157,7 @@ function measurement(protocol::MPIMeasurementProtocol)
     ex = currExceptions[1][:exception]
   end
   if Base.istaskfailed(consumer)
-    currExceptions = current_exceptions(producer)
+    currExceptions = current_exceptions(consumer)
     @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
     for i in 1:length(currExceptions) - 1
       stack = currExceptions[i]
