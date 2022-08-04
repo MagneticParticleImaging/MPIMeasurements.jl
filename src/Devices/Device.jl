@@ -10,6 +10,8 @@ automatic instantiation from the configuration file.
 """
 abstract type DeviceParams end
 
+Base.close(device::Device) = @warn "The device type `$(typeof(device))` has no `close` function defined."
+
 function validateDeviceStruct(device::Type{<:Device})
   requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
   missingFields = [x for x in requiredFields if !in(x, fieldnames(device))]
@@ -18,7 +20,6 @@ function validateDeviceStruct(device::Type{<:Device})
     throw(ScannerConfigurationError(msg))
   end
 end
-
 
 macro add_device_fields(paramType)
   return esc(quote 
@@ -51,7 +52,7 @@ isPresent(device::Device) = device.present
 dependencies(device::Device) = device.dependencies
 
 "Retrieve all dependencies of a certain type."
-dependencies(device::Device, type::DataType) = [dependency for dependency in values(dependencies(device)) if dependency isa type]
+dependencies(device::Device, type::DataType) = [dependency for dependency in Base.values(dependencies(device)) if dependency isa type]
 
 "Retrieve a single dependency of a certain type and error if there are more dependencies."
 function dependency(device::Device, type::DataType)
@@ -66,6 +67,17 @@ end
 
 "Check whether the device has a dependency of the given `type`."
 hasDependency(device::Device, type::DataType) = length(dependencies(device, type)) > 0
+
+"Retrieve a single dependency with a certain device ID."
+function dependency(device::Device, dependencyID::String)
+  dependencies_ = dependencies(device)
+  
+  for (dependencyIDLoop, dependency_) in dependencies_
+    if deviceID(dependency_) == dependencyID
+      return dependency_
+    end
+  end
+end
 
 "Retrieve all expected dependencies of a device."
 expectedDependencies(device::Device)::Vector{DataType} = vcat(neededDependencies(device), optionalDependencies(device))
@@ -90,7 +102,7 @@ function init(device::Device)
   
   # Only init a device if all dependencies are present
   uninitDependencies = []
-  for dev in values(dependencies(device)) # Should only be of type <: Device at this point
+  for dev in Base.values(dependencies(device)) # Should only be of type <: Device at this point
     if !isPresent(dev)
       push!(uninitDependencies, deviceID(dev))
     end

@@ -112,3 +112,4 @@ deviceType = "DummySurveillanceUnit"
 
 [Devices.simulated_amplifier]
 deviceType = "SimulatedAmplifier"
+channelID = "tx_main"

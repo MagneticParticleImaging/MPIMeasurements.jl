@@ -1,11 +1,10 @@
 include("Exceptions.jl")
-include("SerialDevices/SerialDevices.jl")
-include("SCPI/SCPIInstruments.jl")
 include("DictToStruct.jl")
 include("BidirectionalChannel.jl")
 include("ScannerCoordinates.jl")
 
-function wait(::Nothing)
+function Base.wait(::Nothing)
+ @debug "Wait was called with `nothing`."
  # NOP
 end
 

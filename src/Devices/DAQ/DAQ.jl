@@ -1,7 +1,7 @@
 import Base: setindex!, getindex
 
 export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxChannelSettings, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
-       createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, currentFrame, readData,
+       createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, readData,
        numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
        DAQ, readDataPeriod, currentPeriod, getDAQ, getDAQs,
        channelIdx, limitPeak, sinkImpedance, allowedWaveforms, isWaveformAllowed,
@@ -207,22 +207,17 @@ calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelI
 @mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
 @mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
 
-function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true, endSeq = true)
+function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; prepTx = true, prepSeq = true)
   if prepTx
       prepareTx(daq, sequence)
   end
   if prepSeq
       setSequenceParams(daq, sequence)
-      prepareSequence(daq, sequence)
   end
   
   numFrames = acqNumFrames(sequence) * acqNumFrameAverages(sequence)
-  endFrame = startProducer(channel, daq, numFrames)
-  
-  if endSeq
-    endSequence(daq, endFrame)
-  end
-  return endFrame
+  endSample = startProducer(channel, daq, numFrames)
+  return endSample
 end
 
 function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
@@ -300,7 +295,7 @@ function addFramesFrom(measState::SequenceMeasState, frames::Array{Float32, 4})
   fr = measState.nextFrame
   to = fr + size(frames, 4) - 1
   limit = size(measState.buffer, 4)
-  @info "Add frames $fr to $to to framebuffer with $limit size"
+  @debug "Add frames $fr to $to to framebuffer with $limit size"
   if to <= limit
     measState.buffer[:,:,:,fr:to] = frames
     measState.nextFrame = to + 1

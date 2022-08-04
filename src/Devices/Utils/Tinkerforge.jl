@@ -1,17 +1,18 @@
 
+# Default for all devices
+isTinkerforgeDevice(::Device) = false
 
-Base.@kwdef mutable struct TinkerforgeConnection
-  host::IPAddr = ip"127.0.0.1"
-  port::Integer = 4223
-  connection
+export TinkerforgeDevice
+struct TinkerforgeDevice <: Device end
 
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::SimulatedGaussMeterParams
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
-end
+export host
+host(device::T) where T <: Device = isTinkerforgeDevice(device) ? host(TinkerforgeDevice(), device) : error("`host` not implemented for device of type $(typeof(device)).")
+host(::TinkerforgeDevice, device::T) where T <:Device = device.params.host
 
-self.ip_con = IPConnection()
-            self.ip_con.connect(self.HOST, self.PORT)
+export port
+port(device::T) where T <: Device = isTinkerforgeDevice(device) ? port(TinkerforgeDevice(), device) : error("`port` not implemented for device of type $(typeof(device)).")
+port(::TinkerforgeDevice, device::T) where T <:Device = device.params.port
+
+export uid
+uid(device::T) where T <: Device = isTinkerforgeDevice(device) ? uid(TinkerforgeDevice(), device) : error("`uid` not implemented for device of type $(typeof(device)).")
+uid(::TinkerforgeDevice, device::T) where T <:Device = device.params.uid

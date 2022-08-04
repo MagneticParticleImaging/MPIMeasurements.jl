@@ -1,15 +1,25 @@
-export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
+export  Protocol, ProtocolParams, name, description, scanner, params, add_protocol_fields, runProtocol,
         init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
 
-
 abstract type ProtocolParams end
 
 export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
 @enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
+
+macro add_protocol_fields(paramType)
+  return esc(quote
+    name::AbstractString
+    params::$(paramType)
+    description::AbstractString
+    scanner::MPIScanner
+    biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
+    executeTask::Union{Task, Nothing} = nothing
+  end)
+end
 
 name(protocol::Protocol)::AbstractString = protocol.name
 description(protocol::Protocol)::AbstractString = protocol.description
@@ -71,6 +81,7 @@ end
 Protocol(protocolName::AbstractString, scannerName::AbstractString) = Protocol(protocolName, MPIScanner(scannerName))
 Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protocol(protocolDict, MPIScanner(scannerName))
 
+# TODO (from Jonas): Is this still used?
 function runProtocol(protocol::Protocol)
   # TODO: Error handling
   # TODO command line "handler"
@@ -93,6 +104,7 @@ abstract type ProtocolEvent end
 @mustimplement cancel(protocol::Protocol)
 
 function init(protocol::Protocol)
+  @debug "Initializing protocol $(name(protocol)) with inner initializer."
   checkRequiredDevices(protocol)
   _init(protocol)
 end
@@ -117,11 +129,15 @@ timeEstimate(protocol::Protocol) = "Unknown"
 
 function execute(protocol::Protocol, threadID::Integer = 1)
   if isnothing(protocol.executeTask) || istaskdone(protocol.executeTask)
+    @debug "Executing protocol since the execute task is either `nothing` or done."
     protocol.biChannel = BidirectionalChannel{ProtocolEvent}(32)
     @tspawnat threadID executionTask(protocol)
     return BidirectionalChannel{ProtocolEvent}(protocol.biChannel)
   else
-    @warn "Protocol cannot be executed again as it is still running"
+    if !isnothing(protocol.executeTask)
+      @debug "The execute task is not `nothing` but not done."
+    end
+    @warn "Protocol cannot be executed again as it is still running."
     return nothing
   end
 end
@@ -133,18 +149,23 @@ function executionTask(protocol::Protocol)
     _execute(protocol)
   catch ex
     if ex isa CancelException
+      @debug "A CancelException has been thrown during execution."
       put!(protocol.biChannel, OperationSuccessfulEvent(CancelEvent()))
       close(protocol.biChannel)
     elseif ex isa IllegalStateException
+      @debug "An IllegalStateException has been thrown during execution."
       put!(protocol.biChannel, IllegaleStateEvent(ex.message))
       close(protocol.biChannel)
     else
       # Let task fail
+      @debug "An exception has been thrown during execution. $ex"
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
-      throw(ex)
+      rethrow()
     end
   end
+
+  @debug "Execution task ending. Closing communication channel."
   close(protocol.biChannel)
 end
 
@@ -159,7 +180,7 @@ struct AnswerEvent <: ProtocolEvent
   answer::Bool
   question::DecisionEvent
 end
-struct MultipleChoiceEvent <: ProtocolEvent
+struct MultipleChoiceEvent <: ProtocolEvent # TODO: How about multiple values for a question?
   message::AbstractString
   choices::Vector{AbstractString}
 end
@@ -214,13 +235,14 @@ end
 abstract type StorageRequestEvent <: ProtocolEvent end
 struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
   datastore::DatasetStore
-  params::Dict
+  mdf::MDFv2InMemory
 end
 struct StorageSuccessEvent <: ProtocolEvent
   filename::AbstractString
 end
 
 function askConfirmation(protocol::Protocol, message::AbstractString)
+  @debug "Asking for confirmation on \"$message\"."
   channel = biChannel(protocol)
   question = DecisionEvent(message)
   put!(channel, question)
@@ -237,6 +259,7 @@ function askConfirmation(protocol::Protocol, message::AbstractString)
 end
 
 function askChoices(protocol::Protocol, message::AbstractString, choices::Vector{<:AbstractString})
+  @debug "Asking for decision on \"$message\" with the following choices: $(join(choices, ", ", " and "))."
   channel = biChannel(protocol)
   question = MultipleChoiceEvent(message, choices)
   put!(channel, question)
@@ -261,6 +284,7 @@ handleEvent(protocol::Protocol, event::ProtocolEvent) = put!(biChannel(protocol)
 function handleEvents(protocol::Protocol)
   while isready(protocol.biChannel)
     event = take!(protocol.biChannel)
+    @debug "Protocol event handler received event of type $(typeof(event)) and is now dispatching it."
     handleEvent(protocol, event)
   end
 end
@@ -271,8 +295,17 @@ struct NonInteractive <: ProtocolInteractivity end
 struct Interactive <: ProtocolInteractivity end
 @mustimplement protocolInteractivity(protocol::Protocol)
 
-include("DAQMeasurementProtocol.jl")
+abstract type ProtocolMDFStudyUse end
+struct UsingMDFStudy <: ProtocolMDFStudyUse end
+struct NotUsingMDFStudy <: ProtocolMDFStudyUse end
+@mustimplement protocolMDFStudyUse(protocol::Protocol)
+
+export isUsingMDFStudy
+isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDFStudy
+
+include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
+include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
 include("ContinousMeasurementProtocol.jl")

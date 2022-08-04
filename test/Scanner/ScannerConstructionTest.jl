@@ -79,7 +79,7 @@
       listSeq = getSequenceList(mpiScanner)
       @test issetequal(listSeq, ["1DSequence", "1DSequence2"])
       @test_throws ErrorException Sequence(mpiScanner, "DoesNotExist")
-      @test MPIFiles.name(Sequence(mpiScanner, listSeq[1])) == listSeq[1]
+      @test MPIMeasurements.name(Sequence(mpiScanner, listSeq[1])) == listSeq[1]
       
       # Protocols
       listProto = getProtocolList(mpiScanner)

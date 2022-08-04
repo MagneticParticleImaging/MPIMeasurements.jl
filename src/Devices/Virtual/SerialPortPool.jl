@@ -1,10 +1,19 @@
-export SerialPortPool, SerialPortPoolParams
+export SerialPortPool, SerialPortPoolParams, SerialPortPoolListedParams, SerialPortPoolBlacklistParams
 
-Base.@kwdef struct SerialPortPoolParams <: DeviceParams
+abstract type SerialPortPoolParams <: DeviceParams end 
+
+Base.@kwdef struct SerialPortPoolListedParams <: SerialPortPoolParams
   addressPool::Vector{String}
   timeout_ms::Integer = 1000
 end
-SerialPortPoolParams(dict::Dict) = params_from_dict(SerialPortPoolParams, dict)
+SerialPortPoolListedParams(dict::Dict) = params_from_dict(SerialPortPoolListedParams, dict)
+
+Base.@kwdef struct SerialPortPoolBlacklistParams <: SerialPortPoolParams
+  blacklist::Vector{String}
+  timeout_ms::Integer = 1000
+end
+SerialPortPoolBlacklistParams(dict::Dict) = params_from_dict(SerialPortPoolBlacklistParams, dict)
+
 
 Base.@kwdef mutable struct SerialPortPool <: Device
   @add_device_fields SerialPortPoolParams
@@ -15,35 +24,67 @@ neededDependencies(::SerialPortPool) = []
 optionalDependencies(::SerialPortPool) = []
 
 function _init(pool::SerialPortPool)
-  pool.activePool = pool.params.addressPool
+  pool.activePool = initPool(pool.params)
 end
 
-function getSerialPort(pool::SerialPortPool, query::String, reply::String, baudrate::Integer; ndatabits::Integer = 8, parity::SPParity = SP_PARITY_NONE, nstopbits::Integer = 1)
+function initPool(params::SerialPortPoolListedParams)
+  return params.addressPool
+end
+
+function initPool(params::SerialPortPoolBlacklistParams)
+  return filter(x->!in(x, params.blacklist), get_port_list())  
+end
+
+function getSerialDevice(pool::SerialPortPool, queryStr::String, reply::String; kwargs...)
   result = nothing
   for address in pool.activePool
     try
-      sp = SerialPort(address)
-      open(sp)
-      set_speed(sp, baudrate)
-      set_frame(sp, ndatabits = ndatabits, parity = parity, nstopbits=nstopbits)
-      flush(sp)
-      write(sp, query)
-      response=readuntil(sp, last(reply), pool.params.timeout_ms)
-      @show response
+      sd = SerialDevice(address; kwargs...)
+      response=query(sd, queryStr)
       if response == reply
-        result = sp
+        result = sd
         reserveSerialPort(pool, address)
         break
       else
-        close(sp)
+        close(sd)
       end
     catch ex
+      @warn ex
       try
-        close(sp)
+        close(sd)
       catch e
         # NOP
       end
     end
+  end
+  return result
+end
+
+function getSerialDevice(pool::SerialPortPool, description::String; kwargs...)
+  portMap = descriptionMap()
+  fittingPorts = filter(contains(description), keys(portMap))
+  if length(fittingPorts) > 1
+    throw(ScannerConfigurationError("Can not unambiguously find a port for description $description"))
+  elseif length(fittingPorts) == 1
+    port = portMap[first(fittingPorts)]
+    if in(port, pool.activePool)
+      try
+        sd = SerialDevice(port; kwargs...)
+        reserveSerialPort(pool, port)
+        return sd
+      catch e
+        @error e
+      end
+    end
+  end
+  return nothing
+end
+
+function descriptionMap()
+  result = Dict{String, String}()
+  ports = get_port_list()
+  for port in ports
+    result[LibSerialPort.sp_get_port_description(SerialPort(port))] = port
   end
   return result
 end
@@ -55,6 +96,35 @@ end
 function returnSerialPort(pool::SerialPortPool, port::String)
   if (in(port, pool.params.addressPool) && !in(port, pool.activePool))
     push!(pool.activePool, port)
+  end
+end
+
+
+function initSerialDevice(device::Device, query::String, response::String)
+  pool = nothing
+  if hasDependency(device, SerialPortPool)
+    pool = dependency(device, SerialPortPool)
+    sd = getSerialDevice(pool, query, response; serial_device_splatting(device.params)...)
+    if isnothing(sd)
+      throw(ScannerConfigurationError("Device $(deviceID(device)) found no fitting serial port."))
+    end
+    return sd
+  else
+    throw(ScannerConfigurationError("Device $(deviceID(device)) requires a SerialPortPool dependency but has none."))
+  end
+end
+
+function initSerialDevice(device::Device, description::String)
+  pool = nothing
+  if hasDependency(device, SerialPortPool)
+    pool = dependency(device, SerialPortPool)
+    sd = getSerialDevice(pool, description; serial_device_splatting(device.params)...)
+    if isnothing(sd)
+      throw(ScannerConfigurationError("Device $(deviceID(device)) found no fitting serial port with description $description."))
+    end
+    return sd
+  else
+    throw(ScannerConfigurationError("Device $(deviceID(device)) requires a SerialPortPool dependency but has none."))
   end
 end
 
