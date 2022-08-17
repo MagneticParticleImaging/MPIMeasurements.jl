@@ -288,7 +288,7 @@ export acqOffsetField
 acqOffsetField(sequence::Sequence) = nothing # TODO: Implement
 
 export dfBaseFrequency
-dfBaseFrequency(sequence::Sequence) = sequence.baseFrequency
+dfBaseFrequency(sequence::Sequence) = baseFrequency(sequence)
 
 export txBaseFrequency
 txBaseFrequency(sequence::Sequence) = dfBaseFrequency(sequence) # Alias, since this might not only concern the drivefield
