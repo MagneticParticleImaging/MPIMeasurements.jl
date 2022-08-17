@@ -503,6 +503,7 @@ function store(protocol::RobotBasedSystemMatrixProtocol)
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   params["temperatures"] = vec(sysObj.temperatures)
+  params["sequence"] = toDict(protocol.params.sequence)
 
   open(filename,"w") do f
     TOML.print(f, params)
