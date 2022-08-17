@@ -6,6 +6,10 @@ Base.@kwdef struct RxChannel
   id::AbstractString
 end
 
+id(channel::RxChannel) = channel.id
+
+toDictValue(channel::RxChannel) = id(channel)
+
 "Settings for acquiring the sequence."
 Base.@kwdef mutable struct AcquisitionSettings
   "Receive channels that are used in the sequence."
@@ -22,6 +26,4 @@ Base.@kwdef mutable struct AcquisitionSettings
   numAverages::Integer = 1
   "Number of frames to average blockwise."
   numFrameAverages::Integer = 1
-  "Flag for background measurement"
-  isBackground::Bool = false
 end

@@ -1,99 +1,21 @@
 include("Waveform.jl")
-
-export TxChannelType, ContinuousTxChannel, StepwiseTxChannel
-abstract type TxChannelType end
-struct ContinuousTxChannel <: TxChannelType end
-struct StepwiseTxChannel <: TxChannelType end
-
-export TxMechanicalMovementType, RotationTxChannel, TranslationTxChannel
-abstract type TxMechanicalMovementType end
-struct RotationTxChannel <: TxMechanicalMovementType end
-struct TranslationTxChannel <: TxMechanicalMovementType end
-
-export TxChannel, ElectricalTxChannel, AcyclicElectricalTxChannel, MechanicalTxChannel, ElectricalComponent
-abstract type TxChannel end
-abstract type ElectricalTxChannel <: TxChannel end
-abstract type AcyclicElectricalTxChannel <: ElectricalTxChannel end
-abstract type MechanicalTxChannel <: TxChannel end
-
-abstract type ElectricalComponent end
-
-export channeltype
-channeltype(::Type{<:TxChannelType}) = ContinuousTxChannel() #fallback, by default everything is continuous
-
-export isContinuous
-isContinuous(channelType::T) where T <: TxChannel = isContinuous(channeltype(T), channelType)
-isContinuous(::ContinuousTxChannel, channel) = true
-isContinuous(::StepwiseTxChannel, channel) = false
-
-export isStepwise
-isStepwise(channelType::T) where T <: TxChannel = isStepwise(channeltype(T), channelType)
-isStepwise(::ContinuousTxChannel, channel) = false
-isStepwise(::StepwiseTxChannel, channel) = true
-
-export mechanicalMovementType
-@mustimplement mechanicalMovementType(::Type{<:MechanicalTxChannel})
-
-export doesRotationMovement
-doesRotationMovement(channelType::T) where T <: MechanicalTxChannel = doesRotationMovement(mechanicalMovementType(T), channelType)
-doesRotationMovement(::TxMechanicalMovementType, channel) = false
-doesRotationMovement(::RotationTxChannel, channel) = true
-
-export doesTranslationMovement
-doesTranslationMovement(channelType::T) where T <: MechanicalTxChannel = doesTranslationMovement(mechanicalMovementType(T), channelType)
-doesTranslationMovement(::TxMechanicalMovementType, channel) = false
-doesTranslationMovement(::TranslationTxChannel, channel) = true
-
-export stepsPerCycle
-stepsPerCycle(channelType::T) where T = channeltype(T) isa StepwiseTxChannel ? error("Method not defined for $T.") : nothing
-
-export cycleDuration
-cycleDuration(::T, var) where T <: TxChannel = error("The method has not been implemented for T")
-
-include("PeriodicElectricalChannel.jl")
-include("StepwiseElectricalChannel.jl")
-include("ContinuousElectricalChannel.jl")
-include("ContinuousMechanicalTranslationChannel.jl")
-include("StepwiseMechanicalTranslationChannel.jl")
-include("StepwiseMechanicalRotationChannel.jl")
-include("ContinuousMechanicalRotationChannel.jl")
+include("TxChannel.jl")
+include("MagneticField.jl")
 include("Acquisition.jl")
 
-export MagneticField
-"""
-Description of a magnetic field.
 
-The field can either be electromagnetically or mechanically changed.
-The mechanical movement of e.g. an iron yoke would be defined within
-two channels, one electrical and one mechanical.
-"""
-Base.@kwdef struct MagneticField
-  "Unique ID of the field description."
-  id::AbstractString
-  "Transmit channels that are used for the field."
-  channels::Vector{TxChannel}
-
-  "Flag if the start of the field should be convoluted.
-  If the DAQ does not support this, it can may fall back
-  to postponing the application of the settings.
-  Not used for mechanical fields."
-  safeStartInterval::typeof(1.0u"s") = 0.5u"s"
-  "Flag if a transition of the field should be convoluted.
-  If the DAQ does not support this, it can may fall back
-  to postponing the application of the settings.
-  Not used for mechanical fields."
-  safeTransitionInterval::typeof(1.0u"s") = 0.5u"s"
-  "Flag if the end of the field should be convoluted. In case of an existing brake on
-  a mechanical channel this means a use of the brake."
-  safeEndInterval::typeof(1.0u"s") = 0.5u"s"
-  "Flag if the field should be convoluted down in case of an error. In case of an
-  existing brake on a mechanical channel this means a use of the brake."
-  safeErrorInterval::typeof(1.0u"s") = 0.5u"s"
-
-  "Flag if the channels of the field should be controlled."
-  control::Bool = true
-  "Flag if the field should be decoupled. Not used for mechanical channels."
-  decouple::Bool = true
+export GeneralSettings
+Base.@kwdef struct GeneralSettings
+  "Name of the sequence to identify it."
+  name::AbstractString
+  "Description of the sequence."
+  description::AbstractString
+  "The scanner targeted by the sequence."
+  targetScanner::AbstractString
+  "Base frequency for all channels. Mechanical channels are synchronized
+  with the electrical ones by referencing the time required for the movement
+  against this frequency. Please note that the latter has uncertainties."
+  baseFrequency::typeof(1.0u"Hz")
 end
 
 export Sequence
@@ -106,16 +28,8 @@ e.g. the move of a robot. The sweeping of frequencies or movement points
 can also be done in a triggered or continuous fashion.
 """
 Base.@kwdef struct Sequence
-  "Name of the sequence to identify it."
-  name::AbstractString
-  "Description of the sequence."
-  description::AbstractString
-  "The scanner targeted by the sequence."
-  targetScanner::AbstractString
-  "Base frequency for all channels. Mechanical channels are synchronized
-  with the electrical ones by referencing the time required for the movement
-  against this frequency. Please note that the latter has uncertainties."
-  baseFrequency::typeof(1.0u"Hz")
+  "General settings/description of the sequence"
+  general::GeneralSettings
 
   "Magnetic fields defined by the sequence."
   fields::Vector{MagneticField}
@@ -128,20 +42,29 @@ function Sequence(filename::AbstractString)
   return sequenceFromTOML(filename)
 end
 
+function toDict!(dict, seq::Sequence)
+  dict["General"] = toDict(seq.general)
+  dict["Fields"] = toDict(seq.fields)
+  dict["Acquisition"] = toDict(seq.acquisition)
+  return dict
+end
+
 export sequenceFromTOML
 function sequenceFromTOML(filename::AbstractString)
   sequenceDict = TOML.parsefile(filename)
+  return sequenceFromDict(copy(sequenceDict))
+end
 
+export sequenceFromDict
+function sequenceFromDict(sequenceDict::Dict{String, Any})
   general = sequenceDict["General"]
   acquisition = sequenceDict["Acquisition"]
 
   splattingDict = Dict{Symbol, Any}()
 
-  # Main section
-  splattingDict[:name] = general["name"]
-  splattingDict[:description] = general["description"]
-  splattingDict[:targetScanner] = general["targetScanner"]
-  splattingDict[:baseFrequency] = uparse(general["baseFrequency"])
+  # General
+  generalSplattingDict = dict_to_splatting(GeneralSettings, general)
+  splattingDict[:general] = GeneralSettings(; generalSplattingDict...)
 
   # Fields
   splattingDict[:fields] = fieldDictToFields(sequenceDict["Fields"])
@@ -228,47 +151,25 @@ function createFieldChannel(channelID::AbstractString, channelDict::Dict{String,
 end
 
 export name
-name(sequence::Sequence) = sequence.name
+name(sequence::Sequence) = sequence.general.name
 
 export description
-description(sequence::Sequence) = sequence.description
+description(sequence::Sequence) = sequence.general.description
 
 export targetScanner
-targetScanner(sequence::Sequence) = sequence.targetScanner
+targetScanner(sequence::Sequence) = sequence.general.targetScanner
 
 export baseFrequency
-baseFrequency(sequence::Sequence) = sequence.baseFrequency
+baseFrequency(sequence::Sequence) = sequence.general.baseFrequency
 
-channels(field::MagneticField) = field.channels
-channels(field::MagneticField, T::Type{<:TxChannel}) = [channel for channel in channels(field) if typeof(channel) <: T]
+export fields
+fields(sequence::Sequence) = sequence.fields
 
-export safeStartInterval
-safeStartInterval(field::MagneticField) = field.safeStartInterval
-export safeTransitionInterval
-safeTransitionInterval(field::MagneticField) = field.safeTransitionInterval
-export safeEndInterval
-safeEndInterval(field::MagneticField) = field.safeEndInterval
-export safeErrorInterval
-safeErrorInterval(field::MagneticField) = field.safeErrorInterval
 
-control(field::MagneticField) = field.control
-decouple(field::MagneticField) = field.decouple
-
-export electricalTxChannels
-electricalTxChannels(field::MagneticField) = channels(field, ElectricalTxChannel)
-electricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} = [channel for field in sequence.fields for channel in electricalTxChannels(field)]
-
-export mechanicalTxChannels
-mechanicalTxChannels(field::MagneticField) = channels(field, MechanicalTxChannel)
-mechanicalTxChannels(sequence::Sequence)::Vector{MechanicalTxChannel} = [channel for field in sequence.fields for channel in mechanicalTxChannels(field)]
-
-export periodicElectricalTxChannels
-periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicElectricalChannel)
-periodicElectricalTxChannels(sequence::Sequence)::Vector{PeriodicElectricalChannel} = [channel for field in sequence.fields for channel in periodicElectricalTxChannels(field)]
-
-export acyclicElectricalTxChannels
-acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
-acyclicElectricalTxChannels(sequence::Sequence)::Vector{AcyclicElectricalTxChannel} = [channel for field in sequence.fields for channel in acyclicElectricalTxChannels(field)]
+electricalTxChannels(sequence::Sequence)::Vector{ElectricalTxChannel} = [channel for field in fields(sequence) for channel in electricalTxChannels(field)]
+mechanicalTxChannels(sequence::Sequence)::Vector{MechanicalTxChannel} = [channel for field in fields(sequence) for channel in mechanicalTxChannels(field)]
+periodicElectricalTxChannels(sequence::Sequence)::Vector{PeriodicElectricalChannel} = [channel for field in fields(sequence) for channel in periodicElectricalTxChannels(field)]
+acyclicElectricalTxChannels(sequence::Sequence)::Vector{AcyclicElectricalTxChannel} = [channel for field in fields(sequence) for channel in acyclicElectricalTxChannels(field)]
 
 export continuousElectricalTxChannels
 continuousElectricalTxChannels(sequence::Sequence) = [channel for channel in electricalTxChannels(sequence) if isContinuous(channel)]
@@ -306,13 +207,6 @@ hasContinuousMechanicalTxChannels(sequence::Sequence) = any(isContinuous.(mechan
 export hasStepwiseMechanicalChannels
 hasStepwiseMechanicalChannels(sequence::Sequence) = any(isStepwise.(mechanicalTxChannels(sequence)))
 
-export fields
-fields(sequence::Sequence) = sequence.fields
-
-export id
-id(channel::TxChannel) = channel.id
-id(channel::RxChannel) = channel.id
-id(field::MagneticField) = field.id
 
 # Enable sorting of stepwise channels by their step priority
 # TODO: This currently blocks sorting for other properties
@@ -524,3 +418,21 @@ rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
 
 export rxChannels
 rxChannels(sequence::Sequence) = sequence.acquisition.channels
+
+for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
+  ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel]
+  @eval begin
+    @generated function ==(x::$T, y::$T)
+      fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]
+      # If else case needs to be implemented, take care to avoid stack overflow/infinite recursion!
+      if !isempty(fieldEqualities)
+        temp = fieldEqualities[1]
+        for i = 2:length(fieldEqualities)
+          temp = Expr(:&&, temp, fieldEqualities[i])
+        end
+        return temp
+      end
+    end
+  end
+end

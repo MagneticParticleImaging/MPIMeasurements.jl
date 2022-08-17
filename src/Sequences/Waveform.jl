@@ -22,6 +22,8 @@ waveformRelations = Dict{String, Waveform}(
 toWaveform(value::AbstractString) = waveformRelations[value]
 fromWaveform(value::Waveform) = [k for (k, v) in waveformRelations if v == value][1]
 
+toDictValue(value::Waveform) = fromWaveform(value)
+
 function value(w::Waveform, arg_)
   arg = mod(arg_, 1)
   if w == WAVEFORM_SINE

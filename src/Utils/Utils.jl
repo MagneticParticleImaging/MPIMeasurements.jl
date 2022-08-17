@@ -1,5 +1,6 @@
 include("Exceptions.jl")
 include("DictToStruct.jl")
+include("StructToToml.jl")
 include("BidirectionalChannel.jl")
 include("ScannerCoordinates.jl")
 

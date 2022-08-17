@@ -22,6 +22,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length
+import Base: ==, isequal
 
 using Reexport
 @reexport using MPIFiles
