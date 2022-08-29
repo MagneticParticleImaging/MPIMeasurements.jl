@@ -541,6 +541,17 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
 
     numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
     seq = protocol.params.sequence
+
+    storedSeq = sequenceFromDict(params["sequence"])
+    if storedSeq != seq
+      message = "Stored sequence does not match initialized sequence. Use stored sequence instead?"
+      if askChoices(protocol, message, ["Cancel", "Use"]) == 1
+        throw(CancelException())
+      end
+      seq = storedSeq
+      protocol.params.sequence
+    end
+
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)  
@@ -592,11 +603,11 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
   else
     store = event.datastore
     scanner = protocol.scanner
-    params = event.params # TODO: this will error
+    mdf = event.mdf
     data = protocol.systemMeasState.signals
     positions = protocol.systemMeasState.positions
     isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, params; saveAsstoreAsSystemMatrix=protocol.params.saveAsSystemMatrix)
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
