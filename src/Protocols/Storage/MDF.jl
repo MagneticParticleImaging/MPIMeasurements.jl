@@ -29,7 +29,7 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false)
+														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -58,7 +58,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame)
 	fillMDFAcquisition(mdf, scanner, sequence)
-	fillMDFCalibration(mdf, positions)
+	fillMDFCalibration(mdf, positions, deltaSampleSize = deltaSampleSize)
 
 	filename = getNewExperimentPath(study)
 
@@ -67,13 +67,14 @@ end
 
 
 
-function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions)
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
 	# /calibration/ subgroup
 
-	deltaSampleSize = haskey(params, "calibDeltaSampleSize") ?
-	Float64.(ustrip.(uconvert.(Unitful.m, params["calibDeltaSampleSize"]))) : nothing
-
+	if !isnothing(deltaSampleSize)
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+	end
+	
 	subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
 
 	# TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
