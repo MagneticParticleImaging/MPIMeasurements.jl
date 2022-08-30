@@ -131,10 +131,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   numRxChannels = length(rxChannels(protocol.params.sequence)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
   rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequence)
   numPeriods = acqNumPeriodsPerFrame(protocol.params.sequence)  
-  filenameSignals = "/tmp/sysObj.bin"
-  io = open(filenameSignals, "w+");
-  signals = Mmap.mmap(io, Array{Float32,4}, (rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames));
-  signals[:] .= 0.0 # Does this not erase our stored .bin in recovery case?
+  signals = zeros(Float32, rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames)
   protocol.systemMeasState.signals = signals
   
   protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,1)
@@ -180,27 +177,37 @@ function enterExecute(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.currPos = 1
 end
 
+function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
+  if isfile("/tmp/sysObj.toml")
+    message = """Found existing calibration file! \n
+    Should it be resumed?"""
+    if askConfirmation(protocol, message)
+      restore(protocol)
+    end
+  end
+  # Set signals to zero if we didn't restore
+  if !protocol.restored
+    filenameSignals = "/tmp/sysObj.bin"
+    io = open(filenameSignals, "w+");
+    signals = Mmap.mmap(io, Array{Float32,4}, size(protocol.systemMeasState.signals));
+    protocol.systemMeasState.signals = signals  
+    protocol.systemMeasState.signals[:] .= 0.0
+  end
+end
+
 function _execute(protocol::RobotBasedSystemMatrixProtocol)
   @info "Start System Matrix Protocol"
   if !isReferenced(getRobot(protocol.scanner))
     throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
   end
+
+  initMeasData(protocol)
   
   finished = false
-  started = false
   notifiedStop = false
   while !finished
-    if !started
-      if isfile("/tmp/sysObj.toml")
-        message = """Found existing calibration file! \n
-        Should it be resumed?"""
-        if askConfirmation(protocol, message)
-          restore(protocol)
-        end
-      end
-    end
+    # Perform Calibration until stopped or finished
     finished = performCalibration(protocol)
-    started = true
 
     # Stopped 
     notifiedStop = false
