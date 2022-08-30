@@ -11,6 +11,8 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   fgFrameAverages::Int64
   "Flag if the calibration should be saved as a system matrix or not"
   saveAsSystemMatrix::Bool = true
+  "Flag if the temperature measured after every robot measurement should be stored in the MDF or not"
+  saveTemperatureData::Bool = false
   "Number of background measurements to take"
   bgMeas::Int64 = 0
   "If set the tx amplitude and phase will be set with control steps"
@@ -137,7 +139,10 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,1)
   
   # TODO implement properly
-  protocol.systemMeasState.temperatures = zeros(0, 0)
+  if protocol.params.saveTemperatureData
+    sensor = getTemperatureSensor(protocol.scanner)
+    protocol.systemMeasState.temperatures = zeros(numChannels(sensor), numBGPos + numFGPos)
+  end
 
   # Init TxDAQController
   if protocol.params.controlTx
@@ -453,8 +458,12 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   calib = protocol.systemMeasState
   @info "readData"
   daq = getDAQ(protocol.scanner)
-  #tempSensor = getTemperatureSensor(protocol.scanner)
+  
   tempSensor = nothing
+  if protocol.params.saveTemperatureData
+    tempSensor = getTemperatureSensor(protocol.scanner)
+  end
+
   asyncBuffer = AsyncBuffer(daq)
   numFrames = acqNumFrames(protocol.params.sequence)
   while isopen(channel) || isready(channel)
@@ -484,9 +493,10 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 
 
   if !isnothing(tempSensor)
+    temps  = getTemperatures(tempSensor)
     for l in startIdx:stopIdx
       for c = 1:numChannels(tempSensor)
-        calib.temperatures[c,l] = getTemperature(tempSensor, c)
+        calib.temperatures[c,l] = temps[c]
       end
     end
   end
