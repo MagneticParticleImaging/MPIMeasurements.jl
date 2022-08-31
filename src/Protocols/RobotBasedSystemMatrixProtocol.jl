@@ -87,6 +87,9 @@ function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
+  if protocol.params.saveTemperatureData
+    push!(result, TemperatureSensor)
+  end
   return result
 end
 
