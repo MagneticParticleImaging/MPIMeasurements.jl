@@ -57,7 +57,7 @@ mutable struct SystemMatrixRobotMeas
   measIsBGPos::Vector{Bool}
   posToIdx::Vector{Int64}
   measIsBGFrame::Vector{Bool}
-  temperatures::Matrix{Float64}
+  temperatures::Matrix{Float32}
 end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: Protocol
@@ -624,7 +624,11 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     data = protocol.systemMeasState.signals
     positions = protocol.systemMeasState.positions
     isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix)
+    temperatures = nothing
+    if protocol.params.saveTemperatureData
+      temperatures = protocol.systemMeasState.temperatures
+    end
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
