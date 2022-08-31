@@ -123,7 +123,9 @@ function receive(sd::SerialDevice)
 	lock(sd.sdLock)
 	try
 		set_read_timeout(sd.sp, sd.timeout_ms/1000)
-		return readuntil(sd.sp, sd.delim_read)
+		reply = readuntil(sd.sp, sd.delim_read)
+		@debug "$(sd.portName) received: $reply"
+		return reply
 	finally
 		unlock(sd.sdLock)
 	end
