@@ -144,9 +144,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
       controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
       controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
       sortedRef = uRef[:, controlOrderRefIndices, :]
-      @info "Performing control step"
-      controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
-
+      
       # Wait End
       @info "Waiting for end."
       done = false
@@ -154,6 +152,10 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
         done = rampDownDone(daq.rpc)
       end
       masterTrigger!(daq.rpc, false)
+
+      @info "Performing control step"
+      controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
+
       # These reset the amplitude, phase and ramping, so we only reset trigger here
       #stopTx(daq) 
       #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
