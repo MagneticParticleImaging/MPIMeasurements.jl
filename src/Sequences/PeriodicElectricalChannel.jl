@@ -1,6 +1,6 @@
 # TODO: Can this type be removed in favor of ContinuousElectricalChannel?
 
-export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel
+export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel, ArbitraryElectricalComponent
 
 "Component of an electrical channel with periodic base function."
 Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
@@ -25,6 +25,13 @@ Base.@kwdef mutable struct SweepElectricalComponent <: ElectricalComponent
   amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}}
   "Waveform of the component."
   waveform::Waveform = WAVEFORM_SINE
+end
+
+Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
+  id::AbstractString
+  "Divider of the component."
+  divider::Integer
+  values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
 end
 
 """Electrical channel based on based on periodic base functions. Only the
@@ -62,41 +69,57 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Periodi
   for (compId, component) in components
     divider = component["divider"]
 
-    amplitude = uparse.(component["amplitude"])
-    if eltype(amplitude) <: Unitful.Current
-      amplitude = amplitude .|> u"A"
-    elseif eltype(amplitude) <: Unitful.BField
-      amplitude = amplitude .|> u"T"
+    if haskey(component, "values")
+      # Arbitrary Component
+      values = uparse.(component["values"])
+      if eltype(values) <: Unitful.Current
+        values = values .|> u"A"
+      elseif eltype(values) <: Unitful.Voltage
+        values = values .|> u"V"
+      elseif eltype(values) <: Unitful.BField
+        values = values .|> u"T"
+      else
+        error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
+      end    
+      push!(splattingDict[:components], ArbitraryElectricalComponent(id=compId, divider=divider, values=values))
     else
-      error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
-    end
+      # Periodic/Sweep Component
+      amplitude = uparse.(component["amplitude"])
+      if eltype(amplitude) <: Unitful.Current
+        amplitude = amplitude .|> u"A"
+      elseif eltype(amplitude) <: Unitful.BField
+        amplitude = amplitude .|> u"T"
+      else
+        error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+      end
 
-    if haskey(component, "phase")
-      phase = uparse.(component["phase"])
-    else
-      phase = fill(0.0u"rad", length(divider)) # Default phase
-    end
+      if haskey(component, "phase")
+        phase = uparse.(component["phase"])
+      else
+        phase = fill(0.0u"rad", length(divider)) # Default phase
+      end
 
-    if haskey(component, "waveform")
-      waveform = toWaveform(component["waveform"])
-    else
-      waveform = WAVEFORM_SINE # Default to sine
-    end
+      if haskey(component, "waveform")
+        waveform = toWaveform(component["waveform"])
+      else
+        waveform = WAVEFORM_SINE # Default to sine
+      end
 
-    @assert length(amplitude) == length(phase) "The length of amplitude and phase must match."
+      @assert length(amplitude) == length(phase) "The length of amplitude and phase must match."
 
-    if divider isa Vector
-      push!(splattingDict[:components],
-            SweepElectricalComponent(divider=divider,
-                                     amplitude=amplitude,
-                                     waveform=waveform))
-    else
-      push!(splattingDict[:components],
-            PeriodicElectricalComponent(id=compId,
-                                        divider=divider,
-                                        amplitude=amplitude,
-                                        phase=phase,
-                                        waveform=waveform))
+      if divider isa Vector
+        push!(splattingDict[:components],
+              SweepElectricalComponent(divider=divider,
+                                       amplitude=amplitude,
+                                       waveform=waveform))
+      else
+        push!(splattingDict[:components],
+              PeriodicElectricalComponent(id=compId,
+                                          divider=divider,
+                                          amplitude=amplitude,
+                                          phase=phase,
+                                          waveform=waveform))
+      end
     end
   end
   return PeriodicElectricalChannel(;splattingDict...)
@@ -107,6 +130,11 @@ offset(channel::PeriodicElectricalChannel) = channel.offset
 
 export components
 components(channel::PeriodicElectricalChannel) = channel.components
+components(channel::PeriodicElectricalChannel, T::Type{<:ElectricalComponent}) = [component for component in components(channel) if typeof(component) <: T]
+export periodicElectricalComponents
+periodicElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, PeriodicElectricalComponent)
+export arbitraryElectricalComponents
+arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, ArbitraryElectricalComponent)
 
 cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
 
@@ -126,6 +154,7 @@ phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
 export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform
 waveform!(component::ElectricalComponent, value) = component.waveform = value
+waveform(component::ArbitraryElectricalComponent) = component.values
 
 function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
   index = findfirst(x -> id(x) == componentId, channel.components)
