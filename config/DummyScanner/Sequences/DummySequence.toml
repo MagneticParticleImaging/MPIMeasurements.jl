@@ -1,0 +1,44 @@
+[General]
+name = "DummySequence"
+description = "Precise description."
+targetScanner = "DummyScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = false
+decouple = false
+
+[Fields.df.chanx]
+offset = "0.0mT"
+
+[Fields.df.chanx.c1]
+divider = 4800
+amplitude = ["0.02T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+
+[Fields.ff]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = false
+decouple = false
+
+
+[Fields.ff.ffx]
+divider = 4800
+values = ["0.0V"]
+
+[Acquisition]
+channels = ["rx_main"]
+bandwidth = "3.90625MHz"
+numPeriodsPerFrame = 1
+numFrames = 1
+numAverages = 1000
+numFrameAverages = 1

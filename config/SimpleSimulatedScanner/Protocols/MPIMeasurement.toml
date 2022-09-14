@@ -1,0 +1,8 @@
+type = "MPIMeasurementProtocol"
+description = "A protocol for the simulated scanner."
+targetScanner = "SimpleSimulatedScanner"
+
+sequence = "1DSequence"
+
+fgFrames = 1
+bgFrames = 1

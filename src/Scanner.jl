@@ -1,7 +1,7 @@
 import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
-       scannerManufacturer, scannerName, scannerTopology, scannerGradient,
+       scannerManufacturer, scannerName, scannerTopology, scannerGradient, scannerDatasetStore,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
        asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
        getProtocolList, setProtocol, getTransferFunctionList
@@ -68,7 +68,7 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
         error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
       end
       validateDeviceStruct(DeviceImpl)
-      
+
       paramsInst = getFittingDeviceParamsType(params, deviceType)
       if isnothing(paramsInst)
         error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
@@ -81,7 +81,7 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
   end
 
   # Set dependencies for all devices
-  for device in values(devices)
+  for device in Base.values(devices)
     for dependencyID in keys(dependencies(device))
       device.dependencies[dependencyID] = devices[dependencyID]
     end
@@ -102,9 +102,9 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
       end
     catch e
       if !robust
-        throw(e)
+        rethrow()
       else
-        @warn e 
+        @warn e
       end
     end
   end
@@ -113,32 +113,27 @@ function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
 end
 
 function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
-  paramKeys = Symbol.(keys(params))
   tempDeviceParams = []
   paramsRoot = getConcreteType(DeviceParams, deviceType*"Params") # Assumes the naming convention of ending with [...]Params!
   push!(tempDeviceParams, paramsRoot)
   length(deepsubtypes(paramsRoot)) == 0 || push!(tempDeviceParams, deepsubtypes(paramsRoot)...)
-  
+
   fittingDeviceParams = []
-  for paramType in tempDeviceParams
-    #Can't easily see default values for fields -> Just try out all types 
-    #for constructor in methods(paramType)
-    #  if issubset(paramKeys, Base.kwarg_decl(constructor))
-    #    push!(fittingDeviceParams, paramType)
-    #    break
-    #  end
-    #end
+  lastException = nothing
+  for (i, paramType) in enumerate(tempDeviceParams)
     try
-      tempParams = paramType(params)
+      tempParams = paramType(copy(params))
       push!(fittingDeviceParams, tempParams)
     catch ex
-      # NOP
+      lastException = ex
     end
   end
 
   if length(fittingDeviceParams) == 1
     return fittingDeviceParams[1]
-  else 
+  elseif length(fittingDeviceParams) == 0 && !isnothing(lastException)
+    throw(lastException)
+  else
     return nothing
   end
 end
@@ -152,19 +147,19 @@ Note: The fields correspond to the root section of an MDF file.
 """
 Base.@kwdef struct MPIScannerGeneral
   "Bore size of the scanner."
-  boreSize::typeof(1u"mm")
+  boreSize::Union{typeof(1u"mm"), Nothing} = nothing
   "Facility where the scanner is located."
-  facility::String
+  facility::String = "N.A."
   "Manufacturer of the scanner."
-  manufacturer::String
+  manufacturer::String = "N.A."
   "Name of the scanner"
   name::String
   "Topology of the scanner, e.g. FFL or FFP."
-  topology::String
+  topology::String = "N.A."
   "Gradient of the scanners selection field."
-  gradient::typeof(1u"T/m")
+  gradient::Union{typeof(1u"T/m"), Nothing} = nothing
   "Path of the dataset store."
-  datasetStore::String
+  datasetStore::String = ""
   "Default sequence of the scanner."
   defaultSequence::String = ""
   "Default protocol of the scanner."
@@ -177,34 +172,9 @@ Base.@kwdef struct MPIScannerGeneral
   consumerThreadID::Int32 = 3
   "Thread ID of the producer thread."
   protocolThreadID::Int32 = 4
+  "Thread ID of the dedicated serial port thread"
+  serialThreadID::Int32 = 2
 end
-
-abstract type AsyncBuffer end
-abstract type AsyncMeasTyp end
-struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
-struct RegularAsyncMeas <: AsyncMeasTyp end
-# TODO Update
-asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
-
-mutable struct FrameAverageBuffer
-  buffer::Array{Float32, 4}
-  setIndex::Int
-end
-FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
-
-mutable struct SequenceMeasState
-  numFrames::Int
-  nextFrame::Int
-  channel::Union{Channel, Nothing}
-  producer::Union{Task,Nothing}
-  consumer::Union{Task, Nothing}
-  asyncBuffer::AsyncBuffer
-  buffer::Array{Float32,4}
-  avgBuffer::Union{FrameAverageBuffer, Nothing}
-  #temperatures::Matrix{Float64} temps are not implemented atm
-  type::AsyncMeasTyp
-end
-
 
 """
     $(SIGNATURES)
@@ -220,7 +190,6 @@ mutable struct MPIScanner
   generalParams::MPIScannerGeneral
   "Device instances instantiated by the scanner from its configuration."
   devices::Dict{AbstractString, Device}
-  seqMeasState::Union{SequenceMeasState, Nothing}
 
   """
     $(SIGNATURES)
@@ -251,7 +220,7 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(params["Devices"], robust = robust)
 
-    scanner = new(name, configDir, generalParams, devices, nothing)
+    scanner = new(name, configDir, generalParams, devices)
 
     return scanner
   end
@@ -322,7 +291,7 @@ function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
     error("The scanner has more than one $(string(deviceType)) device. Therefore, a single $(string(deviceType)) cannot be retrieved unambiguously.")
   elseif length(devices) == 0
     return nothing
-  else 
+  else
     return devices[1]
   end
 end
@@ -345,6 +314,24 @@ scannerTopology(scanner::MPIScanner) = scanner.generalParams.topology
 "Gradient of the scanners selection field."
 scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
 
+"Path of the dataset store."
+scannerDatasetStore(scanner::MPIScanner) = scanner.generalParams.datasetStore
+
+"Default sequence of the scanner."
+defaultSequence(scanner::MPIScanner) = scanner.generalParams.defaultSequence
+
+"Default protocol of the scanner."
+defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol
+
+"""
+    $(SIGNATURES)
+
+Retrieve a list of all device IDs available for the scanner.
+"""
+function getDeviceIDs(scanner::MPIScanner)
+  return keys(scanner.devices)
+end
+
 """
     $(SIGNATURES)
 
@@ -365,7 +352,7 @@ end
 
 Constructor for a sequence of `name` from `configDir`.
 """
-function MPIFiles.Sequence(configdir::AbstractString, name::AbstractString)
+function Sequence(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "Sequences", name*".toml")
   if !isfile(path)
     error("Sequence $(path) not available!")
@@ -378,7 +365,15 @@ end
 
 Constructor for a sequence of `name` from the configuration directory specified for the scanner.
 """
-MPIFiles.Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
+Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
+
+function Sequence(scanner::MPIScanner, dict::Dict)
+  sequence = sequenceFromDict(dict)
+  if name(scanner) == targetScanner(sequence)
+    return sequence
+  end
+  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner"))
+end
 
 function getTransferFunctionList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "TransferFunctions")
@@ -398,107 +393,6 @@ function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractStri
 end
 
 MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
-
-#### Scanner Measurement Functions ####
-####  Async version  ####
-SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, RegularAsyncMeas())
-
-function asyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  prepareAsyncMeasurement(scanner, sequence)
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
-end
-
-function prepareAsyncMeasurement(scanner::MPIScanner, sequence::Sequence)
-  daq = getDAQ(scanner)
-  numFrames = acqNumFrames(sequence)
-  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
-  numPeriods = acqNumPeriodsPerFrame(sequence)
-  frameAverage = acqNumFrameAverages(sequence)
-  setup(daq, sequence)
-
-  # Prepare buffering structures
-  @info "Allocating buffer for $numFrames frames"
-  # TODO implement properly with only RxMeasurementChannels
-  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)
-  #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
-  avgBuffer = nothing
-  if frameAverage > 1
-    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, frameAverage)), 1)
-  end
-  channel = Channel{channelType(daq)}(32)
-
-  # Prepare measState
-  measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
-  measState.channel = channel
-
-  scanner.seqMeasState = measState
-end
-
-function asyncProducer(channel::Channel, scanner::MPIScanner, sequence::Sequence; prepTx = true)
-  robots = getRobots(scanner)
-  for robot in robots
-    disable(robot)
-  end
-  su = getSurveillanceUnit(scanner) # Maybe also support multiple SU units?
-  if !isnothing(su)
-    enableACPower(su)
-    # TODO Send expected enable time to SU
-  end
-
-  amps = getDevices(scanner, Amplifier)
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
-    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
-  end
-
-  endFrame = nothing
-  try
-    daq = getDAQ(scanner)
-    endFrame = asyncProducer(channel, daq, sequence, prepTx = prepTx)
-  finally
-    if isnothing(endFrame)
-      endSequence(daq, endFrame)
-    end
-    @sync for amp in amps
-      @async turnOff(amp)
-    end
-    if !isnothing(su)
-      disableACPower(su)
-    end
-    for robot in robots
-      enable(robot)
-    end
-  end
-end
-
-# Default Consumer
-function asyncConsumer(channel::Channel, scanner::MPIScanner)
-  daq = getDAQ(scanner)
-  measState = scanner.seqMeasState
-
-  @info "Consumer start"
-  while isopen(channel) || isready(channel)
-    while isready(channel)
-      chunk = take!(channel)
-      updateAsyncBuffer!(measState.asyncBuffer, chunk)
-      updateFrameBuffer!(measState, daq)
-    end
-    sleep(0.001)
-  end
-  @info "Consumer end"
-
-  # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
-  #if length(measState.temperatures) > 0
-  #  params["calibTemperatures"] = measState.temperatures
-  #end
-end
 
 #### Protocol ####
 function getProtocolList(scanner::MPIScanner)

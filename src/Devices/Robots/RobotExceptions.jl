@@ -1,4 +1,4 @@
-export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError, RobotExplicitCoordinatesError, RobotSafetyError
+export RobotAxisRangeError, RobotDeviceError, RobotDOFError, RobotReferenceError, RobotStateError, RobotTeachError, RobotExplicitCoordinatesError, RobotTimeoutError, RobotError, RobotSafetyError
 
 abstract type RobotException <: Exception end
 
@@ -33,6 +33,16 @@ end
 
 struct RobotExplicitCoordinatesError <: RobotException
     robot::Robot
+end
+
+struct RobotTimeoutError <: RobotException
+    robot::Robot
+    msg::String
+end
+
+struct RobotError <: RobotException
+    robot::Robot
+    msg::String
 end
 
 struct RobotSafetyError <: Exception
@@ -71,6 +81,10 @@ function Base.showerror(io::IO, ex::RobotTeachError)
 end
 
 Base.showerror(io::IO, ex::RobotExplicitCoordinatesError) = print(io, "RobotExplicitCoordinatesError: robot '$(deviceID(ex.robot))' has defined a coordinate transform and therefore needs explicit declaration of the used coordinate system. Please pass RobotCoords(pos) or ScannerCoords(pos).")
+
+Base.showerror(io::IO, ex::RobotTimeoutError) = print(io, "RobotTimeoutError: robot '$(deviceID(ex.robot))' had an error with the following message: `$(ex.msg)`.")
+
+Base.showerror(io::IO, ex::RobotError) = print(io, "RobotError: robot '$(deviceID(ex.robot))' had an error with the following message: `$(ex.msg)`.")
 
 Base.showerror(io::IO, ex::RobotSafetyError) = (print(io, "RobotSafetyError: position ");
                                                 show(IOContext(io, :typeinfo => typeof(ex.pos)), ex.pos);

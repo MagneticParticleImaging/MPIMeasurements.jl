@@ -15,16 +15,7 @@ struct ControlledChannel
 end
 
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::TxDAQControllerParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  @add_device_fields TxDAQControllerParams
 
   currTx::Union{Matrix{ComplexF64}, Nothing} = nothing
   desiredTx::Union{Matrix{ComplexF64}, Nothing} = nothing
@@ -46,15 +37,17 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   seqControlledChannel = getControlledChannel(seq)
   missingControlDef = []
   txCont.controlledChannels = []
+
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
     if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
       push!(missingControlDef, name)
-    else 
+    else
       push!(txCont.controlledChannels, ControlledChannel(seqChannel, daqChannel))
     end
   end
+  
   if length(missingControlDef) > 0
     message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
     throw(IllegalStateException(message))
@@ -99,7 +92,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   setTxParamsFrequencies(daq, frequencies)
 
   # Start Tx
-  prepareControl(daq)
+  prepareControl(daq, seq)
   su = nothing
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
@@ -123,25 +116,50 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
 
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-  startTx(daq)
 
   controlPhaseDone = false
   i = 1
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
+      startTx(daq)
+      # Wait Start
+      done = false
+      while !done
+        done = rampUpDone(daq.rpc)
+      end
+      @warn "Ramping status" rampingStatus(daq.rpc)
+      
+      sleep(txCont.params.controlPause)
+
+      @info "Read periods"
       period = currentPeriod(daq)
       uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
-
+      for ch in daq.rampingChannel
+        enableRampDown!(daq.rpc, ch, true)
+      end
+      
       # Translate uRef/channelIdx(daq) to order as it is used here
       mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
       controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
       controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
       sortedRef = uRef[:, controlOrderRefIndices, :]
+      
+      # Wait End
+      @info "Waiting for end."
+      done = false
+      while !done
+        done = rampDownDone(daq.rpc)
+      end
+      masterTrigger!(daq.rpc, false)
 
+      @info "Performing control step"
       controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
 
-      sleep(txCont.params.controlPause)
+      # These reset the amplitude, phase and ramping, so we only reset trigger here
+      #stopTx(daq) 
+      #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+      
       i += 1
     end
   catch ex
@@ -181,6 +199,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
 end
 
 getControlledChannel(seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+getUncontrolledChannel(seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
   amplitudes = Dict{String, Vector{Union{Float32, Nothing}}}()

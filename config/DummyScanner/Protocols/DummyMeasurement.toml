@@ -1,0 +1,9 @@
+name = "Du"
+type = "MPIMeasurementProtocol"
+description = "A dummy acquisition."
+targetScanner = "DummyScanner"
+sequence = "DummySequence"
+
+controlTx = false
+fgFrames = 1
+bgFrames = 1

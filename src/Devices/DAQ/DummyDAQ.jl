@@ -2,7 +2,7 @@ export DummyDAQ, DummyDAQParams
 
 Base.@kwdef mutable struct DummyDAQParams <: DeviceParams
   # Here "only" for user/toml parameter
-  samplesPerPeriod::Int
+  samplesPerPeriod::Int = 625
   amplitude::Float32 = 1.0
   frequency::Float32 = 1.0
 end
@@ -27,6 +27,11 @@ function startTx(daq::DummyDAQ)
 end
 
 function stopTx(daq::DummyDAQ)
+end
+
+function setup(daq::DummyDAQ, sequence::Sequence)
+  #setupRx(daq, sequence)
+  #setupTx(daq, sequence)
 end
 
 # Version 1
@@ -163,7 +168,7 @@ function retrieveMeasAndRef!(buffer::DummyAsyncBuffer, daq::DummyDAQ)
     return uMeas, uRef
 end
 
-function startProducer(channel::Channel, daq::DummyDAQ)
+function startProducer(channel::Channel, daq::DummyDAQ, numFrames)
     startTx(daq)
     startFrame = 1
     endFrame = numFrames + 1
@@ -187,10 +192,6 @@ function prepareTx(daq::DummyDAQ, sequence::Sequence; allowControlLoop = true)
 end
 
 function setSequenceParams(daq::DummyDAQ, sequence::Sequence)
-    # NOP
-end
-
-function prepareSequence(daq::DummyDAQ, sequence::Sequence)
     # NOP
 end
 

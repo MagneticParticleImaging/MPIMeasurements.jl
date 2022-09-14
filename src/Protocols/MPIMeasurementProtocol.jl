@@ -16,7 +16,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Remember background measurement"
   rememberBGMeas::Bool = false
 end
-function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
   if haskey(dict, "sequence")
     sequence = Sequence(scanner, dict["sequence"])
@@ -30,12 +30,9 @@ end
 MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
 
 Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
-  name::AbstractString
-  description::AbstractString
-  scanner::MPIScanner
-  params::MPIMeasurementProtocolParams
-  biChannel::Union{BidirectionalChannel{ProtocolEvent}, Nothing} = nothing
-  executeTask::Union{Task, Nothing} = nothing
+  @add_protocol_fields MPIMeasurementProtocolParams
+
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -61,16 +58,14 @@ function _init(protocol::MPIMeasurementProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
-    controllers = getDevices(protocol.scanner, TxDAQController)
-    if length(controllers) > 1
-      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
-    end
-    protocol.txCont = controllers[1]
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
     protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
+
+  return nothing
 end
 
 function timeEstimate(protocol::MPIMeasurementProtocol)
@@ -95,19 +90,22 @@ function enterExecute(protocol::MPIMeasurementProtocol)
 end
 
 function _execute(protocol::MPIMeasurementProtocol)
-  @info "Measurement protocol started"
+  @debug "Measurement protocol started"
 
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
+
+  debugCount = 0
+
   while !(protocol.finishAcknowledged)
-    handleEvents(protocol) 
+    handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
-    sleep(0.05)
   end
 
   @info "Protocol finished."
   close(protocol.biChannel)
+  @debug "Protocol channel closed after execution."
 end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
@@ -116,14 +114,19 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
       throw(CancelException())
     end
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+
+    @debug "Taking background measurement."
     measurement(protocol)
-    protocol.bgMeas = protocol.scanner.seqMeasState.buffer
+    protocol.bgMeas = protocol.seqMeasState.buffer
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
-    end    
+    end
   end
 
+  @debug "Setting number of foreground frames."
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+
+  @debug "Starting foreground measurement."
   measurement(protocol)
 end
 
@@ -133,7 +136,7 @@ function measurement(protocol::MPIMeasurementProtocol)
   measState = asyncMeasurement(protocol)
   producer = measState.producer
   consumer = measState.consumer
-  
+
   # Handle events
   while !istaskdone(consumer)
     handleEvents(protocol)
@@ -145,19 +148,23 @@ function measurement(protocol::MPIMeasurementProtocol)
   # Check tasks
   ex = nothing
   if Base.istaskfailed(producer)
-    @error "Producer failed"
-    stack = Base.catch_stack(producer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
-    ex = stack[1]
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
   end
   if Base.istaskfailed(consumer)
-    @error "Consumer failed"
-    stack = Base.catch_stack(consumer)[1]
-    @error stack[1]
-    @error stacktrace(stack[2])
+    currExceptions = current_exceptions(consumer)
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
     if isnothing(ex)
-      ex = stack[1]
+      ex = currExceptions[1][:exception]
     end
   end
   if !isnothing(ex)
@@ -167,16 +174,16 @@ function measurement(protocol::MPIMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::MPIMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  scanner.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(scanner.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
-  bind(scanner.seqMeasState.channel, scanner.seqMeasState.producer)
-  scanner.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(scanner.seqMeasState.channel, scanner)
-  return scanner.seqMeasState
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  return protocol.seqMeasState
 end
 
 
@@ -201,14 +208,14 @@ end
 function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.scanner.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.scanner.seqMeasState.numFrames
-        data = protocol.scanner.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.scanner.seqMeasState.buffer
+    data = protocol.seqMeasState.buffer
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -221,12 +228,12 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.scanner.seqMeasState) 
-    framesTotal = protocol.scanner.seqMeasState.numFrames
-    framesDone = min(protocol.scanner.seqMeasState.nextFrame - 1, framesTotal)
+  elseif !isnothing(protocol.seqMeasState)
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else 
-    reply = ProgressEvent(0, 0, "N/A", event)  
+  else
+    reply = ProgressEvent(0, 0, "N/A", event)
   end
   put!(protocol.biChannel, reply)
 end
@@ -236,13 +243,16 @@ handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protoco
 function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  params = event.params
-  data = protocol.scanner.seqMeasState.buffer
+  mdf = event.mdf
+  data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
-  @show filename
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
+  @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
+
+protocolInteractivity(protocol::MPIMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::MPIMeasurementProtocol) = UsingMDFStudy()
