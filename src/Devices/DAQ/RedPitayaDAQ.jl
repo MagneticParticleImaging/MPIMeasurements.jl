@@ -557,6 +557,46 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     end
   end
 end
+function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
+  execute!(daq.rpc) do batch
+    setupTxChannel!(batch, daq, channel, baseFreq)
+  end
+end
+function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  offsetVolts = offset(channel)*calibration(daq, id(channel))
+  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
+  for (idx, component) in enumerate(components(channel))
+    setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
+  end
+end
+
+function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component, componentIdx, baseFreq)
+  execute!(daq.rpc) do batch
+    setupTxComponent!(batch, daq, channel, component, componentIdx, baseFreq)
+  end
+end
+function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
+  if componentIdx > 3
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
+  end  
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  freq = ustrip(u"Hz", baseFreq) / divider(component)
+  @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, componentIdx, freq)
+  waveform_ = uppercase(fromWaveform(waveform(component)))
+  if !isWaveformAllowed(daq, id(channel), waveform(component))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
+                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+  end
+  @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
+end
+function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::ArbitraryElectricalComponent, componentIdx, baseFreq)
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  freq = ustrip(u"Hz", baseFreq) / divider(component)
+  # AWG is always fourth component
+  @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, 4, freq)
+  # Waveform is set together with amplitudes for arbitrary waveforms
+end
 
 function setupRx(daq::RedPitayaDAQ, decimation, samplesPerPeriod, periodsPerFrame)
   @debug "Setup rx"
@@ -652,11 +692,13 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
+  allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
   for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
     amps = []
     phases = []
-    for comp in components(channel)
+    wave = nothing
+    for comp in periodicElectricalComponents(channel)
       # Lengths check == 1 happens in setupTx already
       amp = amplitude(comp)
       if dimension(amp) == dimension(1.0u"T")
@@ -665,12 +707,19 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
       push!(amps, amp)
       push!(phases, phase(comp))
     end
+    for comp in arbitraryElectricalComponent(channel)
+      wave = waveform(comp)
+      if dimension(wave[1]) != dimension(1.0u"V")
+        wave = wave.*calibration(daq, name)
+      end
+    end
 
     allAmps[name] = amps
     allPhases[name] = phases
+    allAwg[name] = wave
   end
 
-  setTxParams(daq, allAmps, allPhases)
+  setTxParams(daq, allAmps, allPhases, allAwg)
 end
 
 """
@@ -680,9 +729,10 @@ Note: `amplitudes` and `phases` are defined as a dictionary of
 vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
   setTxParamsAmplitudes(daq, amplitudes)
   setTxParamsPhases(daq, phases)
+  setTxParamsArbitrary(daq, awg)
 end
 function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
   # Determine the worst case voltage per channel
@@ -733,17 +783,31 @@ function setTxParamsFrequencies(daq::RedPitayaDAQ, freqs::Dict{String, Vector{Un
     end
   end
 end
+function setTxParamsArbitrary(daq::RedPitayaDAQ, awgs::Dict{String, Vector{Float32}})
+  for (channelID, wave) in awgs
+    waveformDAC!(daq.rpc, channelIdx(daq, channelID), wave)
+  end
+end
+function setTxParamsArbitrary(daq::RedPitayaDAQ, awg::Nothing)
+  # NOP
+end
 
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing; convolute=true)
   amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
+  awgFloat = nothing
   for (id, amps) in amplitudes
     amplitudesFloat[id] = map(x-> isnothing(x) ? nothing : ustrip(u"V", x), amps)
   end
   for (id, phs) in phases
     phasesFloat[id] =  map(x-> isnothing(x) ? nothing : ustrip(u"rad", x), phs)
   end
-  setTxParams(daq, amplitudesFloat, phasesFloat)
+  if !isnothing(awg)
+    for (id, wave) in awg
+      awgFloat[id] = map(x-> ustrip(u"V", x), wave)
+    end
+  end
+  setTxParams(daq, amplitudesFloat, phasesFloat, awgFloat)
 end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)

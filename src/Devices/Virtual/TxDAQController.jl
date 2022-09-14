@@ -34,7 +34,7 @@ optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier]
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
   daq = dependency(txCont, AbstractDAQ)
-  seqControlledChannel = getControlledChannel(seq)
+  seqControlledChannel = getControlledChannel(txCont, seq)
   missingControlDef = []
   txCont.controlledChannels = []
 
@@ -54,7 +54,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
 
   # Check that we only control four channels, as our RedPitayaDAQs only have 4 signal components atm
-  if length(txCont.controlledChannels) > 4
+  if length(txCont.controlledChannels) > 3
     throw(IllegalStateException("Sequence requires controlling of more than four channels, which is currently not implemented."))
   end
 
@@ -198,8 +198,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   return txFromMatrix(txCont, txCont.currTx)
 end
 
-getControlledChannel(seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
-getUncontrolledChannel(seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponent(channel)) == 0]
+getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
   amplitudes = Dict{String, Vector{Union{Float32, Nothing}}}()
