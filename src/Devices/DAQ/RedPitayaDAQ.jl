@@ -14,7 +14,6 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
-  passPDMToFastDAC::Vector{Bool}
 end
 
 Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
@@ -62,10 +61,6 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
 
       if haskey(value, "calibration")
         splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      if haskey(value, "passPDMToFastDAC")
-        splattingDict[:passPDMToFastDAC] = value["passPDMToFastDAC"]
       end
 
       channels[key] = RedPitayaTxChannelParams(;splattingDict...)
@@ -560,9 +555,6 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
         @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
       end
     end
-
-    pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
-    @add_batch batch passPDMToFastDAC!(daq.rpc, pass)
   end
 end
 
