@@ -283,7 +283,7 @@ end
 """
 $(SIGNATURES)
 
-Retrieve all devices of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
+Retrieve a device of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
 """
 function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
   devices = getDevices(scanner, deviceType)
@@ -294,6 +294,38 @@ function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
   else
     return devices[1]
   end
+end
+
+function getDevice(f::Function, scanner::MPIScanner, arg)
+  device = getDevice(scanner, arg)
+  if !isnothing(device)
+    f(device)
+  else
+    return nothing
+  end
+end
+
+function getDevices(f::Function, scanner::MPIScanner, arg)
+  c_ex = nothing
+  devices = getDevice(scanner, arg)
+  if !isnothing(devices) && !isempty(devices)
+    for device in devices
+      try
+        f(device)
+      catch ex
+        if isnothing(c_ex)
+          c_ex = CompositeException()
+        end
+        push!(c_ex, ex)
+      end
+    end
+  else
+    return nothing
+  end
+  if !isnothing(c_ex)
+    throw(c_ex)
+  end
+  nothing
 end
 
 "Bore size of the scanner."

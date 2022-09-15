@@ -91,7 +91,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
         enable(robot)
       catch ex
         @error "Could not turn off roboter $(deviceID(robot))"
-        @error ex 
+      @error ex 
       end
     end
   end
