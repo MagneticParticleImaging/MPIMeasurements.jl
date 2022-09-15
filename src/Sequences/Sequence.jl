@@ -321,12 +321,12 @@ export dfPhase
 function dfPhase(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(channels[1].components[1].phase) # Should all be of the same length
+  numPeriods = length(phase(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"rad"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, phase) in enumerate(component.phase)
+      for (periodIdx, phase) in enumerate(phase(component))
         result[periodIdx, channelIdx, componentIdx] = phase
       end
     end
@@ -361,7 +361,7 @@ function dfWaveform(sequence::Sequence) # TODO: How do we integrate the mechanic
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      result[channelIdx, componentIdx] = component.waveform
+      result[channelIdx, componentIdx] = waveform(component)
     end
   end
 
