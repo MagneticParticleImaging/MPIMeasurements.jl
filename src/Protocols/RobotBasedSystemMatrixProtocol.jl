@@ -342,6 +342,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
   su = getSurveillanceUnit(protocol.scanner)
+  tempControl = getTemperatureController(protocol.scanner)
   amps = getDevices(protocol.scanner, Amplifier)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
@@ -400,6 +401,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
             sleep(diffTime)
           end
           enableACPower(su)
+          disableControl(tempControl)
           @sync for amp in amps
             @async turnOn(amp)
           end
@@ -424,6 +426,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     #safety = getSafety(protocol.scanner)
     daq = getDAQ(protocol.scanner)
     su = getSurveillanceUnit(protocol.scanner)
+    tempControl = getTemperatureController(protocol.scanner)
     amps = getDevices(protocol.scanner, Amplifier)
     if !isempty(amps)
       # Only enable amps that amplify a channel of the current sequence
@@ -452,6 +455,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     @sync for amp in amps
       @async turnOff(amp)
     end
+    enableControl(tempControl)
     disableACPower(su)
   end
 end
