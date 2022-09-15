@@ -47,7 +47,7 @@ end
 
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
 
-function createFieldChannel(channelID::AbstractString, channelType::Type{PeriodicElectricalChannel}, channelDict::Dict{String, Any})
+function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectricalChannel}, channelDict::Dict{String, Any})
   splattingDict = Dict{Symbol, Any}()
   splattingDict[:id] = channelID
 
@@ -67,62 +67,65 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Periodi
   components = [(k, v) for (k, v) in channelDict if v isa Dict]
 
   for (compId, component) in components
-    divider = component["divider"]
-
-    if haskey(component, "values")
-      # Arbitrary Component
-      values = uparse.(component["values"])
-      if eltype(values) <: Unitful.Current
-        values = values .|> u"A"
-      elseif eltype(values) <: Unitful.Voltage
-        values = values .|> u"V"
-      elseif eltype(values) <: Unitful.BField
-        values = values .|> u"T"
-      else
-        error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
-      end    
-      push!(splattingDict[:components], ArbitraryElectricalComponent(id=compId, divider=divider, values=values))
-    else
-      # Periodic/Sweep Component
-      amplitude = uparse.(component["amplitude"])
-      if eltype(amplitude) <: Unitful.Current
-        amplitude = amplitude .|> u"A"
-      elseif eltype(amplitude) <: Unitful.BField
-        amplitude = amplitude .|> u"T"
-      else
-        error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
-      end
-
-      if haskey(component, "phase")
-        phase = uparse.(component["phase"])
-      else
-        phase = fill(0.0u"rad", length(divider)) # Default phase
-      end
-
-      if haskey(component, "waveform")
-        waveform = toWaveform(component["waveform"])
-      else
-        waveform = WAVEFORM_SINE # Default to sine
-      end
-
-      @assert length(amplitude) == length(phase) "The length of amplitude and phase must match."
-
-      if divider isa Vector
-        push!(splattingDict[:components],
-              SweepElectricalComponent(divider=divider,
-                                       amplitude=amplitude,
-                                       waveform=waveform))
-      else
-        push!(splattingDict[:components],
-              PeriodicElectricalComponent(id=compId,
-                                          divider=divider,
-                                          amplitude=amplitude,
-                                          phase=phase,
-                                          waveform=waveform))
-      end
-    end
+    push!(splattingDict[:components], createChannelComponent(compId, component))
   end
   return PeriodicElectricalChannel(;splattingDict...)
+end
+
+function createChannelComponent(componentID::AbstractString, componentDict::Dict{String, Any})
+  if haskey(componentDict, "type")
+    type = pop!(componentDict, "type")
+    knownComponents = MPIFiles.concreteSubtypes(ElectricalComponent)
+    index = findfirst(x -> x == type, string.(knownComponents))
+    if !isnothing(index) 
+      createChannelComponent(componentID, knownComponents[index], componentDict)
+    else
+      error("Component $componentID has an unknown channel type `$type`.")
+    end
+  else
+    error("Component $componentID has no `type` field.")
+  end
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
+  
+  amplitude = uparse.(componentDict["amplitude"])
+  if eltype(amplitude) <: Unitful.Current
+    amplitude = amplitude .|> u"A"
+  elseif eltype(amplitude) <: Unitful.BField
+    amplitude = amplitude .|> u"T"
+  else
+    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+  end
+
+  if haskey(componentDict, "phase")
+    phase = uparse.(componentDict["phase"])
+  else
+    phase = fill(0.0u"rad", length(divider)) # Default phase
+  end
+
+  if haskey(componentDict, "waveform")
+    waveform = toWaveform(componentDict["waveform"])
+  else
+    waveform = WAVEFORM_SINE # Default to sine
+  end
+  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
+  values = uparse.(componentDict["values"])
+  if eltype(values) <: Unitful.Current
+    values = values .|> u"A"
+  elseif eltype(values) <: Unitful.Voltage
+    values = values .|> u"V"
+  elseif eltype(values) <: Unitful.BField
+    values = values .|> u"T"
+  else
+    error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
+  end    
+  return ArbitraryElectricalComponent(id=componentDict, divider=divider, values=values)
 end
 
 export offset
