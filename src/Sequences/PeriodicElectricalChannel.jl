@@ -154,11 +154,16 @@ export phase, phase!
 phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
 phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
 phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
+phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
+phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad" #component.phase[period]
+
 
 export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform
 waveform!(component::ElectricalComponent, value) = component.waveform = value
-waveform(component::ArbitraryElectricalComponent) = component.values
+waveform(::ArbitraryElectricalComponent) = WAVEFORM_ARBITRARY
+
+values(component::ArbitraryElectricalComponent) = component.values
 
 function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
   index = findfirst(x -> id(x) == componentId, channel.components)
