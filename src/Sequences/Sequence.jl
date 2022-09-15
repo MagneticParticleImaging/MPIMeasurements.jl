@@ -339,12 +339,12 @@ export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(channels[1].components[1].amplitude) # Should all be of the same length
+  numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, strength) in enumerate(component.amplitude) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+      for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
         result[periodIdx, channelIdx, componentIdx] = strength
       end
     end

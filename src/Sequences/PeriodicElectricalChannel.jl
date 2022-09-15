@@ -148,6 +148,7 @@ export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
 amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1) = component.amplitude[period] = value
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
+amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
 
 export phase, phase!
 phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
