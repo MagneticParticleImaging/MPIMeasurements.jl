@@ -532,7 +532,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
   periodicChannels = periodicElectricalTxChannels(sequence)
 
-  if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
+  if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
 
@@ -707,8 +707,8 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
       push!(amps, amp)
       push!(phases, phase(comp))
     end
-    for comp in arbitraryElectricalComponent(channel)
-      wave = waveform(comp)
+    for comp in arbitraryElectricalComponents(channel)
+      wave = values(comp)
       if dimension(wave[1]) != dimension(1.0u"V")
         wave = wave.*calibration(daq, name)
       end
@@ -786,13 +786,14 @@ end
 function setTxParamsArbitrary(daq::RedPitayaDAQ, awgs::Dict{String, Vector{Float32}})
   for (channelID, wave) in awgs
     waveformDAC!(daq.rpc, channelIdx(daq, channelID), wave)
+    @show wave
   end
 end
 function setTxParamsArbitrary(daq::RedPitayaDAQ, awg::Nothing)
   # NOP
 end
 
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing; convolute=true)
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{typeof(1.0u"V")}}, Nothing} = nothing; convolute=true)
   amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   awgFloat = nothing
@@ -803,6 +804,7 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
     phasesFloat[id] =  map(x-> isnothing(x) ? nothing : ustrip(u"rad", x), phs)
   end
   if !isnothing(awg)
+    awgFloat = Dict{String, Vector{Float32}}()
     for (id, wave) in awg
       awgFloat[id] = map(x-> ustrip(u"V", x), wave)
     end
