@@ -125,7 +125,7 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
   else
     error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
   end    
-  return ArbitraryElectricalComponent(id=componentDict, divider=divider, values=values)
+  return ArbitraryElectricalComponent(id=componentID, divider=divider, values=values)
 end
 
 export offset
@@ -170,8 +170,10 @@ end
 
 export id
 id(component::PeriodicElectricalComponent) = component.id
+id(component::ArbitraryElectricalComponent) = component.id
 
 function toDict!(dict, component::ElectricalComponent)
+  dict["type"] = string(typeof(component))
   for field in [x for x in fieldnames(typeof(component)) if !in(x, [:id])]
     dict[String(field)] = toDictValue(getproperty(component, field))
   end
@@ -179,12 +181,12 @@ function toDict!(dict, component::ElectricalComponent)
 end
 
 function toDict!(dict, channel::PeriodicElectricalChannel)
+  dict["type"] = string(typeof(channel))
   for field in [x for x in fieldnames(typeof(channel)) if !in(x, [:id, :components])]
     dict[String(field)] = toDictValue(getproperty(channel, field))
   end
   for component in components(channel)
     dict[id(component)] = toDictValue(component)
   end
-  dict["type"] = string(typeof(channel))
   return dict
 end
