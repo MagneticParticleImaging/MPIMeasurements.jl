@@ -1,19 +1,16 @@
-export ArduinoTemperatureController, ArduinoTemperatureControllerParams
+export ArduinoTemperatureController, ArduinoTemperatureControllerParams, ArduinoTemperatureControllerPortParams, ArduinoTemperatureControllerPoolParams
 
 abstract type ArduinoTemperatureControllerParams <: DeviceParams end
 
 Base.@kwdef struct ArduinoTemperatureControllerPortParams <: ArduinoTemperatureControllerParams
   # Control
-  setTemps::Vector{Integer}
-  mode::TemperatureControlMode
+  
+  mode::TemperatureControlMode 
   # TODO Add remaining parameter for control, for optional make it like
   # thresholds::Union{Vector{Integer}, Nothing} = nothing
   # Channel
-  numChannels::Integer
+  targetTemps::Vector{Integer}
   maxTemps::Vector{Integer}
-  selectChannels::Vector{Integer}
-  groupChannels::Vector{Integer}
-  nameChannels::Vector{String}
 
   # Communication
   portAddress::String
@@ -24,12 +21,9 @@ ArduinoTemperatureControllerPortParams(dict::Dict) = params_from_dict(ArduinoTem
 
 Base.@kwdef struct ArduinoTemperatureControllerPoolParams <: ArduinoTemperatureControllerParams
   # Control
-  # Channel
-  numChannels::Integer
+  mode::TemperatureControlMode 
+  targetTemps::Vector{Integer}
   maxTemps::Vector{Integer}
-  selectChannels::Vector{Integer}
-  groupChannels::Vector{Integer}
-  nameChannels::Vector{String}
   # Communication
   description::String
   @add_serial_device_fields '#'
@@ -37,9 +31,8 @@ Base.@kwdef struct ArduinoTemperatureControllerPoolParams <: ArduinoTemperatureC
 end
 ArduinoTemperatureControllerPoolParams(dict::Dict) = params_from_dict(ArduinoTemperatureControllerPoolParams, dict)
 
-Base.@kwdef mutable struct ArduinoTemperatureController <: TemperatureSensor
-  @add_device_fields ArduinoTemperatureSensorParams
-
+Base.@kwdef mutable struct ArduinoTemperatureController <: TemperatureController
+  @add_device_fields ArduinoTemperatureControllerParams
   ard::Union{SimpleArduino, Nothing} = nothing # Use composition as multiple inheritance is not supported
 end
 
@@ -52,7 +45,11 @@ function _init(controller::ArduinoTemperatureController)
   @info "Connection to ArduinoTemperatureController established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   controller.ard = ard
-  setMaximumTemps(controller, params.maxTemps)
+
+  # setMaximumTemps(controller, params.maxTemps)
+  # setTargetTemps(controller, params.targetTemps)
+  # controlMode(controller, params.mode)
+
   # TODO Configure targetTemps, controlMode and control parameters
 end
 
@@ -126,6 +123,10 @@ function retrieveTemps(controller::ArduinoTemperatureController)
   return result
 end
 
+
+
+
+
 function setMaximumTemps(controller::ArduinoTemperatureController, maxTemps::Array)
     if length(maxTemps) == controller.params.numSensors
         maxTempString= join(maxTemps, ",")
@@ -143,41 +144,66 @@ end
 
 close(controller::ArduinoTemperatureController) = close(controller.ard)
 
+
+
+
+
+export setTargetTemps
 function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::Vector{Integer})
-  # TODO
+  sendCommand(controller.ard, "SET:MAXTEMPS:<"*maxTempString*">")
 end
+
+
 function getTargetTemps(controller::ArduinoTemperatureController)
-  # TODO
+  TempDelim = "," 
+  # TODO Retrieve temp properly
+  Temps = sendCommand(controller.ard, "GET:ALLTEMPS")
+  #Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
+
+  result =  tryparse.(Float64,split(Temps,TempDelim))
+  result = map(x -> isnothing(x) ? 0.0 : x, result)
+  return result
 end
 
+# TODO Maybe do this per channel/unit/w.e.?, then do setControlMode(controller, channel, mode)
+# mode is always for ALL 
 function setControlMode(controller::ArduinoTemperatureController, mode::TemperatureControlMode)
-  # TODO
-end
-function getControlMode(controller::ArduinoTemperatureController)
-  # TODO
-end
-
-function setControlThreshold(controller::ArduinoTemperatureController, ...)
-  # TODO
-end
-function getControlThreshold(controller::ArduinoTemperatureController)
-  # TODO
-end
-
-function setControlPWM(controller::ArduinoTemperatureController, ...)
-  # TODO
-end
-function getControlPWM(controller::ArduinoTemperatureController)
-  # TODO
+  cmd = ""
+  if mode == TEMP_THRESHOLD
+    cmd = "BLABLA"
+  elseif mode == TEMP_PID
+    cmd = "BLA"
+  elseif mode == TEMP_DUTYCYCLE
+  else
+    throw(ScannerConfigurationError("Temp Controller does not support mode $mode"))
+  end
+  sendCommand(controller.ard, cmd)
 end
 
-function setControlDutyCycle(controller::ArduinoTemperatureController, ...)
-  # TODO
-end
-function getControlDutyCycle(controller::ArduinoTemperatureController)
-  # TODO
+#function getControlMode(controller::ArduinoTemperatureController)
+#  # TODO
+#end
+#
+#function setControlThreshold(controller::ArduinoTemperatureController, ...)
+#  # TODO
+#end
+#
+#function setControlPWM(controller::ArduinoTemperatureController, ...)
+#  # TODO
+#end
+#
+#function setControlDutyCycle(controller::ArduinoTemperatureController, ...)
+#  # TODO
+#end
+#function getControlDutyCycle(controller::ArduinoTemperatureController)
+#  # TODO
+#end
+
+# TODO This would be your AC enable
+function enableControl(controller::ArduinoTemperatureController)
+  sendCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
 end
 
-
-enableControl(controller::TemperatureController)
-disableControl(controller::TemperatureController)
+function disableControl(controller::ArduinoTemperatureController)
+  sendCommand(controller.ard, "SET:ENABLE_HEATING:<0>")
+end

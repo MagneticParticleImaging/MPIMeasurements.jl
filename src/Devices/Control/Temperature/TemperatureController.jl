@@ -1,7 +1,7 @@
-export TemperatureController
+export TemperatureController, TemperatureControlMode
 abstract type TemperatureController <: Device end
 
-@enum TemperatureControlMode TEMP_THRESHOLD TEMP_PWM
+@enum TemperatureControlMode TEMP_THRESHOLD TEMP_PID TEMP_DUTYCYCLE
 
 include("ArduinoTemperatureController.jl")
 
@@ -13,17 +13,6 @@ getTemperatureControllers(scanner::MPIScanner) = getDevices(scanner, Temperature
 export getTemperatureController
 getTemperatureController(scanner::MPIScanner) = getDevice(scanner, TemperatureController)
 
-# "Sensor" Methods
-export numChannels
-@mustimplement numChannels(controller::TemperatureController)
-export getTemperatures
-@mustimplement getTemperatures(controller::TemperatureController)
-export getTemperature
-@mustimplement getTemperature(controller::TemperatureController, channel::Int)
-export getChannelNames
-@mustimplement getChannelNames(controller::TemperatureController)
-export getChannelGroups
-@mustimplement getChannelGroups(controller::TemperatureController)
 
 # Control Methods
 export enableControl

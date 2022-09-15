@@ -8,13 +8,14 @@ include("Motor/Motor.jl")
 include("Robots/Robots.jl")
 include("SurveillanceUnit/SurveillanceUnit.jl")
 include("Sensors/Sensors.jl")
+include("Control/Temperature/TemperatureController.jl")
 include("Virtual/Virtual.jl")
 
 
 # List our own enums to avoid accidentally converting a different enum
 # Did not list enums like LakeShoreF71GaussMeterConnectionModes atm, because their convert function uses specific strings
 # and not the enum name
-for enum in [RedPitayaDAQServer.TriggerMode, RampingMode]
+for enum in [RedPitayaDAQServer.TriggerMode, RampingMode, TemperatureControlMode]
   @eval begin
     function Base.convert(::Type{$enum}, x::String)
       try
