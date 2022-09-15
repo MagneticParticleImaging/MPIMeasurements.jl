@@ -8,6 +8,7 @@ WAVEFORM_SAWTOOTH_FALLING, toWaveform, fromWaveform
   WAVEFORM_TRIANGLE
   WAVEFORM_SAWTOOTH_RISING
   WAVEFORM_SAWTOOTH_FALLING
+  WAVEFORM_ARBITRARY
 end
 
 waveformRelations = Dict{String, Waveform}(
@@ -17,6 +18,7 @@ waveformRelations = Dict{String, Waveform}(
   "sawtooth_rising" => WAVEFORM_SAWTOOTH_RISING,
   "sawtooth" => WAVEFORM_SAWTOOTH_RISING, # Alias
   "sawtooth_falling" => WAVEFORM_SAWTOOTH_FALLING,
+  "custom" => WAVEFORM_ARBITRARY
 )
 
 toWaveform(value::AbstractString) = waveformRelations[value]
@@ -40,5 +42,13 @@ function value(w::Waveform, arg_)
     end
   else
     error("waveform $(w) not supported!")
+  end
+end
+
+function Base.convert(::Type{Waveform}, x::String)
+  if haskey(waveformRelations, x)
+    return toWaveform(x)
+  else
+    return stringToEnum(x, Waveform)
   end
 end
