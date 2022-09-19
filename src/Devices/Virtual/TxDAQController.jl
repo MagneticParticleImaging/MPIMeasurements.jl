@@ -115,7 +115,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
+    txChannelIds = id.(vcat(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
     amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
     @sync for amp in amps
       @async turnOn(amp)

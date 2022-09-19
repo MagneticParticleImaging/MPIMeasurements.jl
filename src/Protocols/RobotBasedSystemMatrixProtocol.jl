@@ -346,7 +346,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   amps = getDevices(protocol.scanner, Amplifier)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+    channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
   timeMove = 0
@@ -430,7 +430,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     amps = getDevices(protocol.scanner, Amplifier)
     if !isempty(amps)
       # Only enable amps that amplify a channel of the current sequence
-      channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+      channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
       amps = filter(amp -> in(channelId(amp), channelIdx), amps)
     end
     channel = Channel{channelType(daq)}(32)
