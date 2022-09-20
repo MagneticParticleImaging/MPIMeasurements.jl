@@ -94,7 +94,7 @@ abstract type IselControllerVersion end
 struct IselC142 <: IselControllerVersion end
 struct IseliMCS8 <: IselControllerVersion end
 
-controllverVersion(rob::IselRobot) = rob.controllerVersion == 1 ? IselC142() : IseliMCS8()
+controllerVersion(rob::IselRobot) = rob.controllerVersion == 1 ? IselC142() : IseliMCS8()
 functionUnavailable(func::AbstractString, version::IselControllerVersion) =   @error "The $func function is not available for Isel Controller version $(string(typeof(version)))"
 
 Base.close(rob::IselRobot) = close(rob.sd.sp)
@@ -134,7 +134,7 @@ function _setup(rob::IselRobot)
   end
 
   initAxes(rob, 3)
-  _setup(rob, controllverVersion(rob))
+  _setup(rob, controllerVersion(rob))
 end
 function _setup(rob::IselRobot, version::IseliMCS8)
   invertAxes(rob, rob.params.invertAxes) # only with newer version of controller
@@ -147,7 +147,7 @@ end
 function _enable(robot::IselRobot)
   writeIOOutput(robot, ones(Bool, 8))
   robot.enableTime = time()
-  _enable(robot, controllverVersion(robot))
+  _enable(robot, controllerVersion(robot))
 end
 function _enable(robot::IselRobot, version::IseliMCS8)
   # NOP
@@ -158,7 +158,7 @@ end
 
 function _disable(robot::IselRobot) 
   writeIOOutput(robot, zeros(Bool, 8))
-  _disable(robot, controllverVersion(robot))
+  _disable(robot, controllerVersion(robot))
 end
 function _disable(robot::IselRobot, version::IseliMCS8)
   # NOP
@@ -177,7 +177,7 @@ end
 
 function _doReferenceDrive(rob::IselRobot)
   # Minor shift for not hitting the limit switch
-  prepareReferenceDrive(rob, controllverVersion(rob))
+  prepareReferenceDrive(rob, controllerVersion(rob))
 
   tempTimeout = rob.sd.timeout_ms
   try
@@ -192,7 +192,7 @@ function _doReferenceDrive(rob::IselRobot)
 end
 
 function _isReferenced(robot::IselRobot)
-  return robot.isReferenced && (robot.state != MPIMeasurements.ERROR)
+  return _isReferenced(robot, controllerVersion(robot)) && (robot.state != MPIMeasurements.ERROR)
   # TODO: find out if there is way to correctly identify the reference status
 
   #   currPos = getPosition(robot)
@@ -211,6 +211,19 @@ function _isReferenced(robot::IselRobot)
 
   #   return false
 end
+_isReferenced(robot::IselRobot, version::IselC142) = robot.isReferenced
+function _isReferenced(robot::IselRobot, version::IseliMCS8)
+  try 
+    currPos = getPosition(robot)
+    currPos[1] += 0.01u"mm"
+    #need to add 0.01mm, otherwise moveAbs returns 0 although it is no longer referenced
+    moveRes = _moveAbs(robot, currPos, nothing)
+    return true
+  catch ex
+    @debug ex
+  end
+  return false
+end 
 
 function _reset(rob::IselRobot)
   close(rob)
@@ -363,7 +376,7 @@ function simRefZYX(robot::IselRobot, version::IseliMCS8)
   rob.isReferenced = true
 end
 function simRefZYX(robot::IselRobot)
-  simRefZYX(robot, controllverVersion(robot))
+  simRefZYX(robot, controllerVersion(robot))
 end
 
 
@@ -378,7 +391,7 @@ function setAcceleration(robot::IselRobot, version::IseliMCS8, acceleration)
   end
 end
 function setAcceleration(robot::IselRobot, acceleration)
-  setAcceleration(robot, controllverVersion(robot), acceleration)
+  setAcceleration(robot, controllerVersion(robot), acceleration)
 end
 
 """ Sets StartStopFrequency"""
@@ -392,7 +405,7 @@ function setStartStopFreq(robot::IselRobot, version::IseliMCS8, frequency)
   end
 end
 function setStartStopFreq(robot::IselRobot, frequency)
-  setStartStopFreq(robot, controllverVersion(robot), frequency)  
+  setStartStopFreq(robot, controllerVersion(robot), frequency)  
 end
 
 """ Sets brake, brake=false no current on brake , brake=true current on brake """
@@ -409,7 +422,7 @@ function setFree(robot::IselRobot, version::IseliMCS8, axis)
   checkIselError(ret)
 end
 function setFree(robot::IselRobot, axis)
-  setFree(robot, controllverVersion(robot), axis)
+  setFree(robot, controllerVersion(robot), axis)
 end
 
 invertAxes(robot::IselRobot, version::IselControllerVersion, axes) = functionUnavailable("invertAxes", version)
@@ -422,7 +435,7 @@ function invertAxes(robot::IselRobot, version::IseliMCS8, axes::Array{Bool})
   checkIselError(ret)
 end
 function invertAxes(robot::IselRobot, axes::Array{Bool})
-  invertAxes(robot, controllverVersion(robot), axes)
+  invertAxes(robot, controllerVersion(robot), axes)
 end
 
 """ Inverts the axes for y,z """
