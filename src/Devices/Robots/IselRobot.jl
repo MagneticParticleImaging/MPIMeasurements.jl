@@ -269,9 +269,9 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
 end
 
 function waitEnableTime(robot::IselRobot)
-  diff = time() - robot.enableTime
-  if diff < robot.params.enableWaitTime
-    sleep(diff)
+  passed = time() - robot.enableTime
+  if passed < robot.params.enableWaitTime
+    sleep(robot.params.enableWaitTime - passed)
   end
 end
 
