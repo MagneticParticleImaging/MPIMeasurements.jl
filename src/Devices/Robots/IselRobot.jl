@@ -49,6 +49,7 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   referenceOrder::String = "zyx"
   movementOrder::String = "zyx"
   coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
+  enableWaitTime::Float64 = 0.0
 end
 IselRobotPortParams(dict::Dict) = params_from_dict(IselRobotPortParams, prepareRobotDict(dict))
 
@@ -70,6 +71,7 @@ Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   referenceOrder::String = "zyx"
   movementOrder::String = "zyx"
   coordinateSystem::ScannerCoordinateSystem = ScannerCoordinateSystem(3)
+  enableWaitTime::Float64 = 0.0
 end
 IselRobotPoolParams(dict::Dict) = params_from_dict(IselRobotPoolParams, prepareRobotDict(dict))
 
@@ -84,6 +86,8 @@ Base.@kwdef mutable struct IselRobot <: Robot
   isReferenced::Bool = false
   "Version of the Isel Controller 1=C142; 2=newer"
   controllerVersion::Int = 1
+  "Epoch Time when robot was enabled"
+  enableTime::Float64 = 0.0
 end
 
 abstract type IselControllerVersion end
@@ -142,6 +146,7 @@ end
 
 function _enable(robot::IselRobot)
   writeIOOutput(robot, ones(Bool, 8))
+  robot.enableTime = time()
   _enable(robot, controllverVersion(robot))
 end
 function _enable(robot::IselRobot, version::IseliMCS8)
@@ -214,6 +219,7 @@ end
 
 
 function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+  waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
   steps = mm2steps.(pos, rob.params.stepsPermm)
@@ -231,6 +237,7 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
 end
 
 function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
+  waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
   steps = mm2steps.(dist, rob.params.stepsPermm)
@@ -245,6 +252,13 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
     checkIselError(ret)
   else
     error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+  end
+end
+
+function waitEnableTime(robot::IselRobot)
+  diff = time() - robot.enableTime
+  if diff < robot.params.enableWaitTime
+    sleep(diff)
   end
 end
 
