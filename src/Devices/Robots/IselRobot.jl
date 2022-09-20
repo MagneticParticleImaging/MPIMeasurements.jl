@@ -217,7 +217,7 @@ function _isReferenced(robot::IselRobot, version::IseliMCS8)
     currPos = getPosition(robot)
     currPos[1] += 0.01u"mm"
     #need to add 0.01mm, otherwise moveAbs returns 0 although it is no longer referenced
-    moveRes = _moveAbs(robot, currPos, nothing)
+    moveRes = _moveAbs(robot, currPos.data, nothing)
     return true
   catch ex
     @debug ex
