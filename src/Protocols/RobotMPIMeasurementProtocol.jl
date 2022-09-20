@@ -200,9 +200,9 @@ function measurement(protocol::RobotMPIMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
@@ -234,14 +234,14 @@ end
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.protocol.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.protocol.seqMeasState.numFrames
-        data = protocol.protocol.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.protocol.seqMeasState.buffer
+    data = protocol.seqMeasState.buffer
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -254,9 +254,9 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::ProgressQuery
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.protocol.seqMeasState) 
-    framesTotal = protocol.protocol.seqMeasState.numFrames
-    framesDone = min(protocol.protocol.seqMeasState.nextFrame - 1, framesTotal)
+  elseif !isnothing(protocol.seqMeasState) 
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
   else 
     reply = ProgressEvent(0, 0, "N/A", event)  
@@ -269,13 +269,18 @@ handleEvent(protocol::RobotMPIMeasurementProtocol, event::FinishedAckEvent) = pr
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  params = event.params
-  data = protocol.protocol.seqMeasState.buffer
+  mdf = event.mdf
+  data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
   @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
+
+
+protocolInteractivity(protocol::RobotMPIMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::RobotMPIMeasurementProtocol) = UsingMDFStudy()
+
