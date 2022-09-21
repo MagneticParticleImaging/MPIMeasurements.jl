@@ -63,12 +63,13 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
     splattingDict[:offset] = tmp
   end
 
-  splattingDict[:components] = Vector{ElectricalComponent}()
-  components = [(k, v) for (k, v) in channelDict if v isa Dict]
+  components = Vector{ElectricalComponent}()
+  componentsDict = [(k, v) for (k, v) in channelDict if v isa Dict]
 
-  for (compId, component) in components
-    push!(splattingDict[:components], createChannelComponent(compId, component))
+  for (compId, component) in componentsDict
+    push!(components, createChannelComponent(compId, component))
   end
+  splattingDict[:components] = sort(components, by=id)
   return PeriodicElectricalChannel(;splattingDict...)
 end
 

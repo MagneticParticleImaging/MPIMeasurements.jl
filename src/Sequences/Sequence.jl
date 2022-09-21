@@ -112,7 +112,7 @@ function fieldDictToFields(fieldsDict::Dict{String, Any})
       end
     end
     splattingDict[:id] = fieldID
-    splattingDict[:channels] = channels
+    splattingDict[:channels] = sort(channels, by=id)
 
     if haskey(fieldDict, "safeStartInterval")
       splattingDict[:safeStartInterval] = uparse(fieldDict["safeStartInterval"])
@@ -421,11 +421,11 @@ rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
-  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel]
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent]
   @eval begin
     @generated function ==(x::$T, y::$T)
       fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]
-      # If else case needs to be implemented, take care to avoid stack overflow/infinite recursion!
+      # If "else"-case needs to be implemented, take care to avoid stack overflow/infinite recursion!
       if !isempty(fieldEqualities)
         temp = fieldEqualities[1]
         for i = 2:length(fieldEqualities)
