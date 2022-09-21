@@ -337,7 +337,7 @@ end
 
 export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+  channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
@@ -355,7 +355,7 @@ end
 
 export dfWaveform
 function dfWaveform(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+  channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   result = fill(WAVEFORM_SINE, (dfNumChannels(sequence), maxComponents))
 
@@ -379,23 +379,23 @@ needsControlOrDecoupling(sequence::Sequence) = needsControl(sequence) || needsDe
 
 # Functions working on the acquisition are define here because they need Sequence to be defined
 export acqNumFrames
-acqNumFrames(sequence::Sequence) = sequence.acquisition.numFrames
-acqNumFrames(sequence::Sequence, val) = sequence.acquisition.numFrames = val
+acqNumFrames(sequence::Sequence) = acqNumFrames(sequence.acquisition)
+acqNumFrames(sequence::Sequence, val) = acqNumFrames(sequence.acquisition, val)
 
 export acqNumAverages
-acqNumAverages(sequence::Sequence) = sequence.acquisition.numAverages
-acqNumAverages(sequence::Sequence, val) = sequence.acquisition.numAverages = val
+acqNumAverages(sequence::Sequence) = acqNumAverages(sequence.acquisition)
+acqNumAverages(sequence::Sequence, val) = acqNumAverages(sequence.acquisition, val)
 
 export acqNumFrameAverages
-acqNumFrameAverages(sequence::Sequence) = sequence.acquisition.numFrameAverages
-acqNumFrameAverages(sequence::Sequence, val) = sequence.acquisition.numFrameAverages = val
+acqNumFrameAverages(sequence::Sequence) = acqNumFrameAverages(sequence.acquisition)
+acqNumFrameAverages(sequence::Sequence, val) = acqNumFrameAverages(sequence.acquisition, val)
 
 export isBackground
-isBackground(sequence::Sequence) = sequence.acquisition.isBackground
-isBackground(sequence::Sequence, val) = sequence.acquisition.isBackground = val
+isBackground(sequence::Sequence) = isBackground(sequence.acquisition)
+isBackground(sequence::Sequence, val) = isBackground(sequence.acquisition, val)
 
 export rxBandwidth
-rxBandwidth(sequence::Sequence) = sequence.acquisition.bandwidth
+rxBandwidth(sequence::Sequence) = rxBandwidth(sequence.acquisition)
 
 export rxSamplingRate
 rxSamplingRate(sequence::Sequence) = 2 * rxBandwidth(sequence)
@@ -417,7 +417,7 @@ export rxNumSamplesPerPeriod
 rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
 
 export rxChannels
-rxChannels(sequence::Sequence) = sequence.acquisition.channels
+rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
