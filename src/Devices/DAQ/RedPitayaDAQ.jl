@@ -161,7 +161,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
-      if (idx - 1) % 4 < 2
+      if (idx - 1) % 6 < 2
         m = Int64(ceil((idx + 1)/2))
       end
     end
@@ -233,7 +233,7 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
   for rp in 1:length(daq.rpc)
     rpLut = copy(emptyLUT)
     rpEnable = copy(emptyEnable)
-    start = (rp - 1) * 4 + 1
+    start = (rp - 1) * 6 + 1
     currentPossibleChannels = collect(start:start+3)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
@@ -324,7 +324,7 @@ function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, A
 end
 
 function createEmptyLUT(numValues::Integer)
-  return zeros(Float32, 2, numValues)
+  return zeros(Float32, 6, numValues)
 end
 
 function createEmptyLUT(seqChannels::Vector{AcyclicElectricalTxChannel})
@@ -347,7 +347,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
     push!(lutIdx, lutChannel.channelIdx)
   end
 
-  # Idx from 1 to 4
+  # Idx from 1 to 6
   lutIdx = (lutIdx.-start).+1
   # Fill skipped channels with 0.0, assumption: size of all lutValues is equal
   #lut = zeros(Float32, maximum(lutIdx), size(lutValues[1], 1))
@@ -358,7 +358,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
 end
 
 function createEmptyEnable(numValues::Integer)
-  return ones(Bool, 2, numValues)
+  return ones(Bool, 6, numValues)
 end
 
 function createEmptyEnable(seqChannels::Vector{AcyclicElectricalTxChannel})
@@ -376,7 +376,7 @@ function createEnableLUT!(enableLut::Array{Bool}, start, channelMapping)
     push!(enableLutIdx, lutChannel.channelIdx)
   end
 
-  # Idx from 1 to 4
+  # Idx from 1 to 6
   enableLutIdx = (enableLutIdx .- start) .+ 1
   # Fill skipped channels with true, assumption: size of all enableLutValues is equal
   #enableLut = ones(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
@@ -847,7 +847,7 @@ numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all 
 numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
 numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
 numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
-numComponentsMax(daq::RedPitayaDAQ) = 4
+numComponentsMax(daq::RedPitayaDAQ) = 3
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 
