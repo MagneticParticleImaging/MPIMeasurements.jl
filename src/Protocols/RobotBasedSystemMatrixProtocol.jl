@@ -144,7 +144,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   # TODO implement properly
   if protocol.params.saveTemperatureData
     sensor = getTemperatureSensor(protocol.scanner)
-    protocol.systemMeasState.temperatures = zeros(numChannels(sensor), numBGPos + numFGPos)
+    protocol.systemMeasState.temperatures = zeros(numChannels(sensor), numTotalFrames)
   end
 
   # Init TxDAQController
@@ -342,10 +342,11 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
   robot = getRobot(protocol.scanner)
   daq = getDAQ(protocol.scanner)
   su = getSurveillanceUnit(protocol.scanner)
+  tempControl = getTemperatureController(protocol.scanner)
   amps = getDevices(protocol.scanner, Amplifier)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+    channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
   timeMove = 0
@@ -400,6 +401,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
             sleep(diffTime)
           end
           enableACPower(su)
+          disableControl(tempControl)
           @sync for amp in amps
             @async turnOn(amp)
           end
@@ -424,10 +426,11 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     #safety = getSafety(protocol.scanner)
     daq = getDAQ(protocol.scanner)
     su = getSurveillanceUnit(protocol.scanner)
+    tempControl = getTemperatureController(protocol.scanner)
     amps = getDevices(protocol.scanner, Amplifier)
     if !isempty(amps)
       # Only enable amps that amplify a channel of the current sequence
-      channelIdx = id.(union(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+      channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
       amps = filter(amp -> in(channelId(amp), channelIdx), amps)
     end
     channel = Channel{channelType(daq)}(32)
@@ -452,6 +455,7 @@ function measurement(protocol::RobotBasedSystemMatrixProtocol)
     @sync for amp in amps
       @async turnOff(amp)
     end
+    enableControl(tempControl)
     disableACPower(su)
   end
 end

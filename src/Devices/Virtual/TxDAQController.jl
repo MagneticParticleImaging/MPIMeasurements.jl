@@ -29,7 +29,7 @@ function _init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier]
+optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, TemperatureController]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
@@ -97,9 +97,16 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
   end
-  
   if !isnothing(su)
     enableACPower(su)
+  end
+
+  tempControl = nothing
+  if hasDependency(txCont, TemperatureController)
+    tempControl = dependency(txCont, TemperatureController)
+  end
+  if !isnothing(tempControl)
+    disableControl(tempControl)
   end
 
   amps = []
@@ -108,7 +115,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
+    txChannelIds = id.(vcat(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
     amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
     @sync for amp in amps
       @async turnOn(amp)
@@ -179,6 +186,14 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
         @error "Could not turn off amplifier $(deviceID(amp))"
         @error ex
       end
+    end
+    try 
+      if !isnothing(tempControl)
+        enableControl(tempControl)
+      end
+    catch ex
+      @error "Could not enable heating control"
+      @error ex
     end
     try
       if !isnothing(su)

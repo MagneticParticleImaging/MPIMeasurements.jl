@@ -78,7 +78,8 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampl
 	subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
 
 	# TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
-	# params["calibIsMeanderingGrid"] = isa(subgrid,MeanderingGridPositions)
+	isMeanderingGrid = isa(subgrid,MeanderingGridPositions)
+	@info "Meandering = $(isMeanderingGrid)"
 
 	fov = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfView(subgrid))))
 	fovCenter = Float64.(ustrip.(uconvert.(Unitful.m, fieldOfViewCenter(subgrid))))
@@ -99,7 +100,8 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampl
 		order = order,
 		positions = positions,
 		size = size,
-		snr = snr
+		snr = snr,
+		isMeanderingGrid = isMeanderingGrid
 	)
 
 	return

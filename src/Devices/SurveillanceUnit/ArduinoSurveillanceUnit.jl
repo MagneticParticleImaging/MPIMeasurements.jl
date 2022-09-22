@@ -48,7 +48,7 @@ end
 
 function getErrorStatus(Arduino::ArduinoSurveillanceUnit)
   Errorcode = sendCommand(Arduino, "GET:STATUS");
-  ErrorcodeBool = [parsebool(x) for x in Errorcode]
+  ErrorcodeBool = [parseBool(Arduino, x) for x in Errorcode]
   return ErrorcodeBool
 end
 
@@ -93,8 +93,10 @@ function resetArduino(Arduino::ArduinoSurveillanceUnit)
 end
 
 function enableACPower(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "ENABLE:AC");
-  checkACQ(Arduino, ACQ)
+  reply = sendCommand(Arduino, "ENABLE:AC");
+  if !parse(Bool, reply)
+    error("AC could not be enabled. Check SU fail")
+  end
 end
 
 function disableACPower(Arduino::ArduinoSurveillanceUnit)
