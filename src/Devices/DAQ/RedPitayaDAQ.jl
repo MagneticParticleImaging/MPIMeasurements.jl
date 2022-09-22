@@ -538,22 +538,9 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
+    baseFreq = txBaseFrequency(sequence)
     for channel in periodicChannels
-      channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-
-      offsetVolts = offset(channel)*calibration(daq, id(channel))
-      @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-
-      for (idx, component) in enumerate(components(channel))
-        freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
-        @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, idx, freq)
-        waveform_ = uppercase(fromWaveform(waveform(component)))
-        if !isWaveformAllowed(daq, id(channel), waveform(component))
-          throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
-                                         "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
-        end
-        @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
-      end
+      setupTxChannel!(batch, daq, channel, baseFreq)
     end
   end
 end
@@ -595,6 +582,11 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   freq = ustrip(u"Hz", baseFreq) / divider(component)
   # AWG is always fourth component
   @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, 4, freq)
+  waveform_ = uppercase(fromWaveform(waveform(component)))
+  if !isWaveformAllowed(daq, id(channel), waveform(component))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
+                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+  end
   # Waveform is set together with amplitudes for arbitrary waveforms
 end
 
@@ -786,7 +778,6 @@ end
 function setTxParamsArbitrary(daq::RedPitayaDAQ, awgs::Dict{String, Vector{Float32}})
   for (channelID, wave) in awgs
     waveformDAC!(daq.rpc, channelIdx(daq, channelID), wave)
-    @show wave
   end
 end
 function setTxParamsArbitrary(daq::RedPitayaDAQ, awg::Nothing)
