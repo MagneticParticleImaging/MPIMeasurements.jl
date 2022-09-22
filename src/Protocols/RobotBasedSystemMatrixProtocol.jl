@@ -144,7 +144,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   # TODO implement properly
   if protocol.params.saveTemperatureData
     sensor = getTemperatureSensor(protocol.scanner)
-    protocol.systemMeasState.temperatures = zeros(numChannels(sensor), numBGPos + numFGPos)
+    protocol.systemMeasState.temperatures = zeros(numChannels(sensor), numTotalFrames)
   end
 
   # Init TxDAQController
