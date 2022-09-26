@@ -277,10 +277,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
 
   rampingSteps = 0
   fractionSteps = 0
-  if isempty(daq.rampingChannel)
-    rampingSteps = 1
-    fractionSteps = 0
-  else
+  if !isempty(daq.rampingChannel)
     result = execute!(daq.rpc) do batch
       for i in daq.rampingChannel
         @add_batch batch rampingDAC(daq.rpc, i)
