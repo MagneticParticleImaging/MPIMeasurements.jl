@@ -182,7 +182,9 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
           throw(ScannerConfigurationError("No tx channel defined for field channel $(id(channel))"))
         end
         idx = idxMap[id(channel)]
-        rampMap[idx] = max(get(rampMap, idx, 0.0), rampUp)
+        if !isnothing(idx)
+          rampMap[idx] = max(get(rampMap, idx, 0.0), rampUp)
+        end
       end
     end
   end
@@ -575,7 +577,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
                                    "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
   end
-  @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
+  @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, componentIdx, waveform_)
 end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::ArbitraryElectricalComponent, componentIdx, baseFreq)
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
@@ -699,16 +701,19 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
       push!(amps, amp)
       push!(phases, phase(comp))
     end
-    for comp in arbitraryElectricalComponents(channel)
-      wave = values(comp)
+    comps = arbitraryElectricalComponents(channel)
+    if length(comps) > 2
+      throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
+    elseif length(comps) == 1
+      wave = values(comps[1])
       if dimension(wave[1]) != dimension(1.0u"V")
         wave = wave.*calibration(daq, name)
       end
+      allAwg[name] = wave
     end
 
     allAmps[name] = amps
     allPhases[name] = phases
-    allAwg[name] = wave
   end
 
   setTxParams(daq, allAmps, allPhases, allAwg)
