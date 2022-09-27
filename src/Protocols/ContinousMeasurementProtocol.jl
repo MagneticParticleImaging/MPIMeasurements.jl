@@ -162,18 +162,17 @@ function measurement(protocol::ContinousMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::ContinousMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = protocol.scanner
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
   return protocol.seqMeasState
 end
-
 
 function cleanup(protocol::ContinousMeasurementProtocol)
   # NOP
