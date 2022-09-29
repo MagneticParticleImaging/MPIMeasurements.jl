@@ -40,6 +40,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::MPIMeasurementProtocol)
@@ -87,6 +88,7 @@ function enterExecute(protocol::MPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
+  protocol.unit = ""
 end
 
 function _execute(protocol::MPIMeasurementProtocol)
@@ -116,6 +118,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
 
     @debug "Taking background measurement."
+    protocol.unit = "BG Frames"
     measurement(protocol)
     protocol.bgMeas = protocol.seqMeasState.buffer
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
@@ -127,6 +130,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
+  protocol.unit = "Frames"
   measurement(protocol)
 end
 
@@ -215,7 +219,13 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
         data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.seqMeasState.buffer
+    data = copy(protocol.seqMeasState.buffer)
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -226,12 +236,10 @@ end
 
 function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
-  if length(protocol.bgMeas) > 0 && !protocol.measuring
-    reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.seqMeasState)
+  if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
     framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
-    reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
   end
