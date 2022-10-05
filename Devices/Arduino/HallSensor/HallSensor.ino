@@ -1,13 +1,13 @@
 #define ARDUINO_TYPE "HALLSENS"
 #define VERSION "1"
 #define POSITION 1
+#define size 1024
 #define BAUDRATE 9600
-#include <Tlv493d.h>
+#include <Tle493d_w2b6.h>
 
 // Tlv493d Opject
-Tlv493d Tlv493dMagnetic3DSensor = Tlv493d();
-
-
+Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
+int called = 0;
 // Communication
 #define INPUT_BUFFER_SIZE 256
 char input_buffer[INPUT_BUFFER_SIZE];
@@ -35,11 +35,11 @@ commandHandler_t cmdHandler[] = {
 };
 
 int getCommands(char*) {
-  Serial.println("Valid Commands (without quotes):");
-  Serial.println("'!DATA*#' ");
-  Serial.println("'!POS*#' ");
-  Serial.println("'!VERSION*#' ");
-  Serial.println("'!COMMANDS*#' ");
+  Serial.print("Valid Commands (without quotes):");
+  Serial.print("'!DATA*#' ");
+  Serial.print("'!POS*#' ");
+  Serial.print("'!VERSION*#' ");
+  Serial.print("'!COMMANDS*#' ");
   Serial.println("#");
 }
 
@@ -118,34 +118,47 @@ void serialCommand() {
 void setup() {
   Serial.begin(BAUDRATE);
   while(!Serial);
-  
-  //For the Evalkit "TLV493D-A1B6 MS2GO" uncommend following 3 lines:
-  pinMode(LED2, OUTPUT);  //Sensor-VDD as output
-  digitalWrite(LED2, HIGH); //Power on the sensor
+ 
+  //If using the MS2Go-Kit: Enable following lines to switch on the sensor
+  // ***
+  pinMode(LED2, OUTPUT);
+  digitalWrite(LED2, HIGH);
   delay(50);
+  // ***
   
-  Tlv493dMagnetic3DSensor.begin();
-  Tlv493dMagnetic3DSensor.setAccessMode(Tlv493dMagnetic3DSensor.MASTERCONTROLLEDMODE);
-  Tlv493dMagnetic3DSensor.disableTemp();
+  sensor.begin();
 }
 
 
 int getData(char*) {
-  Tlv493dMagnetic3DSensor.updateData();
-  unsigned long measDelay = Tlv493dMagnetic3DSensor.getMeasurementDelay();
+  // updateData reads values from sensor and reading triggers next measurement
+  int ret = sensor.updateData(); // Throw away first old data
+  delay(10);
+  ret = sensor.updateData(); // Could check ret after each measurement 
+  uint16_t measDelay = 10;
   unsigned long start = millis();
   
-  // TODO perform measurement
   
-  Serial.write(Tlv493dMagnetic3DSensor.getRawX());
-  Serial.write(Tlv493dMagnetic3DSensor.getRawY());
-  Serial.write(Tlv493dMagnetic3DSensor.getRawZ());
-  Serial.println("#");
-  Serial.flush();
+  // TODO perform measurement
 
+  int16_t mX = 4352;
+  int16_t mY = sensor.getRawY();
+  int16_t mZ = sensor.getRawZ();
+
+  int16_t sX=0,sY=0,sZ =0;
+    
+  Serial.write((byte *)&mX,2);
+  Serial.write((byte *)&mY,2);
+  Serial.write((byte *)&mZ,2);
+  //Serial.write((byte *)&sX,2);
+  //Serial.write((byte *)&sY,2);
+  //Serial.write((byte *)&sZ,2);
+  Serial.print("#");
+  Serial.flush();
+  
   unsigned long end = millis();
   if (end - start < measDelay) {
-    delay(end - start);
+    delay(measDelay-(end - start));
   }
 }
 
