@@ -141,7 +141,7 @@ int getData(char*) {
   
   // TODO perform measurement
 
-  int16_t mX = 4352;
+  int16_t mX = sensor.getRawX();
   int16_t mY = sensor.getRawY();
   int16_t mZ = sensor.getRawZ();
 
