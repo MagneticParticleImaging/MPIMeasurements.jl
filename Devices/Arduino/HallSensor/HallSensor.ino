@@ -1,15 +1,14 @@
 #define ARDUINO_TYPE "HALLSENS"
 #define VERSION "1"
 #define POSITION 1
-#define size 1024
 #define BAUDRATE 9600
 #include <Tle493d_w2b6.h>
 
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
-int called = 0;
+int sample_size= 30;
 // Communication
-#define INPUT_BUFFER_SIZE 256
+#define INPUT_BUFFER_SIZE 3000
 char input_buffer[INPUT_BUFFER_SIZE];
 unsigned int input_pos = 0;
 
@@ -134,33 +133,61 @@ int getData(char*) {
   // updateData reads values from sensor and reading triggers next measurement
   int ret = sensor.updateData(); // Throw away first old data
   delay(10);
-  ret = sensor.updateData(); // Could check ret after each measurement 
   uint16_t measDelay = 10;
-  unsigned long start = millis();
+  unsigned long start, end;
   
   
   // TODO perform measurement
+  
+  int32_t mX=0,mY=0,mZ=0,sX=0,sY=0,sZ=0,x=0,y=0,z=0;
+  for (int i =0 ;i< sample_size ; i++){
+    sensor.updateData(); 
+    start = millis();
+    
+    x = sensor.getRawX();
+    y = sensor.getRawY();
+    z = sensor.getRawZ();
+    
+    mX+=x;
+    mY+=y;
+    mZ+=z;
 
-  int16_t mX = sensor.getRawX();
-  int16_t mY = sensor.getRawY();
-  int16_t mZ = sensor.getRawZ();
+    Serial.print(x);
+    Serial.print(",");
+    
+    sX += x*x;
+    sY += y*y;
+    sZ += z*z;
 
-  int16_t sX=0,sY=0,sZ =0;
+    end = millis();
+    if (end - start < measDelay) {
+      delay(measDelay-(end - start));
+    }
+  }
+
+ 
+  //sX -= mX*mX/sample_size;
+  sY -= mY*mY/sample_size;
+  sZ -= mZ*mZ/sample_size;
+ 
+  mX = mX/sample_size;
+  mY = mY/sample_size;
+  mZ = mZ/sample_size;
+
   Serial.print(mX);
+  //Serial.print(",");
+  //Serial.print(mY);
+  //Serial.print(",");
+  //Serial.print(mZ);
   Serial.print(",");
-  Serial.print(mY);
-  Serial.print(",");
-  Serial.print(mZ);
-  //Serial.write((byte *)&sX,2);
-  //Serial.write((byte *)&sY,2);
-  //Serial.write((byte *)&sZ,2);
+  Serial.print(sX);
+  //Serial.print(",");
+  //Serial.print(sY);
+  //Serial.print(",");
+  //Serial.print(sZ);
+  //Serial.print(",");
   Serial.print("#");
   Serial.flush();
-  
-  unsigned long end = millis();
-  if (end - start < measDelay) {
-    delay(measDelay-(end - start));
-  }
 }
 
 
