@@ -78,9 +78,8 @@ function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
 end
 
 function getXYZValues(gauss::ArduinoGaussMeter)
-  data = zeros(Int16, 3)
-  sendCommand(gauss.ard, "DATA", data)
-  #TODO
+  data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
+  data = [parse(Int16,str) for str in data_strings]
   return data
 end
 

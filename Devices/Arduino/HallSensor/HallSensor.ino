@@ -141,15 +141,16 @@ int getData(char*) {
   
   // TODO perform measurement
 
-  int16_t mX = sensor.getRawX();
-  int16_t mY = sensor.getRawY();
-  int16_t mZ = sensor.getRawZ();
+  int16_t mX = 1;
+  int16_t mY = 4352;
+  int16_t mZ = 3;
 
   int16_t sX=0,sY=0,sZ =0;
-    
-  Serial.write((byte *)&mX,2);
-  Serial.write((byte *)&mY,2);
-  Serial.write((byte *)&mZ,2);
+  Serial.print(mX);
+  Serial.print(",");
+  Serial.print(mY);
+  Serial.print(",");
+  Serial.print(mZ);
   //Serial.write((byte *)&sX,2);
   //Serial.write((byte *)&sY,2);
   //Serial.write((byte *)&sZ,2);
@@ -161,6 +162,7 @@ int getData(char*) {
     delay(measDelay-(end - start));
   }
 }
+
 
 int getPosition(char*) {
   Serial.print(POSITION);
