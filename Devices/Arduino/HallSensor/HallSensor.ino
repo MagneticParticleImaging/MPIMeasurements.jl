@@ -141,9 +141,9 @@ int getData(char*) {
   
   // TODO perform measurement
 
-  int16_t mX = 1;
-  int16_t mY = 4352;
-  int16_t mZ = 3;
+  int16_t mX = sensor.getRawX();
+  int16_t mY = sensor.getRawY();
+  int16_t mZ = sensor.getRawZ();
 
   int16_t sX=0,sY=0,sZ =0;
   Serial.print(mX);
