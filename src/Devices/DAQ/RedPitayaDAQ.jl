@@ -236,11 +236,12 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
     rpLut = copy(emptyLUT)
     rpEnable = copy(emptyEnable)
     start = (rp - 1) * 6 + 1
-    currentPossibleChannels = collect(start:start+3)
+    currentPossibleChannels = collect(start:start+5)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
+      @show currentMapping
       createLUT!(rpLut, start, currentMapping)
-      createEnableLUT!(rpEnable, start, channelMapping)
+      createEnableLUT!(rpEnable, start, currentMapping)
     end
     luts[rp] = rpLut
     enableLuts[rp] = rpEnable
