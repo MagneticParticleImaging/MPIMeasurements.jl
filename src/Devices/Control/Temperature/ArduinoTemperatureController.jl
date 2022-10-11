@@ -45,11 +45,9 @@ function _init(controller::ArduinoTemperatureController)
   @info "Connection to ArduinoTemperatureController established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   controller.ard = ard
-
-  # setMaximumTemps(controller, params.maxTemps)
-  # setTargetTemps(controller, params.targetTemps)
-  # controlMode(controller, params.mode)
-
+  setMaximumTemps(controller, params.maxTemps)
+  setTargetTemps(controller, params.targetTemps)
+  controlMode(controller, params.mode)
   # TODO Configure targetTemps, controlMode and control parameters
 end
 
@@ -108,38 +106,39 @@ function getTemperatures(controller::ArduinoTemperatureController; names::Bool=f
 end
 
 function getTemperature(controller::ArduinoTemperatureController, channel::Int)
-  temp = retrieveTemps(controller)
+  temp = retrieveTemps(controller, "GET:ALLTEMPS")
   return temp[channel]
 end
 
-function retrieveTemps(controller::ArduinoTemperatureController)
+function retrieveTemps(controller::ArduinoTemperatureController, query::AbstractString = "GET:ALLTEMPS")
   TempDelim = "," 
   # TODO Retrieve temp properly
-  Temps = sendCommand(controller.ard, "GET:ALLTEMPS")
-  Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
-
+  Temps = sendCommand(controller.ard, query)
   result =  tryparse.(Float64,split(Temps,TempDelim))
   result = map(x -> isnothing(x) ? 0.0 : x, result)
   return result
 end
 
 
-
-
-
 function setMaximumTemps(controller::ArduinoTemperatureController, maxTemps::Array)
     if length(maxTemps) == controller.params.numSensors
         maxTempString= join(maxTemps, ",")
-        ack = sendCommand(controller.ard, "SET:MAXTEMPS:<"*maxTempString*">")
-        # TODO check ack?
-        @info "acknowledge of MaxTemps from TempUnit."
+        ack = sendCommand(controller.ard, "SET:TMAX:<"*maxTempString*">")
+        if ack
+          @info "Set max temp for ArduinoTemperatureController $(id(controller))."
+          return true
+        else
+          @warn "Could not set max temp for ArduinoTemperatureController $(id(controller))."
+        end
     else
         @warn "Please parse a maximum temperature for each controller" controller.params.numSensors
     end
+    return false
 end
 
 function getMaximumTemps(controller::ArduinoTemperatureController)
-    println(sendCommand(controller.ard, "GET:MAXTEMPS"))
+  temp = retrieveTemps(controller, "GET:TMAX")
+  return temp[channel]
 end
 
 close(controller::ArduinoTemperatureController) = close(controller.ard)
@@ -150,60 +149,49 @@ close(controller::ArduinoTemperatureController) = close(controller.ard)
 
 export setTargetTemps
 function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::Vector{Integer})
-  sendCommand(controller.ard, "SET:MAXTEMPS:<"*maxTempString*">")
+  if length(targetTemps) == controller.params.numSensors
+    targetTempString= join(targetTemps, ",")
+    ack = sendCommand(controller.ard, "SET:TSET:<"*targetTempString*">")
+    if ack
+      @info "Set target temp for ArduinoTemperatureController $(id(controller))."
+      return true
+    else
+      @warn "Could not set target temp for ArduinoTemperatureController $(id(controller))."
+    end
+  else
+    @warn "Please parse a maximum temperature for each controller" controller.params.numSensors
+  end
+  return false
 end
 
 
 function getTargetTemps(controller::ArduinoTemperatureController)
-  TempDelim = "," 
-  # TODO Retrieve temp properly
-  Temps = sendCommand(controller.ard, "GET:ALLTEMPS")
-  #Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
-
-  result =  tryparse.(Float64,split(Temps,TempDelim))
-  result = map(x -> isnothing(x) ? 0.0 : x, result)
-  return result
+  temp = retrieveTemps(controller, "GET:TSET")
+  return temp[channel]
 end
 
-# TODO Maybe do this per channel/unit/w.e.?, then do setControlMode(controller, channel, mode)
 # mode is always for ALL 
 function setControlMode(controller::ArduinoTemperatureController, mode::TemperatureControlMode)
   cmd = ""
   if mode == TEMP_THRESHOLD
-    cmd = "BLABLA"
+    cmd = "SET:C:THRES"
   elseif mode == TEMP_PID
-    cmd = "BLA"
-  elseif mode == TEMP_DUTYCYCLE
+    cmd = "SET:C:PWM"
   else
     throw(ScannerConfigurationError("Temp Controller does not support mode $mode"))
   end
-  sendCommand(controller.ard, cmd)
+  return sendCommand(controller.ard, cmd)
 end
 
 #function getControlMode(controller::ArduinoTemperatureController)
 #  # TODO
 #end
-#
-#function setControlThreshold(controller::ArduinoTemperatureController, ...)
-#  # TODO
-#end
-#
-#function setControlPWM(controller::ArduinoTemperatureController, ...)
-#  # TODO
-#end
-#
-#function setControlDutyCycle(controller::ArduinoTemperatureController, ...)
-#  # TODO
-#end
-#function getControlDutyCycle(controller::ArduinoTemperatureController)
-#  # TODO
-#end
 
 # TODO This would be your AC enable
 function enableControl(controller::ArduinoTemperatureController)
-  sendCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
+  return sendCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
 end
 
 function disableControl(controller::ArduinoTemperatureController)
-  sendCommand(controller.ard, "SET:ENABLE_HEATING:<0>")
+  return sendCommand(controller.ard, "SET:ENABLE_HEATING:<0>")
 end
