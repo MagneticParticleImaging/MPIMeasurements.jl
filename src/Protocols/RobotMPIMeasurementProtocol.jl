@@ -42,6 +42,7 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::RobotMPIMeasurementProtocol)
@@ -111,6 +112,7 @@ function enterExecute(protocol::RobotMPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
+  protocol.unit = ""
 end
 
 function _execute(protocol::RobotMPIMeasurementProtocol)
@@ -142,6 +144,8 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     moveAbs(rob, namedPosition(rob, "park"))
     disable(rob)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+    @debug "Taking background measurement."
+    protocol.unit = "BG Frames"
     measurement(protocol)
     protocol.bgMeas = protocol.seqMeasState.buffer
     if askChoices(protocol, "Press continue when foreground measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
@@ -152,7 +156,9 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
   enable(rob)
   moveAbs(rob, protocol.params.fgPos)
   disable(rob)
+  @debug "Starting foreground measurement."
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  protocol.unit = "Frames"
   measurement(protocol)
 end
 
@@ -241,7 +247,13 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEven
         data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.seqMeasState.buffer
+    data = copy(protocol.seqMeasState.buffer)
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -252,14 +264,12 @@ end
 
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
-  if length(protocol.bgMeas) > 0 && !protocol.measuring
-    reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.seqMeasState) 
+  if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
     framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
-    reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else 
-    reply = ProgressEvent(0, 0, "N/A", event)  
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
+  else
+    reply = ProgressEvent(0, 0, "N/A", event)
   end
   put!(protocol.biChannel, reply)
 end

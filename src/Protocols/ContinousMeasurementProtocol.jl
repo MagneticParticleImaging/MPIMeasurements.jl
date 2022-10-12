@@ -3,10 +3,16 @@ export ContinousMeasurementProtocol, ContinousMeasurementProtocolParams
 Parameters for the MPIMeasurementProtocol
 """
 Base.@kwdef mutable struct ContinousMeasurementProtocolParams <: ProtocolParams
+  "Foreground frames to measure. Overwrites sequence frames"
+  fgFrames::Int64 = 1
+  "Background frames to measure. Overwrites sequence frames"
+  bgFrames::Int64 = 1
   "Pause between measurements"
   pause::typeof(1.0u"s") = 0.2u"s"
   "If set the tx amplitude and phase will be set with control steps"
   controlTx::Bool = false
+  "If unset no background measurement will be taken"
+  measureBackground::Bool = true
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
 end
@@ -30,11 +36,13 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
 
 
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
+  latestBgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   stopped::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
   counter::Int64 = 0
 end
 
@@ -83,10 +91,24 @@ end
 function _execute(protocol::ContinousMeasurementProtocol)
   @info "Measurement protocol started"
 
+  if protocol.params.measureBackground
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
 
+    @debug "Taking background measurement."
+    protocol.unit = "BG Measurement"
+    protocol.latestBgMeas = measurement(protocol)
+    if askChoices(protocol, "Press continue when foreground loop can be started", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+  end
+
+  protocol.unit = "Measurements"
   while true
     @info "Taking new measurement"
-    measurement(protocol)
+    protocol.latestMeas = measurement(protocol)
     protocol.counter+=1
 
     measPauseOver = false
@@ -158,22 +180,21 @@ function measurement(protocol::ContinousMeasurementProtocol)
     throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
   end
 
-  protocol.latestMeas = copy(measState.buffer)
+  return copy(measState.buffer)
 end
 
 function asyncMeasurement(protocol::ContinousMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = protocol.scanner
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
   return protocol.seqMeasState
 end
-
 
 function cleanup(protocol::ContinousMeasurementProtocol)
   # NOP
@@ -194,13 +215,29 @@ function cancel(protocol::ContinousMeasurementProtocol)
 end
 
 function handleEvent(protocol::ContinousMeasurementProtocol, event::DataQueryEvent)
-  data = protocol.latestMeas
+  data = nothing
+  if event.message == "FG"
+    if length(protocol.latestMeas) > 0
+      data = copy(protocol.latestMeas)
+    else
+      data = nothing
+    end
+  elseif event.message == "BG"
+    if length(protocol.latestBgMeas) > 0
+      data = copy(protocol.latestBgMeas)
+    else
+      data = nothing
+    end
+  else
+    put!(protocol.biChannel, UnknownDataQueryEvent(event))
+    return
+  end
   put!(protocol.biChannel, DataAnswerEvent(data, event))
 end
 
 
 function handleEvent(protocol::ContinousMeasurementProtocol, event::ProgressQueryEvent)
-  reply = ProgressEvent(protocol.counter, 0, "Measurements", event)  
+  reply = ProgressEvent(protocol.counter, 0, protocol.unit, event)  
   put!(protocol.biChannel, reply)
 end
 
