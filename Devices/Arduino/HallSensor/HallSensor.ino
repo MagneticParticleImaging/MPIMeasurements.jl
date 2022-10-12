@@ -146,6 +146,8 @@ int getData(char*) {
     start = millis();
     
     x = sensor.getRawX();
+    print(x);
+    print(",")
     y = sensor.getRawY();
     z = sensor.getRawZ();
     
@@ -174,15 +176,15 @@ int getData(char*) {
   
   Serial.print(meanX,7);
   Serial.print(",");
-  Serial.print(meanY,7);
-  Serial.print(",");
-  Serial.print(meanZ,7);
-  Serial.print(",");
+  //Serial.print(meanY,7);
+  //Serial.print(",");
+  //Serial.print(meanZ,7);
+  //Serial.print(",");
   Serial.print(varX,7);
-  Serial.print(",");
-  Serial.print(varY,7);
-  Serial.print(",");
-  Serial.print(varZ,7);
+  //Serial.print(",");
+  //Serial.print(varY,7);
+  //Serial.print(",");
+  //Serial.print(varZ,7);
   Serial.print("#");
   Serial.flush();
 }
