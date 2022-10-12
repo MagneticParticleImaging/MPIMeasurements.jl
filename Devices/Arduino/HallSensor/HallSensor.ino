@@ -6,7 +6,7 @@
 
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
-int sample_size= 30;
+int sample_size= 500;
 // Communication
 #define INPUT_BUFFER_SIZE 3000
 char input_buffer[INPUT_BUFFER_SIZE];
@@ -139,7 +139,8 @@ int getData(char*) {
   
   // TODO perform measurement
   
-  int32_t mX=0,mY=0,mZ=0,sX=0,sY=0,sZ=0,x=0,y=0,z=0;
+  int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0,x=0,y=0,z=0;
+  float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
   for (int i =0 ;i< sample_size ; i++){
     sensor.updateData(); 
     start = millis();
@@ -148,44 +149,40 @@ int getData(char*) {
     y = sensor.getRawY();
     z = sensor.getRawZ();
     
-    mX+=x;
-    mY+=y;
-    mZ+=z;
-
-    Serial.print(x);
-    Serial.print(",");
+    sumX+=x;
+    sumY+=y;
+    sumZ+=z;
     
-    sX += x*x;
-    sY += y*y;
-    sZ += z*z;
+    sumXX += x*x;
+    sumYY += y*y;
+    sumZZ += z*z;
 
     end = millis();
     if (end - start < measDelay) {
       delay(measDelay-(end - start));
     }
   }
-
- 
-  //sX -= mX*mX/sample_size;
-  sY -= mY*mY/sample_size;
-  sZ -= mZ*mZ/sample_size;
- 
-  mX = mX/sample_size;
-  mY = mY/sample_size;
-  mZ = mZ/sample_size;
-
-  Serial.print(mX);
-  //Serial.print(",");
-  //Serial.print(mY);
-  //Serial.print(",");
-  //Serial.print(mZ);
+  meanX = (float)sumX/sample_size;
+  varX = (float) sumXX- (meanX*meanX)*sample_size;
+  varX = varX/(sample_size-1);
+  meanY = (float)sumY/sample_size;
+  varY = (float) sumYY- (meanY*meanY)*sample_size;
+  varY = varY/(sample_size-1);
+  meanZ = (float)sumX/sample_size;
+  varZ = (float) sumZZ- (meanZ*meanZ)*sample_size;
+  varZ = varZ/(sample_size-1);
+  
+  Serial.print(meanX,7);
   Serial.print(",");
-  Serial.print(sX);
-  //Serial.print(",");
-  //Serial.print(sY);
-  //Serial.print(",");
-  //Serial.print(sZ);
-  //Serial.print(",");
+  Serial.print(meanY,7);
+  Serial.print(",");
+  Serial.print(meanZ,7);
+  Serial.print(",");
+  Serial.print(varX,7);
+  Serial.print(",");
+  Serial.print(varY,7);
+  Serial.print(",");
+  Serial.print(varZ,7);
   Serial.print("#");
   Serial.flush();
 }

@@ -178,6 +178,7 @@ function query(sd::SerialDevice,cmd)
 		sp_flush(sd.sp, SP_BUF_INPUT)
 		return out
 	finally
+		sp_flush(sd.sp, SP_BUF_INPUT)
 		unlock(sd.sdLock)
 	end
 end

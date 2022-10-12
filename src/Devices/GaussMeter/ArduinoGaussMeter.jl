@@ -79,7 +79,7 @@ end
 
 function getXYZValues(gauss::ArduinoGaussMeter)
   data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
-  data = [parse(Int16,str) for str in data_strings]
+  data = [parse(Float32,str) for str in data_strings]
   return data
 end
 
