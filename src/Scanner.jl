@@ -372,7 +372,8 @@ function Sequence(scanner::MPIScanner, dict::Dict)
   if name(scanner) == targetScanner(sequence)
     return sequence
   end
-  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner"))
+  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner:
+                                   $(name(scanner)) != $(targetScanner(sequence))"))
 end
 
 function getTransferFunctionList(scanner::MPIScanner)
