@@ -4,14 +4,14 @@ abstract type ArduinoTemperatureControllerParams <: DeviceParams end
 
 Base.@kwdef struct ArduinoTemperatureControllerPortParams <: ArduinoTemperatureControllerParams
   # Control
-  
   mode::TemperatureControlMode 
-  # TODO Add remaining parameter for control, for optional make it like
-  # thresholds::Union{Vector{Integer}, Nothing} = nothing
-  # Channel
-  targetTemps::Vector{Integer}
-  maxTemps::Vector{Integer}
-
+  targetTemps::Vector{Int64}
+  maxTemps::Vector{Int64}
+  # Display
+  numSensors::Int64
+  selectSensors::Vector{Int64}
+  groupSensors::Vector{Int64}
+  nameSensors::Vector{String}
   # Communication
   portAddress::String
   @add_serial_device_fields '#'
@@ -22,8 +22,13 @@ ArduinoTemperatureControllerPortParams(dict::Dict) = params_from_dict(ArduinoTem
 Base.@kwdef struct ArduinoTemperatureControllerPoolParams <: ArduinoTemperatureControllerParams
   # Control
   mode::TemperatureControlMode 
-  targetTemps::Vector{Integer}
-  maxTemps::Vector{Integer}
+  targetTemps::Vector{Int64}
+  maxTemps::Vector{Int64}
+  # Display
+  numSensors::Int64
+  selectSensors::Vector{Int64}
+  groupSensors::Vector{Int64}
+  nameSensors::Vector{String}  
   # Communication
   description::String
   @add_serial_device_fields '#'
@@ -47,8 +52,7 @@ function _init(controller::ArduinoTemperatureController)
   controller.ard = ard
   setMaximumTemps(controller, params.maxTemps)
   setTargetTemps(controller, params.targetTemps)
-  controlMode(controller, params.mode)
-  # TODO Configure targetTemps, controlMode and control parameters
+  setControlMode(controller, params.mode)
 end
 
 function initSerialDevice(controller::ArduinoTemperatureController, params::ArduinoTemperatureControllerPortParams)
@@ -93,15 +97,15 @@ function getChannelGroups(controller::ArduinoTemperatureController)
 end
 
 function getTemperatures(controller::ArduinoTemperatureController; names::Bool=false)
-  temp = retrieveTemps(controller)
+  temp = retrieveTemps(controller, "GET:ALLTEMPS")
   if length(temp) == controller.params.numSensors
       if names
-          return [temp[controller.params.selectSensors] controller.params.nameSensors[controller.params.selectSensors]]
+        return [temp[controller.params.selectSensors] controller.params.nameSensors[controller.params.selectSensors]]
       else
-          return temp[controller.params.selectSensors]
+        return temp[controller.params.selectSensors]
       end
   else
-      return zeros(length(controller.params.selectSensors))
+    return zeros(length(controller.params.selectSensors))
   end
 end
 
@@ -119,26 +123,31 @@ function retrieveTemps(controller::ArduinoTemperatureController, query::Abstract
   return result
 end
 
-
+export setMaximumTemps
 function setMaximumTemps(controller::ArduinoTemperatureController, maxTemps::Array)
-    if length(maxTemps) == controller.params.numSensors
-        maxTempString= join(maxTemps, ",")
-        ack = sendCommand(controller.ard, "SET:TMAX:<"*maxTempString*">")
-        if ack
-          @info "Set max temp for ArduinoTemperatureController $(id(controller))."
-          return true
-        else
-          @warn "Could not set max temp for ArduinoTemperatureController $(id(controller))."
-        end
+  if length(maxTemps) == controller.params.numSensors
+    maxTempString= join(maxTemps, ",")
+    ack = sendCommand(controller.ard, "SET:TMAX:<"*maxTempString*">")
+    if parse(Bool, ack)
+      @info "Set max temp for ArduinoTemperatureController $(deviceID(controller))."
+      return true
     else
-        @warn "Please parse a maximum temperature for each controller" controller.params.numSensors
+      @warn "Could not set max temp for ArduinoTemperatureController $(deviceID(controller))."
     end
-    return false
+  else
+    @warn "Please parse a maximum temperature for each controller" controller.params.numSensors
+  end
+  return false
 end
 
+export getMaximumTemps
 function getMaximumTemps(controller::ArduinoTemperatureController)
   temp = retrieveTemps(controller, "GET:TMAX")
-  return temp[channel]
+  if length(temp) == controller.params.numSensors
+    return temp[controller.params.selectSensors]
+  else
+    return zeros(length(controller.params.selectSensors))
+  end
 end
 
 close(controller::ArduinoTemperatureController) = close(controller.ard)
@@ -148,15 +157,15 @@ close(controller::ArduinoTemperatureController) = close(controller.ard)
 
 
 export setTargetTemps
-function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::Vector{Integer})
+function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::Vector{Int64})
   if length(targetTemps) == controller.params.numSensors
     targetTempString= join(targetTemps, ",")
     ack = sendCommand(controller.ard, "SET:TSET:<"*targetTempString*">")
-    if ack
-      @info "Set target temp for ArduinoTemperatureController $(id(controller))."
+    if parse(Bool, ack)
+      @info "Set target temp for ArduinoTemperatureController $(deviceID(controller))."
       return true
     else
-      @warn "Could not set target temp for ArduinoTemperatureController $(id(controller))."
+      @warn "Could not set target temp for ArduinoTemperatureController $(deviceID(controller))."
     end
   else
     @warn "Please parse a maximum temperature for each controller" controller.params.numSensors
@@ -164,10 +173,14 @@ function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::V
   return false
 end
 
-
+export getTargetTemps
 function getTargetTemps(controller::ArduinoTemperatureController)
   temp = retrieveTemps(controller, "GET:TSET")
-  return temp[channel]
+  if length(temp) == controller.params.numSensors
+    return temp[controller.params.selectSensors]
+  else
+    return zeros(length(controller.params.selectSensors))
+  end
 end
 
 # mode is always for ALL 
