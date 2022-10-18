@@ -14,6 +14,16 @@ struct ControlledChannel
   daqChannel::TxChannelParams
 end
 
+mutable struct ControlSequence
+  targetSequence::Sequence
+  currSequence::Sequence
+  # Periodic Electric Components
+  simpleChannel::Dict{PeriodicElectricalChannel, TxChannelParams}
+  sinLUT::Union{Matrix{Float64}, Nothing} = nothing
+  cosLUT::Union{Matrix{Float64}, Nothing} = nothing
+  # Arbitrary Waveform
+end
+
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   @add_device_fields TxDAQControllerParams
 
@@ -31,12 +41,63 @@ end
 neededDependencies(::TxDAQController) = [AbstractDAQ]
 optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, TemperatureController]
 
-function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
-  # Prepare and check channel under control
-  daq = dependency(txCont, AbstractDAQ)
+function ControlSequence(txCont::TxDAQController, target::Sequence, scanner::AbstractDAQ)
+  # Prepare Periodic Electrical Components
   seqControlledChannel = getControlledChannel(txCont, seq)
+  simpleChannel = createPeriodicElectricalComponentDict(seqControlledChannel, target, scanner)
+  sinLUT, cosLUT = createLUTs(seqControlledChannel, target)
+
+
+  currSeq = target
+  
+  _name = "Control Sequence for target $(name(target))"
+  description = ""
+  _targetScanner = targetScanner(target)
+  _baseFrequency = baseFrequency(target)
+  general = GeneralSettings(;name=_name, description = description, targetScanner = _targetScanner, baseFrequency = _baseFrequency)
+  # TODO do i need rx channel?
+  acq = AcquisitionSettings(;channels = RxChannel[], bandwidth = rxBandwidth(target))
+
+  _fields = MagneticField[]
+  for field in fields(target)
+    if control(field)
+      _id = id(field)
+      safeStart = safeStartInterval(field)
+      safeTrans = safeTransitionInterval(field)
+      safeEnd = safeEndInterval(field)
+      safeError = safeErrorInterval(field)
+      # Init purely periodic electrical component channel
+      periodicChannel = [deepcopy(channel) for channel in periodicElectricalTxChannels(field) if length(arbitraryElectricalComponent(channel)) == 0]
+      periodicComponents = [comp for channel in periodicChannel for comp in periodicElectricalComponents(channel)]
+      for channel in periodicChannel
+        otherComp = filter(!in(periodicElectricalComponents(channel)), periodicComponents)
+        for comp in periodicElectricalComponents(channel)
+          # TODO smarter init value, maybe min between 1/10 and target (<- target might not be V)
+          amplitude!(comp, simpleChannel[channel].limitPeak/10)
+        end
+        if txCont.params.correctCrossCoupling
+          for comp in otherComp
+            copy = deepcopy(comp)
+            amplitude!(copy, 0u"V")
+            push!(channel, copy)
+          end
+        end
+      end
+      # Init arbitrary waveform
+      # TODO Implement AWG
+      contField = MagneticField(;id = _id, channels = periodicChannel, safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
+          safeEndInterval = safeEnd, safeErrorInterval = safeError, control = true)
+      push!(_fields, contField)
+    end
+  end
+
+  currSeq = Sequence(;general = general, acquisition = acq, fields = _fields)
+  return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT)
+end
+
+function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{PeriodicElectricalChannel}, seq::Sequence, daq::AbstractDAQ)
   missingControlDef = []
-  txCont.controlledChannels = []
+  dict = Dict{PeriodicElectricalChannel, TxChannelParams}()
 
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
@@ -44,7 +105,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
       push!(missingControlDef, name)
     else
-      push!(txCont.controlledChannels, ControlledChannel(seqChannel, daqChannel))
+      dict[seqChannel] = daqChannel
     end
   end
   
@@ -53,8 +114,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
     throw(IllegalStateException(message))
   end
 
-  # Check that we only control four channels, as our RedPitayaDAQs only have 4 signal components atm
-  if length(txCont.controlledChannels) > 3
+  # Check that we only control three channels, as our RedPitayaDAQs only have 3 signal components atm
+  if length(dict) > 3
     throw(IllegalStateException("Sequence requires controlling of more than four channels, which is currently not implemented."))
   end
 
@@ -62,34 +123,22 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   if any(x -> length(x.components) > 1, seqControlledChannel)
     throw(IllegalStateException("Sequence has channel with more than one component. Such a channel cannot be controlled by this controller"))
   end
+  return dict
+end
 
-  if !isnothing(initTx) 
-    s = size(initTx)
-    # Not square or does not fit controlled channel matrix
-    if !(length(s) == 0 || all(isequal(s[1]), s))
-      throw(IllegalStateException("Given initTx for control tx has dimenions $s that is either not square or does not match the amount of controlled channel"))
-    end
-  end
+function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
+  daq = dependency(txCont, AbstractDAQ)
+  control = ControlSequence(txCont, seq, daq)
+  return controlTx(txCont, seq, control)
+end
 
-  # Prepare values
-  if isnothing(initTx)
-    txCont.currTx = convert(Matrix{ComplexF64}, diagm(ustrip.(u"V", [channel.daqChannel.limitPeak/10 for channel in txCont.controlledChannels])))
-  else 
-    txCont.currTx = initTx
-  end
-  sinLUT, cosLUt = createLUTs(seqControlledChannel, seq)
-  txCont.sinLUT = sinLUT
-  txCont.cosLUT = cosLUt
-  Ω = calcDesiredField(seqControlledChannel)
 
-  # Prepare/Override signal frequency components
-  freqs = [ustrip(u"Hz", txBaseFrequency(seq) / divider(components(channel.seqChannel)[1])) for channel in txCont.controlledChannels]
-  frequencies = Dict{String, Vector{Union{Float32, Nothing}}}()
-  for channel in txCont.controlledChannels
-    frequencies[id(channel.seqChannel)] = freqs
-  end
-  @show frequencies
-  setTxParamsFrequencies(daq, frequencies)
+function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSequence)
+  # Prepare and check channel under control
+  daq = dependency(txCont, AbstractDAQ)
+  
+
+  Ω = calcDesiredField(control)
 
   # Start Tx
   prepareControl(daq, seq)
@@ -210,7 +259,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
 
   setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-  return txFromMatrix(txCont, txCont.currTx)
+  return control
 end
 
 getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponent(channel)) == 0]
@@ -299,8 +348,9 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
   return Γ
 end
 
-function calcDesiredField(seqChannel::Vector{PeriodicElectricalChannel})
-  temp = [ustrip(amplitude(ch.components[1])) * exp(im*ustrip(phase(ch.components[1]))) for ch in seqChannel]
+function calcDesiredField(cont::ControlSequence)
+  seqChannel = filter(in(values(cont.simpleChannel)), periodicElectricalTxChannels(cont.targetSequence))
+  temp = [ustrip(amplitude(components(ch)[1])) * exp(im*ustrip(phase(components(ch)[1]))) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
