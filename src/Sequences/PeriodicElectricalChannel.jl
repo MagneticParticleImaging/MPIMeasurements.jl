@@ -179,6 +179,8 @@ export id
 id(component::PeriodicElectricalComponent) = component.id
 id(component::ArbitraryElectricalComponent) = component.id
 
+push!(channel::PeriodicElectricalChannel, comp::ElectricalComponent) = push!(channel.components, comp)
+
 function toDict!(dict, component::ElectricalComponent)
   dict["type"] = string(typeof(component))
   for field in [x for x in fieldnames(typeof(component)) if !in(x, [:id])]
