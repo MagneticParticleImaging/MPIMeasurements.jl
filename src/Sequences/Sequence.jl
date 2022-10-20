@@ -434,5 +434,10 @@ for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChann
         return temp
       end
     end
+    @generated function hash(x::$T, h::UInt)
+      hashes = [Expr(:(=), :(h), Expr(:call, :hash, :(x.$field), :(h))) for field in fieldnames($T)]
+      push!(hashes, Expr(:(=), :(h), Expr(:call, :hash, $T, :(h))))
+      return :($(hashes...),)
+    end
   end
 end
