@@ -19,8 +19,8 @@ mutable struct ControlSequence
   currSequence::Sequence
   # Periodic Electric Components
   simpleChannel::Dict{PeriodicElectricalChannel, TxChannelParams}
-  sinLUT::Union{Matrix{Float64}, Nothing} = nothing
-  cosLUT::Union{Matrix{Float64}, Nothing} = nothing
+  sinLUT::Union{Matrix{Float64}, Nothing}
+  cosLUT::Union{Matrix{Float64}, Nothing}
   # Arbitrary Waveform
 end
 
@@ -41,10 +41,10 @@ end
 neededDependencies(::TxDAQController) = [AbstractDAQ]
 optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, TemperatureController]
 
-function ControlSequence(txCont::TxDAQController, target::Sequence, scanner::AbstractDAQ)
+function ControlSequence(txCont::TxDAQController, target::Sequence, daq::AbstractDAQ)
   # Prepare Periodic Electrical Components
-  seqControlledChannel = getControlledChannel(txCont, seq)
-  simpleChannel = createPeriodicElectricalComponentDict(seqControlledChannel, target, scanner)
+  seqControlledChannel = getControlledChannel(txCont, target)
+  simpleChannel = createPeriodicElectricalComponentDict(seqControlledChannel, target, daq)
   sinLUT, cosLUT = createLUTs(seqControlledChannel, target)
 
 
@@ -67,7 +67,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, scanner::Abs
       safeEnd = safeEndInterval(field)
       safeError = safeErrorInterval(field)
       # Init purely periodic electrical component channel
-      periodicChannel = [deepcopy(channel) for channel in periodicElectricalTxChannels(field) if length(arbitraryElectricalComponent(channel)) == 0]
+      periodicChannel = [deepcopy(channel) for channel in periodicElectricalTxChannels(field) if length(arbitraryElectricalComponents(channel)) == 0]
       periodicComponents = [comp for channel in periodicChannel for comp in periodicElectricalComponents(channel)]
       for channel in periodicChannel
         otherComp = filter(!in(periodicElectricalComponents(channel)), periodicComponents)
@@ -78,7 +78,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, scanner::Abs
         if txCont.params.correctCrossCoupling
           for comp in otherComp
             copy = deepcopy(comp)
-            amplitude!(copy, 0u"V")
+            amplitude!(copy, 0.0u"V")
             push!(channel, copy)
           end
         end
@@ -262,7 +262,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   return control
 end
 
-getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponent(channel)) == 0]
+getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]
 getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
