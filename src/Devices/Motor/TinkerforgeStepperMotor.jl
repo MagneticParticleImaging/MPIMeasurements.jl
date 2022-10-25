@@ -70,15 +70,35 @@ export disable
 
 motorCurrent(motor::TinkerforgeStepperMotor) = motor.params.motorCurrent
 stepResolution(motor::TinkerforgeStepperMotor) = motor.params.stepResolution
-microStepResolution(motor::TinkerforgeStepperMotor) = round(Int64, 256 / (2^stepResolution(motor)))
+microStepResolution(motor::TinkerforgeStepperMotor) = round(Int64, 256 / (2^Int(stepResolution(motor))))
 gearRatio(motor::TinkerforgeStepperMotor) = motor.params.drivenGearTeeth // motor.params.drivingGearTeeth
-#allowedVoltageDrop(motor::TinkerforgeStepperMotor) = motor.params.allowedVoltageDrop
+nominalVoltage(motor::TinkerforgeStepperMotor) = motor.params.nominalVoltage
+allowedVoltageDrop(motor::TinkerforgeStepperMotor) = motor.params.allowedVoltageDrop
 stallThreshold(motor::TinkerforgeStepperMotor) = motor.params.stallThreshold
-
 
 # Function that calculates the velocity in steps per second to get x rpm at the motor
 rpm2sps(motor::TinkerforgeStepperMotor, rpm::Real) = rpm * 200 / 60 * microStepResolution(motor) * gearRatio(motor)
 sps2rpm(motor::TinkerforgeStepperMotor, sps::Real) = sps * 60 / 200 * 1 / microStepResolution(motor) * 1 / gearRatio(motor)
+rpm2Hz(rpm::T) where T <: Real = (rpm / 60)u"Hz"
+Hz2rpm(velocity::T) where T <: Unitful.Frequency = ustrip(u"Hz", velocity)*60
+
+function velocity!(motor::TinkerforgeStepperMotor, rpm::Real)
+  velocitySPS = rpm2sps(motor, rpm)
+  PyTinkerforge.set_max_velocity(motor.deviceInternal, velocitySPS)  # /steps per s, max velocity in steps per second, depends on step_resolution
+  PyTinkerforge.set_speed_ramping(motor.deviceInternal, velocitySPS/20, velocitySPS / 10)  # steps per s^2, acceleration and deacceleration of the motor, 8000 steps per s in 10 s equals 800 steps per s^2
+end
+velocity!(motor::TinkerforgeStepperMotor, velocity::T) where T <: Unitful.Frequency = velocity!(motor, Hz2rpm(velocity))
+
+velocity(motor::TinkerforgeStepperMotor) = rpm2Hz(sps2rpm(motor, PyTinkerforge.get_current_velocity(motor.deviceInternal)))
+
+function waitForVelocity(motor::TinkerforgeStepperMotor, velocity_::T) where T <: Unitful.Frequency
+  while true
+    if round(typeof(1.0u"Hz"), velocity(motor)) == velocity_
+      break
+    end
+    sleep(0.1)
+  end
+end
 
 function direction(motor::TinkerforgeStepperMotor)
   if PyTinkerforge.get_current_velocity(motor.deviceInternal) > 0
@@ -109,81 +129,39 @@ function driveSteps(motor::TinkerforgeStepperMotor, numSteps::Integer, direction
   if !isEnabled(motor)
     enable(motor)
   end
-  @warn PyTinkerforge.is_enabled(motor.deviceInternal)
 
   # Set the numper of steps the motor should drive. The sign defines the direction.
   PyTinkerforge.set_steps(motor.deviceInternal, numSteps)
 end
 
-function drive(motor::TinkerforgeStepperMotor, direction::MotorDirection)
+function driveDegree(motor::TinkerforgeStepperMotor, degree::Real,  direction::MotorDirection=MOTOR_FORWARD)
+  numSteps = round(degree * gearRatio(motor) * 200 * microStepResolution(motor) / 360)
+  driveSteps(motor, numSteps, direction)
+end
+
+function drive(motor::TinkerforgeStepperMotor, direction_::MotorDirection=MOTOR_FORWARD)
   if direction(motor) != MOTOR_STILL
-    stop(motor, 0u"s")
+    driveSteps(motor, 0u"s")
   end
 
   if !isEnabled(motor)
     enable(motor)
   end
 
-  if direction(motor) == MOTOR_BACKWARD
+  if direction_ == MOTOR_BACKWARD
     PyTinkerforge.drive_backward(motor.deviceInternal) # drives motor with set parameters till drive_forward or stop is called
   else
     PyTinkerforge.drive_forward(motor.deviceInternal) # drives motor with set parameters till drive_backward or stop is called
   end
 end
 
-# Try to reach velocity while decreasing the acceleration and increasing the velocity
-# Commented out because with it CI failed
-#=function driveToVelocity(motor::TinkerforgeStepperMotor, rpm::typeof(u"1/s"), direction::MotorDirection)
-  global stallThreashold
-  stallThreashold = 10000
-  if not (getMotorDirection() == "still"):
-    stopMotorInSec(0)
-  if not (ssBrick.is_enabled()):
-    ssBrick.enable()  # enable the motor if not done already
-    vSPS = rpm2sps(rpm, microStepResolution, gearRatio)
-  while round(sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio)) < rpm:
-  newAcceleration = 1000
-  setupMotorParameters(vSPS, newAcceleration, vSPS / 2, motorCurrent, stepResolution)
-
-  if sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio) > 500:
-  newAcceleration = 50
-  elif sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio) > 400:
-  newAcceleration = 100
-  elif sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio) > 300:
-  newAcceleration = 200
-  elif sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio) > 200:
-  newAcceleration = 500
-  elif sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio) > 100:
-  newAcceleration = 1000
-  else:
-  newAcceleration = 1
-
-  if (direction == "backward"):
-  ssBrick.drive_backward()  # drives motor with set parameters till drive_forward or stop is called
-  else:
-  ssBrick.drive_forward()  # drives motor with set parameters till drive_backward or stop is called
-  time.sleep(0.1)
-  print(sps2rpm(ssBrick.get_current_velocity(),microStepResolution,gearRatio))
-  if getMotorDirection() == "still":
-  break
-
-  if (direction == "backward"):
-  ssBrick.drive_backward()  # drives motor with set parameters till drive_forward or stop is called
-  else:
-  ssBrick.drive_forward()  # drives motor with set parameters till drive_backward or stop is called
-  stallThreashold = 20000
-end=#
-
-function stop(motor::TinkerforgeStepperMotor, delay::typeof(1.0u"s") = 0u"s")
+function stop(motor::TinkerforgeStepperMotor, delay::T = 0u"s") where T <: Unitful.Time
   sleep(ustrip(u"s", delay))  # Delay the stop maneuver
   stop(motor)  # Stop the motor with the deacceleration set in the motor parameters
 
   # Wait till the motor has actually stopped before disabling the driver
-  sleep((PyTinkerforge.get_max_velocity(motor.deviceInternal) / PyTinkerforge.get_speed_ramping(motor.deviceInternal).deacceleration) + 0.5)  # steps per second / steps per second^2 = second
+  sleep((PyTinkerforge.get_max_velocity(motor.deviceInternal) / PyTinkerforge.get_speed_ramping(motor.deviceInternal)[2]) + 0.5)  # steps per second / steps per second^2 = second
   disable(motor)
-  
-  # global stallSum
-  # stallSum=0
 end
 
 function progress(motor::TinkerforgeStepperMotor)
@@ -194,3 +172,4 @@ function progress(motor::TinkerforgeStepperMotor)
 end
 
 include("TinkerforgeSilentStepperBrick.jl")
+include("TinkerforgeSilentStepperBricklet.jl")
