@@ -561,8 +561,8 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
       end
     end
 
-    pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
-    @add_batch batch passPDMToFastDAC!(daq.rpc, pass)
+    #pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
+    #@add_batch batch passPDMToFastDAC(daq.rpc, pass)
   end
 end
 
