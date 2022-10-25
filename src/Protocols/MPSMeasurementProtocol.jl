@@ -1,8 +1,8 @@
-export MPIMeasurementProtocol, MPIMeasurementProtocolParams
+export MPSMeasurementProtocol, MPSMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the MPSMeasurementProtocol
 """
-Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
+Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
   fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
@@ -15,22 +15,31 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   "Remember background measurement"
   rememberBGMeas::Bool = false
+  "Tracer that is being used for the measurement"
+  tracer::Union{Tracer, Nothing} = nothing 
+
+  #=
+  Notizen für MPS:
+  - Pause zwischen Messungen
+  - Angabe der Offset-Positionen
+  - Zuordnung der Quellen zu den Kanälen
+  =#
 end
-function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
+function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
   if haskey(dict, "sequence")
     sequence = Sequence(scanner, dict["sequence"])
     dict["sequence"] = sequence
     delete!(dict, "sequence")
   end
-  params = params_from_dict(MPIMeasurementProtocolParams, dict)
+  params = params_from_dict(MPsMeasurementProtocolParams, dict)
   params.sequence = sequence
   return params
 end
-MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
+MPSMeasurementProtocolParams(dict::Dict) = params_from_dict(MPSMeasurementProtocolParams, dict)
 
-Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
-  @add_protocol_fields MPIMeasurementProtocolParams
+Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
+  @add_protocol_fields MPSMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
 
@@ -42,7 +51,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   txCont::Union{TxDAQController, Nothing} = nothing
 end
 
-function requiredDevices(protocol::MPIMeasurementProtocol)
+function requiredDevices(protocol::MPSMeasurementProtocol)
   result = [AbstractDAQ]
   if protocol.params.controlTx
     push!(result, TxDAQController)
@@ -50,7 +59,7 @@ function requiredDevices(protocol::MPIMeasurementProtocol)
   return result
 end
 
-function _init(protocol::MPIMeasurementProtocol)
+function _init(protocol::MPSMeasurementProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
@@ -68,7 +77,7 @@ function _init(protocol::MPIMeasurementProtocol)
   return nothing
 end
 
-function timeEstimate(protocol::MPIMeasurementProtocol)
+function timeEstimate(protocol::MPSMeasurementProtocol)
   est = "Unknown"
   if !isnothing(protocol.params.sequence)
     params = protocol.params
@@ -83,13 +92,13 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
   return est
 end
 
-function enterExecute(protocol::MPIMeasurementProtocol)
+function enterExecute(protocol::MPSMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
 end
 
-function _execute(protocol::MPIMeasurementProtocol)
+function _execute(protocol::MPSMeasurementProtocol)
   @debug "Measurement protocol started"
 
   performMeasurement(protocol)
@@ -106,7 +115,7 @@ function _execute(protocol::MPIMeasurementProtocol)
   @debug "Protocol channel closed after execution."
 end
 
-function performMeasurement(protocol::MPIMeasurementProtocol)
+function performMeasurement(protocol::MPSMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
@@ -128,7 +137,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
   measurement(protocol)
 end
 
-function measurement(protocol::MPIMeasurementProtocol)
+function measurement(protocol::MPSMeasurementProtocol)
   # Start async measurement
   protocol.measuring = true
   measState = asyncMeasurement(protocol)
@@ -171,7 +180,7 @@ function measurement(protocol::MPIMeasurementProtocol)
 
 end
 
-function asyncMeasurement(protocol::MPIMeasurementProtocol)
+function asyncMeasurement(protocol::MPSMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
   prepareAsyncMeasurement(protocol, sequence)
@@ -185,25 +194,25 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
 end
 
 
-function cleanup(protocol::MPIMeasurementProtocol)
+function cleanup(protocol::MPSMeasurementProtocol)
   # NOP
 end
 
-function stop(protocol::MPIMeasurementProtocol)
+function stop(protocol::MPSMeasurementProtocol)
   put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
 end
 
-function resume(protocol::MPIMeasurementProtocol)
+function resume(protocol::MPSMeasurementProtocol)
    put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
 end
 
-function cancel(protocol::MPIMeasurementProtocol)
+function cancel(protocol::MPSMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
 end
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
     data = max(protocol.seqMeasState.nextFrame - 1, 0)
@@ -222,7 +231,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
 end
 
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
   if length(protocol.bgMeas) > 0 && !protocol.measuring
     reply = ProgressEvent(0, 1, "No bg meas", event)
@@ -236,9 +245,9 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   put!(protocol.biChannel, reply)
 end
 
-handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+handleEvent(protocol::MPSMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
@@ -252,5 +261,5 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
-protocolInteractivity(protocol::MPIMeasurementProtocol) = Interactive()
-protocolMDFStudyUse(protocol::MPIMeasurementProtocol) = UsingMDFStudy()
+protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
