@@ -21,8 +21,8 @@ using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length
-import Base: ==, isequal
+import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
+import Base: ==, isequal, hash
 
 using Reexport
 @reexport using MPIFiles
