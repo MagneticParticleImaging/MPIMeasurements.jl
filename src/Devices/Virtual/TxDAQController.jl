@@ -102,17 +102,17 @@ function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{Peri
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
-    if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
-      push!(missingControlDef, name)
-    else
+    #if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
+    #  push!(missingControlDef, name)
+    #else
       dict[seqChannel] = daqChannel
-    end
+    #end
   end
   
-  if length(missingControlDef) > 0
-    message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
-    throw(IllegalStateException(message))
-  end
+  #if length(missingControlDef) > 0
+  #  message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
+  #  throw(IllegalStateException(message))
+  #end
 
   # Check that we only control three channels, as our RedPitayaDAQs only have 3 signal components atm
   if length(dict) > 3
@@ -210,7 +210,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       masterTrigger!(daq.rpc, false)
 
       @info "Performing control step"
-      controlPhaseDone = doControlStep(txCont, seq, sortedRef, Ω)
+      controlPhaseDone = doControlStep(txCont, control, sortedRef, Ω)
 
       # These reset the amplitude, phase and ramping, so we only reset trigger here
       #stopTx(daq) 
@@ -311,10 +311,9 @@ function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
     @info "Could control"
     return true
   else
-    newTx = newDFValues(Γ, Ω, txCont)
+    @info "Updating control values"
+    newTx = updateControlMatrix(Γ, Ω, txCont.currTx, correct_coupling = txCont.params.correctCrossCoupling)
     oldTx = txCont.currTx
-    @info "oldTx=" oldTx 
-    @info "newTx=" newTx
 
     if checkDFValues(newTx, oldTx, Γ,txCont)
       txCont.currTx[:] = newTx
@@ -349,7 +348,7 @@ function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
 end
 
 function calcDesiredField(cont::ControlSequence)
-  seqChannel = filter(in(values(cont.simpleChannel)), periodicElectricalTxChannels(cont.targetSequence))
+  seqChannel = keys(cont.simpleChannel)
   temp = [ustrip(amplitude(components(ch)[1])) * exp(im*ustrip(phase(components(ch)[1]))) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
@@ -369,25 +368,24 @@ function controlStepSuccessful(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   return deviation < txCont.params.amplitudeAccuracy
 end
 
-function newDFValues(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
-
-  κ = txCont.currTx
-  if txCont.params.correctCrossCoupling
+# Γ: Matrix from Ref
+# Ω: Desired Matrix
+# κ: Last Set Matrix
+function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_coupling::Bool = false)
+  if correct_coupling
     β = Γ*inv(κ)
   else 
-    @show size(Γ), size(κ)
     β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
   end
   newTx = inv(β)*Ω
-
-  @warn "here are the values"
-  @show κ
-  @show Γ
-  @show Ω
-  
-
+  @debug "Last matrix:" κ
+  @debug "Ref matrix" Γ
+  @debug "Desired matrix" Ω
+  @debug "New matrix" newTx 
   return newTx
 end
+
+#function updateControl! end
 
 function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
 
