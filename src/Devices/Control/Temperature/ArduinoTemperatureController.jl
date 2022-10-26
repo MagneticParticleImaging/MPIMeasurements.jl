@@ -200,7 +200,11 @@ end
 #  # TODO
 #end
 
-# TODO This would be your AC enable
+export resetOvertemp
+function resetOvertemp(controller::ArduinoTemperatureController)
+  return parse(Bool, sendCommand(controller.ard, "RESET:OVERTEMP"))
+end
+
 function enableControl(controller::ArduinoTemperatureController)
   return sendCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
 end
