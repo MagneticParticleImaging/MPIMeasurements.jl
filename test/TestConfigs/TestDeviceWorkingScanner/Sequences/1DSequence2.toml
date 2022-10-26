@@ -3,7 +3,6 @@ name = "1DSequence2"
 description = "Precise description."
 targetScanner = "testScanner"
 baseFrequency = "125.0MHz"
-triggered = false
 
 [Fields]
 
