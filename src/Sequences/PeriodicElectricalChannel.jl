@@ -1,6 +1,6 @@
 # TODO: Can this type be removed in favor of ContinuousElectricalChannel?
 
-export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel
+export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel, ArbitraryElectricalComponent
 
 "Component of an electrical channel with periodic base function."
 Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
@@ -27,6 +27,13 @@ Base.@kwdef mutable struct SweepElectricalComponent <: ElectricalComponent
   waveform::Waveform = WAVEFORM_SINE
 end
 
+Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
+  id::AbstractString
+  "Divider of the component."
+  divider::Integer
+  values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+end
+
 """Electrical channel based on based on periodic base functions. Only the
 PeriodicElectricalChannel counts for the cycle length calculation"""
 Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
@@ -40,7 +47,7 @@ end
 
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
 
-function createFieldChannel(channelID::AbstractString, channelType::Type{PeriodicElectricalChannel}, channelDict::Dict{String, Any})
+function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectricalChannel}, channelDict::Dict{String, Any})
   splattingDict = Dict{Symbol, Any}()
   splattingDict[:id] = channelID
 
@@ -56,50 +63,70 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Periodi
     splattingDict[:offset] = tmp
   end
 
-  splattingDict[:components] = Vector{ElectricalComponent}()
-  components = [(k, v) for (k, v) in channelDict if v isa Dict]
+  components = Vector{ElectricalComponent}()
+  componentsDict = [(k, v) for (k, v) in channelDict if v isa Dict]
 
-  for (compId, component) in components
-    divider = component["divider"]
-
-    amplitude = uparse.(component["amplitude"])
-    if eltype(amplitude) <: Unitful.Current
-      amplitude = amplitude .|> u"A"
-    elseif eltype(amplitude) <: Unitful.BField
-      amplitude = amplitude .|> u"T"
-    else
-      error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
-    end
-
-    if haskey(component, "phase")
-      phase = uparse.(component["phase"])
-    else
-      phase = fill(0.0u"rad", length(divider)) # Default phase
-    end
-
-    if haskey(component, "waveform")
-      waveform = toWaveform(component["waveform"])
-    else
-      waveform = WAVEFORM_SINE # Default to sine
-    end
-
-    @assert length(amplitude) == length(phase) "The length of amplitude and phase must match."
-
-    if divider isa Vector
-      push!(splattingDict[:components],
-            SweepElectricalComponent(divider=divider,
-                                     amplitude=amplitude,
-                                     waveform=waveform))
-    else
-      push!(splattingDict[:components],
-            PeriodicElectricalComponent(id=compId,
-                                        divider=divider,
-                                        amplitude=amplitude,
-                                        phase=phase,
-                                        waveform=waveform))
-    end
+  for (compId, component) in componentsDict
+    push!(components, createChannelComponent(compId, component))
   end
+  splattingDict[:components] = sort(components, by=id)
   return PeriodicElectricalChannel(;splattingDict...)
+end
+
+function createChannelComponent(componentID::AbstractString, componentDict::Dict{String, Any})
+  if haskey(componentDict, "type")
+    type = pop!(componentDict, "type")
+    knownComponents = MPIFiles.concreteSubtypes(ElectricalComponent)
+    index = findfirst(x -> x == type, string.(knownComponents))
+    if !isnothing(index) 
+      createChannelComponent(componentID, knownComponents[index], componentDict)
+    else
+      error("Component $componentID has an unknown channel type `$type`.")
+    end
+  else
+    error("Component $componentID has no `type` field.")
+  end
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
+  
+  amplitude = uparse.(componentDict["amplitude"])
+  if eltype(amplitude) <: Unitful.Current
+    amplitude = amplitude .|> u"A"
+  elseif eltype(amplitude) <: Unitful.BField
+    amplitude = amplitude .|> u"T"
+  else
+    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+  end
+
+  if haskey(componentDict, "phase")
+    phase = uparse.(componentDict["phase"])
+  else
+    phase = fill(0.0u"rad", length(divider)) # Default phase
+  end
+
+  if haskey(componentDict, "waveform")
+    waveform = toWaveform(componentDict["waveform"])
+  else
+    waveform = WAVEFORM_SINE # Default to sine
+  end
+  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
+  values = uparse.(componentDict["values"])
+  if eltype(values) <: Unitful.Current
+    values = values .|> u"A"
+  elseif eltype(values) <: Unitful.Voltage
+    values = values .|> u"V"
+  elseif eltype(values) <: Unitful.BField
+    values = values .|> u"T"
+  else
+    error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
+  end    
+  return ArbitraryElectricalComponent(id=componentID, divider=divider, values=values)
 end
 
 export offset
@@ -107,6 +134,11 @@ offset(channel::PeriodicElectricalChannel) = channel.offset
 
 export components
 components(channel::PeriodicElectricalChannel) = channel.components
+components(channel::PeriodicElectricalChannel, T::Type{<:ElectricalComponent}) = [component for component in components(channel) if typeof(component) <: T]
+export periodicElectricalComponents
+periodicElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, PeriodicElectricalComponent)
+export arbitraryElectricalComponents
+arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, ArbitraryElectricalComponent)
 
 cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
 
@@ -117,15 +149,22 @@ export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
 amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1) = component.amplitude[period] = value
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
+amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
 
 export phase, phase!
 phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
 phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
 phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
+phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
+phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad" #component.phase[period]
+
 
 export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform
 waveform!(component::ElectricalComponent, value) = component.waveform = value
+waveform(::ArbitraryElectricalComponent) = WAVEFORM_ARBITRARY
+
+values(component::ArbitraryElectricalComponent) = component.values
 
 function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
   index = findfirst(x -> id(x) == componentId, channel.components)
@@ -138,8 +177,10 @@ end
 
 export id
 id(component::PeriodicElectricalComponent) = component.id
+id(component::ArbitraryElectricalComponent) = component.id
 
 function toDict!(dict, component::ElectricalComponent)
+  dict["type"] = string(typeof(component))
   for field in [x for x in fieldnames(typeof(component)) if !in(x, [:id])]
     dict[String(field)] = toDictValue(getproperty(component, field))
   end
@@ -147,12 +188,12 @@ function toDict!(dict, component::ElectricalComponent)
 end
 
 function toDict!(dict, channel::PeriodicElectricalChannel)
+  dict["type"] = string(typeof(channel))
   for field in [x for x in fieldnames(typeof(channel)) if !in(x, [:id, :components])]
     dict[String(field)] = toDictValue(getproperty(channel, field))
   end
   for component in components(channel)
     dict[id(component)] = toDictValue(component)
   end
-  dict["type"] = string(typeof(channel))
   return dict
 end

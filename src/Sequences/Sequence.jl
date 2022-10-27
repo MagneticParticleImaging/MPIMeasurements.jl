@@ -112,7 +112,7 @@ function fieldDictToFields(fieldsDict::Dict{String, Any})
       end
     end
     splattingDict[:id] = fieldID
-    splattingDict[:channels] = channels
+    splattingDict[:channels] = sort(channels, by=id)
 
     if haskey(fieldDict, "safeStartInterval")
       splattingDict[:safeStartInterval] = uparse(fieldDict["safeStartInterval"])
@@ -321,12 +321,12 @@ export dfPhase
 function dfPhase(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(channels[1].components[1].phase) # Should all be of the same length
+  numPeriods = length(phase(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"rad"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, phase) in enumerate(component.phase)
+      for (periodIdx, phase) in enumerate(phase(component))
         result[periodIdx, channelIdx, componentIdx] = phase
       end
     end
@@ -337,14 +337,14 @@ end
 
 export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+  channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(channels[1].components[1].amplitude) # Should all be of the same length
+  numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, strength) in enumerate(component.amplitude) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+      for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
         result[periodIdx, channelIdx, componentIdx] = strength
       end
     end
@@ -355,13 +355,13 @@ end
 
 export dfWaveform
 function dfWaveform(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = [channel for field in sequence.fields for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+  channels = periodicElectricalTxChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   result = fill(WAVEFORM_SINE, (dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      result[channelIdx, componentIdx] = component.waveform
+      result[channelIdx, componentIdx] = waveform(component)
     end
   end
 
@@ -379,23 +379,23 @@ needsControlOrDecoupling(sequence::Sequence) = needsControl(sequence) || needsDe
 
 # Functions working on the acquisition are define here because they need Sequence to be defined
 export acqNumFrames
-acqNumFrames(sequence::Sequence) = sequence.acquisition.numFrames
-acqNumFrames(sequence::Sequence, val) = sequence.acquisition.numFrames = val
+acqNumFrames(sequence::Sequence) = acqNumFrames(sequence.acquisition)
+acqNumFrames(sequence::Sequence, val) = acqNumFrames(sequence.acquisition, val)
 
 export acqNumAverages
-acqNumAverages(sequence::Sequence) = sequence.acquisition.numAverages
-acqNumAverages(sequence::Sequence, val) = sequence.acquisition.numAverages = val
+acqNumAverages(sequence::Sequence) = acqNumAverages(sequence.acquisition)
+acqNumAverages(sequence::Sequence, val) = acqNumAverages(sequence.acquisition, val)
 
 export acqNumFrameAverages
-acqNumFrameAverages(sequence::Sequence) = sequence.acquisition.numFrameAverages
-acqNumFrameAverages(sequence::Sequence, val) = sequence.acquisition.numFrameAverages = val
+acqNumFrameAverages(sequence::Sequence) = acqNumFrameAverages(sequence.acquisition)
+acqNumFrameAverages(sequence::Sequence, val) = acqNumFrameAverages(sequence.acquisition, val)
 
 export isBackground
-isBackground(sequence::Sequence) = sequence.acquisition.isBackground
-isBackground(sequence::Sequence, val) = sequence.acquisition.isBackground = val
+isBackground(sequence::Sequence) = isBackground(sequence.acquisition)
+isBackground(sequence::Sequence, val) = isBackground(sequence.acquisition, val)
 
 export rxBandwidth
-rxBandwidth(sequence::Sequence) = sequence.acquisition.bandwidth
+rxBandwidth(sequence::Sequence) = rxBandwidth(sequence.acquisition)
 
 export rxSamplingRate
 rxSamplingRate(sequence::Sequence) = 2 * rxBandwidth(sequence)
@@ -417,15 +417,15 @@ export rxNumSamplesPerPeriod
 rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
 
 export rxChannels
-rxChannels(sequence::Sequence) = sequence.acquisition.channels
+rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
-  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel]
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent]
   @eval begin
     @generated function ==(x::$T, y::$T)
       fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]
-      # If else case needs to be implemented, take care to avoid stack overflow/infinite recursion!
+      # If "else"-case needs to be implemented, take care to avoid stack overflow/infinite recursion!
       if !isempty(fieldEqualities)
         temp = fieldEqualities[1]
         for i = 2:length(fieldEqualities)
