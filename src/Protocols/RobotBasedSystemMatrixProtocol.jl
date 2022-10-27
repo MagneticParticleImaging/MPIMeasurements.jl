@@ -563,6 +563,16 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     numBGPos = sum(sysObj.measIsBGPos)
     numFGPos = length(sysObj.measIsBGPos) - numBGPos
 
+    message = "Current position is $(sysObj.currPos). Resume from last background position instead?"
+    if askChoices(protocol, message, ["Cancel", "Use"]) == 2
+      temp = sysObj.currPos
+      while temp > 1 && !sysObj.measIsBGPos[temp]
+        temp = temp - 1
+      end
+      sysObj.currPos = temp
+    end
+
+
     numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
     seq = protocol.params.sequence
 
