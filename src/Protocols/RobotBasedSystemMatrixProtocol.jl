@@ -117,7 +117,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(protocol.params.positions) : zeros(Bool,length(protocol.params.positions))
   numBGPos = sum(measIsBGPos)
   numFGPos = length(measIsBGPos) - numBGPos
-  numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
+  numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
   # The following looks like a secrete line but it makes sense
   posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (protocol.params.bgFrames - 1) .+ 1)
   measIsBGFrame = zeros(Bool, numTotalFrames)
@@ -139,7 +139,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   signals = zeros(Float32, rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames)
   protocol.systemMeasState.signals = signals
   
-  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,1)
+  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,protocol.params.fgFrames)
   
   # TODO implement properly
   if protocol.params.saveTemperatureData
@@ -488,11 +488,8 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   startIdx = calib.posToIdx[index]
   stopIdx = calib.posToIdx[index] + numFrames - 1
 
-  if calib.measIsBGPos[index]
-    calib.signals[:,:,:,startIdx:stopIdx] = uMeas
-  else
-    calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
-  end
+  calib.signals[:,:,:,startIdx:stopIdx] = uMeas
+
 
   calib.measIsBGFrame[ startIdx:stopIdx ] .= calib.measIsBGPos[index]
 
