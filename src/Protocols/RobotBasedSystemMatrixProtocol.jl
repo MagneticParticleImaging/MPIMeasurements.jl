@@ -117,7 +117,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(protocol.params.positions) : zeros(Bool,length(protocol.params.positions))
   numBGPos = sum(measIsBGPos)
   numFGPos = length(measIsBGPos) - numBGPos
-  numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
+  numTotalFrames = numFGPos*protocol.params.fgFrameAverages + protocol.params.bgFrames*numBGPos
   # The following looks like a secrete line but it makes sense
   posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (protocol.params.bgFrames - 1) .+ 1)
   measIsBGFrame = zeros(Bool, numTotalFrames)
@@ -139,7 +139,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   signals = zeros(Float32, rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames)
   protocol.systemMeasState.signals = signals
   
-  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,protocol.params.fgFrames)
+  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,protocol.params.fgFrameAverages)
   
   # TODO implement properly
   if protocol.params.saveTemperatureData
@@ -373,7 +373,8 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         timeFrameChange = @elapsed begin 
           if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
             acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
-            acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+            #acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+            acqNumFrameAverages(protocol.params.sequence, 1)
             setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
             setSequenceParams(daq, protocol.params.sequence)
             protocol.restored = false
