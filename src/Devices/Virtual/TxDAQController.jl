@@ -213,7 +213,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   return txFromMatrix(txCont, txCont.currTx)
 end
 
-getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponent(channel)) == 0]
+getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]
 getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
