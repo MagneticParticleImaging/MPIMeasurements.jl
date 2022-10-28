@@ -372,7 +372,7 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         # The following tasks can only be started after the finalizer and mostly only in this order
         timeFrameChange = @elapsed begin 
           if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-            acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
+            acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrameAverages)
             #acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
             acqNumFrameAverages(protocol.params.sequence, 1)
             setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
