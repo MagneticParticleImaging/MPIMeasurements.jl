@@ -6,6 +6,7 @@ using Base: Integer
 import Base.Iterators: flatten
 using ThreadPools
 using Sockets
+using DataStructures
 using Dates
 using Unitful
 using TOML
