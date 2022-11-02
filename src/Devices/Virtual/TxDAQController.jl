@@ -317,7 +317,7 @@ function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
 
   @info "reference Γ=" Γ
 
-  if controlStepSuccessful(Γ, Ω, txCont)
+  if checkFieldDeviation(Γ, Ω, txCont)
     @info "Could control"
     return true
   else
@@ -370,18 +370,17 @@ function calcDesiredField(cont::ControlSequence)
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
-function controlStepSuccessful(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
-
+checkFieldDeviation(uRef, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(calcFieldFromRef(uRef, cont), calcDesiredField(cont), txCont)
+function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   if txCont.params.correctCrossCoupling
     diff = Ω - Γ
   else
     diff = diagm(diag(Ω)) - diagm(diag(Γ))
   end
   deviation = maximum(abs.(diff)) / maximum(abs.(Ω))
-  @info "Ω = " Ω
-  @info "Γ = " Γ
-  @info "Ω - Γ = " diff
-  @info "deviation = $(deviation)   allowed= $(txCont.params.amplitudeAccuracy)"
+  @debug "Check field deviation" Ω Γ
+  @debug "Ω - Γ = " diff
+  @info "deviation = $(deviation) allowed= $(txCont.params.amplitudeAccuracy)"
   return deviation < txCont.params.amplitudeAccuracy
 end
 
