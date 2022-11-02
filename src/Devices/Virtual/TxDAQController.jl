@@ -9,6 +9,9 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
+struct SortedRef end
+struct UnsortedRef end
+
 struct ControlledChannel
   seqChannel::PeriodicElectricalChannel
   daqChannel::TxChannelParams
@@ -18,9 +21,10 @@ mutable struct ControlSequence
   targetSequence::Sequence
   currSequence::Sequence
   # Periodic Electric Components
-  simpleChannel::Dict{PeriodicElectricalChannel, TxChannelParams}
+  simpleChannel::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
   sinLUT::Union{Matrix{Float64}, Nothing}
   cosLUT::Union{Matrix{Float64}, Nothing}
+  refIndices::Vector{Int64}
   # Arbitrary Waveform
 end
 
@@ -91,13 +95,19 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
     end
   end
 
+  # Create Ref Indexing
+  mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
+  controlOrderChannelIndices = [channelIdx(daq, ch.feedback.channelID) for ch in Base.values(simpleChannel)]
+  refIndices = [mapping[x] for x in controlOrderChannelIndices]
+
+
   currSeq = Sequence(;general = general, acquisition = acq, fields = _fields)
-  return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT)
+  return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT, refIndices)
 end
 
 function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{PeriodicElectricalChannel}, seq::Sequence, daq::AbstractDAQ)
   missingControlDef = []
-  dict = Dict{PeriodicElectricalChannel, TxChannelParams}()
+  dict = OrderedDict{PeriodicElectricalChannel, TxChannelParams}()
 
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
@@ -302,7 +312,7 @@ end
 
 function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
 
-  Γ = calcFieldFromRef(txCont,seq, uRef)
+  Γ = calcFieldFromRef(txCont, seq, uRef)
   daq = dependency(txCont, AbstractDAQ)
 
   @info "reference Γ=" Γ
@@ -327,19 +337,26 @@ function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
   end
 end
 
-function calcFieldFromRef(txCont::TxDAQController, seq::Sequence, uRef)
-  len = length(txCont.controlledChannels)
+calcFieldFromRef(cont::ControlSequence, uRef) = calcFieldFromRef(cont, uRef, UnsortedRef())
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Any, 4}, ::UnsortedRef)
+  return calcFieldFromRef(cont, uRef[:, :, :, 1], UnsortedRef())
+end
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Any, 3}, ::UnsortedRef)
+  return calcFieldFromRef(cont, uRef[:, cont.refIndices, :], SortedRef())
+end
+
+function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
+  len = length(keys(cont.simpleChannel))
   Γ = zeros(ComplexF64, len, len)
 
   for d=1:len
+    c = ustrip(u"T/V", Base.values(cont.simpleChannel)[d].feedback.calibration)
     for e=1:len
-      c = ustrip(u"T/V", txCont.controlledChannels[d].daqChannel.feedback.calibration)
 
-      uVolt = float(uRef[1:rxNumSamplingPoints(seq),d,1])
+      uVolt = float(uRef[1:rxNumSamplingPoints(cont.currSequence),d,1])
 
       a = 2*sum(uVolt.*txCont.cosLUT[:,e])
       b = 2*sum(uVolt.*txCont.sinLUT[:,e])
-      @show sqrt(a^2 + b^2)
 
       Γ[d,e] = c*(b+im*a)
     end
