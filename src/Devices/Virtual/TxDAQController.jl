@@ -152,7 +152,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   Ω = calcDesiredField(control)
 
   # Start Tx
-  prepareControl(daq, seq)
   su = nothing
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
@@ -182,51 +181,39 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
     end
   end
 
-  setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-
   controlPhaseDone = false
   i = 1
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
-      startTx(daq)
-      # Wait Start
-      done = false
-      while !done
-        done = rampUpDone(daq.rpc)
+      # Prepare control measurement
+      ch = Channel{channelType(daq)}(32)
+      buffer = AsyncBuffer(daq)
+      @info "Control measurement started"
+      producer = @async begin 
+        endSample = asyncProducer(channel, daq, cont.currSequence)
+        endSequence(daq, endSample)
       end
-      @warn "Ramping status" rampingStatus(daq.rpc)
-      
-      sleep(txCont.params.controlPause)
-
-      @info "Read periods"
-      period = currentPeriod(daq)
-      uMeas, uRef = readDataPeriods(daq, 1, period + 1, acqNumAverages(seq))
-      for ch in daq.rampingChannel
-        enableRampDown!(daq.rpc, ch, true)
+      bind(ch, producer)
+      consumer = @async begin 
+        while isopen(channel) || isready(channel)
+          while isready(channel)
+            chunk = take!(channel)
+            updateAsyncBuffer!(buffer, chunk)
+          end
+          sleep(0.001)
+        end      
       end
-      
-      # Translate uRef/channelIdx(daq) to order as it is used here
-      mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
-      controlOrderChannelIndices = [channelIdx(daq, ch.daqChannel.feedback.channelID) for ch in txCont.controlledChannels]
-      controlOrderRefIndices = [mapping[x] for x in controlOrderChannelIndices]
-      sortedRef = uRef[:, controlOrderRefIndices, :]
-      
-      # Wait End
-      @info "Waiting for end."
-      done = false
-      while !done
-        done = rampDownDone(daq.rpc)
+      wait(consumer)
+      @info "Control measurement finished"
+
+      @info "Evaluating control step"
+      uMeas, uRef = retrieveMeasAndRef!(buffer, daq)
+      if !isnothing(uRef)
+        controlPhaseDone = doControlStep(txCont, control, uRef, Ω)
+      else
+        error("Could not retrieve reference signal")
       end
-      masterTrigger!(daq.rpc, false)
-
-      @info "Performing control step"
-      controlPhaseDone = doControlStep(txCont, control, sortedRef, Ω)
-
-      # These reset the amplitude, phase and ramping, so we only reset trigger here
-      #stopTx(daq) 
-      #setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-      
       i += 1
     end
   catch ex
@@ -276,22 +263,6 @@ end
 getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]
 getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
-function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
-  amplitudes = Dict{String, Vector{Union{Float32, Nothing}}}()
-  phases = Dict{String, Vector{Union{Float32, Nothing}}}()
-  for (d, channel) in enumerate(txCont.controlledChannels)
-    amps = []
-    phs = []
-    for (e, channel) in enumerate(txCont.controlledChannels)
-      push!(amps, abs(Γ[d, e]))
-      push!(phs, angle(Γ[d, e]))
-    end
-    amplitudes[id(channel.seqChannel)] = amps
-    phases[id(channel.seqChannel)] = phs
-  end
-  return amplitudes, phases
-end
-
 function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence)
   N = rxNumSamplingPoints(seq)
   D = length(seqChannel)
@@ -311,28 +282,13 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   return sinLUT, cosLUT
 end
 
-function doControlStep(txCont::TxDAQController, seq::Sequence, uRef, Ω::Matrix)
-
-  Γ = calcFieldFromRef(txCont, seq, uRef)
-  daq = dependency(txCont, AbstractDAQ)
-
-  @info "reference Γ=" Γ
-
+function doControlStep(txCont::TxDAQController, cont::ControlSequence, uRef, Ω::Matrix)
+  Γ = calcFieldFromRef(cont, uRef)
   if checkFieldDeviation(Γ, Ω, txCont)
     @info "Could control"
     return true
   else
-    @info "Updating control values"
-    newTx = updateControlMatrix(Γ, Ω, txCont.currTx, correct_coupling = txCont.params.correctCrossCoupling)
-    oldTx = txCont.currTx
-
-    if checkDFValues(newTx, oldTx, Γ,txCont)
-      txCont.currTx[:] = newTx
-      setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
-    else
-      @warn "New values are above voltage limits or are different than expected!"
-    end
-
+    updateControl!(cont, Γ, Ω, txCont)
     @info "Could not control !"
     return false
   end
