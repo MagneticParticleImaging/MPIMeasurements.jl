@@ -444,10 +444,12 @@ end
 
 function checkVoltLimits(newTx, cont::ControlSequence, txCont::TxDAQController)
   validChannel = abs.(newTx) .<  ustrip.(u"V", [channel.limitPeak for channel in collect(Base.values(cont.simpleChannel))])
-  if !all(valid)
+  valid = all(validChannel)
+  if !valid
     @debug "Valid Tx Channel" validChannel
     @warn "New control sequence exceeds voltage limits of tx channel"
   end
+  return valid
 end
 
 function close(txCont::TxDAQController)
