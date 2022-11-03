@@ -32,11 +32,8 @@ end
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   @add_device_fields TxDAQControllerParams
 
-  currTx::Union{Matrix{ComplexF64}, Nothing} = nothing
-  desiredTx::Union{Matrix{ComplexF64}, Nothing} = nothing
-  sinLUT::Union{Matrix{Float64}, Nothing} = nothing
-  cosLUT::Union{Matrix{Float64}, Nothing} = nothing
-  controlledChannels::Vector{ControlledChannel} = []
+  ref::Union{Array{Float32, 4}, Nothing} = nothing
+  cont::Union{Nothing, ControlSequence} = nothing
 end
 
 function _init(tx::TxDAQController)
@@ -98,7 +95,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
   # Create Ref Indexing
   mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
-  controlOrderChannelIndices = [channelIdx(daq, ch.feedback.channelID) for ch in Base.values(simpleChannel)]
+  controlOrderChannelIndices = [channelIdx(daq, ch.feedback.channelID) for ch in collect(Base.values(simpleChannel))]
   refIndices = [mapping[x] for x in controlOrderChannelIndices]
 
 
@@ -113,17 +110,17 @@ function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{Peri
   for seqChannel in seqControlledChannel
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
-    #if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
-    #  push!(missingControlDef, name)
-    #else
+    if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
+      push!(missingControlDef, name)
+    else
       dict[seqChannel] = daqChannel
-    #end
+    end
   end
   
-  #if length(missingControlDef) > 0
-  #  message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
-  #  throw(IllegalStateException(message))
-  #end
+  if length(missingControlDef) > 0
+    message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
+    throw(IllegalStateException(message))
+  end
 
   # Check that we only control three channels, as our RedPitayaDAQs only have 3 signal components atm
   if length(dict) > 3
@@ -150,6 +147,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   
 
   Ω = calcDesiredField(control)
+  txCont.cont = control
 
   # Start Tx
   su = nothing
@@ -182,21 +180,22 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   end
 
   # Hacky solution
-  setup(daq, cont.currSequence)
+  setup(daq, control.currSequence)
   controlPhaseDone = false
   i = 1
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
       # Prepare control measurement
-      ch = Channel{channelType(daq)}(32)
+      channel = Channel{channelType(daq)}(32)
       buffer = AsyncBuffer(daq)
       @info "Control measurement started"
-      producer = @async begin 
-        endSample = asyncProducer(channel, daq, cont.currSequence)
+      producer = @async begin
+        @debug "Starting control producer" 
+        endSample = asyncProducer(channel, daq, control.currSequence)
         endSequence(daq, endSample)
       end
-      bind(ch, producer)
+      bind(channel, producer)
       consumer = @async begin 
         while isopen(channel) || isready(channel)
           while isready(channel)
@@ -211,6 +210,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
 
       @info "Evaluating control step"
       uMeas, uRef = retrieveMeasAndRef!(buffer, daq)
+      txCont.ref = uRef
       if !isnothing(uRef)
         controlPhaseDone = doControlStep(txCont, control, uRef, Ω)
       else
@@ -219,8 +219,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       i += 1
     end
   catch ex
-    @error "Exception during control loop"
-    @error ex
+    @error "Exception during control loop" exception=(ex, catch_backtrace())
   finally
     try 
       stopTx(daq)
@@ -259,8 +258,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   end
 
   # Prepare Tx for proper measurement
-  setupRx(daq, cont.targetSequence)
-  setupTx(daq, cont.currSequence)
+  setupRx(daq, control.targetSequence)
+  setupTx(daq, control.currSequence)
   return control
 end
 
@@ -299,10 +298,10 @@ function doControlStep(txCont::TxDAQController, cont::ControlSequence, uRef, Ω:
 end
 
 calcFieldFromRef(cont::ControlSequence, uRef) = calcFieldFromRef(cont, uRef, UnsortedRef())
-function calcFieldFromRef(cont::ControlSequence, uRef::Array{Any, 4}, ::UnsortedRef)
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 4}, ::UnsortedRef)
   return calcFieldFromRef(cont, uRef[:, :, :, 1], UnsortedRef())
 end
-function calcFieldFromRef(cont::ControlSequence, uRef::Array{Any, 3}, ::UnsortedRef)
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::UnsortedRef)
   return calcFieldFromRef(cont, uRef[:, cont.refIndices, :], SortedRef())
 end
 
@@ -311,13 +310,13 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   Γ = zeros(ComplexF64, len, len)
 
   for d=1:len
-    c = ustrip(u"T/V", Base.values(cont.simpleChannel)[d].feedback.calibration)
+    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
     for e=1:len
 
       uVolt = float(uRef[1:rxNumSamplingPoints(cont.currSequence),d,1])
 
-      a = 2*sum(uVolt.*txCont.cosLUT[:,e])
-      b = 2*sum(uVolt.*txCont.sinLUT[:,e])
+      a = 2*sum(uVolt.*cont.cosLUT[:,e])
+      b = 2*sum(uVolt.*cont.sinLUT[:,e])
 
       Γ[d,e] = c*(b+im*a)
     end
@@ -432,7 +431,7 @@ function updateControlSequence!(cont::ControlSequence, newTx::Matrix)
 end
 
 function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQController)
-  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.calibration) for ch in Base.values(cont.simpleChannel)]
+  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.calibration) for ch in collect(Base.values(cont.simpleChannel))]
   calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ))
   deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
@@ -444,7 +443,7 @@ function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQControl
 end
 
 function checkVoltLimits(newTx, cont::ControlSequence, txCont::TxDAQController)
-  validChannel = abs.(newTx) .<  ustrip.(u"V", [channel.limitPeak for channel in Base.values(cont.simpleChannel)])
+  validChannel = abs.(newTx) .<  ustrip.(u"V", [channel.limitPeak for channel in collect(Base.values(cont.simpleChannel))])
   if !all(valid)
     @debug "Valid Tx Channel" validChannel
     @warn "New control sequence exceeds voltage limits of tx channel"
