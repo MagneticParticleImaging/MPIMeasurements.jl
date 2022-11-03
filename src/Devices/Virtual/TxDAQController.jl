@@ -5,6 +5,7 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   amplitudeAccuracy::Float64
   controlPause::Float64
   maxControlSteps::Int64 = 20
+  fieldToVoltDeviation::Float64 = 0.2
   correctCrossCoupling::Bool = false
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
@@ -370,7 +371,8 @@ function calcDesiredField(cont::ControlSequence)
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
-checkFieldDeviation(uRef, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(calcFieldFromRef(uRef, cont), calcDesiredField(cont), txCont)
+#checkFieldDeviation(uRef, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(calcFieldFromRef(cont, uRef), cont, txCont)
+checkFieldDeviation(Γ::Matrix, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(Γ, calcDesiredField(cont), txCont)
 function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   if txCont.params.correctCrossCoupling
     diff = Ω - Γ
@@ -384,6 +386,17 @@ function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   return deviation < txCont.params.amplitudeAccuracy
 end
 
+updateControl!(cont::ControlSequence, uRef, txCont::TxDAQController) = updateControl!(cont, calcFieldFromRef(cont, uRef), calcDesiredField(cont), txCont)
+function updateControl!(cont::ControlSequence, Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
+  @debug "Updating control values"
+  κ = calcControlMatrix(cont)
+  newTx = updateControlMatrix(Γ, Ω, κ, correct_coupling = txCont.params.correctCrossCoupling)
+  if checkFieldToVolt(κ, Γ, cont, txCont) && checkVoltLimits(newTx, cont, txCont)
+    updateControlSequence!(cont, newTx)
+  else
+    @warn "New control values are not allowed"
+  end
+end
 # Γ: Matrix from Ref
 # Ω: Desired Matrix
 # κ: Last Set Matrix
@@ -401,20 +414,81 @@ function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_couplin
   return newTx
 end
 
-#function updateControl! end
+function calcControlMatrix(cont::ControlSequence)
+  # TxDAQController only works on one field atm (possible future TODO: update to multiple fields, matrix per field)
+  field = fields(cont.currSequence)[1]
+  len = length(keys(cont.simpleChannel))
+  κ = zeros(ComplexF64, len, len)
+  # In each channel the first component is the channels "own" component, the following are the ordered correction components of the other channel
+  # -> For Channel 2 its components in the matrix row should be c2 c1 c3 for a 3x3 matrix 
+  for (i, channel) in enumerate([channel for channel in periodicElectricalTxChannels(field) if length(arbitraryElectricalComponents(channel)) == 0])
+    next = 2
+    comps = periodicElectricalComponents(channel)
+    for j = 1:len
+      comp = nothing
+      if (i == j) 
+        comp = comps[1]
+      elseif next <= length(comps)
+        comp = comps[next]
+        next+=1
+      end
 
-function checkDFValues(newTx, oldTx, Γ, txCont::TxDAQController)
+      val = 0.0
+      if !isnothing(comp)
+        r = ustrip(u"V", amplitude(comp))
+        angle = ustrip(u"rad", phase(comp))
+        val = r*cos(angle) + r*sin(angle)*im
+      end
+      κ[i, j] = val
+    end
+  end
+  return κ
+end
 
-  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.daqChannel.calibration) for ch in txCont.controlledChannels]
+function updateControlSequence!(cont::ControlSequence, newTx::Matrix)
+  # TxDAQController only works on one field atm (possible future TODO: update to multiple fields, matrix per field)
+  field = fields(cont.currSequence)[1]
+  for (i, channel) in enumerate([channel for channel in periodicElectricalTxChannels(field) if length(arbitraryElectricalComponents(channel)) == 0])
+    comps = periodicElectricalComponents(channel)
+    j = 1
+    for (k, comp) in enumerate(comps)
+      val = 0.0
+      # First component is a diagonal entry from the matrix
+      if length(comps) == 1 || k == i
+        val = newTx[i, i]
+      # All other components are "in order" and skip the diagonal entry
+      else
+        if j == i 
+          j+=1
+        end
+        val = newTx[i, j]
+        j+=1
+      end
+      amplitude!(comp, abs(val)*1.0u"V")
+      phase!(comp, angle(val)*1.0u"rad")
+    end
+  end
+
+end
+
+function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQController)
+  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.calibration) for ch in Base.values(cont.simpleChannel)]
   calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ))
-
-  @info "" calibFieldToVoltEstimate[1] calibFieldToVoltMeasured[1]
-
   deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
+  @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
+  valid = maximum( deviation ) < txCont.params.fieldToVoltDeviation
+  if !valid
+    @warn "Measured field to volt deviates by $deviation from estimate, exceeding allowed deviation"
+  end
+  return valid
+end
 
-  @info "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
-
-  return all( abs.(newTx) .<  ustrip.(u"V", [channel.daqChannel.limitPeak for channel in txCont.controlledChannels]) ) && maximum( deviation ) < 0.2
+function checkVoltLimits(newTx, cont::ControlSequence, txCont::TxDAQController)
+  validChannel = abs.(newTx) .<  ustrip.(u"V", [channel.limitPeak for channel in Base.values(cont.simpleChannel)])
+  if !all(valid)
+    @debug "Valid Tx Channel" validChannel
+    @warn "New control sequence exceeds voltage limits of tx channel"
+  end
 end
 
 function close(txCont::TxDAQController)
