@@ -1,5 +1,5 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "1"
+#define VERSION "1.2"
 #define POSITION 1
 #define BAUDRATE 9600
 #include <Tle493d_w2b6.h>
@@ -17,6 +17,7 @@ int getPosition(char*);
 int getTemp(char*);
 int getVersion(char*);
 int getCommands(char*);
+int setSampleSize(char*);
 //int setFoo(char*)
 
 typedef struct {
@@ -30,6 +31,7 @@ commandHandler_t cmdHandler[] = {
   {"TEMP", getTemp},
   {"VERSION", getVersion},
   {"COMMANDS", getCommands},
+  {"SAMPLES", setSampleSize}
   //{"FOO", setFoo}
 };
 
@@ -39,6 +41,7 @@ int getCommands(char*) {
   Serial.print("'!POS*#' ");
   Serial.print("'!VERSION*#' ");
   Serial.print("'!COMMANDS*#' ");
+  Serial.print("'!SAMPLES*500#' ");
   Serial.println("#");
 }
 
@@ -95,7 +98,7 @@ void serialCommand() {
       //check for known commands
       for (int i = 0; i < sizeof(cmdHandler)/sizeof(*cmdHandler); i++) {
         if (strncmp(cmdHandler[i].id, command, strlen(cmdHandler[i].id)) == 0) {
-          cmdHandler[i].handler(command);
+          cmdHandler[i].handler(endCmd+1);
           unknown = false;
           input_buffer[0] = '\0'; // "Empty" input buffer
           break;
@@ -176,16 +179,16 @@ int getData(char*) {
   
   Serial.print(meanX,7);
   Serial.print(",");
-  //Serial.print(meanY,7);
-  //Serial.print(",");
-  //Serial.print(meanZ,7);
-  //Serial.print(",");
+  Serial.print(meanY,7);
+  Serial.print(",");
+  Serial.print(meanZ,7);
+  Serial.print(",");
   Serial.print(varX,7);
-  //Serial.print(",");
-  //Serial.print(varY,7);
-  //Serial.print(",");
-  //Serial.print(varZ,7);
-  Serial.print("#");
+  Serial.print(",");
+  Serial.print(varY,7);
+  Serial.print(",");
+  Serial.print(varZ,7);
+  Serial.println("#");
   Serial.flush();
 }
 
@@ -207,6 +210,16 @@ int getVersion(char*) {
   Serial.print(POSITION);
   Serial.print("#");
   Serial.flush(); 
+}
+
+int setSampleSize(char* value){
+  int value_int = atoi(value);
+  if (value_int>0){
+    sample_size=value_int;
+  }
+  Serial.print("Set sample size to:");
+  Serial.print(sample_size);
+  Serial.println("#");
 }
 
 
