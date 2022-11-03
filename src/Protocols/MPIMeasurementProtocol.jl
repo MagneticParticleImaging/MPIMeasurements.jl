@@ -60,7 +60,6 @@ function _init(protocol::MPIMeasurementProtocol)
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
     protocol.txCont = getDevice(protocol.scanner, TxDAQController)
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
@@ -182,7 +181,7 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
   sequence = protocol.params.sequence
   prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+    controlTx(protocol.txCont, sequence, nothing)
   end
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
