@@ -181,6 +181,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
     end
   end
 
+  # Hacky solution
+  setup(daq, cont.currSequence)
   controlPhaseDone = false
   i = 1
   try
@@ -256,7 +258,9 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
     error("TxDAQController $(deviceID(txCont)) could not control.")
   end
 
-  setTxParams(daq, txFromMatrix(txCont, txCont.currTx)...)
+  # Prepare Tx for proper measurement
+  setupRx(daq, cont.targetSequence)
+  setupTx(daq, cont.currSequence)
   return control
 end
 
