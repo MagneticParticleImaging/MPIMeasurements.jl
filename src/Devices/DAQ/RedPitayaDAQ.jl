@@ -514,7 +514,7 @@ function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
     # Map channel index to their respective index in the view
     if !isnothing(daq.rpv)
       rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
-      refIds = map(x->clusterToView(daq.rpv, x), rxIds)
+      refIds = map(x->clusterToView(daq.rpv, x), refIds)
     end
     uMeas = frames[:,rxIds,:,:]
     uRef = frames[:, refIds,:,:]
