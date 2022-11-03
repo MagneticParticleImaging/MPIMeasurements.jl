@@ -260,6 +260,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   # Prepare Tx for proper measurement
   setupRx(daq, control.targetSequence)
   setupTx(daq, control.currSequence)
+  prepareTx(daq, control.currSequence)
   return control
 end
 
