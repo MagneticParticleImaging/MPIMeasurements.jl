@@ -29,11 +29,13 @@ mutable struct ControlSequence
   # Arbitrary Waveform
 end
 
+@enum ControlResult UNCHANGED, UPDATED, INVALID
+
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   @add_device_fields TxDAQControllerParams
 
-  ref::Union{Array{Float32, 4}, Nothing} = nothing
-  cont::Union{Nothing, ControlSequence} = nothing
+  ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
+  cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
 end
 
 function _init(tx::TxDAQController)
@@ -57,7 +59,6 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   _targetScanner = targetScanner(target)
   _baseFrequency = baseFrequency(target)
   general = GeneralSettings(;name=_name, description = description, targetScanner = _targetScanner, baseFrequency = _baseFrequency)
-  # TODO do i need rx channel?
   acq = AcquisitionSettings(;channels = RxChannel[], bandwidth = rxBandwidth(target))
 
   _fields = MagneticField[]
@@ -212,7 +213,12 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       uMeas, uRef = retrieveMeasAndRef!(buffer, daq)
       txCont.ref = uRef
       if !isnothing(uRef)
-        controlPhaseDone = doControlStep(txCont, control, uRef, Ω)
+        controlPhaseDone = controlStep!(txCont, control, uRef, Ω) != UNCHANGED
+        if controlPhaseDone
+          @info "Could control"
+        else
+          @info "Could not control"
+        end
       else
         error("Could not retrieve reference signal")
       end
@@ -286,15 +292,15 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   return sinLUT, cosLUT
 end
 
-function doControlStep(txCont::TxDAQController, cont::ControlSequence, uRef, Ω::Matrix)
-  Γ = calcFieldFromRef(cont, uRef)
+controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef) = controlStep!(cont, txCont, uRef, calcDesiredField(cont))
+controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef, Ω::Matrix) = controlStep!(cont, txCont, calcFieldFromRef(cont, uRef), Ω)
+function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix, Ω::Matrix)
   if checkFieldDeviation(Γ, Ω, txCont)
-    @info "Could control"
-    return true
+    return UNCHANGED
+  elseif updateControl!(cont, txCont, Γ, Ω)
+    return UPDATED
   else
-    updateControl!(cont, Γ, Ω, txCont)
-    @info "Could not control !"
-    return false
+    return INVALID
   end
 end
 
@@ -331,7 +337,7 @@ function calcDesiredField(cont::ControlSequence)
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
-#checkFieldDeviation(uRef, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(calcFieldFromRef(cont, uRef), cont, txCont)
+checkFieldDeviation(uRef, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(calcFieldFromRef(cont, uRef), cont, txCont)
 checkFieldDeviation(Γ::Matrix, cont::ControlSequence, txCont::TxDAQController) = checkFieldDeviation(Γ, calcDesiredField(cont), txCont)
 function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   if txCont.params.correctCrossCoupling
@@ -346,15 +352,17 @@ function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   return deviation < txCont.params.amplitudeAccuracy
 end
 
-updateControl!(cont::ControlSequence, uRef, txCont::TxDAQController) = updateControl!(cont, calcFieldFromRef(cont, uRef), calcDesiredField(cont), txCont)
-function updateControl!(cont::ControlSequence, Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
+updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateControl!(cont, txCont, calcFieldFromRef(cont, uRef), calcDesiredField(cont))
+function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix, Ω::Matrix)
   @debug "Updating control values"
   κ = calcControlMatrix(cont)
   newTx = updateControlMatrix(Γ, Ω, κ, correct_coupling = txCont.params.correctCrossCoupling)
   if checkFieldToVolt(κ, Γ, cont, txCont) && checkVoltLimits(newTx, cont, txCont)
     updateControlSequence!(cont, newTx)
+    return true
   else
     @warn "New control values are not allowed"
+    return false
   end
 end
 # Γ: Matrix from Ref
