@@ -41,7 +41,7 @@ int getCommands(char*) {
   Serial.print("'!POS*#' ");
   Serial.print("'!VERSION*#' ");
   Serial.print("'!COMMANDS*#' ");
-  Serial.print("'!SAMPLES*500#' ");
+  Serial.print("'!SAMPLES500*#' ");
   Serial.println("#");
 }
 
@@ -98,7 +98,7 @@ void serialCommand() {
       //check for known commands
       for (int i = 0; i < sizeof(cmdHandler)/sizeof(*cmdHandler); i++) {
         if (strncmp(cmdHandler[i].id, command, strlen(cmdHandler[i].id)) == 0) {
-          cmdHandler[i].handler(endCmd+1);
+          cmdHandler[i].handler(command);
           unknown = false;
           input_buffer[0] = '\0'; // "Empty" input buffer
           break;
@@ -210,12 +210,11 @@ int getVersion(char*) {
   Serial.flush(); 
 }
 
-int setSampleSize(char* value){
-  int value_int = atoi(value);
+int setSampleSize(char* command){
+  int value_int = atoi(command+7);
   if (value_int>0){
     sample_size=value_int;
   }
-  Serial.print("Set sample size to:");
   Serial.print(sample_size);
   Serial.println("#");
 }

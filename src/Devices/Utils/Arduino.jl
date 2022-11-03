@@ -11,7 +11,7 @@ function sendCommand(ard::Arduino, cmdString::String)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   return query(serialDevice(ard), cmd)
 end
-
+  
 function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   return query!(serialDevice(ard), cmd, data, delimited = true)
