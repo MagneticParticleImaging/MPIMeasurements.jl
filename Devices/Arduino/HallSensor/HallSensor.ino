@@ -149,8 +149,6 @@ int getData(char*) {
     start = millis();
     
     x = sensor.getRawX();
-    Serial.print(x);
-    Serial.print(",");
     y = sensor.getRawY();
     z = sensor.getRawZ();
     
