@@ -177,6 +177,7 @@ end
 
 function _doReferenceDrive(rob::IselRobot)
   # Minor shift for not hitting the limit switch
+  waitEnableTime(rob)
   prepareReferenceDrive(rob, controllerVersion(rob))
 
   tempTimeout = rob.sd.timeout_ms

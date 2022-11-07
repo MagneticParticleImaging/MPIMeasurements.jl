@@ -8,7 +8,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   "Number of background frames to measure for a background position"
   bgFrames::Int64
   "Number of frames that are averaged for a foreground position"
-  fgFrameAverages::Int64
+  fgFrames::Int64
   "Flag if the calibration should be saved as a system matrix or not"
   saveAsSystemMatrix::Bool = true
   "Flag if the temperature measured after every robot measurement should be stored in the MDF or not"
@@ -117,9 +117,15 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   measIsBGPos = isa(protocol.params.positions,BreakpointGridPositions) ? MPIFiles.getmask(protocol.params.positions) : zeros(Bool,length(protocol.params.positions))
   numBGPos = sum(measIsBGPos)
   numFGPos = length(measIsBGPos) - numBGPos
-  numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
+  numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
   # The following looks like a secrete line but it makes sense
-  posToIdx = cumsum(vcat([false],measIsBGPos)[1:end-1] .* (protocol.params.bgFrames - 1) .+ 1)
+  framesPerPos = zeros(length(measIsBGPos))
+  posToIdx = zeros(length(measIsBGPos))
+  for (i, isBg) in enumerate(measIsBGPos)
+    framesPerPos[i] = isBg ? protocol.params.bgFrames : protocol.params.fgFrames
+  end
+  posToIdx[1] = 1
+  posToIdx[2:end] = cumsum(framesPerPos)[1:end-1] .+ 1
   measIsBGFrame = zeros(Bool, numTotalFrames)
 
   protocol.systemMeasState.measIsBGPos = measIsBGPos
@@ -139,7 +145,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   signals = zeros(Float32, rxNumSamplingPoints,numRxChannels,numPeriods,numTotalFrames)
   protocol.systemMeasState.signals = signals
   
-  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,1)
+  protocol.systemMeasState.currentSignal = zeros(Float32,rxNumSamplingPoints,numRxChannels,numPeriods,protocol.params.fgFrames)
   
   # TODO implement properly
   if protocol.params.saveTemperatureData
@@ -372,8 +378,9 @@ function prepareMeasurement(protocol::RobotBasedSystemMatrixProtocol, pos)
         # The following tasks can only be started after the finalizer and mostly only in this order
         timeFrameChange = @elapsed begin 
           if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-            acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : 1)
-            acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrameAverages)
+            acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
+            #acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
+            acqNumFrameAverages(protocol.params.sequence, 1)
             setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
             setSequenceParams(daq, protocol.params.sequence)
             protocol.restored = false
@@ -488,11 +495,8 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   startIdx = calib.posToIdx[index]
   stopIdx = calib.posToIdx[index] + numFrames - 1
 
-  if calib.measIsBGPos[index]
-    calib.signals[:,:,:,startIdx:stopIdx] = uMeas
-  else
-    calib.signals[:,:,:,startIdx] = mean(uMeas,dims=4)
-  end
+  calib.signals[:,:,:,startIdx:stopIdx] = uMeas
+
 
   calib.measIsBGFrame[ startIdx:stopIdx ] .= calib.measIsBGPos[index]
 
@@ -563,7 +567,17 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     numBGPos = sum(sysObj.measIsBGPos)
     numFGPos = length(sysObj.measIsBGPos) - numBGPos
 
-    numTotalFrames = numFGPos + protocol.params.bgFrames*numBGPos
+    message = "Current position is $(sysObj.currPos). Resume from last background position instead?"
+    if askChoices(protocol, message, ["No", "Use"]) == 2
+      temp = sysObj.currPos
+      while temp > 1 && !sysObj.measIsBGPos[temp]
+        temp = temp - 1
+      end
+      sysObj.currPos = temp
+    end
+
+
+    numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
     seq = protocol.params.sequence
 
     storedSeq = sequenceFromDict(params["sequence"])
