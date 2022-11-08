@@ -22,7 +22,7 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
