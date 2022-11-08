@@ -122,7 +122,7 @@ Read out current content of the output buffer of the serial devive. Returns a St
 function receive(sd::SerialDevice)
 	lock(sd.sdLock)
 	try
-		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		#set_read_timeout(sd.sp, sd.timeout_ms/1000)
 		reply = readuntil(sd.sp, sd.delim_read)
 		@debug "$(sd.portName) received: $reply"
 		return reply

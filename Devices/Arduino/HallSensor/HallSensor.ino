@@ -9,7 +9,9 @@ Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
 int sample_size= 500;
 // Communication
 #define INPUT_BUFFER_SIZE 3000
+#define VALUE_BUFFER_SIZE 1000
 char input_buffer[INPUT_BUFFER_SIZE];
+int16_t value_buffer[VALUE_BUFFER_SIZE*3];
 unsigned int input_pos = 0;
 
 int getData(char*);
@@ -137,14 +139,15 @@ int getData(char*) {
   int ret = sensor.updateData(); // Throw away first old data
   delay(10);
   uint16_t measDelay = 10;
-  unsigned long start, end;
+  unsigned long start, end,startFP,startSP,endA;
   
   
   // TODO perform measurement
-  
-  int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0,x=0,y=0,z=0;
+  int16_t x=0,y=0,z=0;
+  int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0;
   float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
-  for (int i =0 ;i< sample_size ; i++){
+  startFP=millis();
+  for (int i =0 ;i< VALUE_BUFFER_SIZE*3 ; i+=3){
     sensor.updateData(); 
     start = millis();
     
@@ -152,29 +155,33 @@ int getData(char*) {
     y = sensor.getRawY();
     z = sensor.getRawZ();
     
+    value_buffer[i] = x;
+    value_buffer[i+1] = y;
+    value_buffer[i+2] = z;
+    
     sumX+=x;
     sumY+=y;
     sumZ+=z;
     
-    sumXX += x*x;
-    sumYY += y*y;
-    sumZZ += z*z;
-
     end = millis();
     if (end - start < measDelay) {
       delay(measDelay-(end - start));
     }
   }
-  meanX = (float)sumX/sample_size;
-  varX = (float) sumXX- (meanX*meanX)*sample_size;
-  varX = varX/(sample_size-1);
-  meanY = (float)sumY/sample_size;
-  varY = (float) sumYY- (meanY*meanY)*sample_size;
-  varY = varY/(sample_size-1);
-  meanZ = (float)sumX/sample_size;
-  varZ = (float) sumZZ- (meanZ*meanZ)*sample_size;
-  varZ = varZ/(sample_size-1);
   
+  meanX = (float)sumX/VALUE_BUFFER_SIZE;
+  meanY = (float)sumY/VALUE_BUFFER_SIZE;
+  meanZ = (float)sumX/VALUE_BUFFER_SIZE;
+  startSP= millis();
+  for(int i=0; i<VALUE_BUFFER_SIZE*3;i+=3){
+    sumXX = (value_buffer[i]-meanX)*(value_buffer[i]-meanX);
+    sumYY = (value_buffer[i+1]-meanY)*(value_buffer[i+1]-meanY);
+    sumZZ = (value_buffer[i+2]-meanZ) *(value_buffer[i+2]-meanZ);
+  }
+    varX =(float)sumXX/VALUE_BUFFER_SIZE;
+    varY =(float)sumYY/VALUE_BUFFER_SIZE;
+    varZ =(float)sumXX/VALUE_BUFFER_SIZE;
+  endA=millis();
   Serial.print(meanX,7);
   Serial.print(",");
   Serial.print(meanY,7);
@@ -186,6 +193,10 @@ int getData(char*) {
   Serial.print(varY,7);
   Serial.print(",");
   Serial.print(varZ,7);
+  Serial.print(",");
+  Serial.print(startSP-startFP);
+  Serial.print(",");
+  Serial.print(endA-startSP);
   Serial.println("#");
   Serial.flush();
 }
