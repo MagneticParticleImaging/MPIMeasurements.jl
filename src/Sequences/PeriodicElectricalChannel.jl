@@ -8,7 +8,7 @@ Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   "Divider of the component."
   divider::Integer
   "Amplitude (peak) of the component for each period of the field."
-  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}} # Is it really the right choice to have the periods here? Or should it be moved to the MagneticField?
+  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}, Vector{typeof(1.0u"A")}} # Is it really the right choice to have the periods here? Or should it be moved to the MagneticField?
   "Phase of the component for each period of the field."
   phase::Vector{typeof(1.0u"rad")}
   "Waveform of the component."
@@ -94,6 +94,8 @@ function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElec
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
+  elseif eltype(amplitude) <: Unitful.Voltage
+    amplitude = amplitude .|> u"V"
   elseif eltype(amplitude) <: Unitful.BField
     amplitude = amplitude .|> u"T"
   else
@@ -147,7 +149,7 @@ divider(component::ElectricalComponent, trigger::Integer=1) = length(component.d
 
 export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
-amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1) = component.amplitude[period] = value
+amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V"), typeof(1.0u"A")}; period::Integer=1) = component.amplitude[period] = value
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
 amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
 
