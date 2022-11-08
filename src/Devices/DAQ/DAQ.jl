@@ -111,24 +111,22 @@ function createDAQChannels(::Type{T}, dict::Dict{String, Any}) where {T <: DAQPa
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
-function createDAQParams(DAQType::DataType, dict::Dict{String, Any})
-  @assert DAQType <: DAQParams "The supplied type `$type` cannot be used for creating DAQ params, since it does not inherit from `DAQParams`."
-  
+function createDAQParams(DAQType::Type{T}, dict::Dict{String, Any}) where {T <: DAQParams}
   # Extract all main section fields which means excluding `channels`
   mainSectionFields = [string(field) for field in fieldnames(DAQType) if field != :channels]
 
   # Split between main section fields and channels, which are dictionaries
   channelDict = Dict{String, Any}()
+  mainDict = Dict{String, Any}()
   for (key, value) in dict
     if value isa Dict && !(key in mainSectionFields)
       channelDict[key] = value
-      
-      # Remove key in order to process the rest with the standard function
-      delete!(dict, key)
+    else
+      mainDict[key] = value
     end
   end
 
-  splattingDict = dict_to_splatting(dict)
+  splattingDict = dict_to_splatting(mainDict)
   splattingDict[:channels] = createDAQChannels(DAQType, channelDict)
 
   try
