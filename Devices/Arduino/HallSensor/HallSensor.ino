@@ -174,9 +174,9 @@ int getData(char*) {
   meanZ = (float)sumX/VALUE_BUFFER_SIZE;
   startSP= millis();
   for(int i=0; i<VALUE_BUFFER_SIZE*3;i+=3){
-    sumXX = (value_buffer[i]-meanX)*(value_buffer[i]-meanX);
-    sumYY = (value_buffer[i+1]-meanY)*(value_buffer[i+1]-meanY);
-    sumZZ = (value_buffer[i+2]-meanZ) *(value_buffer[i+2]-meanZ);
+    sumXX += (value_buffer[i]-meanX)*(value_buffer[i]-meanX);
+    sumYY += (value_buffer[i+1]-meanY)*(value_buffer[i+1]-meanY);
+    sumZZ += (value_buffer[i+2]-meanZ) *(value_buffer[i+2]-meanZ);
   }
     varX =(float)sumXX/VALUE_BUFFER_SIZE;
     varY =(float)sumYY/VALUE_BUFFER_SIZE;
