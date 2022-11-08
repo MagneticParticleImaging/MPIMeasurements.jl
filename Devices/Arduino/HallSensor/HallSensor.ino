@@ -6,10 +6,10 @@
 
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
-int sample_size= 500;
+int sample_size= 1000;
 // Communication
 #define INPUT_BUFFER_SIZE 3000
-#define VALUE_BUFFER_SIZE 1000
+#define VALUE_BUFFER_SIZE 1024
 char input_buffer[INPUT_BUFFER_SIZE];
 int16_t value_buffer[VALUE_BUFFER_SIZE*3];
 unsigned int input_pos = 0;
@@ -43,7 +43,7 @@ int getCommands(char*) {
   Serial.print("'!POS*#' ");
   Serial.print("'!VERSION*#' ");
   Serial.print("'!COMMANDS*#' ");
-  Serial.print("'!SAMPLES500*#' ");
+  Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
   Serial.println("#");
 }
 
@@ -139,7 +139,7 @@ int getData(char*) {
   int ret = sensor.updateData(); // Throw away first old data
   delay(10);
   uint16_t measDelay = 10;
-  unsigned long start, end,startFP,startSP,endA;
+  unsigned long start, end,startFP,endA;
   
   
   // TODO perform measurement
@@ -147,7 +147,7 @@ int getData(char*) {
   int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0;
   float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
   startFP=millis();
-  for (int i =0 ;i< VALUE_BUFFER_SIZE*3 ; i+=3){
+  for (int i =0 ;i< sample_size*3 ; i+=3){
     sensor.updateData(); 
     start = millis();
     
@@ -169,18 +169,18 @@ int getData(char*) {
     }
   }
   
-  meanX = (float)sumX/VALUE_BUFFER_SIZE;
-  meanY = (float)sumY/VALUE_BUFFER_SIZE;
-  meanZ = (float)sumX/VALUE_BUFFER_SIZE;
-  startSP= millis();
-  for(int i=0; i<VALUE_BUFFER_SIZE*3;i+=3){
+  meanX = (float)sumX/sample_size;
+  meanY = (float)sumY/sample_size;
+  meanZ = (float)sumX/sample_size;
+  
+  for(int i=0; i<sample_size*3;i+=3){
     sumXX += (value_buffer[i]-meanX)*(value_buffer[i]-meanX);
     sumYY += (value_buffer[i+1]-meanY)*(value_buffer[i+1]-meanY);
     sumZZ += (value_buffer[i+2]-meanZ) *(value_buffer[i+2]-meanZ);
   }
-    varX =(float)sumXX/VALUE_BUFFER_SIZE;
-    varY =(float)sumYY/VALUE_BUFFER_SIZE;
-    varZ =(float)sumXX/VALUE_BUFFER_SIZE;
+    varX =(float)sumXX/sample_size;
+    varY =(float)sumYY/sample_size;
+    varZ =(float)sumXX/sample_size;
   endA=millis();
   Serial.print(meanX,7);
   Serial.print(",");
@@ -194,9 +194,7 @@ int getData(char*) {
   Serial.print(",");
   Serial.print(varZ,7);
   Serial.print(",");
-  Serial.print(startSP-startFP);
-  Serial.print(",");
-  Serial.print(endA-startSP);
+  Serial.print(endA-startFP);
   Serial.println("#");
   Serial.flush();
 }
@@ -223,7 +221,7 @@ int getVersion(char*) {
 
 int setSampleSize(char* command){
   int value_int = atoi(command+7);
-  if (value_int>0){
+  if (value_int>0 && value_int<=2048){
     sample_size=value_int;
   }
   Serial.print(sample_size);
