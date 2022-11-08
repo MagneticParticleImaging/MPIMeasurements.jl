@@ -73,7 +73,10 @@ function values(channel::ContinuousElectricalChannel)
     return circshift(temp, ceil(Int,channel.phase/(2*pi)*length(temp)) ) 
   elseif channel.waveform == WAVEFORM_SAWTOOTH_FALLING
     temp = channel.offset .+ channel.amplitude .*collect(range(1, stop=-1, length=numPatches)) 
-    return circshift(temp, ceil(Int,channel.phase/(2*pi)*length(temp)) ) 
+    return circshift(temp, ceil(Int,channel.phase/(2*pi)*length(temp)) )
+  elseif channel.waveform == WAVEFORM_TRIANGLE
+    temp = channel.offset .+ channel.amplitude .* [4*abs((x/numPatches - floor(x/numPatches + 1/2))) - 1  for x in 1:numPatches]
+    return circshift(temp, ceil(Int, channel.phase/(2*pi)*length(temp)))
   else
     return [channel.offset + channel.amplitude*
                    value(channel.waveform, p/numPatches+channel.phase/(2*pi))
