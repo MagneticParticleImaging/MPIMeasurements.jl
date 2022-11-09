@@ -5,100 +5,137 @@ export RobotBasedProtocol, positions, postMoveWaitTime, numCooldowns, robotVeloc
 abstract type RobotBasedProtocol <: Protocol end
 abstract type RobotBasedProtocolParams <: ProtocolParams end
 
-positions(protocol::RobotBasedProtocol)::Union{Positions, Missing} = protocol.params.positions
-postMoveWaitTime(protocol::RobotBasedProtocol)::typeof(1.0u"s") = protocol.params.postMoveWaitTime
-numCooldowns(protocol::RobotBasedProtocol)::Integer = protocol.params.numCooldowns
-robotVelocity(protocol::RobotBasedProtocol)::typeof(1.0u"m/s") = protocol.params.robotVelocity
-switchBrakes(protocol::RobotBasedProtocol)::Bool = protocol.params.switchBrakes
+# TODO which of these are currently necessary
+#positions(protocol::RobotBasedProtocol)::Union{Positions, Missing} = protocol.params.positions
+#postMoveWaitTime(protocol::RobotBasedProtocol)::typeof(1.0u"s") = protocol.params.postMoveWaitTime
+#numCooldowns(protocol::RobotBasedProtocol)::Integer = protocol.params.numCooldowns
+#robotVelocity(protocol::RobotBasedProtocol)::typeof(1.0u"m/s") = protocol.params.robotVelocity
+#switchBrakes(protocol::RobotBasedProtocol)::Bool = protocol.params.switchBrakes
 
-function execute(protocol::RobotBasedProtocol)
+function _execute(protocol::RobotBasedProtocol)
+  @info "Start $(typeof(protocol))"
   scanner_ = scanner(protocol)
   robot = getRobot(scanner_)
-
-  positions_ = positions(protocol)
-  vel = robotVelocity(protocol)
-  switchBrakes_ = switchBrakes(protocol)
-
-  enable(robot)
   if !isReferenced(robot)
-    doReferenceDrive(robot)
+    throw(IllegalStateException("Robot not referenced! Cannot proceed!"))
   end
-  movePark(robot)
-  
-  for (index, pos) in enumerate(positions_)
-    for coord in pos
-      @debug coord
-    end
-    # Cooldown pause
-    numCooldowns_ = numCooldowns(protocol)
-    if numCooldowns_ > 0 && index == round(Int, length(positions)/numCooldowns_)
-      println("Cooled down? Enter \"yes\"")
-      while readline() != "yes"
-        println("Cooled down? Enter \"yes\"")
+
+  initMeasData(protocol)
+
+  finished = false
+  notifiedStop = false
+  while !finished
+    finished = performMovements(protocol)
+
+    # Stopped 
+    notifiedStop = false
+    while protocol.stopped
+      handleEvents(protocol)
+      protocol.cancelled && throw(CancelException())
+      if !notifiedStop
+        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        notifiedStop = true
       end
+      if !protocol.stopped
+        put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+      end
+      sleep(0.05)
     end
-
-    @debug pos
-
-    preMoveAction(protocol, upreferred.(pos))
-    moveAbs(robot, upreferred.(pos), vel)
-    sleep(ustrip(u"s", postMoveWaitTime(protocol)))
-
-    # if hasBrake(robot) && switchBrakes_
-    #   setBrake(robot, false)
-    # end
-
-    postMoveAction(protocol, pos)
-
-    # if hasBrake(robot) && switchBrakes_
-    #   setBrake(robot, true)
-    # end
   end
 
-  movePark(robot)
+ 
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  while !protocol.finishAcknowledged
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+    sleep(0.01)
+  end
+  @info "Protocol finished."
 end
 
-@mustimplement preMoveAction(protocol::RobotBasedProtocol)
-@mustimplement postMoveAction(protocol::RobotBasedProtocol)
+function performMovements(protocol::RobotBasedProtocol)
+  @info "Enter robot movement loop"
+  finished = false
+  robot = getRobot(protocol.scanner)
 
-"Create the params struct from a dict. Typically called during scanner instantiation."
-function createRobotBasedProtocolParams(ProtocolType::DataType, dict::Dict{String, Any})
-  @debug "" ProtocolType dict
-  for (key, value) in dict
-    println("$key => $value")
-  end
-  @assert ProtocolType <: RobotBasedProtocolParams "The supplied type `$type` cannot be used for creating robot based protocol params, since it does not inherit from `ProtocolType`."
-  
-  # Split between main section fields and channels, which are dictionaries
-  positionsDict = Dict{String, Any}()
-  for (key, value) in dict["positions"]
-    key = String([i == 1 ? uppercase(c) : c for (i, c) in enumerate(key)]) # No indexing to prevent possible errors with unicode
-    positionsDict["positions"*key] = tryuparse.(value)
-  end
-
-  # Remove key in order to process the rest with the standard function
-  delete!(dict, "positions")
-  
-  splattingDict = dict_to_splatting(dict)
-  splattingDict[:positions] = Positions(positionsDict)
-
-  try
-    return ProtocolType(;splattingDict...)
-  catch e
-    if e isa UndefKeywordError
-      throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
-                                      "for a device with the params type `$ProtocolType`."))
-    elseif e isa MethodError
-      @warn e.args e.world e.f
-      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
-                                      "with the params type `$ProtocolType`. Please check "*
-                                      "the causing stacktrace."))
-    else
-      rethrow()
+  # TODO entering loop function
+  while true
+    @info "Curr Pos in performCalibrationInner $(calib.currPos)"
+    handleEvents(protocol)
+    
+    if protocol.stopped
+      enterPause(protocol)
+      @info "Stop robot movement loop"
+      finished = false
+      break
     end
+
+    pos = nextPosition(protocol)
+    if !isnothing(pos)
+      performMovement(protocol, robot, pos)
+    else
+      afterMovements(protocol)
+      enable(robot)
+      movePark(robot)
+      disable(robot)
+      finished = true
+      break
+    end
+    
   end
+    @info "Exit robot movement loop"
+  return finished
+end
+
+performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::RobotCoords) = performMovement(protocol, robot, toScannerCoords(robot, pos))
+function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::ScannerCoords)
+  preMovement(protocol)
+
+  enable(robot)
+  try
+    @sync begin 
+      moveRobot = @tspawnat protocol.scanner.generalParams.serialThreadID moveAbs(robot, pos)
+      duringMovement(protocol, moveRobot)
+    end
+  catch ex 
+    if ex isa CompositeException
+      @error "CompositeException while preparing measurement:"
+      for e in ex
+        @error e
+      end
+    end
+    rethrow(ex)
+  end
+  #diffTime = protocol.params.waitTime - timePreparing
+  #if diffTime > 0.0
+  #  sleep(diffTime)
+  #end
+  disable(robot)
+  postMovement(protocol)
+end
+
+
+
+function preMovement(protocol::RobotBasedProtocol)
+  # NOP
+end
+
+function duringMovement(protocol::RobotBasedProtocol, moving::Task)
+  # NOP
+end
+
+function postMovement(protocol::RobotBasedProtocol)
+  # NOP
+end
+
+function enterPause(protocol::RobotBasedProtocol)
+  # NOP
+end
+
+function afterMovements(protocol::RobotBasedProtocol)
+  # NOP
 end
 
 include("RobotBasedMagneticFieldStaticProtocol.jl")
 #include("RobotBasedMagneticFieldSweepProtocol.jl")
-#include("RobotBasedSystemMatrixProtocol.jl")
+include("RobotBasedSystemMatrixProtocol.jl")
