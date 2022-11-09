@@ -14,7 +14,7 @@ Base.@kwdef struct ArduinoTemperatureControllerPortParams <: ArduinoTemperatureC
   nameSensors::Vector{String}
   # Communication
   portAddress::String
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoTemperatureControllerPortParams(dict::Dict) = params_from_dict(ArduinoTemperatureControllerPortParams, dict)
@@ -31,7 +31,7 @@ Base.@kwdef struct ArduinoTemperatureControllerPoolParams <: ArduinoTemperatureC
   nameSensors::Vector{String}  
   # Communication
   description::String
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoTemperatureControllerPoolParams(dict::Dict) = params_from_dict(ArduinoTemperatureControllerPoolParams, dict)

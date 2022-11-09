@@ -6,7 +6,7 @@ Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
 
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDirectParams, dict)
@@ -16,7 +16,7 @@ Base.@kwdef struct ArduinoGaussMeterPoolParams <: ArduinoGaussMeterParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
 
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoGaussMeterPoolParams(dict::Dict) = params_from_dict(ArduinoGaussMeterPoolParams, dict)
@@ -26,7 +26,7 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
 
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoGaussMeterDescriptionParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
