@@ -43,6 +43,7 @@ Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
   components::Vector{ElectricalComponent}
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
   offset::Union{typeof(1.0u"T"), typeof(1.0u"V")} = 0.0u"T"
+  isDfChannel::Bool = true
 end
 
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
@@ -61,6 +62,10 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
       error("The value for an offset has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
     end
     splattingDict[:offset] = tmp
+  end
+
+  if haskey(channelDict, "isDfChannel")
+    splattingDict[:isDfChannel] = channelDict["isDfChannel"]
   end
 
   components = Vector{ElectricalComponent}()
@@ -143,6 +148,8 @@ export arbitraryElectricalComponents
 arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, ArbitraryElectricalComponent)
 
 cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
+
+isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
 
 export divider
 divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
