@@ -1,4 +1,3 @@
-using Core: Vector
 export getXYZValues
 export setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
