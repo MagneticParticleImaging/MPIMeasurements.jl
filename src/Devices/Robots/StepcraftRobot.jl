@@ -31,7 +31,7 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
 
   serial_port::String = "/dev/ttyUSB0"
   pause_ms::Int = 200
-  timeout_ms::Int = 40000
+  timeout_ms::Int = 4000
   delim_read::String = "\r"
   delim_write::String = "\r"
   baudrate::Int = 115200
@@ -46,7 +46,7 @@ Base.@kwdef struct StepcraftRobotParams <: DeviceParams
 end
 StepcraftRobotParams(dict::Dict) = params_from_dict(StepcraftRobotParams, prepareRobotDict(dict))
 
-mutable struct  StepcraftStatus
+mutable struct StepcraftStatus
   idle::Bool
   hasError::Bool
   isReferenced::Bool
@@ -77,10 +77,8 @@ axisRange(rob::StepcraftRobot) = rob.params.axisRange # must return Vector of Ve
 defaultVelocity(rob::StepcraftRobot) = rob.params.defaultVel # should be implemented for a robot that can handle velocities
 
 function _setup(rob::StepcraftRobot)
-  sp = LibSerialPort.open(rob.params.serial_port, rob.params.baudrate)
-  rob.sd = SerialDevice(sp, rob.params.pause_ms, rob.params.timeout_ms, rob.params.delim_read, rob.params.delim_write)
-  set_flow_control(sp, xonxoff=SP_XONXOFF_INOUT) # TODO COMMENT WHY
-  flush(sp)
+  rob.sd = SerialDevice(rob.params.serial_port; baudrate = rob.params.baudrate, delim_read = rob.params.delim_read, delim_write = rob.params.delim_write, timeout_ms = rob.params.timeout_ms)
+  set_flow_control(rob.sd.sp, xonxoff=SP_XONXOFF_INOUT) # TODO COMMENT WHY
 
   stopStepcraftSpam(rob)
   setSpindel(rob)
@@ -154,21 +152,7 @@ function invertAxes(rob::StepcraftRobot)
 end
 
 function stepcraftCommand(rob::StepcraftRobot, cmd::String)
-  sd = rob.sd
-  @debug "queryStepcraft: " cmd
-  #@info cmd
-  flush(sd.sp)
-  send(sd, cmd)
-  #flush(sd.sp)
-  out = readuntil(rob.sd.sp,Vector{Char}("\r"),rob.params.timeout_ms)
-  #@info out
-  #Stepcraft responds always CR or error code with CR (except: mode 2)
-  if out == ""
-    error("Stepcraft robot did not respond!")
-  end
-
-  flush(sd.sp)
-  return out
+  return query(rob.sd, cmd)
 end
 
 function setSpeed(rob::StepcraftRobot,speed::Vector{<:Unitful.Velocity})
@@ -227,7 +211,7 @@ function _moveAbs(rob::StepcraftRobot, pos::Vector{<:Unitful.Length}, speed::Uni
   #robot moves with minimal velocity of speed...
   command = "\$E1,X$(posSC[1]),Y$(posSC[2]),Z$(posSC[3])"
   out = stepcraftCommand(rob,command)
-  catchingStepcraftSpam(rob)
+  #catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
 end
 
@@ -238,19 +222,19 @@ function _moveRel(rob::StepcraftRobot, dist::Vector{<:Unitful.Length}, speed::Un
   command = "\$E1,x$(distSC[1]),y$(distSC[2]),z$(distSC[3])"
   out = stepcraftCommand(rob,command)
   #@info "bla"*out*"foo"
-  catchingStepcraftSpam(rob)
+  #catchingStepcraftSpam(rob)
   waitForStatus(rob,:idle,false)
 end
 
-function catchingStepcraftSpam(rob::StepcraftRobot)
-  #Hack(-elberg) to get rid of the position data sended during movements... 
-  reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
-  while reply != ""
-    reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
-    println(reply)#*string(length(bla)))
-    #updateStepcraftStatus(rob)
-  end
-end
+#function catchingStepcraftSpam(rob::StepcraftRobot)
+#  #Hack(-elberg) to get rid of the position data sended during movements... 
+#  reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
+#  while reply != ""
+#    reply = readuntil(rob.sd.sp, Vector{Char}("\r"), 500)
+#    println(reply)#*string(length(bla)))
+#    #updateStepcraftStatus(rob)
+#  end
+#end
 
 function waitForStatus(rob::StepcraftRobot, status::Symbol, inverted::Bool=false)
   updateStepcraftStatus(rob)
@@ -298,7 +282,7 @@ end
 
 function _doReferenceDrive(rob::StepcraftRobot) #toDO: Prevent endless loop when emergency stop is pressed during reference drive.
   out = stepcraftCommand(rob,"\$H"*rob.params.referenceOrder)
-  catchingStepcraftSpam(rob)
+  #catchingStepcraftSpam(rob)
   waitForStatus(rob,:isReferenced,false)
 end
 
@@ -311,16 +295,16 @@ function _getPosition(rob::StepcraftRobot)
   updateStepcraftStatus(rob)
 
   setStepcraftMode(rob,PARAMETERS)
-
+  sleep(0.1)
   pos = zeros(3)
   #Unit: µm
-  pos[1] = parse(Int32,stepcraftCommand(rob,"&Px")[5:end-1])
-  pos[2] = parse(Int32,stepcraftCommand(rob,"&Py")[5:end-1])
-  pos[3] = parse(Int32,stepcraftCommand(rob,"&Pz")[5:end-1])
+  pos[1] = parse(Int32,stepcraftCommand(rob,"&Px")[5:end])
+  pos[2] = parse(Int32,stepcraftCommand(rob,"&Py")[5:end])
+  pos[3] = parse(Int32,stepcraftCommand(rob,"&Pz")[5:end])
 
   setStepcraftMode(rob,MOVEMENT)
   
   return pos./1000*u"mm"
 end
 
-Base.close(rob::StepcraftRobot) = close(rob.sd.sp)
+Base.close(rob::StepcraftRobot) = close(rob.sd)
