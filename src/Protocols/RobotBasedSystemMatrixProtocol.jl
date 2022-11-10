@@ -245,7 +245,7 @@ end
 
 function preMovement(protocol::RobotBasedSystemMatrixProtocol)
   calib = protocol.systemMeasState
-  @info "Curr Pos in System Matrix Protoocl $(calib.currPos)"
+  @info "Curr Pos in System Matrix Protocol $(calib.currPos)"
 end
 
 function duringMovement(protocol::RobotBasedSystemMatrixProtocol, moving::Task)

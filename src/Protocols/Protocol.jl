@@ -245,6 +245,9 @@ struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
   datastore::DatasetStore
   mdf::MDFv2InMemory
 end
+struct FileStorageRequestEvent <: StorageRequestEvent
+  filename::AbstractString
+end 
 struct StorageSuccessEvent <: ProtocolEvent
   filename::AbstractString
 end
