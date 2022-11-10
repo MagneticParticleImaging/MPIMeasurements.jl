@@ -4,13 +4,13 @@ export setUnitToTesla,setStandardSettings, getFieldError, calculateFieldError
 
 export LakeShore460GaussMeterDirectParams, LakeShore460GaussMeterPoolParams, LakeShore460GaussMeter
 
-abstract type LakeShoreGaussMeterParams <: DeviceParams end
+abstract type LakeShore460GaussMeterParams <: DeviceParams end
 
 Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShoreGaussMeterParams
 	portAddress::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
-	range::Char = "3"
+	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n"
@@ -21,7 +21,7 @@ Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShoreGaussMeterParams
 	description::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
-	range::Char = "3"
+	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n"
