@@ -1,9 +1,8 @@
 export RobotBasedMagneticFieldStaticProtocolParams, RobotBasedMagneticFieldStaticProtocol, measurement, filename
 
-Base.@kwdef struct RobotBasedMagneticFieldStaticProtocolParams <: RobotBasedProtocolParams
-  sequence::Union{Sequence, Nothing}
-  positions::Union{GridPositions, Nothing}
-  filename::String # TODO Temporary solution, will be moved to storage events
+Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocolParams <: RobotBasedProtocolParams
+  sequence::Union{Sequence, Nothing} = nothing
+  positions::Union{GridPositions, Nothing} = nothing
   description::String = ""
   #postMoveWaitTime::typeof(1.0u"s") = 0.5u"s"
   #numCooldowns::Integer = 0
@@ -41,7 +40,7 @@ Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocol <: RobotBasedPr
   restored::Bool = false
   finishAcknowledged::Bool = false
 
-  measurement::Union{MagneticFieldMeasurement, Missing} = nothing
+  measurement::Union{MagneticFieldMeasurement, Nothing} = nothing
   currPos::Int64 = 1
   #safetyTask::Union{Task, Nothing} = nothing
   #safetyChannel::Union{Channel{ProtocolEvent}, Nothing} = nothing

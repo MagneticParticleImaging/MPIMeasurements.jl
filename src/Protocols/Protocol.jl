@@ -2,7 +2,7 @@ export  Protocol, ProtocolParams, name, description, scanner, params, add_protoc
         init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
-        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
+        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, FileStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
 
 abstract type ProtocolParams end
