@@ -13,7 +13,7 @@ Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShoreGaussMeterPara
 	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
-	@add_serial_device_fields "\r\n"
+	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
 end
 LakeShore460GaussMeterDirectParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterDirectParams, dict)
 
@@ -24,7 +24,7 @@ Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShoreGaussMeterParams
 	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
-	@add_serial_device_fields "\r\n"
+	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
 end
 LakeShore460GaussMeterPoolParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterPoolParams, dict)
 
