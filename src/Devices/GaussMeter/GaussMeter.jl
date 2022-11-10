@@ -39,5 +39,4 @@ end
 include("DummyGaussMeter.jl")
 include("SimulatedGaussMeter.jl")
 include("LakeShore.jl")
-include("LakeShoreF71.jl")
 include("ArduinoGaussMeter.jl")

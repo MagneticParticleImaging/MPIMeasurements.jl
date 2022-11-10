@@ -2,13 +2,13 @@ import Sockets: send
 
 export getSerialDevices, resolvedSymlink
 
-macro add_serial_device_fields(delim)
+macro add_serial_device_fields(delim, ndatabits=8, parity=SP_PARITY_NONE)
 	return esc(quote
 		delim_read::Union{String, Nothing} = $delim
 		delim_write::Union{String, Nothing} = $delim
   	baudrate::Integer
-  	ndatabits::Integer = 8
-  	parity::SPParity = SP_PARITY_NONE
+  	ndatabits::Integer = $ndatabits
+  	parity::SPParity = $parity
   	nstopbits::Integer = 1
 		timeout_ms::Int = 1000
 	end)
