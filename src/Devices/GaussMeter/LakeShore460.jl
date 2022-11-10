@@ -56,7 +56,7 @@ function initSerialDevice(gauss::LakeShore460GaussMeter, params::LakeShore460Gau
   return sd
 end
 
-function setParams(gauss::LakeShore460GaussMeter, params::LakeShoreGaussMeterParams)
+function setParams(gauss::LakeShore460GaussMeter, params::LakeShore460GaussMeterParams)
 	# setStandardSettings(gauss)
 	if params.autoRange
 		setAllAutoRanging(gauss, '1')
