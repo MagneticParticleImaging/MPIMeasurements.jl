@@ -4,7 +4,7 @@ abstract type ArduinoSurveillanceUnitInternalTempParams <: DeviceParams end
 
 Base.@kwdef struct ArduinoSurveillanceUnitInternalTempPortParams <: DeviceParams
   portAdress::String
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoSurveillanceUnitInternalTempPortParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempPortParams, dict)
@@ -12,7 +12,7 @@ ArduinoSurveillanceUnitInternalTempPortParams(dict::Dict) = params_from_dict(Ard
 
 Base.@kwdef struct ArduinoSurveillanceUnitInternalTempPoolParams <: DeviceParams
   description::String
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoSurveillanceUnitInternalTempPoolParams(dict::Dict) = params_from_dict(ArduinoSurveillanceUnitInternalTempPoolParams, dict)

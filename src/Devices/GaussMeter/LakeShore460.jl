@@ -197,15 +197,16 @@ function LakeShoreGaussMeter(portAdress::AbstractString, coordinateTransformatio
 
 	flush(sp)
 	write(sp, "*IDN?$delim_write")
-	sleep(pause_ms/1000)
-	if(readuntil(sp, Vector{Char}(delim_read), timeout_ms) == "LSCI,MODEL460,0,032406$delim_read")
+	sp_drain(sp)
+	set_read_timeout(sp, timeout_ms/1000)
+	if(readuntil(sp, delim_read) == "LSCI,MODEL460,0,032406")
 
 		@info "Opening port to LSCI,MODEL460,0,032406..."
 		flush(sp)
 		write(sp, "*TST?$delim_write")
-		sleep(pause_ms/1000)
-		if(readuntil(sp, Vector{Char}(delim_read), timeout_ms) == "0$delim_read")
-			return LakeShoreGaussMeter( SerialDevice(sp,pause_ms, timeout_ms, delim_read, delim_write), reshape(coordinateTransformation,3,3) )
+		set_read_timeout(sp, timeout_ms/1000)
+		if(readuntil(sp, delim_read) == "0")
+			return LakeShoreGaussMeter( SerialDevice(sp, portAdress; timeout_ms = timeout_ms, delim_read = delim_read, delim_write = delim_write), reshape(coordinateTransformation,3,3) )
 		else
 			@warn "Errors found in the Device!"
 		end
@@ -256,10 +257,13 @@ end
 
 function getAllMultipliers(gauss::LakeShoreGaussMeter)
 	setActiveChannel(gauss, 'X')
+	sleep(0.01) # Fynn made me do it
 	mx = getMultiplier(gauss)
 	setActiveChannel(gauss, 'Y')
+	sleep(0.01)
 	my = getMultiplier(gauss)
 	setActiveChannel(gauss, 'Z')
+	sleep(0.01)
 	mz = getMultiplier(gauss)
 	return [mx,my,mz]
 end

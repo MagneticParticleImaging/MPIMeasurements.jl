@@ -8,7 +8,7 @@ Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   "Divider of the component."
   divider::Integer
   "Amplitude (peak) of the component for each period of the field."
-  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}} # Is it really the right choice to have the periods here? Or should it be moved to the MagneticField?
+  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}, Vector{typeof(1.0u"A")}} # Is it really the right choice to have the periods here? Or should it be moved to the MagneticField?
   "Phase of the component for each period of the field."
   phase::Vector{typeof(1.0u"rad")}
   "Waveform of the component."
@@ -43,6 +43,7 @@ Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
   components::Vector{ElectricalComponent}
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
   offset::Union{typeof(1.0u"T"), typeof(1.0u"V")} = 0.0u"T"
+  isDfChannel::Bool = true
 end
 
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
@@ -61,6 +62,10 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
       error("The value for an offset has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
     end
     splattingDict[:offset] = tmp
+  end
+
+  if haskey(channelDict, "isDfChannel")
+    splattingDict[:isDfChannel] = channelDict["isDfChannel"]
   end
 
   components = Vector{ElectricalComponent}()
@@ -94,6 +99,8 @@ function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElec
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
+  elseif eltype(amplitude) <: Unitful.Voltage
+    amplitude = amplitude .|> u"V"
   elseif eltype(amplitude) <: Unitful.BField
     amplitude = amplitude .|> u"T"
   else
@@ -142,12 +149,14 @@ arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(c
 
 cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
 
+isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
+
 export divider
 divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
 
 export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
-amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1) = component.amplitude[period] = value
+amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V"), typeof(1.0u"A")}; period::Integer=1) = component.amplitude[period] = value
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
 amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
 
