@@ -6,7 +6,7 @@ export LakeShore460GaussMeterDirectParams, LakeShore460GaussMeterPoolParams, Lak
 
 abstract type LakeShore460GaussMeterParams <: DeviceParams end
 
-Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShoreGaussMeterParams
+Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShore460GaussMeterParams
 	portAddress::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
@@ -17,7 +17,7 @@ Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShoreGaussMeterPara
 end
 LakeShore460GaussMeterDirectParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterDirectParams, dict)
 
-Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShoreGaussMeterParams
+Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShore460GaussMeterParams
 	description::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
@@ -29,7 +29,7 @@ end
 LakeShore460GaussMeterPoolParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterPoolParams, dict)
 
 Base.@kwdef mutable struct LakeShore460GaussMeter <: GaussMeter
-	@add_device_fields LakeShoreGaussMeterParams
+	@add_device_fields LakeShore460GaussMeterParams
 	sd::Union{SerialDevice, Nothing} = nothing
 end
 
