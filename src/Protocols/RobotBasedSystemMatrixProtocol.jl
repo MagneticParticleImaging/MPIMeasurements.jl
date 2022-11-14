@@ -305,8 +305,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
 
   # Start measurement
   channel = Channel{channelType(daq)}(32)
-  calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol, index)
   calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false)
+  bind(channel, calib.producer)
+  calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol, index)
   while !istaskdone(calib.producer)
     handleEvents(protocol)
     # Dont want to throw cancel here
