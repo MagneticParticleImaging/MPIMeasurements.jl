@@ -161,7 +161,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
-      if idx % 6 <= 1
+      if (idx -1) % 6 < 2
         m = Int64(idx - (ceil(idx/6) - 1) * 4)
       end
     end
