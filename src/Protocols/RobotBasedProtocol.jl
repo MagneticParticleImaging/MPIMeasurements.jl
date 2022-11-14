@@ -60,7 +60,6 @@ function performMovements(protocol::RobotBasedProtocol)
 
   # TODO entering loop function
   while true
-    @info "Curr Pos in performCalibrationInner $(calib.currPos)"
     handleEvents(protocol)
     
     if protocol.stopped
@@ -89,11 +88,13 @@ end
 
 performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::RobotCoords) = performMovement(protocol, robot, toScannerCoords(robot, pos))
 function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::ScannerCoords)
+  @info "Pre movement"
   preMovement(protocol)
 
   enable(robot)
   try
     @sync begin 
+      @info "During movement"
       moveRobot = @tspawnat protocol.scanner.generalParams.serialThreadID moveAbs(robot, pos)
       duringMovement(protocol, moveRobot)
     end
@@ -111,6 +112,7 @@ function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::Scanne
   #  sleep(diffTime)
   #end
   disable(robot)
+  @info "Post movement"
   postMovement(protocol)
 end
 
