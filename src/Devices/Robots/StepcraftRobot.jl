@@ -194,8 +194,8 @@ end
 function updateStepcraftStatus(rob::StepcraftRobot)
   #Don't trust hasError and onReferenceDrive. toDo: trustworthy error
   preStatus = stepcraftCommand(rob,"@X")
-  #@info preStatus
-  status = preStatus[3:4]
+  index = findfirst('X', preStatus)
+  status = preStatus[index+1:index+2]
   
   rob.stepcraftStatus.idle = 1 - parse(Bool,status[1])
   rob.stepcraftStatus.hasError = (parse(Int,status[2],base=16) >> 1) & 1
