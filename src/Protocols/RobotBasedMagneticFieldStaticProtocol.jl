@@ -98,8 +98,12 @@ function postMovement(protocol::RobotBasedMagneticFieldStaticProtocol)
     channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
-  enableACPower(su)
-  disableControl(tempControl)
+  if !isnothing(su)
+    enableACPower(su)
+  end
+  if !isnothing(tempControl)
+    disableControl(tempControl)
+  end
   @sync for amp in amps
     @async turnOn(amp)
   end
@@ -112,30 +116,44 @@ function postMovement(protocol::RobotBasedMagneticFieldStaticProtocol)
     sleep(0.05)
   end
 
+  if Base.istaskfailed(producer)
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
+  end
+
   # Increment measured positions
   protocol.currPos +=1
   
   # End measurement
-  timing = getTiming(daq) 
+  timing = getTiming(daq)
+  @show timing 
   endSequence(daq, timing.finish)
   @sync for amp in amps
     @async turnOff(amp)
   end
-  enableControl(tempControl)
-  disableACPower(su)
+  if !isnothing(tempControl)
+    enableControl(tempControl)
+  end
+  if !isnothing(su)
+    disableACPower(su)
+  end
 end
 
 function performMeasurement(protocol::RobotBasedMagneticFieldStaticProtocol)
   daq = getDAQ(protocol.scanner)
   gaussmeter = getGaussMeter(scanner(protocol))
-  addMeasuredPosition(measurement(protocol), pos, field=field_, fieldError=fieldError_, fieldFrequency=fieldFrequency_, timestamp=timestamp_, temperature=temperature_)
-
   timing = getTiming(daq)
   startTx(daq)
   current = 0
   # Wait for measurement proper frame to start
   while current < timing.start
     current = currentWP(daq.rpc)
+    sleep(0.01)
   end
   
   field_ = getXYZValues(gaussmeter)
@@ -144,11 +162,11 @@ function performMeasurement(protocol::RobotBasedMagneticFieldStaticProtocol)
     @warn "Magnetic field was measured too late"
   end
   
-  fieldError_ = calculateFieldError(gaussmeter, field_)
-  fieldFrequency_ = getFrequency(gaussmeter)
+  #fieldError_ = calculateFieldError(gaussmeter, field_)
+  #fieldFrequency_ = getFrequency(gaussmeter)
   timestamp_ = now()
-  temperature_ = getTemperature(gaussmeter)
-  addMeasuredPosition(measurement(protocol), pos, field=field_, fieldError=fieldError_, fieldFrequency=fieldFrequency_, timestamp=timestamp_, temperature=temperature_)
+  #temperature_ = getTemperature(gaussmeter)
+  addMeasuredPosition(protocol.measurement, nextPosition(protocol).data, field=field_) #  fieldError=fieldError_, fieldFrequency=fieldFrequency_, timestamp=timestamp_, temperature=temperature_)
 end
 
 function stop(protocol::RobotBasedMagneticFieldStaticProtocol)

@@ -2,31 +2,41 @@ export setAllRange
 export sleepModeOn,sleepModeOff,lockOn,lockOff
 export setUnitToTesla,setStandardSettings, getFieldError, calculateFieldError
 
-export LakeShore460GaussMeterDirectParams, LakeShore460GaussMeterPoolParams, LakeShore460GaussMeter
+export LakeShore460GaussMeterDirectParams, LakeShore460GaussMeterPoolParams, LakeShore460GaussMeter, LakeShore460GaussMeterParams
 
 abstract type LakeShore460GaussMeterParams <: DeviceParams end
 
 Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShore460GaussMeterParams
 	portAddress::String
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  	coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
 	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
 end
-LakeShore460GaussMeterDirectParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterDirectParams, dict)
+function LakeShore460GaussMeterDirectParams(dict::Dict) 
+	if haskey(dict, "coordinateTransformation")
+		dict["coordinateTransformation"] = reshape(dict["coordinateTransformation"], 3, 3)
+	end
+	params_from_dict(LakeShore460GaussMeterDirectParams, dict)
+end
 
 Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShore460GaussMeterParams
 	description::String
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  	coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	autoRange::Bool = true
 	range::Char = '3'
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
 end
-LakeShore460GaussMeterPoolParams(dict::Dict) = params_from_dict(LakeShore460GaussMeterPoolParams, dict)
+function LakeShore460GaussMeterPoolParams(dict::Dict) 
+	if haskey(dict, "coordinateTransformation")
+		dict["coordinateTransformation"] = reshape(dict["coordinateTransformation"], 3, 3)
+	end
+	params_from_dict(LakeShore460GaussMeterPoolParams, dict)
+end
 
 Base.@kwdef mutable struct LakeShore460GaussMeter <: GaussMeter
 	@add_device_fields LakeShore460GaussMeterParams
@@ -447,7 +457,7 @@ function setAllRange(gauss::LakeShore460GaussMeter, range::Char)
 	return nothing
 end
 
-function getFieldError(gauss::LakeShore460GaussMeter, range::Int)
+function getFieldError(gauss::LakeShore460GaussMeter, range::Int64)
     if range == 0
         return 150Unitful.μT
     elseif range == 1
@@ -462,7 +472,7 @@ end
 function calculateFieldError(gauss::LakeShore460GaussMeter, magneticField::Vector{<:Unitful.BField})
 	magneticFieldError = zeros(typeof(1.0u"T"),3,2)
 	magneticFieldError[:,1] = abs.(magneticField)*1e-3
-	magneticFieldError[:,2] .= getFieldError(gauss, range)
+	magneticFieldError[:,2] .= getFieldError(gauss, tryparse(Int64, string(gauss.params.range)))
 	return sum(magneticFieldError, dims=2)
 end
 
@@ -550,3 +560,5 @@ Set the state of the temperatur compensation. 1 = on, 0 = off
 function setTempComp(gauss::LakeShore460GaussMeter, state::Char)
 	send(gauss.sd, "TCOMP $state")
 end
+
+close(gauss::LakeShore460GaussMeter) = close(gauss.sd)
