@@ -117,6 +117,10 @@ function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::Scanne
 end
 
 
+function initMeasData(protocol::RobotBasedProtocol)
+  # NOP
+end
+
 
 function preMovement(protocol::RobotBasedProtocol)
   # NOP
