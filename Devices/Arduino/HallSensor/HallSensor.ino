@@ -1,5 +1,5 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "1.2"
+#define VERSION "1.3"
 #define POSITION 1
 #define BAUDRATE 9600
 #include <Tle493d_w2b6.h>
