@@ -145,3 +145,4 @@ end
 include("RobotBasedMagneticFieldStaticProtocol.jl")
 #include("RobotBasedMagneticFieldSweepProtocol.jl")
 include("RobotBasedSystemMatrixProtocol.jl")
+include("RobotBasedTDesignFieldProtocol.jl")

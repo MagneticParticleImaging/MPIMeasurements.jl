@@ -8,7 +8,8 @@ abstract type LakeShore460GaussMeterParams <: DeviceParams end
 
 Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShore460GaussMeterParams
 	portAddress::String
-  	coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+	sensorCorrectionTranslation::Matrix{Float64} = zeros(Float64, 3, 3) 
 	autoRange::Bool = true
 	range::Char = '3'
 	completeProbe::Char = '1'
@@ -24,7 +25,8 @@ end
 
 Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShore460GaussMeterParams
 	description::String
-  	coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+	sensorCorrectionTranslation::Matrix{Float64} = zeros(Float64, 3, 3)
 	autoRange::Bool = true
 	range::Char = '3'
 	completeProbe::Char = '1'
