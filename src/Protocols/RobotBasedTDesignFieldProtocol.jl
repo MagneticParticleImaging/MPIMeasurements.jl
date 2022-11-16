@@ -2,8 +2,8 @@ export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, mea
 
 Base.@kwdef mutable struct RobotBasedTDesignFieldProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
-  radius::typeof(1.0u"mm")
-  center::ScannerCoords
+  radius::typeof(1.0u"mm") = 0.0u"mm"
+  center::ScannerCoords = ScannerCoords([0.0u"mm", 0.0u"mm", 0.0u"mm"])
   N::Int64
   T::Int64
 end
@@ -16,7 +16,6 @@ function RobotBasedTDesignFieldProtocolParams(dict::Dict, scanner::MPIScanner)
   end
   
   params = params_from_dict(RobotBasedTDesignFieldProtocolParams, dict)
-  params.positions = positions
   params.sequence = sequence
   return params
 end
@@ -40,7 +39,7 @@ function _init(protocol::RobotBasedTDesignFieldProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
-  tDesign = loadTDesign(protocol.params.T, protocol.params.N, protocol.params.center.data)
+  tDesign = loadTDesign(protocol.params.T, protocol.params.N, protocol.params.radius, protocol.params.center.data)
   protocol.positions = tDesign
   protocol.measurement = zeros(Float64, 3, length(tDesign))
 end
@@ -76,7 +75,7 @@ end
 function postMovement(protocol::RobotBasedTDesignFieldProtocol)
   # Prepare
   index = protocol.currPos
-  @info "Measurement" index length(protocol.params.positions)
+  @info "Measurement" index length(protocol.positions)
   daq = getDAQ(protocol.scanner)
   su = getSurveillanceUnit(protocol.scanner)
   tempControl = getTemperatureController(protocol.scanner)
@@ -149,11 +148,11 @@ function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
   if currentWP(daq.rpc) < timing.finish
     @warn "Magnetic field was measured too late"
   end
-  protocol.measurement[:, protocol.currPos] = field_
+  protocol.measurement[:, protocol.currPos] = ustrip.(u"T", field_)
 end
 
 function stop(protocol::RobotBasedTDesignFieldProtocol)
-  if protocol.currPos <= length(protocol.params.positions)
+  if protocol.currPos <= length(protocol.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.stopped = true
   else 
@@ -175,7 +174,7 @@ end
 
 
 function handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::ProgressQueryEvent)
-  put!(protocol.biChannel, ProgressEvent(protocol.currPos, length(protocol.params.positions), "Position", event))
+  put!(protocol.biChannel, ProgressEvent(protocol.currPos, length(protocol.positions), "Position", event))
 end
 
 handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
@@ -191,6 +190,10 @@ function handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::FileStorag
     write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO only works for LakeShore460 atm
   end
   put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+function cleanup(protocol::RobotBasedTDesignFieldProtocol)
+ # NOP
 end
 
 protocolInteractivity(protocol::RobotBasedTDesignFieldProtocol) = Interactive()
