@@ -88,4 +88,10 @@ function setSampleSize(gauss::ArduinoGaussMeter, samplesize::Int)
   return parse(Int, data_string)
 end
 
+export getTemperature
+function getTemperature(gauss::ArduinoGaussMeter)
+  temp_str = sendCommand(gauss.ard, "TEMP")
+  return parse(Float32,temp_str)
+end
+
 close(gauss::ArduinoGaussMeter) = close(gauss.ard)

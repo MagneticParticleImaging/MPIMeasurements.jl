@@ -42,6 +42,7 @@ int getCommands(char*) {
   Serial.print("'!DATA*#' ");
   Serial.print("'!POS*#' ");
   Serial.print("'!VERSION*#' ");
+  Serial.print("'!TEMP*#' ");
   Serial.print("'!COMMANDS*#' ");
   Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
   Serial.println("#");
@@ -131,12 +132,13 @@ void setup() {
   // ***
   
   sensor.begin();
+  sensor.enableTemp();
 }
 
 
 int getData(char*) {
   // updateData reads values from sensor and reading triggers next measurement
-  int ret = sensor.updateData(); // Throw away first old data
+  sensor.updateData(); // Throw away first old data
   delay(10);
   uint16_t measDelay = 10;
   unsigned long start, end,startFP,endA;
@@ -146,7 +148,6 @@ int getData(char*) {
   int16_t x=0,y=0,z=0;
   int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0;
   float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
-  startFP=millis();
   for (int i =0 ;i< sample_size*3 ; i+=3){
     sensor.updateData(); 
     start = millis();
@@ -181,7 +182,7 @@ int getData(char*) {
     varX =(float)sumXX/sample_size;
     varY =(float)sumYY/sample_size;
     varZ =(float)sumXX/sample_size;
-  endA=millis();
+
   Serial.print(meanX,7);
   Serial.print(",");
   Serial.print(meanY,7);
@@ -193,8 +194,6 @@ int getData(char*) {
   Serial.print(varY,7);
   Serial.print(",");
   Serial.print(varZ,7);
-  Serial.print(",");
-  Serial.print(endA-startFP);
   Serial.println("#");
   Serial.flush();
 }
@@ -206,7 +205,18 @@ int getPosition(char*) {
 }
 
 int getTemp(char*) {
-  // Enable Temp, measure, then disable again
+  sensor.enableTemp();
+  delay(10);
+  sensor.updateData();
+  delay(10);
+  sensor.updateData();
+  delay(10);
+  float temp = sensor.getTemp();
+  Serial.print(temp);
+  Serial.println("#");
+  Serial.flush();
+  sensor.disableTemp();
+  delay(10);
 }
 
 int getVersion(char*) {
