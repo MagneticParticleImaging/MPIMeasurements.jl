@@ -144,8 +144,12 @@ function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
   end
   
   field_ = getXYZValues(gaussmeter)
+
+  @info field_
   
-  if currentWP(daq.rpc) < timing.finish
+  current = currentWP(daq.rpc)
+  if current > timing.down
+    @warn current
     @warn "Magnetic field was measured too late"
   end
   protocol.measurement[:, protocol.currPos] = ustrip.(u"T", field_)
