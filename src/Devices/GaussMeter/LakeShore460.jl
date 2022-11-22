@@ -4,6 +4,9 @@ export setUnitToTesla,setStandardSettings, getFieldError, calculateFieldError
 
 export LakeShore460GaussMeterDirectParams, LakeShore460GaussMeterPoolParams, LakeShore460GaussMeter, LakeShore460GaussMeterParams
 
+struct CachedMultiplier end
+struct LiveMultiplier end
+
 abstract type LakeShore460GaussMeterParams <: DeviceParams end
 
 Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShore460GaussMeterParams
@@ -11,7 +14,7 @@ Base.@kwdef struct LakeShore460GaussMeterDirectParams <: LakeShore460GaussMeterP
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	sensorCorrectionTranslation::Matrix{Float64} = zeros(Float64, 3, 3) 
 	autoRange::Bool = true
-	range::Char = '3'
+	range::Int64 = 3
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
@@ -28,7 +31,7 @@ Base.@kwdef struct LakeShore460GaussMeterPoolParams <: LakeShore460GaussMeterPar
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
 	sensorCorrectionTranslation::Matrix{Float64} = zeros(Float64, 3, 3)
 	autoRange::Bool = true
-	range::Char = '3'
+	range::Int64 = 3
 	completeProbe::Char = '1'
 	fast::Bool = true
 	@add_serial_device_fields "\r\n" 7 SP_PARITY_ODD
@@ -42,6 +45,7 @@ end
 
 Base.@kwdef mutable struct LakeShore460GaussMeter <: GaussMeter
 	@add_device_fields LakeShore460GaussMeterParams
+	multiplier::Union{Vector{Float64}, Nothing} = nothing
 	sd::Union{SerialDevice, Nothing} = nothing
 end
 
@@ -104,7 +108,7 @@ Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::LakeShore460GaussMeter)
 	field = parse.(Float32,split(getAllFields(gauss),","))[1:3]
-	multipliers = getAllMultipliers(gauss)
+	multipliers = getAllMultipliers(gauss, LiveMultiplier()) # Caching has a race condition/weird behaviour
   return gauss.params.coordinateTransformation*(field.*multipliers)*Unitful.T
 end
 
@@ -166,7 +170,7 @@ function getMultiplier(gauss::LakeShore460GaussMeter)
 	end
 end
 
-function getAllMultipliers(gauss::LakeShore460GaussMeter)
+function getAllMultipliers(gauss::LakeShore460GaussMeter, ::LiveMultiplier)
 	setActiveChannel(gauss, 'X')
 	sleep(0.01) # Fynn made me do it
 	mx = getMultiplier(gauss)
@@ -179,6 +183,17 @@ function getAllMultipliers(gauss::LakeShore460GaussMeter)
 	return [mx,my,mz]
 end
 
+function getAllMultipliers(gauss::LakeShore460GaussMeter, ::CachedMultiplier)
+	if isnothing(gauss.multiplier)
+		gauss.multiplier = getAllMultipliers(gauss, LiveMultiplier())
+	end
+	return gauss.multiplier
+end
+
+function getAllMultipliers(gauss::LakeShore460GaussMeter)
+	type = gauss.params.autoRange ? LiveMultiplier() : CachedMultiplier()
+	return getAllMultipliers(gauss, type)
+end
 
 """
 Returns the manufacturerID, model number, derial number and firmware revision date
@@ -340,7 +355,7 @@ For HSE Probe. More Information in part 3.4 on page 3-7.
 	2           = ±30mT
 	3 = lowest  = ±3mT
 """
-function setRange(gauss::LakeShore460GaussMeter, range::Char)
+function setRange(gauss::LakeShore460GaussMeter, range::Int64)
 	send(gauss.sd, "RANGE $range")
 end
 
@@ -425,34 +440,35 @@ For HSE Probe. More Information in part 3.4 on page 3-7.
 
 Sets the range of the X channel
 """
-function setXRange(gauss::LakeShore460GaussMeter, range::Char)
-	setActiveChannel(gauss, 'X')
-	setRange(gauss, range)
-	return nothing
-end
+setXRange(gauss::LakeShore460GaussMeter, range::Int64) = setRange(gauss, 'X', range, 1)
 
 """
 Sets the range of the Y channel
 """
-function setYRange(gauss::LakeShore460GaussMeter, range::Char)
-	setActiveChannel(gauss, 'Y')
-	setRange(gauss, range)
-	return nothing
-end
+setYRange(gauss::LakeShore460GaussMeter, range::Int64) = setRange(gauss, 'Y', range, 2)
 
 """
 Sets the range of the Z channel
 """
-function setZRange(gauss::LakeShore460GaussMeter, range::Char)
-	setActiveChannel(gauss, 'Z')
+setZRange(gauss::LakeShore460GaussMeter, range::Int64) = setRange(gauss, 'Z', range, 3)
+
+
+function setRange(gauss::LakeShore460GaussMeter, channel::Char, range::Int64, index::Int64)
+	setActiveChannel(gauss, channel)
+	sleep(0.05)
 	setRange(gauss, range)
-	return nothing
+	sleep(0.05)
+	if isnothing(gauss.multiplier)
+		gauss.multiplier = zeros(Float64, 3)
+	end
+	sleep(0.05)
+	gauss.multiplier[index] = getMultiplier(gauss)
 end
 
 """
 Sets the range of all channels
 """
-function setAllRange(gauss::LakeShore460GaussMeter, range::Char)
+function setAllRange(gauss::LakeShore460GaussMeter, range::Int64)
 	setXRange(gauss, range)
 	setYRange(gauss, range)
 	setZRange(gauss, range)
