@@ -1,5 +1,5 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "1.3"
+#define VERSION "2.1"
 #define POSITION 1
 #define BAUDRATE 9600
 #include <Tle493d_w2b6.h>
@@ -132,7 +132,7 @@ void setup() {
   // ***
   
   sensor.begin();
-  sensor.enableTemp();
+  sensor.disableTemp();
 }
 
 
@@ -172,7 +172,7 @@ int getData(char*) {
   
   meanX = (float)sumX/sample_size;
   meanY = (float)sumY/sample_size;
-  meanZ = (float)sumX/sample_size;
+  meanZ = (float)sumZ/sample_size;
   
   for(int i=0; i<sample_size*3;i+=3){
     sumXX += ((float)value_buffer[i]-meanX)*((float)value_buffer[i]-meanX);
@@ -181,7 +181,7 @@ int getData(char*) {
   }
     varX =(float)sumXX/sample_size;
     varY =(float)sumYY/sample_size;
-    varZ =(float)sumXX/sample_size;
+    varZ =(float)sumZZ/sample_size;
 
   Serial.print(meanX,7);
   Serial.print(",");
@@ -212,7 +212,7 @@ int getTemp(char*) {
   sensor.updateData();
   delay(10);
   float temp = sensor.getTemp();
-  Serial.print(temp);
+  Serial.print(temp,7);
   Serial.println("#");
   Serial.flush();
   sensor.disableTemp();

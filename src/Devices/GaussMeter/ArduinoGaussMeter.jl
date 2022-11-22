@@ -67,7 +67,7 @@ end
 function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HALLSENS:1"))
+    if !(startswith(reply, "HALLSENS:2"))
         close(sd)
         throw(ScannerConfigurationError(string("Connected to wrong Device", reply)))
     end
