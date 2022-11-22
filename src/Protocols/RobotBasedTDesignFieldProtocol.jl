@@ -29,7 +29,9 @@ Base.@kwdef mutable struct RobotBasedTDesignFieldProtocol <: RobotBasedProtocol
   finishAcknowledged::Bool = false
 
   measurement::Union{Matrix{Float64}, Nothing} = nothing
-  positions::Union{SphericalTDesign, Nothing} = nothing
+  tDesign::Union{SphericalTDesign, Nothing} = nothing
+  positions::Union{Vector{ScannerCoords}, Nothing} = nothing
+  indices::Union{Vector{Int64}, Nothing} = nothing
   currPos::Int64 = 1
   #safetyTask::Union{Task, Nothing} = nothing
   #safetyChannel::Union{Channel{ProtocolEvent}, Nothing} = nothing
@@ -39,9 +41,32 @@ function _init(protocol::RobotBasedTDesignFieldProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
-  tDesign = loadTDesign(protocol.params.T, protocol.params.N, protocol.params.radius, protocol.params.center.data)
-  protocol.positions = tDesign
-  protocol.measurement = zeros(Float64, 3, length(tDesign))
+  protocol.tDesign = loadTDesign(protocol.params.T, protocol.params.N, protocol.params.radius, protocol.params.center.data)
+  (pos, indices) = sortPositions(protocol, protocol.tDesign)
+  protocol.positions = pos
+  protocol.indices = indices
+  protocol.measurement = zeros(Float64, 3, length(protocol.tDesign))
+end
+
+function sortPositions(protocol::RobotBasedTDesignFieldProtocol, tDesign::SphericalTDesign)
+  robot = getRobot(protocol.scanner)
+  current = getPositionScannerCoords(robot)
+  return sortPositions(tDesign, current)
+end
+
+function sortPositions(tDesign::SphericalTDesign, start)
+  current = start
+  tempPositions = collect(tDesign)
+  greedyPositions = ScannerCoords[]
+  indices = Int64[]
+  while length(greedyPositions) != length(tDesign)
+    (val, idx) = findmin(map(x-> norm(x - current), tempPositions))
+    current = tempPositions[idx]
+    push!(greedyPositions, ScannerCoords(uconvert.(Unitful.mm, current)))
+    push!(indices, idx)
+    tempPositions[idx] = [Inf, Inf, Inf] .* 1.0u"mm"
+  end
+  return (greedyPositions, indices)
 end
 
 function enterExecute(protocol::RobotBasedTDesignFieldProtocol)
@@ -55,7 +80,7 @@ end
 function nextPosition(protocol::RobotBasedTDesignFieldProtocol)
   positions = protocol.positions
   if protocol.currPos <= length(positions)
-    return ScannerCoords(uconvert.(Unitful.mm, positions[protocol.currPos]))
+    return protocol.positions[protocol.currPos]
   end
   return nothing
 end
@@ -152,7 +177,7 @@ function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
     @warn current
     @warn "Magnetic field was measured too late"
   end
-  protocol.measurement[:, protocol.currPos] = ustrip.(u"T", field_)
+  protocol.measurement[:, protocol.indices[protocol.currPos]] = ustrip.(u"T", field_)
 end
 
 function stop(protocol::RobotBasedTDesignFieldProtocol)
