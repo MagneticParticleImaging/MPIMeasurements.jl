@@ -107,7 +107,7 @@ end
 Returns x,y, and z values and apply a coordinate transformation
 """
 function getXYZValues(gauss::LakeShore460GaussMeter)
-	field = parse.(Float32,split(getAllFields(gauss),","))[1:3]
+	field = getAllFields(gauss)
 	multipliers = getAllMultipliers(gauss, LiveMultiplier()) # Caching has a race condition/weird behaviour
   return gauss.params.coordinateTransformation*(field.*multipliers)*Unitful.T
 end
@@ -124,18 +124,14 @@ function getField(gauss::LakeShore460GaussMeter)
 end
 
 """
-Returns the field values of X, Y, Z and a fourth reading consiting of
-meaningless data.
+Returns the field values of X, Y and Z. Throws an error if an overload was detected
 """
 function getAllFields(gauss::LakeShore460GaussMeter)
-	field = "OL,OL,OL,OL"
-    while occursin("OL",field)
-	  field = query(gauss.sd, "ALLF?")
-	  if occursin("OL",field)
-        sleep(3.0)
-	  end
-    end
-	return field
+	field = query(gauss.sd, "ALLF?")
+	if occursin("OL",field)
+		throw(DeviceException("Overload detected during measurement", gauss))
+	end
+	return parse.(Float32,split(field,","))[1:3]
 end
 
 """
