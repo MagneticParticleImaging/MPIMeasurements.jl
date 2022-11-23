@@ -33,6 +33,7 @@ Base.@kwdef mutable struct RobotBasedTDesignFieldProtocol <: RobotBasedProtocol
   positions::Union{Vector{ScannerCoords}, Nothing} = nothing
   indices::Union{Vector{Int64}, Nothing} = nothing
   currPos::Int64 = 1
+  finalizer::Union{Task, Nothing} = nothing
   #safetyTask::Union{Task, Nothing} = nothing
   #safetyChannel::Union{Channel{ProtocolEvent}, Nothing} = nothing
 end
@@ -90,6 +91,7 @@ function preMovement(protocol::RobotBasedTDesignFieldProtocol)
 end
 
 function duringMovement(protocol::RobotBasedTDesignFieldProtocol, moving::Task)
+  wait(protocol.finalizer)
   daq = getDAQ(protocol.scanner)
   # Prepare Sequence
   setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
@@ -130,18 +132,57 @@ function postMovement(protocol::RobotBasedTDesignFieldProtocol)
 
   if Base.istaskfailed(producer)
     currExceptions = current_exceptions(producer)
-    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    @error "Measurement failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
     for i in 1:length(currExceptions) - 1
       stack = currExceptions[i]
       @error stack[:exception] trace = stacktrace(stack[:backtrace])
     end
     ex = currExceptions[1][:exception]
+    throw(ex)
   end
 
   # Increment measured positions
   protocol.currPos +=1
-  
-  # End measurement
+end
+
+function startMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  daq = getDAQ(protocol.scanner)
+  su = getSurveillanceUnit(protocol.scanner)
+  tempControl = getTemperatureController(protocol.scanner)
+  amps = getDevices(protocol.scanner, Amplifier)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+  end
+  if !isnothing(su)
+    enableACPower(su)
+  end
+  if !isnothing(tempControl)
+    disableControl(tempControl)
+  end
+  @sync for amp in amps
+    @async turnOn(amp)
+  end
+  startTx(daq)
+  current = 0
+  # Wait for measurement proper frame to start
+  while current < timing.start
+    current = currentWP(daq.rpc)
+    sleep(0.01)
+  end
+end
+
+function stopMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  daq = getDAQ(protocol.scanner)
+  su = getSurveillanceUnit(protocol.scanner)
+  tempControl = getTemperatureController(protocol.scanner)
+  amps = getDevices(protocol.scanner, Amplifier)
+  if !isempty(amps)
+    # Only enable amps that amplify a channel of the current sequence
+    channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
+    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
+  end
   timing = getTiming(daq)
   @show timing 
   endSequence(daq, timing.finish)
@@ -158,26 +199,35 @@ end
 
 function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
   daq = getDAQ(protocol.scanner)
+  startMeasurement(protocol)
   gaussmeter = getGaussMeter(scanner(protocol))
+  
+  field = getXYZValues(protocol, gaussmeter)
   timing = getTiming(daq)
-  startTx(daq)
-  current = 0
-  # Wait for measurement proper frame to start
-  while current < timing.start
-    current = currentWP(daq.rpc)
-    sleep(0.01)
-  end
-  
-  field_ = getXYZValues(gaussmeter)
-
-  @info field_
-  
   current = currentWP(daq.rpc)
   if current > timing.down
     @warn current
     @warn "Magnetic field was measured too late"
   end
-  protocol.measurement[:, protocol.indices[protocol.currPos]] = ustrip.(u"T", field_)
+  protocol.finalizer = @tspawnat protocol.scanner.generalParams.consumerThreadID finishMeasurement(protocol, gaussmeter, field, protocol.currPos)
+end
+
+getXYZValues(::RobotBasedTDesignFieldProtocol, gauss::GaussMeter) = getXYZValues(gauss)
+function finishMeasurement(protocol::RobotBasedTDesignFieldProtocol, ::GaussMeter, field, index::Int64)
+  protocol.measurement[:, protocol.indices[index]] = ustrip.(u"T", field)
+  stopMeasurement(protocol)
+end
+
+getXYZValues(::RobotBasedTDesignFieldProtocol, gauss::LakeShore460GaussMeter) = getAllFields(gauss)
+function finishMeasurement(protocol::RobotBasedTDesignFieldProtocol, gauss::LakeShore460GaussMeter, field, index::Int64)
+  @sync begin
+    @async begin 
+      multipliers = getAllMultipliers(gauss, LiveMultiplier())
+      field = gauss.params.coordinateTransformation*(field.*multipliers)*Unitful.T
+      protocol.measurement[:, protocol.indices[index]] = ustrip.(u"T", field)
+    end
+    @async stopMeasurement(protocol)
+  end
 end
 
 function stop(protocol::RobotBasedTDesignFieldProtocol)
