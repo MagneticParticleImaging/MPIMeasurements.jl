@@ -144,15 +144,12 @@ end
 function receiveDelimited(sd::SerialDevice, array::AbstractArray)
 	lock(sd.sdLock)
 	try
-		println("----------------------------")
 		set_read_timeout(sd.sp, sd.timeout_ms/1000)
 		buf = IOBuffer()
 		done = false
 		while bytesavailable(sd.sp) > 0 || !done
 			c = read(sd.sp, 1)
-			println(c[1])
 			if c[1] == UInt8(sd.delim_read) && buf.size == sizeof(array)
-				println("we did it")
 				done = true
 				break
 			end
