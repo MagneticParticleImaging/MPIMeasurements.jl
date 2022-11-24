@@ -29,12 +29,12 @@ function _init(tx::TxDAQController)
 end
 
 neededDependencies(::TxDAQController) = [AbstractDAQ]
-optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier]
+optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, TemperatureController]
 
 function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{ComplexF64}, Nothing} = nothing)
   # Prepare and check channel under control
   daq = dependency(txCont, AbstractDAQ)
-  seqControlledChannel = getControlledChannel(seq)
+  seqControlledChannel = getControlledChannel(txCont, seq)
   missingControlDef = []
   txCont.controlledChannels = []
 
@@ -54,7 +54,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
 
   # Check that we only control four channels, as our RedPitayaDAQs only have 4 signal components atm
-  if length(txCont.controlledChannels) > 4
+  if length(txCont.controlledChannels) > 3
     throw(IllegalStateException("Sequence requires controlling of more than four channels, which is currently not implemented."))
   end
 
@@ -97,9 +97,16 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   if hasDependency(txCont, SurveillanceUnit)
     su = dependency(txCont, SurveillanceUnit)
   end
-  
   if !isnothing(su)
     enableACPower(su)
+  end
+
+  tempControl = nothing
+  if hasDependency(txCont, TemperatureController)
+    tempControl = dependency(txCont, TemperatureController)
+  end
+  if !isnothing(tempControl)
+    disableControl(tempControl)
   end
 
   amps = []
@@ -108,7 +115,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   end
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(union(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
+    txChannelIds = id.(vcat(acyclicElectricalTxChannels(seq), periodicElectricalTxChannels(seq)))
     amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
     @sync for amp in amps
       @async turnOn(amp)
@@ -180,6 +187,14 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
         @error ex
       end
     end
+    try 
+      if !isnothing(tempControl)
+        enableControl(tempControl)
+      end
+    catch ex
+      @error "Could not enable heating control"
+      @error ex
+    end
     try
       if !isnothing(su)
         disableACPower(su)
@@ -198,8 +213,8 @@ function controlTx(txCont::TxDAQController, seq::Sequence, initTx::Union{Matrix{
   return txFromMatrix(txCont, txCont.currTx)
 end
 
-getControlledChannel(seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
-getUncontrolledChannel(seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
+getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]
+getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
 function txFromMatrix(txCont::TxDAQController, Γ::Matrix{ComplexF64})
   amplitudes = Dict{String, Vector{Union{Float32, Nothing}}}()

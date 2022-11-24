@@ -42,6 +42,7 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::RobotMPIMeasurementProtocol)
@@ -111,6 +112,7 @@ function enterExecute(protocol::RobotMPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
+  protocol.unit = ""
 end
 
 function _execute(protocol::RobotMPIMeasurementProtocol)
@@ -142,6 +144,8 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     moveAbs(rob, namedPosition(rob, "park"))
     disable(rob)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+    @debug "Taking background measurement."
+    protocol.unit = "BG Frames"
     measurement(protocol)
     protocol.bgMeas = protocol.seqMeasState.buffer
     if askChoices(protocol, "Press continue when foreground measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
@@ -152,7 +156,9 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
   enable(rob)
   moveAbs(rob, protocol.params.fgPos)
   disable(rob)
+  @debug "Starting foreground measurement."
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  protocol.unit = "Frames"
   measurement(protocol)
 end
 
@@ -200,15 +206,15 @@ function measurement(protocol::RobotMPIMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
-  scanner = protocol.scanner
+  scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(scanner, sequence)
+  prepareAsyncMeasurement(protocol, sequence)
   if protocol.params.controlTx
     controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, scanner, sequence, prepTx = !protocol.params.controlTx)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, scanner)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
   return protocol.seqMeasState
 end
 
@@ -234,14 +240,20 @@ end
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.protocol.seqMeasState.nextFrame - 1, 0)
+    data = max(protocol.seqMeasState.nextFrame - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
-    if !isnothing(frame) && frame > 0 && frame <= protocol.protocol.seqMeasState.numFrames
-        data = protocol.protocol.seqMeasState.buffer[:, :, :, frame:frame]
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.protocol.seqMeasState.buffer
+    data = copy(protocol.seqMeasState.buffer)
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -252,14 +264,12 @@ end
 
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
-  if length(protocol.bgMeas) > 0 && !protocol.measuring
-    reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.protocol.seqMeasState) 
-    framesTotal = protocol.protocol.seqMeasState.numFrames
-    framesDone = min(protocol.protocol.seqMeasState.nextFrame - 1, framesTotal)
-    reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
-  else 
-    reply = ProgressEvent(0, 0, "N/A", event)  
+  if !isnothing(protocol.seqMeasState)
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
+  else
+    reply = ProgressEvent(0, 0, "N/A", event)
   end
   put!(protocol.biChannel, reply)
 end
@@ -269,13 +279,18 @@ handleEvent(protocol::RobotMPIMeasurementProtocol, event::FinishedAckEvent) = pr
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
-  params = event.params
-  data = protocol.protocol.seqMeasState.buffer
+  mdf = event.mdf
+  data = protocol.seqMeasState.buffer
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, params, bgdata = bgdata)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
   @show filename
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
+
+
+protocolInteractivity(protocol::RobotMPIMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::RobotMPIMeasurementProtocol) = UsingMDFStudy()
+

@@ -46,13 +46,19 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(devicesParams::Dict{String, Any}; robust = false)
+function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false)
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
+    params = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
+    else
+      params = deviceParams(configDir, deviceID)
+    end
+
+    if !isnothing(params)
       deviceType = pop!(params, "deviceType")
 
       dependencies_ = Dict{String, Union{Device, Missing}}()
@@ -218,7 +224,7 @@ mutable struct MPIScanner
     params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
-    devices = initiateDevices(params["Devices"], robust = robust)
+    devices = initiateDevices(configDir, params["Devices"], robust = robust)
 
     scanner = new(name, configDir, generalParams, devices)
 
@@ -283,7 +289,7 @@ end
 """
 $(SIGNATURES)
 
-Retrieve all devices of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
+Retrieve a device of a specific `deviceType` if it can be unambiguously retrieved. Returns nothing if no such device can be found and throws an error if multiple devices fit the type.
 """
 function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
   devices = getDevices(scanner, deviceType)
@@ -294,6 +300,38 @@ function getDevice(scanner::MPIScanner, deviceType::Type{<:Device})
   else
     return devices[1]
   end
+end
+
+function getDevice(f::Function, scanner::MPIScanner, arg)
+  device = getDevice(scanner, arg)
+  if !isnothing(device)
+    f(device)
+  else
+    return nothing
+  end
+end
+
+function getDevices(f::Function, scanner::MPIScanner, arg)
+  c_ex = nothing
+  devices = getDevice(scanner, arg)
+  if !isnothing(devices) && !isempty(devices)
+    for device in devices
+      try
+        f(device)
+      catch ex
+        if isnothing(c_ex)
+          c_ex = CompositeException()
+        end
+        push!(c_ex, ex)
+      end
+    end
+  else
+    return nothing
+  end
+  if !isnothing(c_ex)
+    throw(c_ex)
+  end
+  nothing
 end
 
 "Bore size of the scanner."
@@ -372,8 +410,20 @@ function Sequence(scanner::MPIScanner, dict::Dict)
   if name(scanner) == targetScanner(sequence)
     return sequence
   end
-  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner"))
+  throw(ScannerConfigurationError("Target scanner of sequence differs from given scanner:
+                                   $(name(scanner)) != $(targetScanner(sequence))"))
 end
+
+function deviceParams(configdir::AbstractString, name::AbstractString)
+  path = joinpath(configdir, "Devices", name*".toml")
+  if !isfile(path)
+    return nothing
+  end
+  return TOML.parsefile(path)
+end
+
+deviceParams(scanner::MPIScanner, name::AbstractString) = deviceParams(configDir(scanner), name)
+
 
 function getTransferFunctionList(scanner::MPIScanner)
   path = joinpath(configDir(scanner), "TransferFunctions")

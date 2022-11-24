@@ -10,7 +10,7 @@ Base.@kwdef struct ArduinoTemperatureSensorPortParams <: ArduinoTemperatureSenso
   groupSensors::Vector{Int}
   nameSensors::Vector{String}
 
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoTemperatureSensorPortParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorPortParams, dict)
@@ -23,7 +23,7 @@ Base.@kwdef struct ArduinoTemperatureSensorPoolParams <: ArduinoTemperatureSenso
   groupSensors::Vector{Int}
   nameSensors::Vector{String}
 
-  @add_serial_device_fields '#'
+  @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoTemperatureSensorPoolParams(dict::Dict) = params_from_dict(ArduinoTemperatureSensorPoolParams, dict)

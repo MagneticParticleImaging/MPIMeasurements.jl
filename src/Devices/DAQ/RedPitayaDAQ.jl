@@ -14,7 +14,6 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
-  passPDMToFastDAC::Vector{Bool}
 end
 
 Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
@@ -23,7 +22,7 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
@@ -62,10 +61,6 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
 
       if haskey(value, "calibration")
         splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      if haskey(value, "passPDMToFastDAC")
-        splattingDict[:passPDMToFastDAC] = value["passPDMToFastDAC"]
       end
 
       channels[key] = RedPitayaTxChannelParams(;splattingDict...)
@@ -166,8 +161,8 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
-      if (idx - 1) % 4 < 2
-        m = Int64(ceil((idx + 1)/2))
+      if (idx -1) % 6 < 2
+        m = Int64(idx - (ceil(idx/6) - 1) * 4)
       end
     end
     idxMap[channel[1]] = m
@@ -187,7 +182,9 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
           throw(ScannerConfigurationError("No tx channel defined for field channel $(id(channel))"))
         end
         idx = idxMap[id(channel)]
-        rampMap[idx] = max(get(rampMap, idx, 0.0), rampUp)
+        if !isnothing(idx)
+          rampMap[idx] = max(get(rampMap, idx, 0.0), rampUp)
+        end
       end
     end
   end
@@ -238,12 +235,12 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
   for rp in 1:length(daq.rpc)
     rpLut = copy(emptyLUT)
     rpEnable = copy(emptyEnable)
-    start = (rp - 1) * 4 + 1
-    currentPossibleChannels = collect(start:start+3)
+    start = (rp - 1) * 6 + 1
+    currentPossibleChannels = collect(start:start+5)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
       createLUT!(rpLut, start, currentMapping)
-      createEnableLUT!(rpEnable, start, channelMapping)
+      createEnableLUT!(rpEnable, start, currentMapping)
     end
     luts[rp] = rpLut
     enableLuts[rp] = rpEnable
@@ -280,10 +277,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
 
   rampingSteps = 0
   fractionSteps = 0
-  if isempty(daq.rampingChannel)
-    rampingSteps = 1
-    fractionSteps = 0
-  else
+  if !isempty(daq.rampingChannel)
     result = execute!(daq.rpc) do batch
       for i in daq.rampingChannel
         @add_batch batch rampingDAC(daq.rpc, i)
@@ -329,7 +323,7 @@ function rpSequence(rp::RedPitaya, lut::Array{Float64}, enable::Union{Nothing, A
 end
 
 function createEmptyLUT(numValues::Integer)
-  return zeros(Float32, 2, numValues)
+  return zeros(Float32, 6, numValues)
 end
 
 function createEmptyLUT(seqChannels::Vector{AcyclicElectricalTxChannel})
@@ -352,7 +346,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
     push!(lutIdx, lutChannel.channelIdx)
   end
 
-  # Idx from 1 to 4
+  # Idx from 1 to 6
   lutIdx = (lutIdx.-start).+1
   # Fill skipped channels with 0.0, assumption: size of all lutValues is equal
   #lut = zeros(Float32, maximum(lutIdx), size(lutValues[1], 1))
@@ -363,7 +357,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
 end
 
 function createEmptyEnable(numValues::Integer)
-  return ones(Bool, 2, numValues)
+  return ones(Bool, 6, numValues)
 end
 
 function createEmptyEnable(seqChannels::Vector{AcyclicElectricalTxChannel})
@@ -381,7 +375,7 @@ function createEnableLUT!(enableLut::Array{Bool}, start, channelMapping)
     push!(enableLutIdx, lutChannel.channelIdx)
   end
 
-  # Idx from 1 to 4
+  # Idx from 1 to 6
   enableLutIdx = (enableLutIdx .- start) .+ 1
   # Fill skipped channels with true, assumption: size of all enableLutValues is equal
   #enableLut = ones(Bool, maximum(enableLutIdx), size(enableLutValues[1], 1))
@@ -537,33 +531,62 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
   periodicChannels = periodicElectricalTxChannels(sequence)
 
-  if any([length(component.amplitude) > 1 for channel in periodicChannels for component in channel.components])
+  if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
 
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
+    baseFreq = txBaseFrequency(sequence)
     for channel in periodicChannels
-      channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-
-      offsetVolts = offset(channel)*calibration(daq, id(channel))
-      @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-
-      for (idx, component) in enumerate(components(channel))
-        freq = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(component)
-        @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, idx, freq)
-        waveform_ = uppercase(fromWaveform(waveform(component)))
-        if !isWaveformAllowed(daq, id(channel), waveform(component))
-          throw(SequenceConfigurationError("The channel of sequence `$(name(sequence))` with the ID `$(id(channel))` "*
-                                         "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
-        end
-        @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, idx, waveform_)
-      end
+      setupTxChannel!(batch, daq, channel, baseFreq)
     end
-
-    pass = isempty(daq.params.passPDMToFastDAC) ? [false for i = 1:length(daq.rpc)] : daq.params.passPDMToFastDAC
-    @add_batch batch passPDMToFastDAC!(daq.rpc, pass)
   end
+end
+function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
+  execute!(daq.rpc) do batch
+    setupTxChannel!(batch, daq, channel, baseFreq)
+  end
+end
+function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  offsetVolts = offset(channel)*calibration(daq, id(channel))
+  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
+  for (idx, component) in enumerate(components(channel))
+    setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
+  end
+end
+
+function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component, componentIdx, baseFreq)
+  execute!(daq.rpc) do batch
+    setupTxComponent!(batch, daq, channel, component, componentIdx, baseFreq)
+  end
+end
+function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
+  if componentIdx > 3
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
+  end  
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  freq = ustrip(u"Hz", baseFreq) / divider(component)
+  @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, componentIdx, freq)
+  waveform_ = uppercase(fromWaveform(waveform(component)))
+  if !isWaveformAllowed(daq, id(channel), waveform(component))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
+                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+  end
+  @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, componentIdx, waveform_)
+end
+function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::ArbitraryElectricalComponent, componentIdx, baseFreq)
+  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
+  freq = ustrip(u"Hz", baseFreq) / divider(component)
+  # AWG is always fourth component
+  @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, 4, freq)
+  waveform_ = uppercase(fromWaveform(waveform(component)))
+  if !isWaveformAllowed(daq, id(channel), waveform(component))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
+                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+  end
+  # Waveform is set together with amplitudes for arbitrary waveforms
 end
 
 function setupRx(daq::RedPitayaDAQ, decimation, samplesPerPeriod, periodsPerFrame)
@@ -660,11 +683,13 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
+  allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
   for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
     amps = []
     phases = []
-    for comp in components(channel)
+    wave = nothing
+    for comp in periodicElectricalComponents(channel)
       # Lengths check == 1 happens in setupTx already
       amp = amplitude(comp)
       if dimension(amp) == dimension(1.0u"T")
@@ -673,12 +698,22 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
       push!(amps, amp)
       push!(phases, phase(comp))
     end
+    comps = arbitraryElectricalComponents(channel)
+    if length(comps) > 2
+      throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
+    elseif length(comps) == 1
+      wave = values(comps[1])
+      if dimension(wave[1]) != dimension(1.0u"V")
+        wave = wave.*calibration(daq, name)
+      end
+      allAwg[name] = wave
+    end
 
     allAmps[name] = amps
     allPhases[name] = phases
   end
 
-  setTxParams(daq, allAmps, allPhases)
+  setTxParams(daq, allAmps, allPhases, allAwg)
 end
 
 """
@@ -688,9 +723,10 @@ Note: `amplitudes` and `phases` are defined as a dictionary of
 vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
   setTxParamsAmplitudes(daq, amplitudes)
   setTxParamsPhases(daq, phases)
+  setTxParamsArbitrary(daq, awg)
 end
 function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
   # Determine the worst case voltage per channel
@@ -741,17 +777,32 @@ function setTxParamsFrequencies(daq::RedPitayaDAQ, freqs::Dict{String, Vector{Un
     end
   end
 end
+function setTxParamsArbitrary(daq::RedPitayaDAQ, awgs::Dict{String, Vector{Float32}})
+  for (channelID, wave) in awgs
+    waveformDAC!(daq.rpc, channelIdx(daq, channelID), wave)
+  end
+end
+function setTxParamsArbitrary(daq::RedPitayaDAQ, awg::Nothing)
+  # NOP
+end
 
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}; convolute=true)
+function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{typeof(1.0u"V")}}, Nothing} = nothing; convolute=true)
   amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
+  awgFloat = nothing
   for (id, amps) in amplitudes
     amplitudesFloat[id] = map(x-> isnothing(x) ? nothing : ustrip(u"V", x), amps)
   end
   for (id, phs) in phases
     phasesFloat[id] =  map(x-> isnothing(x) ? nothing : ustrip(u"rad", x), phs)
   end
-  setTxParams(daq, amplitudesFloat, phasesFloat)
+  if !isnothing(awg)
+    awgFloat = Dict{String, Vector{Float32}}()
+    for (id, wave) in awg
+      awgFloat[id] = map(x-> ustrip(u"V", x), wave)
+    end
+  end
+  setTxParams(daq, amplitudesFloat, phasesFloat, awgFloat)
 end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)
@@ -789,7 +840,7 @@ numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all 
 numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
 numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
 numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
-numComponentsMax(daq::RedPitayaDAQ) = 4
+numComponentsMax(daq::RedPitayaDAQ) = 3
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 
