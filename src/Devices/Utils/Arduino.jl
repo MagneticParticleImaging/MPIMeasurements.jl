@@ -9,7 +9,8 @@ abstract type Arduino <: Device end
 
 function sendCommand(ard::Arduino, cmdString::String)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
-  return query(serialDevice(ard), cmd)
+  sd = serialDevice(ard)
+  return query(sd, cmd)
 end
   
 function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
