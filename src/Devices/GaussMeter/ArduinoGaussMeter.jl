@@ -89,7 +89,6 @@ function setSampleSize(gauss::ArduinoGaussMeter, samplesize::Int)
     throw(error("no valid sample size, pick size from 1 to 1024"))
   end
   timeout_ms = max(1000,floor(Int,samplesize*10*1.1)+1)
-  @info("debug"*string(timeout_ms))
   set_timeout_ms(serialDevice(gauss.ard),timeout_ms)
   data_string = sendCommand(gauss.ard, "SAMPLES" * string(samplesize))
   return parse(Int, data_string)
