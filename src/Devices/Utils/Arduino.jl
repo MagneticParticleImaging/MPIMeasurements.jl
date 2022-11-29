@@ -18,6 +18,14 @@ function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
   return query!(serialDevice(ard), cmd, data, delimited = true)
 end
 
+function set_timeout(ard::Arduino,timeout_ms::Int)
+  set_timeout_ms(ard.sd,timeout_ms)
+end
+
+function get_timeout(ard::Arduino)
+  return get_timeout_ms(ard.sd)
+end
+
 Base.@kwdef struct SimpleArduino <: Arduino
   commandStart::String = "!"
   commandEnd::String = "*"

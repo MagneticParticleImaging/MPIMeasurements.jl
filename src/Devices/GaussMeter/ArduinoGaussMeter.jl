@@ -25,16 +25,23 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
+  sampleSize:: Int
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
-ArduinoGaussMeterDescriptionParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
+function ArduinoGaussMeterDescriptionParams(dict::Dict)
+  if haskey(dict, "coordinateTransformation")
+    dict["coordinateTransformation"] = reshape(dict["coordinateTransformation"], 3, 3)
+  end 
+  params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
+end
 
 
 Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino, Nothing} = nothing
+  sampleSize::Int = 0
 end
 
 neededDependencies(::ArduinoGaussMeter) = []
@@ -46,6 +53,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   gauss.ard = ard
+  setSampleSize(gauss, params.sampleSize)
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -78,21 +86,32 @@ function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
 end
 
 function getXYZValues(gauss::ArduinoGaussMeter)
+  temp = get_timeout(gauss.ard)
+  timeout_ms = max(1000,floor(Int,gauss.sampleSize*10*1.2)+1)
+  @info(timeout_ms)
+  set_timeout(gauss.ard, timeout_ms)
   data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
   data = [parse(Float32,str) for str in data_strings]
+  set_timeout(gauss.ard, temp)
   return data
 end
 
 export setSampleSize
-function setSampleSize(gauss::ArduinoGaussMeter, samplesize::Int)
-  if(samplesize>1024 || samplesize<1)
+function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
+  if(sampleSize>1024 || sampleSize<1)
     throw(error("no valid sample size, pick size from 1 to 1024"))
   end
-  timeout_ms = max(1000,floor(Int,samplesize*10*1.1)+1)
-  set_timeout_ms(serialDevice(gauss.ard),timeout_ms)
-  data_string = sendCommand(gauss.ard, "SAMPLES" * string(samplesize))
+  gauss.sampleSize = sampleSize
+  data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize))
   return parse(Int, data_string)
 end
+
+export getSampleSize
+function  getSampleSize(gauss::ArduinoGaussMeter)
+  return gauss.sampleSize
+end
+
+
 
 export getTemperature
 function getTemperature(gauss::ArduinoGaussMeter)

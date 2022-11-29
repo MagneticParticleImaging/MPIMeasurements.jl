@@ -67,6 +67,10 @@ function set_timeout_ms(sd::SerialDevice,timeout_ms::Int)
 	return nothing
 end
 
+function  get_timeout_ms(sd::SerialDevice)
+	return sd.timeout_ms
+end
+
 """
 Set character which terminates query.
 """
