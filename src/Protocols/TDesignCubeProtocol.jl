@@ -3,6 +3,7 @@ export TDesignCubeProtocolParams, TDesignCubeProtocol
 Base.@kwdef mutable struct TDesignCubeProtocolParams <: ProtocolParams
     sequence::Union{Sequence, Nothing} = nothing
     center::ScannerCoords = ScannerCoords([[0.0u"mm", 0.0u"mm", 0.0u"mm"]])
+    samplesSize::Union{Nothing, Int64} = nothing # Optional overwrite
 end
 function TDesignCubeProtocolParams(dict::Dict, scanner::MPIScanner)
     sequence = nothing
@@ -19,6 +20,7 @@ function TDesignCubeProtocolParams(dict::Dict, scanner::MPIScanner)
 end
 
 Base.@kwdef mutable struct TDesignCubeProtocol <: Protocol
+    @add_protocol_fields TDesignCubeProtocolParams
     finishAcknowledged::Bool = false
     measurement::Union{Matrix{Float64}, Nothing} = nothing
     tDesign::Union{SphericalTDesign, Nothing} = nothing
@@ -38,10 +40,7 @@ function _init(protocol::TDesignCubeProtocol)
 end
 
 function enterExecute(protocol::TDesignCubeProtocol)
-    protocol.done = false
-    protocol.cancelled = false
     protocol.finishAcknowledged = false
-    protocol.unit = ""
 end
 
 function _execute(protocol::TDesignCubeProtocol)
@@ -140,7 +139,7 @@ function measurement(protocol::RobotBasedTDesignFieldProtocol)
     daq = getDAQ(protocol.scanner)
     startMeasurement(protocol)
     cube = getDevice(scanner(protocol), TDesignCube)
-    
+    # TODO overwrite samplesSize if given
     field = getXYZValues(protocol, cube)
     timing = getTiming(daq)
     current = currentWP(daq.rpc)
@@ -163,7 +162,7 @@ function handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::FileStorag
       write(file,"/positions/tDesign/N", N)		# number of points of the t-design
       write(file,"/positions/tDesign/t", T)		# t of the t-design
       write(file,"/positions/tDesign/center", ustrip.(u"m", protocol.params.center.data))	# center of the measured ball
-      #write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO How to handle this for the cube?
+      #write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO Write 3x3xN rotated translations
     end
     put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

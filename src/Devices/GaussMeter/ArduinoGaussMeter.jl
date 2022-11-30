@@ -1,8 +1,19 @@
 export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
+# Params need more paramters
+# TODO three matrices:
+# calibration: 3x3 <- from calibration measurement (in hall sensor coords) 
+# rotation: 3x3 <- how the sensor is rotated in the cube
+# translation: 3x3 <- spatial offset of each sensor (for now 0)
+# TODO each params needs a position value
+# TODO "getter" for rotated translation
+
 Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   portAddress::String
+  position::Int64 = 1
+  calibration::Matrix{Float64}
+  rotation::Matrix{Float64}
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   calibration::Vector{Float64} = [0.098, 0.098, 0.098]
 
@@ -41,6 +52,7 @@ end
 Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino, Nothing} = nothing
+  rotatedCalibration::Matrix{Float64}
   sampleSize::Int = 0
 end
 
@@ -53,6 +65,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   gauss.ard = ard
+  gauss.rotatedCalibration = params.rotation * params.calibration
   setSampleSize(gauss, params.sampleSize)
 end
 
@@ -91,6 +104,7 @@ function getXYZValues(gauss::ArduinoGaussMeter)
   @info(timeout_ms)
   set_timeout(gauss.ard, timeout_ms)
   data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
+  # TODO use rotatedCalibration * data
   data = [parse(Float32,str) for str in data_strings]
   set_timeout(gauss.ard, temp)
   return data
