@@ -1,3 +1,4 @@
+#=
 export TDesignCubeProtocolParams, TDesignCubeProtocol
 
 Base.@kwdef mutable struct TDesignCubeProtocolParams <: ProtocolParams
@@ -171,3 +172,4 @@ function cleanup(protocol::RobotBasedTDesignFieldProtocol)
     # NOP
 end
    
+=#
