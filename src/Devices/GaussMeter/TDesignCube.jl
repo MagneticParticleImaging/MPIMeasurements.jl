@@ -1,4 +1,4 @@
-export 
+export TDesignCubeParams, TDesignCube
 
 Base.@kwdef struct TDesignCubeParams <: DeviceParams
     T::Int64
@@ -34,6 +34,7 @@ function getXYZValues(cube::TDesignCube)
 end
 
 # TODO implement start and receive like with sensor as (maybe async) for loops
+# TODO implement "getters" for T, N, radius
 
 function close(cube::TDesignCube)
     # NOP
