@@ -4,7 +4,7 @@ abstract type ArduinoGaussMeterParams <: DeviceParams end
 Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   portAddress::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
-  calibration::Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -14,7 +14,7 @@ ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDi
 Base.@kwdef struct ArduinoGaussMeterPoolParams <: ArduinoGaussMeterParams
   position::Int64
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
-  calibration::Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -24,16 +24,19 @@ ArduinoGaussMeterPoolParams(dict::Dict) = params_from_dict(ArduinoGaussMeterPool
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
-  calibration::Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
   sampleSize:: Int
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
+
 function ArduinoGaussMeterDescriptionParams(dict::Dict)
   if haskey(dict, "coordinateTransformation")
     dict["coordinateTransformation"] = reshape(dict["coordinateTransformation"], 3, 3)
-  end 
+  elseif  haskey(dict,"biasCalibration")
+    dict["coordinateTransformation"] = reshape(dict["biasCalibration"], 3, 1)
+  end
   params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
 end
 
@@ -85,16 +88,26 @@ function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   end
 end
 
-function getXYZValues(gauss::ArduinoGaussMeter)
+export getRawXYZValues
+function getRawXYZValues(gauss::ArduinoGaussMeter)
   temp = get_timeout(gauss.ard)
   timeout_ms = max(1000,floor(Int,gauss.sampleSize*10*1.2)+1)
-  @info(timeout_ms)
   set_timeout(gauss.ard, timeout_ms)
   data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
   data = [parse(Float32,str) for str in data_strings]
   set_timeout(gauss.ard, temp)
   return data
 end
+
+function getXYZValues(gauss::ArduinoGaussMeter)
+  data = getRawXYZValues(gauss) 
+  means = data[1:3]
+  calibrated_data  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
+  data = vcat(calibrated_data,data[4:6])
+  return data
+
+end
+
 
 export setSampleSize
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
