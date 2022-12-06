@@ -1,41 +1,30 @@
 export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
-# Params need more paramters
-# TODO three matrices:
-# calibration: 3x3 <- from calibration measurement (in hall sensor coords) 
-# rotation: 3x3 <- how the sensor is rotated in the cube
-# translation: 3x3 <- spatial offset of each sensor (for now 0)
-# TODO each params needs a position value
-# TODO "getter" for rotated translation
 
 Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   portAddress::String
   position::Int64 = 1
-  calibration::Matrix{Float64}
-  rotation::Matrix{Float64}
+  calibration::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  rotation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  translation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
-
+  sampleSize::Int
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
 ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDirectParams, dict)
 
-Base.@kwdef struct ArduinoGaussMeterPoolParams <: ArduinoGaussMeterParams
-  position::Int64
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
-  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
-
-  @add_serial_device_fields "#"
-  @add_arduino_fields "!" "*"
-end
-ArduinoGaussMeterPoolParams(dict::Dict) = params_from_dict(ArduinoGaussMeterPoolParams, dict)
 
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
+  position::Int64 = 1
+  calibration::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  rotation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  translation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
-  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration::Vector{Float64} = [0.098, 0.098, 0.098]
   sampleSize:: Int
 
   @add_serial_device_fields "#"
@@ -43,10 +32,14 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
 end
 
 function ArduinoGaussMeterDescriptionParams(dict::Dict)
-  if haskey(dict, "coordinateTransformation")
-    dict["coordinateTransformation"] = reshape(dict["coordinateTransformation"], 3, 3)
-  elseif  haskey(dict,"biasCalibration")
-    dict["coordinateTransformation"] = reshape(dict["biasCalibration"], 3, 1)
+  if haskey(dict, "translation")
+    dict["translation"] = Float64.(reshape(dict["translation"], 3, 3))
+  end
+  if haskey(dict, "rotation")
+    dict["rotation"] = Float64.(reshape(dict["rotation"], 3, 3))
+  end
+  if haskey(dict, "calibration")
+    dict["calibration"] = Float64.(reshape(dict["calibration"], 3, 3))
   end
   params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
 end
@@ -55,7 +48,7 @@ end
 Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino, Nothing} = nothing
-  rotatedCalibration::Matrix{Float64}
+  rotatedCalibration::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   sampleSize::Int = 0
 end
 
@@ -76,10 +69,6 @@ function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDir
   sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
   checkSerialDevice(gauss, sd)
   return sd
-end
-
-function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterPoolParams)
-  return initSerialDevice(gauss, "!VERSION*", "HALLSENS:1:$(params.position)")
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDescriptionParams)
