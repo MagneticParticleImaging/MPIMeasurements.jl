@@ -9,6 +9,9 @@ getGaussMeters(scanner::MPIScanner) = getDevices(scanner, GaussMeter)
 export getGaussMeter
 getGaussMeter(scanner::MPIScanner) = getDevice(scanner, GaussMeter)
 
+export getCube
+getCube(scanner::MPIScanner) = getDevice(scanner,TDesignCube)
+
 export getXValue
 @mustimplement getXValue(gauss::GaussMeter)
 
