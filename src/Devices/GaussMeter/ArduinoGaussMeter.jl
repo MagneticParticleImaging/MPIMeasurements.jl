@@ -105,8 +105,10 @@ end
 function getXYZValues(gauss::ArduinoGaussMeter)
   data = getRawXYZValues(gauss) 
   means = data[1:3]
-  calibrated_data  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
-  data = vcat(calibrated_data,data[4:6])
+  var = data[4:6]
+  calibrated_means  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
+  calibrated_var = gauss.params.coordinateTransformation*gauss.params.coordinateTransformation*var
+  data = vcat(calibrated_means,calibrated_var)
   return data
 
 end
