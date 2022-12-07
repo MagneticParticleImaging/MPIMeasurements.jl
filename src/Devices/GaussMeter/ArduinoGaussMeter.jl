@@ -63,6 +63,7 @@ function _init(gauss::ArduinoGaussMeter)
   gauss.ard = ard
   gauss.rotatedCalibration = params.rotation * params.calibration
   setSampleSize(gauss, params.sampleSize)
+  measurementTriggered =false
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -113,7 +114,54 @@ function getXYZValues(gauss::ArduinoGaussMeter)
 
 end
 
+function query(sd::SerialDevice,cmd)
+	lock(sd.sdLock)
+	try
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		send(sd,cmd)
+		out = receive(sd)
+		# Discard remaining data
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		return out
+	finally
+		sp_flush(sd.sp, SP_BUF_INPUT)
+		unlock(sd.sdLock)
+	end
+end
 
+#todo move to Arduino.jl
+function triggerMeasurment(gauss::ArduinoGaussMeter)
+  cmd = cmdStart(gauss.ard) * cmdString * cmdEnd(gauss.ard)
+  sd = gauss.sd
+  lock(sd.sdLock)
+  try
+    if gauss.measurementTriggered
+      throw("measurement already triggered")
+    end
+    sp_flush(sd.sp,SP_BUF_INPUT)
+    send(sd,cmd)
+    gauss.measurementTriggered = true
+  finally
+    unlock(sd.sdLock) 
+  end
+  
+end
+
+function reciveMeasurmentRaw(gauss::ArduinoGaussMeter)
+  #todo use lock
+  if !gauss.measurementTriggered
+    throw("startMeasurment has to be called first")
+  else
+    lock(sd.sdLock)
+    try
+      data = receive(gauss.sd)
+      sp_flush(sd.sp, SP_BUF_INPUT)
+    finally
+      sp_flush(sd.sp, SP_BUF_INPUT)
+      unlock(sd.sdLock)
+    end
+end
+function applyCalibration(gauss::ArduinoGaussMeter, data::)
 export setSampleSize
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   if(sampleSize>1024 || sampleSize<1)
