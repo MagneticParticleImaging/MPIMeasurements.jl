@@ -32,8 +32,8 @@ end
 
 export setSampleSize
 function setSampleSize(cube::TDesignCube,sampleSize::Int)
-    if sampleSize>2000 || sampleSize<1
-        throw("sampleSize must be in 1:2000")
+    if sampleSize>1024 || sampleSize<1
+        throw("sampleSize must be in 1:1024")
     end
     for sensor in cube.sensors
         setSampleSize(sensor,sampleSize)
