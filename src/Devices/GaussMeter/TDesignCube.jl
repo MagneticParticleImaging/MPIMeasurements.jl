@@ -1,9 +1,10 @@
-export TDesignCubeParams, TDesignCube
+export TDesignCubeParams, TDesignCube, setSampleSize, getSampleSize, getT, getN, getRadius
 
 Base.@kwdef struct TDesignCubeParams <: DeviceParams
     T::Int64
     N::Int64
     radius::typeof(1.0u"mm") = 0.0u"mm"
+    sampleSize:: Int64 = 100
 end
 TDesignCubeParams(dict::Dict) = params_from_dict(TDesignCubeParams, dict)
 
@@ -11,30 +12,49 @@ TDesignCubeParams(dict::Dict) = params_from_dict(TDesignCubeParams, dict)
 Base.@kwdef mutable struct TDesignCube <: Device
     @add_device_fields TDesignCubeParams
     sensors::Union{Vector{ArduinoGaussMeter}, Nothing} = nothing
+    sampleSize:: Int64 = 100
 end
 
 neededDependencies(::TDesignCube) = [ArduinoGaussMeter]
 optionalDependencies(::TDesignCube) = []
 
 function _init(cube::TDesignCube)
+    sampleSize = cube.params.sampleSize
     sensors = dependencies(cube, ArduinoGaussMeter)
-    if length(sensors) != 4
+    if length(sensors) != cube.params.T
         throw("missing Sensors")
     end
-    
-    sort!(sensors,by=x-> x.parms.position)
+    sort!(sensors,by=x-> x.params.position)
     cube.sensors = sensors
+    println(cube.params)
+    setSampleSize(cube,cube.sampleSize)
 end
 
-# TODO get/setSampleSizes
+export setSampleSize
+function setSampleSize(cube::TDesignCube,sampleSize::Int)
+    if sampleSize>2000 || sampleSize<1
+        throw("sampleSize must be in 1:2000")
+    end
+    for sensor in cube.sensors
+        setSampleSize(sensor,sampleSize)
+    end
+    cube.sampleSize = sampleSize
+end
+
+export getSampleSize
+getSampleSize(cube::TDesignCube) = cube.params.sampleSize
 
 function getXYZValues(cube::TDesignCube)
-    measurement = zeros(typeof(u"T"), 3, cube.params.T)
-    # TODO Implement this with start/receive from sensors
+    measurement = zeros(cube.params.T,6)
+    for (i,sensor) in enumerate(cube.sensors)
+        measurement[i,:] = getXYZValues(sensor)
+    end
     return measurement
 end
 
-# TODO implement "getters" for T, N, radius
+getT(cube::TDesignCube) = cube.params.T
+getN(cube::TDesignCube) = cube.params.N
+getRadius(cube::TDesignCube) = cube.params.radius
 
 function close(cube::TDesignCube)
     # NOP
