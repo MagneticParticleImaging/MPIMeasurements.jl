@@ -46,8 +46,13 @@ getSampleSize(cube::TDesignCube) = cube.params.sampleSize
 
 function getXYZValues(cube::TDesignCube)
     measurement = zeros(cube.params.T,6)
+    #triggerMeasurment
+    for sensor in cube.sensors
+        triggerMeasurment(sensor)
+    end
+    #readmeasurement
     for (i,sensor) in enumerate(cube.sensors)
-        measurement[i,:] = getXYZValues(sensor)
+        measurement[i,:] = reciveMeasurment(sensor)
     end
     return measurement
 end

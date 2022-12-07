@@ -1,4 +1,4 @@
-export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams,getRawXYZValues, getXValue, triggerMeasurment, reciveMeasurmentRaw,reciveMeasurment,setSampleSize,getSampleSize,getTemperature
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
 
@@ -50,6 +50,7 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   ard::Union{SimpleArduino, Nothing} = nothing
   rotatedCalibration::Matrix{Float64} = Matrix{Float64}(I,(3,3))
   sampleSize::Int = 0
+  measurementTriggered::Bool =false
 end
 
 neededDependencies(::ArduinoGaussMeter) = []
@@ -63,7 +64,6 @@ function _init(gauss::ArduinoGaussMeter)
   gauss.ard = ard
   gauss.rotatedCalibration = params.rotation * params.calibration
   setSampleSize(gauss, params.sampleSize)
-  measurementTriggered =false
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -91,48 +91,25 @@ function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   end
 end
 
-export getRawXYZValues
 function getRawXYZValues(gauss::ArduinoGaussMeter)
   temp = get_timeout(gauss.ard)
   timeout_ms = max(1000,floor(Int,gauss.sampleSize*10*1.2)+1)
   set_timeout(gauss.ard, timeout_ms)
   data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
-  # TODO use rotatedCalibration * data
-  data = [parse(Float32,str) for str in data_strings]
+  data = [parse(Float64,str) for str in data_strings]
   set_timeout(gauss.ard, temp)
   return data
 end
 
 function getXYZValues(gauss::ArduinoGaussMeter)
   data = getRawXYZValues(gauss) 
-  means = data[1:3]
-  var = data[4:6]
-  calibrated_means  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
-  calibrated_var = gauss.params.coordinateTransformation*gauss.params.coordinateTransformation*var
-  data = vcat(calibrated_means,calibrated_var)
-  return data
-
-end
-
-function query(sd::SerialDevice,cmd)
-	lock(sd.sdLock)
-	try
-		sp_flush(sd.sp, SP_BUF_INPUT)
-		send(sd,cmd)
-		out = receive(sd)
-		# Discard remaining data
-		sp_flush(sd.sp, SP_BUF_INPUT)
-		return out
-	finally
-		sp_flush(sd.sp, SP_BUF_INPUT)
-		unlock(sd.sdLock)
-	end
+  return applyCalibration(gauss,data)
 end
 
 #todo move to Arduino.jl
 function triggerMeasurment(gauss::ArduinoGaussMeter)
-  cmd = cmdStart(gauss.ard) * cmdString * cmdEnd(gauss.ard)
-  sd = gauss.sd
+  cmd = cmdStart(gauss.ard) * "DATA" * cmdEnd(gauss.ard)
+  sd = gauss.ard.sd
   lock(sd.sdLock)
   try
     if gauss.measurementTriggered
@@ -152,17 +129,36 @@ function reciveMeasurmentRaw(gauss::ArduinoGaussMeter)
   if !gauss.measurementTriggered
     throw("startMeasurment has to be called first")
   else
+    sd = gauss.ard.sd
     lock(sd.sdLock)
+    temp = get_timeout(gauss.ard)
+    timeout_ms = max(1000,floor(Int,gauss.sampleSize*10*1.2)+1)
+    set_timeout(gauss.ard, timeout_ms)
     try
-      data = receive(gauss.sd)
-      sp_flush(sd.sp, SP_BUF_INPUT)
+      data_strings = split(receive(gauss.ard.sd), ",")
+      data = [parse(Float64,str) for str in data_strings]
+      return data
     finally
       sp_flush(sd.sp, SP_BUF_INPUT)
       unlock(sd.sdLock)
+      set_timeout(gauss.ard, temp)
+      gauss.measurementTriggered = false
     end
+  end
 end
-function applyCalibration(gauss::ArduinoGaussMeter, data::)
-export setSampleSize
+
+
+reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss,reciveMeasurmentRaw(gauss))
+
+
+function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
+  means = data[1:3]
+  var = data[4:6]
+  calibrated_means  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
+  calibrated_var = gauss.params.coordinateTransformation*gauss.params.coordinateTransformation*var
+  return vcat(calibrated_means,calibrated_var)
+end
+ 
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   if(sampleSize>1024 || sampleSize<1)
     throw(error("no valid sample size, pick size from 1 to 1024"))
@@ -172,14 +168,10 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   return parse(Int, data_string)
 end
 
-export getSampleSize
 function  getSampleSize(gauss::ArduinoGaussMeter)
   return gauss.sampleSize
 end
 
-
-
-export getTemperature
 function getTemperature(gauss::ArduinoGaussMeter)
   temp_str = sendCommand(gauss.ard, "TEMP")
   return parse(Float32,temp_str)
