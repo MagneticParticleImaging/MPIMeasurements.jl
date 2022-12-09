@@ -14,6 +14,12 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
+  "Flag for using the counter trigger"
+  useCounterTrigger::Bool = false
+  "Source type of the counter trigger"
+  counterTriggerSourceType::CounterTriggerSourceType =  COUNTER_TRIGGER_DIO
+  "DIO pin used for the counter trigger"
+  counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
 Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
@@ -127,6 +133,12 @@ function _init(daq::RedPitayaDAQ)
     serverMode!(daq.rpc, CONFIGURATION)
   end
   triggerMode!(daq.rpc, string(daq.params.triggerMode))
+
+  if daq.params.useCounterTrigger
+    counterTrigger_reset!(daq.rpc)
+    counterTrigger_sourceType!(daq.rpc, daq.params.counterTriggerSourceType)
+    counterTrigger_sourceChannel!(daq.rpc, daq.params.counterTriggerSourceChannel)
+  end
 
   daq.present = true
 end
@@ -645,7 +657,18 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
-function startTx(daq::RedPitayaDAQ)
+function startTx(daq::RedPitayaDAQ; useCounterTrigger::Bool=false, referenceCounter::Integer=0, presamples::Integer=0)
+  if daq.params.useCounterTrigger && useCounterTrigger
+    counterTrigger_referenceCounter!(rp, referenceCounter)
+    counterTrigger_presamples!(rp, presamples)
+
+    counterTrigger_enabled!(daq.rpc, true)
+  elseif !daq.params.useCounterTrigger && useCounterTrigger
+    @warn "Usage of the counter trigger was specified for starting tx, but is not enabled in the device params. Nothing is being done."
+  else
+    counterTrigger_enabled!(daq.rpc, false)
+  end
+
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
   @debug "Started tx"
@@ -660,6 +683,10 @@ function stopTx(daq::RedPitayaDAQ)
     end
   end
   clearTx!(daq)
+
+  # We just always make sure to disable the counter trigger
+  counterTrigger_enabled!(daq.rpc, false)
+
   @debug "Stopped tx"
 end
 
