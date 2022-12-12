@@ -241,13 +241,14 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
     speed = defaultVelocity(rob)
   end
   vel = mm2steps.(speed, rob.params.stepsPermm)
-  #EA: Set Robot timeout to a value dependend of the distance to be driven
-  tempTimeout = rob.sd.timeout_ms
-  calculatedTimeout = round(Int, 1000 * 1.5 * (maximum(pos)/minimum(rob.params.defaultVel))/Unitful.s)
-  if calculatedTimeout > 1000
-    rob.sd.timeout_ms = calculatedTimeout
-  end
-  #EA : End Set Robot
+
+  tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
+  # calclulate the timeout needed to do the full movement
+  # TODO: following code can fail for negativ pos values. Pos values should be calclulated as pos minus current posistion
+  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* (maximum(pos)/minimum(rob.params.defaultVel))/Unitful.s)])
+  rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
+  @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
+
   if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
     cmd = string("@0M", " ", steps[1], ",", vel[1], ",", steps[2], ",", vel[2], ",", steps[3], ",", vel[3], ",", 0, ",", 30)
     ret = queryIsel(rob, cmd)
@@ -255,9 +256,7 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
   else
     error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
   end
-  #EA: Set Robot
-  rob.sd.timeout_ms = tempTimeout
-  #EA : End Set Robot
+  rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
 
 function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -270,13 +269,12 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
   end
   vel = mm2steps.(speed, rob.params.stepsPermm)
 
-  #EA: Set Robot timeout to a value dependend of the distance to be driven
-  tempTimeout = rob.sd.timeout_ms
-  calculatedTimeout = round(Int, 1000 * 1.5 * (maximum(dist)/minimum(rob.params.defaultVel))/Unitful.s)
-  if calculatedTimeout > 1000
-    rob.sd.timeout_ms = calculatedTimeout
-  end
-  #EA : End Set Robot
+  tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
+  # calclulate the timeout needed to do the full movement
+  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* (maximum(dist)/minimum(rob.params.defaultVel))/Unitful.s)])
+  rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
+  @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
+
 
   if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
     cmd = string("@0A"," ",steps[1],",",vel[1], ",",steps[2],",",vel[2], ",",steps[3],",",vel[3], ",",0,",",30)
@@ -286,9 +284,7 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
     error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
   end
 
-  #EA: Set Robot
-  rob.sd.timeout_ms = tempTimeout
-  #EA : End Set Robot
+  rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
 
 function waitEnableTime(robot::IselRobot)
