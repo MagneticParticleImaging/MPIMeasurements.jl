@@ -298,7 +298,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
   enableACPower(su)
-  disableControl(tempControl)
+  if tempControl != nothing
+    disableControl(tempControl)
+  end
   @sync for amp in amps
     @async turnOn(amp)
   end
@@ -324,7 +326,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     @sync for amp in amps
       @async turnOff(amp)
     end
-    enableControl(tempControl)
+    if tempControl != nothing
+      enableControl(tempControl)
+    end
     disableACPower(su)
   end
 end
