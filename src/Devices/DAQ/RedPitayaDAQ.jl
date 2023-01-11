@@ -22,7 +22,7 @@ Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
@@ -161,8 +161,8 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
-      if (idx - 1) % 6 < 2
-        m = Int64(ceil((idx + 1)/2))
+      if (idx -1) % 6 < 2
+        m = Int64(idx - (ceil(idx/6) - 1) * 4)
       end
     end
     idxMap[channel[1]] = m
@@ -239,7 +239,6 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
     currentPossibleChannels = collect(start:start+5)
     currentMapping = [(lut, seq) for (lut, seq) in channelMapping if lut.channelIdx in currentPossibleChannels]
     if !isempty(currentMapping)
-      @show currentMapping
       createLUT!(rpLut, start, currentMapping)
       createEnableLUT!(rpEnable, start, currentMapping)
     end

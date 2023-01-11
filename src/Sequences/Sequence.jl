@@ -301,7 +301,7 @@ txCycle(sequence::Sequence) = dfCycle(sequence) # Alias, since this might not on
 
 export dfDivider
 function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = periodicElectricalTxChannels(sequence)
+  channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   result = zeros(Int64, (dfNumChannels(sequence), maxComponents))
   
@@ -315,11 +315,13 @@ function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanica
 end
 
 export dfNumChannels
-dfNumChannels(sequence::Sequence) = length(periodicElectricalTxChannels(sequence)) # TODO: How do we integrate the mechanical channels?
+dfNumChannels(sequence::Sequence) = length(dfChannels(sequence)) # TODO: How do we integrate the mechanical channels?
+
+dfChannels(sequence::Sequence) = [x for x in periodicElectricalTxChannels(sequence) if isDfChannel(x)]
 
 export dfPhase
 function dfPhase(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = periodicElectricalTxChannels(sequence)
+  channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   numPeriods = length(phase(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"rad"), (numPeriods, dfNumChannels(sequence), maxComponents))
@@ -337,7 +339,7 @@ end
 
 export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = periodicElectricalTxChannels(sequence)
+  channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
@@ -355,7 +357,7 @@ end
 
 export dfWaveform
 function dfWaveform(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
-  channels = periodicElectricalTxChannels(sequence)
+  channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
   result = fill(WAVEFORM_SINE, (dfNumChannels(sequence), maxComponents))
 

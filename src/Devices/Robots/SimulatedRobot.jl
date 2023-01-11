@@ -1,7 +1,7 @@
 export SimulatedRobot, SimulatedRobotParams
 
 Base.@kwdef struct SimulatedRobotParams <: DeviceParams
-  defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
+  defaultVelocity::Vector{typeof(1.0u"mm/s")} = [100,100,100]u"mm/s"
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500],[0,400],[0,250]]u"mm"
   namedPositions::Dict{String, Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   movementOrder::String = "default"
@@ -67,7 +67,7 @@ end
 
 function _doReferenceDrive(rob::SimulatedRobot)
   @debug "SimulatedRobot: Doing reference drive"
-  sleep(2)
+  sleep(0.5)
   @debug "SimulatedRobot: Reference drive complete"
   rob.referenced = true
 end

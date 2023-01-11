@@ -2,13 +2,13 @@ import Sockets: send
 
 export getSerialDevices, resolvedSymlink
 
-macro add_serial_device_fields(delim)
+macro add_serial_device_fields(delim, ndatabits=8, parity=SP_PARITY_NONE)
 	return esc(quote
-		delim_read::Union{Char, Nothing} = $delim
-		delim_write::Union{Char, Nothing} = $delim
+		delim_read::Union{String, Nothing} = $delim
+		delim_write::Union{String, Nothing} = $delim
   	baudrate::Integer
-  	ndatabits::Integer = 8
-  	parity::SPParity = SP_PARITY_NONE
+  	ndatabits::Integer = $ndatabits
+  	parity::SPParity = $parity
   	nstopbits::Integer = 1
 		timeout_ms::Int = 1000
 	end)
@@ -39,17 +39,17 @@ mutable struct SerialDevice
 	sp::SerialPort
 	portName::String
 	timeout_ms::Int
-	delim_read::Union{Char, Nothing}
-	delim_write::Union{Char, Nothing}
+	delim_read::Union{String, Nothing}
+	delim_write::Union{String, Nothing}
 	sdLock::ReentrantLock
 	SerialDevice(sp, portName, timeout_ms, delim_read, delim_write) = new(sp, portName, timeout_ms, delim_read, delim_write, ReentrantLock())
 end
 
-function SerialDevice(port::SerialPort, portName::String; delim_read::Union{Char, Nothing} = nothing, delim_write::Union{Char, Nothing} = nothing, timeout_ms = 1000)
+function SerialDevice(port::SerialPort, portName::String; delim_read::Union{String, Nothing} = nothing, delim_write::Union{String, Nothing} = nothing, timeout_ms = 1000)
 	return SerialDevice(port, portName, timeout_ms, delim_read, delim_write)	
 end
 
-function SerialDevice(port::String; baudrate::Integer, delim_read::Union{Char, Nothing} = nothing, delim_write::Union{Char, Nothing} = nothing, timeout_ms = 1000, ndatabits::Integer = 8,
+function SerialDevice(port::String; baudrate::Integer, delim_read::Union{String, Nothing} = nothing, delim_write::Union{String, Nothing} = nothing, timeout_ms = 1000, ndatabits::Integer = 8,
 	parity::SPParity = SP_PARITY_NONE, nstopbits::Integer = 1)
 	sp = SerialPort(port)
 	open(sp)
@@ -149,7 +149,8 @@ function receiveDelimited(sd::SerialDevice, array::AbstractArray)
 		done = false
 		while bytesavailable(sd.sp) > 0 || !done
 			c = read(sd.sp, 1)
-			if c[1] == UInt8(sd.delim_read)
+			# TODO Implement delim check for multi-character delims
+			if c[1] == UInt8(sd.delim_read[1])
 				done = true
 				break
 			end
