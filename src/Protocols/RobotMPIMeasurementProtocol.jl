@@ -73,7 +73,6 @@ function _init(protocol::RobotMPIMeasurementProtocol)
       throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
     end
     protocol.txCont = controllers[1]
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
@@ -208,10 +207,12 @@ end
 function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  daq = getDAQ(scanner_)
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+    sequence = controlTx(protocol.txCont, sequence)
   end
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)

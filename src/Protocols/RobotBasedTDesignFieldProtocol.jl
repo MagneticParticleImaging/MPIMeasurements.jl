@@ -94,34 +94,14 @@ function duringMovement(protocol::RobotBasedTDesignFieldProtocol, moving::Task)
   wait(protocol.finalizer)
   daq = getDAQ(protocol.scanner)
   # Prepare Sequence
-  setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
-  prepareTx(daq, protocol.params.sequence)
-  setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
+  setup(daq, protocol.params.sequence)
 end
 
 function postMovement(protocol::RobotBasedTDesignFieldProtocol)
   # Prepare
   index = protocol.currPos
   @info "Measurement" index length(protocol.positions)
-  daq = getDAQ(protocol.scanner)
-  su = getSurveillanceUnit(protocol.scanner)
-  tempControl = getTemperatureController(protocol.scanner)
-  amps = getDevices(protocol.scanner, Amplifier)
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
-    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-  end
-  if !isnothing(su)
-    enableACPower(su)
-  end
-  if !isnothing(tempControl)
-    disableControl(tempControl)
-  end
-  @sync for amp in amps
-    @async turnOn(amp)
-  end
-
+  
   # Start measurement
   producer = @tspawnat protocol.scanner.generalParams.producerThreadID performMeasurement(protocol)
   while !istaskdone(producer)

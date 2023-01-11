@@ -7,14 +7,13 @@ function asyncMeasurement(protocol::Protocol, sequence::Sequence)
   return protocol.seqMeasState
 end
 
-function prepareAsyncMeasurement(protocol::Protocol, sequence::Sequence)
-  scanner_ = scanner(protocol)
-  daq = getDAQ(scanner_)
+SequenceMeasState(x, sequence::ControlSequence) = SequenceMeasState(x, sequence.targetSequence)
+SequenceMeasState(protocol::Protocol, x) = SequenceMeasState(getDAQ(scanner(protocol)), x)
+function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence)
   numFrames = acqNumFrames(sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
   frameAverage = acqNumFrameAverages(sequence)
-  setup(daq, sequence)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
@@ -31,10 +30,10 @@ function prepareAsyncMeasurement(protocol::Protocol, sequence::Sequence)
   measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
   measState.channel = channel
 
-  protocol.seqMeasState = measState
+  return measState
 end
 
-function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence; prepTx = true)
+function asyncProducer(channel::Channel, protocol::Protocol, sequence::Union{Sequence, ControlSequence})
   scanner_ = scanner(protocol)
   su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
   if !isnothing(su)
@@ -63,7 +62,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
   endSample = nothing
   try
     daq = getDAQ(scanner_)
-    endSample = asyncProducer(channel, daq, sequence, prepTx = prepTx)
+    endSample = asyncProducer(channel, daq, sequence)
   finally
     try
       daq = getDAQ(scanner_)

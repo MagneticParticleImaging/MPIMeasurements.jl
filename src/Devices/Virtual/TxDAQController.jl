@@ -104,6 +104,14 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT, refIndices)
 end
 
+acyclicElectricalTxChannels(cont::ControlSequence) = acyclicElectricalTxChannels(cont.targetSequence)
+periodicElectricalTxChannels(cont::ControlSequence) = periodicElectricalTxChannels(cont.targetSequence)
+acqNumFrames(cont::ControlSequence) = acqNumFrames(cont.targetSequence)
+acqNumFrameAverages(cont::ControlSequence) = acqNumFrameAverages(cont.targetSequence)
+acqNumFrames(cont::ControlSequence, x) = acqNumFrames(cont.targetSequence, x)
+acqNumFrameAverages(cont::ControlSequence, x) = acqNumFrameAverages(cont.targetSequence, x)
+
+
 function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{PeriodicElectricalChannel}, seq::Sequence, daq::AbstractDAQ)
   missingControlDef = []
   dict = OrderedDict{PeriodicElectricalChannel, TxChannelParams}()
@@ -263,11 +271,16 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
     error("TxDAQController $(deviceID(txCont)) could not control.")
   end
 
-  # Prepare Tx for proper measurement
-  setupRx(daq, control.targetSequence)
-  setupTx(daq, control.currSequence)
-  prepareTx(daq, control.currSequence)
   return control
+end
+
+
+function setup(daq::RedPitayaDAQ, sequence::ControlSequence)
+  stopTx(daq)
+  setupRx(daq, sequence.targetSequence)
+  setupTx(daq, sequence.currSequence)
+  prepareTx(daq, sequence.currSequence)
+  setSequenceParams(daq, sequence.targetSequence)
 end
 
 getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]

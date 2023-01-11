@@ -179,11 +179,13 @@ end
 function asyncMeasurement(protocol::MPIMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  daq = getDAQ(scanner_)
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, nothing)
+    sequence = controlTx(protocol.txCont, sequence)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
   return protocol.seqMeasState

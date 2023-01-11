@@ -64,6 +64,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   @add_protocol_fields RobotBasedSystemMatrixProtocolParams
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   txCont::Union{TxDAQController, Nothing} = nothing
+  contSequence::Union{ControlSequence, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
   restored::Bool = false
@@ -160,10 +161,10 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
       throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
     end
     protocol.txCont = controllers[1]
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
+  protocol.contSequence = nothing
 
   return nothing
 end
@@ -251,36 +252,27 @@ end
 function duringMovement(protocol::RobotBasedSystemMatrixProtocol, moving::Task)
   calib = protocol.systemMeasState
   wait(calib.producer)
-  prepareDAQ(protocol)
   wait(calib.consumer)
+  prepareDAQ(protocol)
 end
 
 function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
   calib = protocol.systemMeasState
   daq = getDAQ(protocol.scanner)
-  allowControlLoop = mod1(calib.currPos, 11) == 1  || protocol.restored
-  
-  # Prepare Sequence
-  if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-    acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
-    #acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
-    acqNumFrameAverages(protocol.params.sequence, 1)
-    setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
-    setSequenceParams(daq, protocol.params.sequence)
-    protocol.restored = false
-  end
 
-  # Prepare Tx
-  if protocol.params.controlTx
-    if allowControlLoop
-      controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
-    else
-      setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx 
+    if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
+      protocol.contSequence = controlTx(protocol.txCont, protocol.params.sequence)
+      protocol.restored = false
     end
-  else
-    prepareTx(daq, protocol.params.sequence)
+    sequence = protocol.contSequence
   end
-  setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
+  
+  acqNumFrames(sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
+  #acqNumFrameAverages(sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
+  acqNumFrameAverages(sequence, 1)
+  setup(daq, sequence)
 end
 
 function postMovement(protocol::RobotBasedSystemMatrixProtocol)
@@ -356,6 +348,16 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   end
 
   uMeas, uRef = retrieveMeasAndRef!(asyncBuffer, getDAQ(protocol.scanner))
+  step = UNCHANGED
+  if protocol.params.controlTx
+    @debug "Start update control sequence"
+    field = calcFieldFromRef(protocol.contSequence, uRef)
+    step = controlStep!(protocol.contSequence, protocol.txCont, calcDesiredField(protocol.contSequence), field)
+    if step == INVALID
+      throw(ErrorException("Control update failed to produce valid results"))
+    end
+    @debug "Finish update control sequence"
+  end
 
   startIdx = calib.posToIdx[index]
   stopIdx = calib.posToIdx[index] + numFrames - 1

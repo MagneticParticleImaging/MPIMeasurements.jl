@@ -523,8 +523,11 @@ end
 
 #### Tx and Rx
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
+  stopTx(daq)
   setupRx(daq, sequence)
   setupTx(daq, sequence)
+  prepareTx(daq, sequence)
+  setSequenceParams(daq, sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
