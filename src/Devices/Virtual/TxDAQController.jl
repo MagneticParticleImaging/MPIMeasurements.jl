@@ -29,7 +29,7 @@ mutable struct ControlSequence
   # Arbitrary Waveform
 end
 
-@enum ControlResult UNCHANGED, UPDATED, INVALID
+@enum ControlResult UNCHANGED UPDATED INVALID
 
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   @add_device_fields TxDAQControllerParams
@@ -127,7 +127,7 @@ function createPeriodicElectricalComponentDict(seqControlledChannel::Vector{Peri
   end
   
   if length(missingControlDef) > 0
-    message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and") * ", but either the channel was not defined or had no defined feedback channel."
+    message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and ") * ", but either the channel was not defined or had no defined feedback channel."
     throw(IllegalStateException(message))
   end
 
@@ -145,6 +145,7 @@ end
 
 function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
   daq = dependency(txCont, AbstractDAQ)
+  setupRx(daq, seq)
   control = ControlSequence(txCont, seq, daq)
   return controlTx(txCont, seq, control)
 end
@@ -189,13 +190,13 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   end
 
   # Hacky solution
-  setup(daq, control.currSequence)
   controlPhaseDone = false
   i = 1
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
       # Prepare control measurement
+      setup(daq, control.currSequence)
       channel = Channel{channelType(daq)}(32)
       buffer = AsyncBuffer(daq)
       @info "Control measurement started"
@@ -221,7 +222,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       uMeas, uRef = retrieveMeasAndRef!(buffer, daq)
       txCont.ref = uRef
       if !isnothing(uRef)
-        controlPhaseDone = controlStep!(txCont, control, uRef, Ω) != UNCHANGED
+        controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone
           @info "Could control"
         else

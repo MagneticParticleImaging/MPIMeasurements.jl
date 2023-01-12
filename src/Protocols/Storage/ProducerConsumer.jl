@@ -33,7 +33,8 @@ function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence)
   return measState
 end
 
-function asyncProducer(channel::Channel, protocol::Protocol, sequence::Union{Sequence, ControlSequence})
+asyncProducer(channel, protocol, sequence::ControlSequence) = asyncProducer(channel, protocol, sequence.targetSequence)
+function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   scanner_ = scanner(protocol)
   su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
   if !isnothing(su)

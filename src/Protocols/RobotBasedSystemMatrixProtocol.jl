@@ -298,8 +298,13 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
   end
 
   # Start measurement
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx
+    sequence = protocol.contSequence.targetSequence
+  end
+
   channel = Channel{channelType(daq)}(32)
-  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false)
+  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence)
   bind(channel, calib.producer)
   calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol, index)
   while !istaskdone(calib.producer)
@@ -349,10 +354,10 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 
   uMeas, uRef = retrieveMeasAndRef!(asyncBuffer, getDAQ(protocol.scanner))
   step = UNCHANGED
-  if protocol.params.controlTx
+  @time if protocol.params.controlTx
     @debug "Start update control sequence"
     field = calcFieldFromRef(protocol.contSequence, uRef)
-    step = controlStep!(protocol.contSequence, protocol.txCont, calcDesiredField(protocol.contSequence), field)
+    step = controlStep!(protocol.contSequence, protocol.txCont, field, calcDesiredField(protocol.contSequence))
     if step == INVALID
       throw(ErrorException("Control update failed to produce valid results"))
     end
