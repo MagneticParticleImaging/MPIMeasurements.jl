@@ -21,7 +21,8 @@ optionalDependencies(::TDesignCube) = []
 function _init(cube::TDesignCube)
     sampleSize = cube.params.sampleSize
     sensors = dependencies(cube, ArduinoGaussMeter)
-    if length(sensors) != cube.params.T
+    if length(sensors) != cube.params.N
+        close.(sensors)
         throw("missing Sensors")
     end
     sort!(sensors,by=x-> x.params.position)
