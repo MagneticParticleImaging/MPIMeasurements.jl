@@ -154,7 +154,7 @@ reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss,reciveMeasur
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   var = data[4:6]
-  calibrated_means  = gauss.params.coordinateTransformation * means + gauss.params.biasCalibration
+  calibrated_means  = gauss.rotatedCalibration * means + gauss.params.biasCalibration
   calibrated_var = gauss.params.coordinateTransformation*gauss.params.coordinateTransformation*var
   return vcat(calibrated_means,calibrated_var)
 end
