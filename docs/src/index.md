@@ -1,16 +1,16 @@
 # MPIMeasurements.jl
 
-*A measurement platform for [MPI](https://en.wikipedia.org/wiki/) systems.*
+*A measurement and instrumentation framework for magnetic particle imaging ([MPI](https://en.wikipedia.org/wiki/Magnetic_particle_imaging)) and magnetic particle spectroscopy systems.*
 
-This package provides tools for acquiring [MPI](https://en.wikipedia.org/wiki/Magnetic_particle_imaging) data by providing a composable platform for working with the scanner hardware. By the use of simple configuration files you can describe your hardware and run specific imaging protocols on it.
+## Introduction
 
-## Installation
+This package provides tools for acquiring [MPI](https://en.wikipedia.org/wiki/Magnetic_particle_imaging) data by providing a composable representation for working with the scanner hardware. With the use of simple configuration files you can describe your hardware and run specific imaging protocols on it. The project is designed to be expanded to new systems through community development and component reuse.
 
-Start julia and open the package mode by entering `]`. Then enter
-```julia
-add MPIMeasurements
-```
-This will install the packages `MPIMeasurements.jl` and all its dependencies.
+The main components of the project are:
+* `Scanner`, a composition of devices representing the hardware
+* `Devices`, generic interfaces to hard- and software components of a scanner
+* `Sequences`, abstract representation of magnetic fields and acquisition parameters
+* `Protocols`, complex measurements procedures, that can be executed in scripts, GUIs or the Julia REPL
 
 ## License / Terms of Usage
 
@@ -19,36 +19,12 @@ you are free to use, share, and adapt it. However, please give appropriate credi
 
 ## Community Guidelines
 
-If you have problems using the software, find bugs, or have feature requests please use the [issue tracker](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/issues) to contact us. For general questions we prefer that you contact the current maintainer directly by email.
+If you have problems using the software, find bugs, or have feature requests please use the [issue tracker](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/issues) to contact us. For general questions we prefer that you contact the current maintainers directly by email.
 
 We welcome community contributions to `MPIMeasurements.jl`. Simply create a [pull request](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/pulls) with your proposed changes.
 
-## Contributors
+## Maintainer
 
-* [Tobias Knopp](https://www.tuhh.de/ibi/people/tobias-knopp-head-of-institute.html) (maintainer)
-* TODO: Add missing persons
+* [Tobias Knopp](https://www.tuhh.de/ibi/people/tobias-knopp-head-of-institute.html)
+* [Niklas Hackelberg](https://www.tuhh.de/ibi/people/niklas-hackelberg.html)
 * [Jonas Schumacher](https://www.imt.uni-luebeck.de/institute/staff/jonas-schumacher.html)
-
-## Manual Outline
-
-```@contents
-Pages = [
-    "man/guide.md",
-    "man/examples.md",
-    "man/protocols.md",
-    "man/sequences.md",
-]
-Depth = 1
-```
-
-## Library Outline
-
-```@contents
-Pages = ["lib/public.md", "lib/internals.md"]
-```
-
-### [Index](@id main-index)
-
-```@index
-Pages = ["lib/public.md"]
-```

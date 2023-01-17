@@ -8,12 +8,13 @@ makedocs(
     modules = [MPIMeasurements],
     pages = [
         "Home" => "index.md",
-        "Manual" => Any[
-            "Guide" => "man/guide.md",
-            "Devices" => "man/devices.md",
-            "Protocols" => "man/protocols.md",
-            "Sequences" => "man/sequences.md",
-            "Examples" => "man/examples.md",
+        "Installation" => "installation.md",
+        "Framework" => Any[
+            "Scanner" => "framework/scanner.md",
+            "Devices" => "framework/devices.md",
+            "Sequences" => "framework/sequences.md",
+            "Protocols" => "framework/protocols.md",
+            "Examples" => "framework/examples.md",
         ],
         "Library" => Any[
             "Public" => "lib/public.md",
