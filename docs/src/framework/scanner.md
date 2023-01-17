@@ -27,8 +27,6 @@ julia> scanner = MPIScanner("ScannerName");
 
 During construction, all `Devices` of the scanner are also constructed and initialised according to the parameters contained in the `Scanner.toml` configuration file.
 
-##
-
 ## Scanner.toml
 
 The `Scanner.toml` contains the configuration parameters of the `Scanner` and is structured into three sections. 

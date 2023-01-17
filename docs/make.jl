@@ -17,11 +17,12 @@ makedocs(
             "Examples" => "framework/examples.md",
         ],
         "Library" => Any[
-            "Public" => "lib/public.md",
-            "Internals" => map(
-                s -> "lib/internals/$(s)",
-                sort(readdir(normpath(@__DIR__, "src/lib/internals")))
-            ),
+            "Framework" => Any[
+                "Scanner" => "lib/framework/scanner.md",
+                "Device" => "lib/framework/device.md",
+                "Sequence" => "lib/framework/sequence.md",
+                "Protocol" => "lib/framework/protocol.md",    
+            ]
         ],
     ],
 )

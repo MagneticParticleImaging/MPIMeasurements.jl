@@ -158,4 +158,4 @@ function getTemperature(sensor::IPTempSensor, channel::Int)
     return parse(reply, Float64)
 end
 ```
-Once these are implemented, every `Protocol`, script and GUI that works with the other temperature sensors will seamlessly work with the new. But it is also possible to specialise specific parts of `Protocol` to have unique behaviour for this particular sensor using multiple-dispatch.
+Once these are implemented, every `Protocol`, script and GUI that works with the other temperature sensors will seamlessly work with the new one. But it is also possible to specialise specific parts of `Protocol` to have unique behaviour for this particular sensor using multiple-dispatch.
