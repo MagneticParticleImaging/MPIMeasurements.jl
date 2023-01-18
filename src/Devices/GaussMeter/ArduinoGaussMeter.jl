@@ -225,7 +225,7 @@ function getSampleSize(gauss::ArduinoGaussMeter)
 end
 
 """
-getTemperature(gauss::ArduinoGaussMeter)::Float32= tempreture
+getTemperature(gauss::ArduinoGaussMeter)::Float32
 
 returns tempreture of the sensor, do not expect a high tempreture resolution
 """
