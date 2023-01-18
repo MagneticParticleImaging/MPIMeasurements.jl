@@ -21,7 +21,7 @@ ScannerName/
 
 The `Scanner` data structure is the entry point for working with an MPI system within `MPIMeasurements.jl`, as it manages both the composition of `Devices` and the construction of `Sequences` and `Protocols` based on the configuration directory. A `Scanner` is constructed with the `MPIScanner` function and the name of the desired configuration directoy:  
 
-```julia
+```julia-repl
 julia> scanner = MPIScanner("ScannerName");
 ```
 

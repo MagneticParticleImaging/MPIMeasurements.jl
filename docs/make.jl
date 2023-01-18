@@ -27,5 +27,5 @@ makedocs(
     ],
 )
 
-# deploydocs(repo   = "github.com/MagneticParticleImaging/MPIMeasurements.jl.git",
-#           target = "build")
+deploydocs(repo   = "github.com/MagneticParticleImaging/MPIMeasurements.jl.git",
+          target = "build")

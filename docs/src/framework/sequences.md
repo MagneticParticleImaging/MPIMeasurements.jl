@@ -1,11 +1,11 @@
 # Sequences
 A `Sequence` is an abstract description of magnetic fields being applied during an experiment, as well as the used acquisition parameters. It is the data acquisition (DAQ) `Device` responsibility to produce and acquire the necessary signals described in a `Sequence`.
 
-`MPIMeasurements.jl` contains an implementation of a `DAQ` based on the [RedPitayaDAQServer](https://github.com/tknopp/RedPitayaDAQServer) project. This, together with the [MPI data format (MDF)](https://github.com/MagneticParticleImaging/MDF), motivated the structure of a `Sequence`. However, any `DAQ` capable of producing the following signals could be used instead.
+`MPIMeasurements.jl` contains an implementation of a `DAQ` based on the [RedPitayaDAQServer](https://github.com/tknopp/RedPitayaDAQServer) project. This, together with the [MPI data format (MDF)](https://github.com/MagneticParticleImaging/MDF), motivated the structure of a `Sequence`. However, any `DAQ` capable of producing the following signals could be used instead. A `DAQ` device needs to map the channel and components mentioned in a `Sequence`, into its own representation.
 
 A `Sequence` contains a general description of itself, acquisition parameters and a list of magnetic fields. `Sequences` are constructed from a `Scanners` configuration directory as follows:
 
-```julia
+```julia-repl
 julia> sequence = Sequence(scanner, "<sequence X name>")
 ```
 
@@ -16,14 +16,14 @@ The general section contains a description string for the sequence, as well as t
 [General]
 description = "<Sequence Description>"
 targetScanner = "<ScannerName>"
-baseFrequency = "<XX>Hz"
+baseFrequency = "125MHz"
 ```
 ## Acquisition Settings
 The acquisition settings list which receive channels of a `Scanner` should be acquired during a measurement and with which sampling rate. Furthermore, it contains a description of the length of a measurement or rather how much samples should be acquired and if they should be averaged. This section is related to the acquisition parameters in an MDF file. 
 ```toml
 [Acquisition]
 channels = ["rx1", "rx2"]
-bandwidth = "125MHz"
+bandwidth = "<XX>Hz"
 numPeriodsPerFrame = 1
 numFrames = 1
 numAverages = 1
@@ -37,7 +37,6 @@ The last section of a `Sequence` is the description of the desired magnetic fiel
 Next to these `TxChannel`, a magnetic field also contains parameters if its channel should be controlled, decoupled or should feature ramping of its signals.
 
 ```toml
-[Fields]
 [Fields.df] # Drive Field 
 control = true
 ```
@@ -76,4 +75,3 @@ waveform = "triangle"
 The above example shows an acylic electrical channel with a 4-Hz triangular waveform sampled uniformly at 85 points. 
 
 Instead of sampling pre-defined analytical functions, it is also possible to directly state a series of values.
-### Mechanical Channel
