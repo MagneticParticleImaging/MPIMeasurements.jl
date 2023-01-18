@@ -52,7 +52,7 @@ The protocol section contains hints for `Protocol`, scripts and GUI implementati
 
 ```toml
 [Runtime]
-defaultSequence = <"sequence X name">
+defaultSequence = "<sequence X name>"
 defaultProtocol = "<protocol X name>"
 transferFunction = "<file path>"
 dataStorage = "<file path">
