@@ -22,6 +22,20 @@ makedocs(
                 "Device" => "lib/framework/device.md",
                 "Sequence" => "lib/framework/sequence.md",
                 "Protocol" => "lib/framework/protocol.md",    
+            ],
+            "Base" => Any[
+                "Devices" => Any[
+                    "Robots" => Any[
+                        "Interface" => "lib/base/devices/robots/interface.md",
+                        "Isel" => "lib/base/devices/robots/isel.md"
+                    ],
+                    "Virtual" => Any[
+                        "Serial Port Pool" => "lib/base/devices/virtual/serialportpool.md",
+                    ]
+                ],
+                "Protocols" => Any[
+                    "MPIMeasurement" => "lib/base/protocols/mpimeasurement.md"
+                ]
             ]
         ],
     ],

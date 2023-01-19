@@ -8,7 +8,7 @@ This package provides tools for acquiring [MPI](https://en.wikipedia.org/wiki/Ma
 
 The main components of the project are:
 * `Scanner`, a composition of devices representing the hardware
-* `Devices`, generic interfaces to hard- and software components of a scanner
+* `Devices`, generic interfaces and implementations to/of hard- and software components of a scanner
 * `Sequences`, abstract representation of magnetic fields and acquisition parameters
 * `Protocols`, complex measurements procedures, that can be executed in scripts, GUIs or the Julia REPL
 

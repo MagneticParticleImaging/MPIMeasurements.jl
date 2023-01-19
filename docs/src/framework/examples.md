@@ -17,13 +17,15 @@ To perform an MPS experiement one can use the `MPIMeasurementProtocol`, which ta
 ### Scanner.toml
 ```toml
 [General]
-boreSize = "0mm"
+boreSize = "6mm"
 facility = "Universitätsklinikum Hamburg-Eppendorf"
 manufacturer = "IBI"
 name = "MPS"
 topology = "MPS"
 gradient = "0T/m"
-datasetStore = "/opt/data/MPS1"
+
+[Runtime]
+datasetStore = "/opt/data/MPS"
 defaultProtocol = "MPSMeasurement"
 producerThreadID = 2
 consumerThreadID = 3
@@ -48,19 +50,17 @@ type = "tx"
 channel = 1
 limitPeak = "1.0V"
 sinkImpedance = "HIGH"
-calibration = "20.79V/T"
+calibration = "20.5V/T"
 feedback.channelID = "feedback_main"
-feedback.calibration = "0.017460815791201338T/V"
+feedback.calibration = "0.017T/V"
 
 [Devices.rp_cluster.rx_main]
 type = "rx"
 channel = 1
-limitPeak = "1V"
 
 [Devices.rp_cluster.feedback_main]
 type = "rx"
 channel = 2
-limitPeak = "1V"
 
 [Devices.txController]
 deviceType = "TxDAQController"
@@ -84,7 +84,7 @@ bgFrames = 10
 ```toml
 [General]
 name = "MPSSequence"
-description = "A sequence with a 26 kHz excitation frequency."
+description = "A sequence with a 26.042 kHz excitation frequency."
 targetScanner = "MPS"
 baseFrequency = "125.0MHz"
 
@@ -102,7 +102,7 @@ offset = "0.0mT"
 
 [Fields.ex.excitation.c1]
 divider = 4800
-amplitude = ["0.02T"]
+amplitude = ["20mT"]
 phase = ["0.0rad"]
 waveform = "sine"
 
