@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Protocols · MPIMeasurements</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">MPIMeasurements</a></span></div><form class="docs-search" action="../search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><a class="tocitem" href="../installation.html">Installation</a></li><li><span class="tocitem">Framework</span><ul><li><a class="tocitem" href="scanner.html">Scanner</a></li><li><a class="tocitem" href="devices.html">Devices</a></li><li><a class="tocitem" href="sequences.html">Sequences</a></li><li class="is-active"><a class="tocitem" href="protocols.html">Protocols</a><ul class="internal"><li><a class="tocitem" href="#Tasks-and-Channels"><span>Tasks and Channels</span></a></li><li><a class="tocitem" href="#Protocol-Structure"><span>Protocol Structure</span></a></li><li><a class="tocitem" href="#Protocol-Lifecycle"><span>Protocol Lifecycle</span></a></li><li><a class="tocitem" href="#Protocol-Communication"><span>Protocol Communication</span></a></li><li><a class="tocitem" href="#Implementing-New-Protocols"><span>Implementing New Protocols</span></a></li></ul></li><li><a class="tocitem" href="examples.html">Examples</a></li></ul></li><li><span class="tocitem">Library</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Framework</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../lib/framework/scanner.html">Scanner</a></li><li><a class="tocitem" href="../lib/framework/device.html">Device</a></li><li><a class="tocitem" href="../lib/framework/sequence.html">Sequence</a></li><li><a class="tocitem" href="../lib/framework/protocol.html">Protocol</a></li></ul></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Framework</a></li><li class="is-active"><a href="protocols.html">Protocols</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="protocols.html">Protocols</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/MagneticParticleImaging/MPIMeasurements.jl/blob/master/docs/src/framework/protocols.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Protocols"><a class="docs-heading-anchor" href="#Protocols">Protocols</a><a id="Protocols-1"></a><a class="docs-heading-anchor-permalink" href="#Protocols" title="Permalink"></a></h1><p>The purpose of a <code>Protocol</code> is to describe and implement a complex measurement procedure that may involve several <code>Devices</code> and <code>Sequences</code>, for example a robot-based system matrix calibration.</p><p>To achieve this, a <code>Protocol</code> acts as a running process, that controls all <code>Devices</code> of a scanner to perform its respective measurement. During its runtime a <code>Protocol</code> can spawn and join further processes, as well as react to user interaction and queries via a communication channel. This channel allows the same <code>Protocol</code> to be reused in scripts, console modes or GUIs.</p><h2 id="Tasks-and-Channels"><a class="docs-heading-anchor" href="#Tasks-and-Channels">Tasks and Channels</a><a id="Tasks-and-Channels-1"></a><a class="docs-heading-anchor-permalink" href="#Tasks-and-Channels" title="Permalink"></a></h2><p>Before devling into <code>Protocols</code>, let&#39;s review some necessary basics of <a href="https://docs.julialang.org/en/v1/manual/asynchronous-programming/">asynchronous programming</a> and <a href="https://docs.julialang.org/en/v1/manual/multi-threading/">multi-threading</a> in Julia.</p><p>Julia provides <code>Tasks</code> (also called coroutines, lightweight or green threads). These are expressions or functions grouped as computation, that is executed as a &quot;thread&quot; which can be interrupted and switched out for a different <code>Task</code>. If Julia is started with multiple threads, for example with 5:</p><pre><code class="language-cmd hljs">$ julia -t 5</code></pre><p>then <code>Tasks</code> can run in parallel and on different threads. Depending on the Julia version and the way the <code>Task</code> was created, they can even migrate between threads.</p><p>The following example is a <code>Task</code> that prints the current id of the thread it is run on:</p><pre><code class="language-julia-repl hljs">julia&gt; t = Task(() -&gt; println(Threads.threadid()))
+Task (runnable) @0x00007f5a378b2f80
+
+julia&gt; schedule(t)
+1</code></pre><p>After a <code>Task</code> is created, it needs to be scheduled before it is run. As a convience, the <code>@async</code> macro creates and immidiately schedules a <code>Task</code>:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; @async println(Threads.threadid())</code><code class="nohighlight hljs ansi" style="display:block;">Task (runnable) @0x00007f4f4ef61fb0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; 1</code><code class="nohighlight hljs ansi" style="display:block;">1</code></pre><p>Using the Julia package <code>ThreadPools</code> it is also possible to schedule a <code>Task</code> on a specific thread:</p><pre><code class="language-julia-repl hljs">julia&gt; @tspawnat 2 println(Threads.threadid())
+2</code></pre><p>Once a <code>Task</code> is running, it is possible to wait for it to end in a blocking manner:</p><pre><code class="language-julia-repl hljs">julia&gt; t = @async sleep(3); println(Threads.threadid())
+julia&gt; wait(t)</code></pre><p>or a busy-waiting manner: </p><pre><code class="language-julia-repl hljs">julia&gt; t = @async sleep(3); println(Threads.threadid())
+julia&gt; while !istaskdone(t)
+          sleep(0.05)
+       end</code></pre><p>If a <code>Task</code> threw an error during its runtime, a <code>Task</code> waiting on it will propagate the error. To check if a <code>Task</code> failed without waiting on it, one can use <code>Base.istaskfailed</code> and <code>current_exceptions</code>.</p><p>Another important concept for <code>Protocols</code> are <code>Channel</code>. These are waitable first-in-first-out (FIFO) queues which can be used to pass data between <code>Tasks</code>:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; ch = Channel{Int64}(4) # Buffer up to 4 values</code><code class="nohighlight hljs ansi" style="display:block;">Channel{Int64}(4) (empty)</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; put!(ch, 42) # Blocks if full</code><code class="nohighlight hljs ansi" style="display:block;">42</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isopen(ch) # True as long as the channel is open</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isready(ch) # True if channel contains values</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; close(ch)</code><code class="nohighlight hljs ansi" style="display:block;"></code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isopen(ch)</code><code class="nohighlight hljs ansi" style="display:block;">false</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isready(ch)</code><code class="nohighlight hljs ansi" style="display:block;">true</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; temp = take!(ch) # Blocks if empty</code><code class="nohighlight hljs ansi" style="display:block;">42</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; isready(ch)</code><code class="nohighlight hljs ansi" style="display:block;">false</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; temp == 42</code><code class="nohighlight hljs ansi" style="display:block;">true</code></pre><p>Multiple <code>Tasks</code> can read and write to a <code>Channel</code>, however this always goes into the same &quot;direction&quot;. <code>MPIMeasurements.jl</code> provides a <code>BidirectionalChannel</code>, which encapsulates two <code>Channels</code>, allowing a <code>Protocol</code> to both receive and send data:</p><pre><code class="language-julia-repl hljs">julia&gt; ch = BidirectionalChannel{Int64}(4)
+BidirectionalChannel{Int64}(Channel{Int64}(4), Channel{Int64}(4))
+
+julia&gt; ch2 = BidirectionalChannel(ch)
+BidirectionalChannel{Int64}(Channel{Int64}(4), Channel{Int64}(4))
+
+julia&gt; put!(ch, 1)
+1
+
+julia&gt; take!(ch2)
+1
+
+julia&gt; put!(ch2, 2)
+2
+
+julia&gt; take!(ch)
+2</code></pre><p><code>Tasks</code> and <code>BidirectionalChannel</code> are the main building blocks of <code>Protocols</code>.</p><h2 id="Protocol-Structure"><a class="docs-heading-anchor" href="#Protocol-Structure">Protocol Structure</a><a id="Protocol-Structure-1"></a><a class="docs-heading-anchor-permalink" href="#Protocol-Structure" title="Permalink"></a></h2><p><code>Protocols</code> have a similar structure to <code>Devices</code>. Each <code>Protocol</code> has a parameter type that inherits from: </p><pre><code class="language-julia-repl hljs">abstract type ProtocolParams end</code></pre><p>and must be named like the <code>Protocol</code> itself together with an <code>Params</code> suffix.</p><p>Similarily, each <code>Protocol</code> has a number of mandatory fields, that can be added with the provided macro <code>add_protocol_fields</code>. These fields contain the <code>Scanner</code> used by the <code>Protocol</code>, the name and description of the <code>Protocol</code>, its <code>ProtocolParams</code> and lastly its communication channel and its active main <code>Task</code> or process. </p><p>Lastly, a <code>Protocol</code> can have any number of internal fields, these must be provided with a default value.</p><h2 id="Protocol-Lifecycle"><a class="docs-heading-anchor" href="#Protocol-Lifecycle">Protocol Lifecycle</a><a id="Protocol-Lifecycle-1"></a><a class="docs-heading-anchor-permalink" href="#Protocol-Lifecycle" title="Permalink"></a></h2><p>Similar to a <code>Sequence</code>, a <code>Protocol</code> is constructed from a <code>Scanners</code> configuration directory: </p><pre><code class="language-julia-repl hljs">julia&gt; protocol = Protocol(scanner, &quot;MPIMeasurementProtocol&quot;)</code></pre><p>This only constructs the <code>Protocol</code> and assigns it the value stored in its configuration file. One could now programmatically change the parameters of the <code>Protocol</code>.</p><h3 id="Init"><a class="docs-heading-anchor" href="#Init">Init</a><a id="Init-1"></a><a class="docs-heading-anchor-permalink" href="#Init" title="Permalink"></a></h3><p>The next step is to initialize a <code>Protocol</code> execution:</p><pre><code class="language-julia-repl hljs">julia&gt; init(protocol)</code></pre><p>In this step <code>MPIMeasurements.jl</code> checks if the <code>Protocol</code> was constructed by a <code>Scanner</code> that contains all the necessary <code>Devices</code> required by the <code>Protocol</code>. Furthermore, it calls the <code>_init</code> function of the <code>Protocol</code>. In this function a <code>Protocol</code> implementation should check if all its arguments are sensible and prepare any internal fields it requires for an execution. This step should not start any <code>Tasks</code>. </p><h3 id="Execute"><a class="docs-heading-anchor" href="#Execute">Execute</a><a id="Execute-1"></a><a class="docs-heading-anchor-permalink" href="#Execute" title="Permalink"></a></h3><p>After its execution has been initialized, a <code>Protocol</code> can be started with:</p><pre><code class="language-julia-repl hljs">julia&gt; ch = execute(protocol)
+BidirectionalChannel{ProtocolEvent}(32)</code></pre><p>This function checks if the <code>Protocol</code> is currently running and if not it starts a new execution. This involves creating a communication channel, which is returned at the end of the function and starting the <code>Protocols Execution Task</code> on a provided thread id (default 1). Once the execution <code>Task</code> is finished, the communication channel is closed.</p><h3 id="Cleanup"><a class="docs-heading-anchor" href="#Cleanup">Cleanup</a><a id="Cleanup-1"></a><a class="docs-heading-anchor-permalink" href="#Cleanup" title="Permalink"></a></h3><p>If a <code>Protocol</code> produces temporary files, it can implement the <code>cleanup</code> function. After successfull <code>Protocol</code> execution, a calling Julia component can then invoke <code>cleanup</code> and remove any temporary files.</p><h2 id="Protocol-Communication"><a class="docs-heading-anchor" href="#Protocol-Communication">Protocol Communication</a><a id="Protocol-Communication-1"></a><a class="docs-heading-anchor-permalink" href="#Protocol-Communication" title="Permalink"></a></h2><p>During its execution a <code>Protocol</code> can communicate through its communication channel. From a caller perspective, this can be used to query the <code>Protocol</code> for its current progress, for its status or measurement data. It can also be used to ask the <code>Protocol</code> to pause and resume or to cancel. The <code>Protocol</code> itself can ask for things like a user confirmation or a user choice.</p><p>This communication however, is something that has to be deliberately implemented in a <code>Protocol</code>, though <code>MPIMeasurements.jl</code> provides several helper function for this cause. </p><p>A <code>Protocol</code> communicates via <code>ProtocolEvents</code>. This is an abstract type hierarchy derived from:</p><pre><code class="language-julia hljs">abstract type ProtocolEvent end</code></pre><p><code>MPIMeasurements.jl</code> already provides a number of <code>Event</code> types. Most are designed as query/answer pairs. The follow examples hightlight a few pairs.</p><h3 id="Event-Examples"><a class="docs-heading-anchor" href="#Event-Examples">Event Examples</a><a id="Event-Examples-1"></a><a class="docs-heading-anchor-permalink" href="#Event-Examples" title="Permalink"></a></h3><p>When a <code>Protocol</code> is running, it is helpful to know how far it progressed, especially for longer running <code>Protocol</code>. For this, the <code>ProgressEvents</code> exist. With these a caller can query the <code>Protocol</code> how far it is done and can receives an <code>Event</code> containing an <code>X/Y</code> reply. </p><pre><code class="language-julia hljs">struct ProgressQueryEvent &lt;: ProtocolEvent end
+struct ProgressEvent &lt;: ProtocolEvent
+  done::Int
+  total::Int
+  unit::AbstractString
+  query::ProgressQueryEvent
+end</code></pre><p>If a <code>Protocol</code> requires input from the user, it has multiple options. If the input is a yes/no question one can use the following:</p><pre><code class="language-julia hljs">struct DecisionEvent &lt;: ProtocolEvent
+  message::AbstractString
+end
+struct AnswerEvent &lt;: ProtocolEvent
+  answer::Bool
+  question::DecisionEvent
+end</code></pre><p>This requires a caller that is able to reply to <code>Protocol</code> queries. <code>Protocols</code> that potentially ask for user input possess the <code>Interactive</code> trait.</p><p>A last important <code>Event</code> example concerns the end of a <code>Protocol</code>. It is recommended that a <code>Protocols Task</code> does not simply end, instead it should notify the caller that it finished. This allows the caller to query for relevant measurement data or request the <code>Protocol</code> to save the data to a file. This process is covered by the following <code>Events</code>:</p><pre><code class="language-julia hljs">struct FinishedNotificationEvent &lt;: ProtocolEvent end
+struct FinishedAckEvent &lt;: ProtocolEvent end</code></pre><p>Only after receiving an acknowledgement should the protocol finish.</p><h3 id="Event-Handling"><a class="docs-heading-anchor" href="#Event-Handling">Event Handling</a><a id="Event-Handling-1"></a><a class="docs-heading-anchor-permalink" href="#Event-Handling" title="Permalink"></a></h3><p>A common way for <code>Protocols</code> to interact with events is the following pattern:</p><pre><code class="language-julia hljs">function measurementStep(protocol::ExampleProtocol)
+  step = @tspawnat protocol.scanner.runtime.producerThreadID doStep(protocol)
+  while !istaskdone(step)
+    handleEvents(protocol)
+    sleep(0.05)
+  end
+end</code></pre><p>Here, the <code>Protocol</code> does not block its own execution task with a measurement step, instead it spawns a dedicated <code>Task</code> on a different thread. This leaves the <code>Protocol</code> free to react to <code>Events</code>. It invokes the provided function <code>handleEvents</code>:</p><pre><code class="language-julia hljs">function handleEvents(protocol::Protocol)
+  while isready(protocol.biChannel)
+    event = take!(protocol.biChannel)
+    handleEvent(protocol, event)
+  end
+end</code></pre><p>With this function, a <code>Protocol</code> only has to write a function like the following to react to an <code>Event</code>:</p><pre><code class="language-julia hljs">function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
+  framesTotal = protocol..numFrames
+  framesDone = min(protocol..nextFrame - 1, framesTotal)
+  reply = ProgressEvent(framesDone, framesTotal, &quot;Frames&quot;, event)
+  put!(protocol.biChannel, reply)
+end</code></pre><h2 id="Implementing-New-Protocols"><a class="docs-heading-anchor" href="#Implementing-New-Protocols">Implementing New Protocols</a><a id="Implementing-New-Protocols-1"></a><a class="docs-heading-anchor-permalink" href="#Implementing-New-Protocols" title="Permalink"></a></h2><p>The following example implements a <code>Protocol</code>, that uses moves a <code>Robot</code> to several defined positions and measures the temperature using a <code>TemperatureSensor</code> like the one implemented in the <code>Device</code> example.</p><p><code>MPIMeasurements.jl</code> already provides a family of robot-based <code>Protocols</code>, which can be found <a href="https://github.com/MagneticParticleImaging/MPIMeasurements.jl/blob/master/src/Protocols/RobotBasedProtocol.jl">here</a>. In particular, this already provides an implementation of the <code>_execute</code> function, which is further annotated with comments for this example:</p><pre><code class="language-julia hljs">function _execute(protocol::RobotBasedProtocol)
+  @info &quot;Start $(typeof(protocol))&quot;
+  scanner_ = scanner(protocol)
+  robot = getRobot(scanner_)
+  if !isReferenced(robot)
+    # Any exception thrown in _execute, produces an ExceptionEvent
+    throw(IllegalStateException(&quot;Robot not referenced! Cannot proceed!&quot;))
+  end
+
+  initMeasData(protocol) # This is method needs to be implemented
+
+  finished = false
+  notifiedStop = false
+  while !finished
+    finished = performMovements(protocol)
+
+    # This code block handels pausing and resuming the measurement 
+    notifiedStop = false
+    # protocol.stopped is set when a StopEvent is received
+    while protocol.stopped
+      handleEvents(protocol) # Here we react to Events again
+      protocol.cancelled &amp;&amp; throw(CancelException())
+      if !notifiedStop
+        # Notify once that we paused
+        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        notifiedStop = true
+      end
+      if !protocol.stopped
+        # Notify that we resumed
+        put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+      end
+      sleep(0.05)
+    end
+  end
+
+  # Notify the caller that the protocol finished
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  # Await acknowledgement
+  while !protocol.finishAcknowledged
+    handleEvents(protocol)
+    protocol.cancelled &amp;&amp; throw(CancelException())
+    sleep(0.01)
+  end
+  @info &quot;Protocol finished.&quot;
+end</code></pre><p>The function uses several internal fields, such as <code>stopped</code>, <code>cancelled</code> and  <code>finishedAcknowledged</code> which are mandatory for robot-based <code>Protocols</code>, additionally to the ones mandatory for any <code>Protocol</code>.</p><p>The robot-based <code>Protocols</code> are implement as a multi-threaded process with three distinct steps per robot movement. A <code>Protocol</code> can performan an action before, during and after a movement:</p><pre><code class="language-julia hljs">function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::ScannerCoords)
+  @info &quot;Pre movement&quot;
+  preMovement(protocol) # Needs to be implemented
+
+  enable(robot)
+  try
+    @sync begin 
+      @info &quot;During movement&quot;
+      moveRobot = @tspawnat protocol.scanner.runtime.serialThreadID moveAbs(robot, pos)
+      duringMovement(protocol, moveRobot) # Needs to be implemented
+    end
+  catch ex 
+    if ex isa CompositeException
+      @error &quot;CompositeException while preparing measurement:&quot;
+      for e in ex
+        @error e
+      end
+    end
+    rethrow(ex)
+  end
+  disable(robot)
+  
+  @info &quot;Post movement&quot;
+  postMovement(protocol) # Needs to be implemented
+end</code></pre><p>The <code>performMovement</code> function has as an argument the next position to drive to. This argument is provided by the <code>nextPosition</code> function, which our <code>Protocol</code> also needs to implement.</p><p>With this overview of what needs to be implemented one can start writing the <code>Protocol</code>. We define the following parameters type: </p><pre><code class="language-julia hljs">Base.@kwdef mutable struct RobotBasedTempMeasProtocolParams &lt;: RobotBasedProtocolParams
+  positions::GridPositions
+end
+RobotBasedTempMeasProtocolParams(dict::Dict, scanner::MPIScanner) = RobotBasedTempMeasProtocolParams(positions = Positions(dict[&quot;Positions&quot;]))</code></pre><p>Note that while we directly set the keyword argument here, it is also possible to use <code>params_from_dict</code> like we did in for the <code>Device</code> example. Next we define the <code>Protocol</code> itself:</p><pre><code class="language-julia hljs">Base.@kwdef mutable struct RobotBasedTempMeasProtocol &lt;: RobotBasedProtocol
+  # Protocol mandatory fields
+  @add_protocol_fields RobotBasedTempMeasProtocolParams
+  # Measurement data
+  data::Union{Nothing, Matrix{Float64}} = nothing
+  # Position data
+  positions::Union{Nothing, GridPositions} = nothing
+  currPos::Int64 = 0
+  # Robot based protocol mandatory fields
+  stopped::Bool = false
+  cancelled::Bool = false
+  finishAcknowledged::Bool = false
+end</code></pre><p>The struct definition contains the mentioned additonal mandatory fields, as well as fields to track the current position and lastly the measurement data itself.</p><p>The next functions finish all necessary implementations up to the execute phase of a <code>Protocol</code>.</p><pre><code class="language-julia hljs">requiredDevices(RobotBasedTempMeasProtocol) = [Robot, TemperatureSensor]
+function _init(protocol::RobotBasedTempMeasProtocol)
+  protocol.positions = copy(protocol.params.positions)
+  sensor = getDevice(protocol.scanner, TemperatureSensor)
+  protocol.data = zeros(Float64, numChannels(sensor), length(protocol.positions))
+end
+function enterExecute(protocol::RobotBasedTempMeasProtocol)
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  protocol.currPos = 1
+end</code></pre><p>Next up is the <code>initMeasData</code> function. As robot-based <code>Protocol</code> can be very time-intensive, they often times features persistent storage of measurement data to allow a user to resume a measurement should an error occur. This case could be handled here, as during the execution phase a <code>Protocol</code> can query the user. In our case the function is just empty, which is already the default provided implementation. Likewise, our <code>Protocol</code> does not need to do anything before a robot movement. </p><p>To be able to move the robot, our <code>Protocol</code> needs to supply positions with the following function:</p><pre><code class="language-julia hljs">function nextPosition(protocol::RobotBasedTempMeasProtocol)
+  if protocol.currPos &lt;= length(protocol.positions)
+    return ScannerCoords(uconvert.(Unitful.mm, protocol.positions[protocol.currPos]))
+  end
+  return nothing
+end</code></pre><p>Then during a robot movement we can react to user <code>Events</code>, such as <code>ProgressQueryEvents</code>:</p><pre><code class="language-julia hljs">function duringMovement(protocol::RobotBasedTempMeasProtocol, moving::Task)
+  while !istaskdone(moving)
+    handleEvents(protocol)
+    sleep(0.05)
+  end
+end
+function handleEvent(protocol::RobotBasedTempMeasProtocol, event::ProgressQueryEvent)
+  reply = ProgressEvent(protocol.currPos, length(protocol.positions), &quot;Position&quot;, event)
+  put!(protocol.biChannel, reply)
+end</code></pre><p>After a robot movement a measurement can be performed:</p><pre><code class="language-julia hljs">function postMovement(protocol::RobotBasedTempMeasProtocol)
+  # Perform measurement
+  sensor = getDevice(protocol.scanner, TemperatureSensor)
+  producer = @tspawnat protocol.scanner.runtime.producerThreadID begin
+    data = getTemperatures(sensor)
+    protocol.data[:, protocol.currPos] = data
+  end
+
+  # Wait
+  while !istaskdone(producer)
+    handleEvents(protocol)
+    sleep(0.05)
+  end
+
+  protocol.currPos += 1
+end</code></pre><p>Lastly a user should be able to retrieve or store the measurement data. Proper MPI measurements can be stored in MDF, however in our case we can also simply reply to <code>DataQuery-</code> and simple <code>FileStorageRequestEvents</code>:</p><pre><code class="language-julia hljs">function handleEvent(protocol::RobotBasedTempMeasProtocol, event::FileStorageRequestEvent)
+  filename = event.filename
+  open(filename, &quot;w&quot;) do file
+    writedlm(file, protocol.data) # from DelimitedFiles.jl, writes a CSV
+  end
+  put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+function handleEvent(protocol::RobotBasedTempMeasProtocol, event::DataQueryEvent)
+  msg = event.message
+  reply = nothing
+  if msg = &quot;DATA&quot;
+    reply = protocol.data
+  else
+   # ...
+  end
+  put!(protocol.biChannel, DataAnswerEvent(reply, event))
+end</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="sequences.html">« Sequences</a><a class="docs-footer-nextpage" href="examples.html">Examples »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Thursday 19 January 2023 12:32">Thursday 19 January 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
