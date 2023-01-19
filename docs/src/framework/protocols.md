@@ -181,7 +181,7 @@ end
 ## Implementing New Protocols
 The following example implements a `Protocol`, that uses moves a `Robot` to several defined positions and measures the temperature using a `TemperatureSensor` like the one implemented in the `Device` example.
 
-`MPIMeasurements.jl` already provides a family of robot-based `Protocols`. In particular, this already provides an implementation of the `_execute` function, which is further annotated with comments for this example:
+`MPIMeasurements.jl` already provides a family of robot-based `Protocols`, which can be found [here](https://github.com/MagneticParticleImaging/MPIMeasurements.jl/blob/master/src/Protocols/RobotBasedProtocol.jl). In particular, this already provides an implementation of the `_execute` function, which is further annotated with comments for this example:
 ```julia
 function _execute(protocol::RobotBasedProtocol)
   @info "Start $(typeof(protocol))"
@@ -229,9 +229,9 @@ function _execute(protocol::RobotBasedProtocol)
   @info "Protocol finished."
 end
 ```
-The function uses several internal fields, such as `stopped` and `finishedAcknowledged` which are mandatory for robot-based `Protocols`, additionally to the ones mandatory for any `Protocols`.
+The function uses several internal fields, such as `stopped`, `cancelled` and  `finishedAcknowledged` which are mandatory for robot-based `Protocols`, additionally to the ones mandatory for any `Protocol`.
 
-The robot-based `Protocols` are implement as a multi-threaded process with three distinct steps per robot movement. A `Protocol` can performan an action `before`, `during` and `after` movement
+The robot-based `Protocols` are implement as a multi-threaded process with three distinct steps per robot movement. A `Protocol` can performan an action before, during and after a movement:
 
 ```julia
 function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::ScannerCoords)
@@ -242,7 +242,7 @@ function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::Scanne
   try
     @sync begin 
       @info "During movement"
-      moveRobot = @tspawnat protocol.scanner.generalParams.serialThreadID moveAbs(robot, pos)
+      moveRobot = @tspawnat protocol.scanner.runtime.serialThreadID moveAbs(robot, pos)
       duringMovement(protocol, moveRobot) # Needs to be implemented
     end
   catch ex 
@@ -258,5 +258,113 @@ function performMovement(protocol::RobotBasedProtocol, robot::Robot, pos::Scanne
   
   @info "Post movement"
   postMovement(protocol) # Needs to be implemented
+end
+```
+The `performMovement` function has as an argument the next position to drive to. This argument is provided by the `nextPosition` function, which our `Protocol` also needs to implement.
+
+With this overview of what needs to be implemented one can start writing the `Protocol`. We define the following parameters type: 
+```julia
+Base.@kwdef mutable struct RobotBasedTempMeasProtocolParams <: RobotBasedProtocolParams
+  positions::GridPositions
+end
+RobotBasedTempMeasProtocolParams(dict::Dict, scanner::MPIScanner) = RobotBasedTempMeasProtocolParams(positions = Positions(dict["Positions"]))
+```
+Note that while we directly set the keyword argument here, it is also possible to use `params_from_dict` like we did in for the `Device` example. Next we define the `Protocol` itself:
+```julia
+Base.@kwdef mutable struct RobotBasedTempMeasProtocol <: RobotBasedProtocol
+  # Protocol mandatory fields
+  @add_protocol_fields RobotBasedTempMeasProtocolParams
+  # Measurement data
+  data::Union{Nothing, Matrix{Float64}} = nothing
+  # Position data
+  positions::Union{Nothing, GridPositions} = nothing
+  currPos::Int64 = 0
+  # Robot based protocol mandatory fields
+  stopped::Bool = false
+  cancelled::Bool = false
+  finishAcknowledged::Bool = false
+end
+```
+The struct definition contains the mentioned additonal mandatory fields, as well as fields to track the current position and lastly the measurement data itself.
+
+The next functions finish all necessary implementations up to the execute phase of a `Protocol`.
+```julia
+requiredDevices(RobotBasedTempMeasProtocol) = [Robot, TemperatureSensor]
+function _init(protocol::RobotBasedTempMeasProtocol)
+  protocol.positions = copy(protocol.params.positions)
+  sensor = getDevice(protocol.scanner, TemperatureSensor)
+  protocol.data = zeros(Float64, numChannels(sensor), length(protocol.positions))
+end
+function enterExecute(protocol::RobotBasedTempMeasProtocol)
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  protocol.currPos = 1
+end
+```
+Next up is the `initMeasData` function. As robot-based `Protocol` can be very time-intensive, they often times features persistent storage of measurement data to allow a user to resume a measurement should an error occur. This case could be handled here, as during the execution phase a `Protocol` can query the user. In our case the function is just empty, which is already the default provided implementation. Likewise, our `Protocol` does not need to do anything before a robot movement. 
+
+To be able to move the robot, our `Protocol` needs to supply positions with the following function:
+```julia
+function nextPosition(protocol::RobotBasedTempMeasProtocol)
+  if protocol.currPos <= length(protocol.positions)
+    return ScannerCoords(uconvert.(Unitful.mm, protocol.positions[protocol.currPos]))
+  end
+  return nothing
+end
+```
+
+Then during a robot movement we can react to user `Events`, such as `ProgressQueryEvents`:
+```julia
+function duringMovement(protocol::RobotBasedTempMeasProtocol, moving::Task)
+  while !istaskdone(moving)
+    handleEvents(protocol)
+    sleep(0.05)
+  end
+end
+function handleEvent(protocol::RobotBasedTempMeasProtocol, event::ProgressQueryEvent)
+  reply = ProgressEvent(protocol.currPos, length(protocol.positions), "Position", event)
+  put!(protocol.biChannel, reply)
+end
+```
+After a robot movement a measurement can be performed:
+```julia
+function postMovement(protocol::RobotBasedTempMeasProtocol)
+  # Perform measurement
+  sensor = getDevice(protocol.scanner, TemperatureSensor)
+  producer = @tspawnat protocol.scanner.runtime.producerThreadID begin
+    data = getTemperatures(sensor)
+    protocol.data[:, protocol.currPos] = data
+  end
+
+  # Wait
+  while !istaskdone(producer)
+    handleEvents(protocol)
+    sleep(0.05)
+  end
+
+  protocol.currPos += 1
+end
+```
+
+Lastly a user should be able to retrieve or store the measurement data. Proper MPI measurements can be stored in MDF, however in our case we can also simply reply to `DataQuery-` and simple `FileStorageRequestEvents`:
+```julia
+function handleEvent(protocol::RobotBasedTempMeasProtocol, event::FileStorageRequestEvent)
+  filename = event.filename
+  open(filename, "w") do file
+    writedlm(file, protocol.data) # from DelimitedFiles.jl, writes a CSV
+  end
+  put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+function handleEvent(protocol::RobotBasedTempMeasProtocol, event::DataQueryEvent)
+  msg = event.message
+  reply = nothing
+  if msg = "DATA"
+    reply = protocol.data
+  else
+   # ...
+  end
+  put!(protocol.biChannel, DataAnswerEvent(reply, event))
 end
 ```
