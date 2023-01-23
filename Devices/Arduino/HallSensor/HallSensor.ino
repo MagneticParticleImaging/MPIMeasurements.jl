@@ -1,6 +1,6 @@
 #define ARDUINO_TYPE "HALLSENS"
 #define VERSION "2.1"
-#define POSITION 1
+#define POSITION 1 // TODO Remove POSITION and position related code 
 #define BAUDRATE 9600
 #include <Tle493d_w2b6.h>
 
@@ -9,7 +9,7 @@ Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
 int sample_size= 1000;
 // Communication
 #define INPUT_BUFFER_SIZE 3000
-#define VALUE_BUFFER_SIZE 1024
+#define VALUE_BUFFER_SIZE 1024 // TODO Add function querying VALUE_BUFFER_SIZE
 char input_buffer[INPUT_BUFFER_SIZE];
 int16_t value_buffer[VALUE_BUFFER_SIZE*3];
 unsigned int input_pos = 0;
@@ -139,12 +139,12 @@ void setup() {
 int getData(char*) {
   // updateData reads values from sensor and reading triggers next measurement
   sensor.updateData(); // Throw away first old data
-  delay(10);
+  delay(10); // TODO Magic number 10 -> #define MEAS_DELAY 10
   uint16_t measDelay = 10;
   unsigned long start, end,startFP,endA;
   
   
-  // TODO perform measurement
+  // TODO consistent formatting
   int16_t x=0,y=0,z=0;
   int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0;
   float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
@@ -179,9 +179,10 @@ int getData(char*) {
     sumYY += ((float)value_buffer[i+1]-meanY)*((float)value_buffer[i+1]-meanY);
     sumZZ += ((float)value_buffer[i+2]-meanZ) *((float)value_buffer[i+2]-meanZ);
   }
-    varX =(float)sumXX/sample_size;
-    varY =(float)sumYY/sample_size;
-    varZ =(float)sumZZ/sample_size;
+
+  varX =(float)sumXX/sample_size;
+  varY =(float)sumYY/sample_size;
+  varZ =(float)sumZZ/sample_size;
 
   Serial.print(meanX,7);
   Serial.print(",");
@@ -206,7 +207,7 @@ int getPosition(char*) {
 
 int getTemp(char*) {
   sensor.enableTemp();
-  delay(10);
+  delay(10); // TODO See meas delay
   sensor.updateData();
   delay(10);
   sensor.updateData();
@@ -230,8 +231,8 @@ int getVersion(char*) {
 }
 
 int setSampleSize(char* command){
-  int value_int = atoi(command+7);
-  if (value_int>0 && value_int<=2048){
+  int value_int = atoi(command+7); // Could point to end of char, value_int = 0. But in theory can not differentiate between unintended string and 0 samples set
+  if (value_int>0 && value_int<=2048){ // 2048 > VALUE_BUFFER_SIZE -> TODO Use VALUE_BUFFER_SIZE here
     sample_size=value_int;
   }
   Serial.print(sample_size);
