@@ -140,7 +140,7 @@ int getData(char*) {
   // updateData reads values from sensor and reading triggers next measurement
   sensor.updateData(); // Throw away first old data
   delay(10);
-  uint16_t measDelay = 10;
+  uint16_t measDelay = 2;
   unsigned long start, end,startFP,endA;
   
   
