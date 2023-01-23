@@ -1,15 +1,14 @@
-export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXValue, triggerMeasurment, reciveMeasurmentRaw, reciveMeasurment, setSampleSize, getSampleSize, getTemperature
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXValue, triggerMeasurment, recive, reciveMeasurment, setSampleSize, getSampleSize, getTemperature
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
 
 Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   portAddress::String
   position::Int64 = 1
-  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
+  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))*0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
-  biasCalibration = Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration = Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -20,11 +19,10 @@ ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDi
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
   position::Int64 = 1
-  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
+  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))*0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
-  biasCalibration::Vector{Float64} = [0.098, 0.098, 0.098]
+  biasCalibration::Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
 
   @add_serial_device_fields "#"
@@ -63,6 +61,7 @@ function _init(gauss::ArduinoGaussMeter)
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
   gauss.rotatedCalibration = params.rotation * params.calibration
+  gaus.measdelay = query(sd,"!DELAY*")
   setSampleSize(gauss, params.sampleSize)
 end
 
@@ -81,7 +80,7 @@ end
 function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HALLSENS:2"))
+    if !(startswith(reply, "HALLSENS:3"))
       close(sd)
       throw(ScannerConfigurationError(string("Connected to wrong Device", reply)))
     end
@@ -100,12 +99,8 @@ end
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
 function getRawXYZValues(gauss::ArduinoGaussMeter)
-  temp = get_timeout(gauss.ard)
-  timeout_ms = max(1000, floor(Int, gauss.sampleSize * 10 * 1.2) + 1)
-  set_timeout(gauss.ard, timeout_ms)
-  data_strings = split(sendCommand(gauss.ard, "DATA"), ",")
-  data = [parse(Float64, str) for str in data_strings]
-  set_timeout(gauss.ard, temp)
+  triggerMeasurment(gauss)
+  data = recive(gauss)
   return data
 end
 
@@ -129,6 +124,9 @@ end
 function triggerMeasurment(gauss::ArduinoGaussMeter)
   cmd = cmdStart(gauss.ard) * "DATA" * cmdEnd(gauss.ard)
   sd = gauss.ard.sd
+  # TODO Lock synchronization like this does not have the desired effect:
+  # For example triggerMeasurement(gauss); getTemperature(gauss); receiveMeasurement(gauss) would result in wrong values
+  # Instead use an atomic or lock concept on ArduinoGaussMeter level and restrict all communication during measurement
   lock(sd.sdLock)
   try
     if gauss.measurementTriggered
@@ -144,7 +142,7 @@ end
 
 
 """
-  reciveMeasurmentRaw(gauss::ArduinoGaussMeter)::Array{Float64,1}
+  recive(gauss::ArduinoGaussMeter)::Array{Float64,1}
   
     collecting the measurment data for sensor 'gauss'
     triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first. 
@@ -152,7 +150,8 @@ end
   #returns 
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
-function reciveMeasurmentRaw(gauss::ArduinoGaussMeter)
+
+function recive(gauss::ArduinoGaussMeter)
   #todo use lock
   if !gauss.measurementTriggered
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
@@ -162,12 +161,15 @@ function reciveMeasurmentRaw(gauss::ArduinoGaussMeter)
     temp = get_timeout(gauss.ard)
     timeout_ms = max(1000, floor(Int, gauss.sampleSize * 10 * 1.2) + 1)
     set_timeout(gauss.ard, timeout_ms)
+    # TODO Function has no "defined" return value if receive or parse fail
     try
       data_strings = split(receive(gauss.ard.sd), ",")
       data = [parse(Float64, str) for str in data_strings]
       return data
+    catch e
+      throw(e)
     finally
-      sp_flush(sd.sp, SP_BUF_INPUT)
+      sp_flush(sd.sp, SP_BUF_INPUT) # TODO Why flush?
       unlock(sd.sdLock)
       set_timeout(gauss.ard, temp)
       gauss.measurementTriggered = false
@@ -184,7 +186,7 @@ reciveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
   #return
     [x_mean,y_mean,z_mean, x_var,y_var,z_var]
 """
-reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, reciveMeasurmentRaw(gauss))
+reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, recive(gauss))
 
 """
 applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})::Array{Float64,1}
@@ -194,9 +196,12 @@ calibrate and rotated raw data to mT
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   var = data[4:6]
-  calibrated_means = gauss.rotatedCalibration * means + gauss.params.biasCalibration
-  calibrated_var = gauss.params.coordinateTransformation * gauss.params.coordinateTransformation * var
-  return vcat(calibrated_means, calibrated_var)
+
+  # TODO Sanity checks on data, does it have the expected size
+  # TODO Is bias not rotated? Why is variance multiplied with coordinateTransformation twice
+  calibrated_means  = gauss.rotatedCalibration * means + gauss.params.biasCalibration
+  calibrated_var = gauss.rotatedCalibration*gauss.rotatedCalibration*var
+  return vcat(calibrated_means,calibrated_var)
 end
 
 """
@@ -215,8 +220,9 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   if (sampleSize > 1024 || sampleSize < 1)
     throw(error("no valid sample size, pick size from 1 to 1024"))
   end
+  # TODO only set sampleSize if it was confirmed by Arduino, see next comment
   gauss.sampleSize = sampleSize
-  data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize))
+  data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
   return parse(Int, data_string)
 end
 

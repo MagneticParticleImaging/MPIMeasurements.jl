@@ -1,12 +1,14 @@
 #define ARDUINO_TYPE "HALLSENS"
 #define VERSION "2.1"
-#define POSITION 1
 #define BAUDRATE 9600
+#define MEASDELAY 2
+
 #include <Tle493d_w2b6.h>
 
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
 int sample_size= 1000;
+
 // Communication
 #define INPUT_BUFFER_SIZE 3000
 #define VALUE_BUFFER_SIZE 1024
@@ -28,8 +30,8 @@ typedef struct {
 } commandHandler_t;
 
 commandHandler_t cmdHandler[] = {
+  {"DELAY",getDelay}
   {"DATA", getData},
-  {"POS", getPosition},
   {"TEMP", getTemp},
   {"VERSION", getVersion},
   {"COMMANDS", getCommands},
@@ -40,13 +42,14 @@ commandHandler_t cmdHandler[] = {
 int getCommands(char*) {
   Serial.print("Valid Commands (without quotes):");
   Serial.print("'!DATA*#' ");
-  Serial.print("'!POS*#' ");
+  Serial.print("'!DELAY*#' ");
   Serial.print("'!VERSION*#' ");
   Serial.print("'!TEMP*#' ");
   Serial.print("'!COMMANDS*#' ");
   Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
   Serial.println("#");
 }
+
 
 bool updateBufferUntilDelim(char delim) {
   char nextChar;
@@ -134,17 +137,16 @@ void setup() {
   sensor.begin();
   sensor.disableTemp();
 }
-
+int getDelay(char*) {
+  
+}
 
 int getData(char*) {
   // updateData reads values from sensor and reading triggers next measurement
-  sensor.updateData(); // Throw away first old data
-  delay(10);
-  uint16_t measDelay = 2;
+  sensor.updateData(); 
+  delay(MEASDELAY); 
   unsigned long start, end,startFP,endA;
-  
-  
-  // TODO perform measurement
+    // TODO consistent formatting
   int16_t x=0,y=0,z=0;
   int32_t sumX=0,sumY=0,sumZ=0,sumXX=0,sumYY=0,sumZZ=0;
   float varX=0, varY = 0, varZ=0, meanX =0, meanY =0, meanZ =0;
@@ -166,7 +168,7 @@ int getData(char*) {
     
     end = millis();
     if (end - start < measDelay) {
-      delay(measDelay-(end - start));
+      delay(MEASDELAY-(end - start));
     }
   }
   
@@ -179,9 +181,10 @@ int getData(char*) {
     sumYY += ((float)value_buffer[i+1]-meanY)*((float)value_buffer[i+1]-meanY);
     sumZZ += ((float)value_buffer[i+2]-meanZ) *((float)value_buffer[i+2]-meanZ);
   }
-    varX =(float)sumXX/sample_size;
-    varY =(float)sumYY/sample_size;
-    varZ =(float)sumZZ/sample_size;
+
+  varX =(float)sumXX/sample_size;
+  varY =(float)sumYY/sample_size;
+  varZ =(float)sumZZ/sample_size;
 
   Serial.print(meanX,7);
   Serial.print(",");
@@ -199,18 +202,13 @@ int getData(char*) {
 }
 
 
-int getPosition(char*) {
-  Serial.print(POSITION);
-  Serial.println("#");
-}
-
 int getTemp(char*) {
   sensor.enableTemp();
-  delay(10);
+  delay(10); 
   sensor.updateData();
-  delay(10);
+  delay(MEASDELAY);
   sensor.updateData();
-  delay(10);
+  delay(MEASDELAY);
   float temp = sensor.getTemp();
   Serial.print(temp,7);
   Serial.println("#");
@@ -230,8 +228,8 @@ int getVersion(char*) {
 }
 
 int setSampleSize(char* command){
-  int value_int = atoi(command+7);
-  if (value_int>0 && value_int<=2048){
+  int value_int = atoi(command+7); // Could point to end of char, value_int = 0. But in theory can not differentiate between unintended string and 0 samples set
+  if (value_int>0 && value_int<=VALUE_BUFFER_SIZE){
     sample_size=value_int;
   }
   Serial.print(sample_size);

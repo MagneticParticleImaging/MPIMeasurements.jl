@@ -22,22 +22,20 @@ function _init(cube::TDesignCube)
     sampleSize = cube.params.sampleSize
     sensors = dependencies(cube, ArduinoGaussMeter)
     if length(sensors) != cube.params.N
-        close.(sensors)
+        close.(sensors) # TODO @NH Should not close devices here
         throw("missing Sensors")
     end
     sort!(sensors,by=x-> x.params.position)
     cube.sensors = sensors
-    println(cube.params)
     setSampleSize(cube,cube.sampleSize)
 end
 
 export setSampleSize
 function setSampleSize(cube::TDesignCube,sampleSize::Int)
-    if sampleSize>1024 || sampleSize<1
-        throw("sampleSize must be in 1:1024")
-    end
     for sensor in cube.sensors
-        setSampleSize(sensor,sampleSize)
+        returnSampleSize = setSampleSize(sensor,sampleSize)
+        if returnSampleSize != sampleSize
+            throw("sensors coud not be updated") 
     end
     cube.sampleSize = sampleSize
 end
