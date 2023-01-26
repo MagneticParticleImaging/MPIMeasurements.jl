@@ -192,6 +192,8 @@ applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})::Array{Float64
 
 calibrate and rotate raw data to mT
 
+Varianz can't be calibrated
+
 #returns
 [x_mean_c,y_mean_c,z_mean_c]
 """
@@ -199,7 +201,6 @@ function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   
   # TODO Sanity checks on data, does it have the expected size
-  # TODO Is bias not rotated? Why is variance multiplied with coordinateTransformation twice
   calibrated_means  = gaus.params.rotation*(gauss.params.calibrate * means + gauss.params.biasCalibration)
   return calibrated_means
 end
@@ -220,10 +221,13 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   if (sampleSize > 1024 || sampleSize < 1)
     throw(error("no valid sample size, pick size from 1 to 1024"))
   end
-  # TODO only set sampleSize if it was confirmed by Arduino, see next comment
-  gauss.sampleSize = sampleSize
+  # TODO problem on time out probabil wrong value on device
   data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
-  return parse(Int, data_string)
+  new_size = parse(Int, data_string)
+  if(new_size !== sampleSize)
+  gauss.sampleSize = new_size
+  return new_size
+
 end
 
 function getSampleSize(gauss::ArduinoGaussMeter)
