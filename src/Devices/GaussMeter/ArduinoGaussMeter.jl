@@ -60,7 +60,6 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gauss.rotatedCalibration = params.rotation * params.calibration
   gaus.measdelay = query(sd,"!DELAY*")
   setSampleSize(gauss, params.sampleSize)
 end
@@ -191,17 +190,18 @@ reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, recive(gaus
 """
 applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})::Array{Float64,1}
 
-calibrate and rotated raw data to mT
+calibrate and rotate raw data to mT
+
+#returns
+[x_mean_c,y_mean_c,z_mean_c]
 """
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
-  var = data[4:6]
-
+  
   # TODO Sanity checks on data, does it have the expected size
   # TODO Is bias not rotated? Why is variance multiplied with coordinateTransformation twice
-  calibrated_means  = gauss.rotatedCalibration * means + gauss.params.biasCalibration
-  calibrated_var = gauss.rotatedCalibration*gauss.rotatedCalibration*var
-  return vcat(calibrated_means,calibrated_var)
+  calibrated_means  = gaus.params.rotation*(gauss.params.calibrate * means + gauss.params.biasCalibration)
+  return calibrated_means
 end
 
 """

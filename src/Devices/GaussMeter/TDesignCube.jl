@@ -44,7 +44,7 @@ export getSampleSize
 getSampleSize(cube::TDesignCube) = cube.params.sampleSize
 
 function getXYZValues(cube::TDesignCube)
-    measurement = zeros(cube.params.T,6)
+    measurement = zeros(cube.params.N,3)
     #triggerMeasurment
     for sensor in cube.sensors
         triggerMeasurment(sensor)
