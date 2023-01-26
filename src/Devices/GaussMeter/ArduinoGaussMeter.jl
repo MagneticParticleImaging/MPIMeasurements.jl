@@ -206,7 +206,7 @@ function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
 end
 
 """
-  setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)::Int = sample_size
+  setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)::Int
 
   sets sample size for measurment
 
@@ -215,7 +215,7 @@ end
   -`gauss` sensor
 
   #return
-  -sampleSize()::Int
+  -updatedSampleSize
 """
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   if (sampleSize > 1024 || sampleSize < 1)
@@ -223,10 +223,10 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   end
   # TODO problem on time out probabil wrong value on device
   data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
-  new_size = parse(Int, data_string)
-  if(new_size !== sampleSize)
-  gauss.sampleSize = new_size
-  return new_size
+  updatedSampleSize = parse(Int, data_string)
+  if(updatedSampleSize !== sampleSize)
+  gauss.sampleSize = updatedSampleSize
+  return updatedSampleSize
 
 end
 
