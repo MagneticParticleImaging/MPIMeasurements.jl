@@ -36,8 +36,7 @@ commandHandler_t cmdHandler[] = {
     {"TEMP", getTemp},
     {"VERSION", getVersion},
     {"COMMANDS", getCommands},
-    {"SAMPLES", setSampleSize}
-};
+    {"SAMPLES", setSampleSize}};
 
 int getCommands(char *)
 {
@@ -190,7 +189,7 @@ int getData(char *)
     sumY += y;
     sumZ += z;
 
-    //waiting until new data is ready in the sensor
+    // waiting until new data is ready in the sensor
     end = millis();
     if (end - start < MEASDELAY)
     {
@@ -258,7 +257,7 @@ int getVersion(char *)
 
 int setSampleSize(char *command)
 {
-  int value_int = atoi(command + 7); // Could point to end of char, value_int = 0. But in theory can not differentiate between unintended string and 0 samples set
+  int value_int = atoi(command + 7); 
   if (value_int > 0 && value_int <= VALUE_BUFFER_SIZE)
   {
     sample_size = value_int;
