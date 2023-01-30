@@ -36,6 +36,7 @@ function setSampleSize(cube::TDesignCube,sampleSize::Int)
         returnSampleSize = setSampleSize(sensor,sampleSize)
         if returnSampleSize != sampleSize
             throw("sensors coud not be updated") 
+        end
     end
     cube.sampleSize = sampleSize
 end

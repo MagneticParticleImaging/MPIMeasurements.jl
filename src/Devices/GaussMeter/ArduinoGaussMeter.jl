@@ -5,7 +5,7 @@ abstract type ArduinoGaussMeterParams <: DeviceParams end
 Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   portAddress::String
   position::Int64 = 1
-  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))*0.125
+  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3)) * 0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration = Vector{Float64} = [0.0, 0.0, 0.0]
@@ -19,7 +19,7 @@ ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDi
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
   position::Int64 = 1
-  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))*0.125
+  calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3)) * 0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration::Vector{Float64} = [0.0, 0.0, 0.0]
@@ -60,7 +60,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gaus.measdelay = query(sd,"!DELAY*")
+  gaus.measdelay = query(sd, "!DELAY*")
   setSampleSize(gauss, params.sampleSize)
 end
 
@@ -199,9 +199,8 @@ Varianz can't be calibrated
 """
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
-  
   # TODO Sanity checks on data, does it have the expected size
-  calibrated_means  = gaus.params.rotation*(gauss.params.calibrate * means + gauss.params.biasCalibration)
+  calibrated_means = gaus.params.rotation * (gauss.params.calibrate * means + gauss.params.biasCalibration)
   return calibrated_means
 end
 
@@ -224,10 +223,11 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   # TODO problem on time out probabil wrong value on device
   data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
   updatedSampleSize = parse(Int, data_string)
-  if(updatedSampleSize !== sampleSize)
+  if (updatedSampleSize !== sampleSize)
+    throw(error("wrong sample size set"))
+  end
   gauss.sampleSize = updatedSampleSize
   return updatedSampleSize
-
 end
 
 function getSampleSize(gauss::ArduinoGaussMeter)
