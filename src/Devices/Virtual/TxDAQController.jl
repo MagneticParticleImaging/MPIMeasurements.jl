@@ -339,7 +339,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       a = 2*sum(uVolt.*cont.cosLUT[:,e])
       b = 2*sum(uVolt.*cont.sinLUT[:,e])
 
-      Γ[d,e] = c*(b+im*a)
+      Γ[d,e] = -(c*(b+im*a)*im)
     end
   end
   return Γ
