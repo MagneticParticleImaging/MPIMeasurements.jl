@@ -181,7 +181,7 @@ Varianz can't be calibrated
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   # TODO Sanity checks on data, does it have the expected size
-  calibrated_means = gaus.params.rotation * (gauss.params.calibrate * means + gauss.params.biasCalibration)
+  calibrated_means = gauss.params.rotation * (gauss.params.calibrate * means + gauss.params.biasCalibration)
   return calibrated_means
 end
 
