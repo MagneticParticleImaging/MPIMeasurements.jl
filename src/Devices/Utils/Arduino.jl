@@ -1,4 +1,4 @@
-export Arduino, sendCommand
+export Arduino, queryCommand
 
 abstract type Arduino <: Device end
 
@@ -7,13 +7,13 @@ abstract type Arduino <: Device end
 @mustimplement cmdEnd(ard::Arduino)
 @mustimplement serialDevice(ard::Arduino)
 
-function sendCommand(ard::Arduino, cmdString::String)
+function queryCommand(ard::Arduino, cmdString::String)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   sd = serialDevice(ard)
   return query(sd, cmd)
 end
   
-function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
+function queryCommand(ard::Arduino, cmdString::String, data::AbstractArray)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   return query!(serialDevice(ard), cmd, data, delimited = true)
 end

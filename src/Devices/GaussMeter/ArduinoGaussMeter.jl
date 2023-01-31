@@ -211,7 +211,7 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
     throw(error("no valid sample size, pick size from 1 to 1024"))
   end
   # TODO problem on time out probabil wrong value on device
-  data_string = sendCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
+  data_string = queryCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
   updatedSampleSize = parse(Int, data_string)
   if (updatedSampleSize !== sampleSize)
     throw(error("wrong sample size set"))
@@ -230,7 +230,7 @@ getTemperature(gauss::ArduinoGaussMeter)::Float32
 returns tempreture of the sensor, do not expect a high tempreture resolution
 """
 function getTemperature(gauss::ArduinoGaussMeter)
-  temp_str = sendCommand(gauss.ard, "TEMP")
+  temp_str = queryCommand(gauss.ard, "TEMP")
   return parse(Float32, temp_str)
 end
 
