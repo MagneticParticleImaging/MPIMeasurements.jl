@@ -52,7 +52,7 @@ function getXYZValues(cube::TDesignCube)
     end
     #readmeasurement
     for (i,sensor) in enumerate(cube.sensors)
-        measurement[i,:] = reciveMeasurment(sensor)
+        measurement[i,:] = receiveMeasurment(sensor)
     end
     return measurement
 end

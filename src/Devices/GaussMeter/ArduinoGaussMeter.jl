@@ -1,4 +1,4 @@
-export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXValue, triggerMeasurment, recive, reciveMeasurment, setSampleSize, getSampleSize, getTemperature
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXValue, triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
 
@@ -99,7 +99,7 @@ end
 """
 function getRawXYZValues(gauss::ArduinoGaussMeter)
   triggerMeasurment(gauss)
-  data = recive(gauss)
+  data = receive(gauss)
   return data
 end
 
@@ -135,7 +135,7 @@ end
 
 
 """
-  recive(gauss::ArduinoGaussMeter)::Array{Float64,1}
+  receive(gauss::ArduinoGaussMeter)::Array{Float64,1}
   
     collecting the measurment data for sensor 'gauss'
     triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first. 
@@ -144,7 +144,7 @@ end
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
 
-function recive(gauss::ArduinoGaussMeter)
+function receive(gauss::ArduinoGaussMeter)
   if !gauss.measurementTriggered
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
@@ -167,7 +167,7 @@ function recive(gauss::ArduinoGaussMeter)
 end
 
 """
-reciveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
+receiveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
   collecting, calibrating and returning measurment for 'gauss'-sensor in mT
     triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first. 
 
@@ -175,7 +175,7 @@ reciveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
   #return
     [x_mean,y_mean,z_mean, x_var,y_var,z_var]
 """
-reciveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, recive(gauss))
+receiveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, receive(gauss))
 
 """
 applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})::Array{Float64,1}
