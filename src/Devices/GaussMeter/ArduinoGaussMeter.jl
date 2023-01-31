@@ -48,7 +48,7 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   ard::Union{SimpleArduino,Nothing} = nothing
   rotatedCalibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   sampleSize::Int = 0
-  gauss.measdelay = 1000
+  measdelay = 1000
   measurementTriggered::Bool = false
 end
 
@@ -61,7 +61,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gauss.measdelay = query(sd, "!DELAY*")
+  gauss.measdelay = parse(Int64,query(sd, "!DELAY*"))
   setSampleSize(gauss, params.sampleSize)
 end
 
@@ -124,7 +124,7 @@ function triggerMeasurment(gauss::ArduinoGaussMeter)
   if gauss.measurementTriggered
     throw("measurement already triggered")
   end 
-  send(gauss.ard, "DATA")
+  sendCommand(gauss.ard, "DATA")
   gauss.measurementTriggered = true
 end
 
