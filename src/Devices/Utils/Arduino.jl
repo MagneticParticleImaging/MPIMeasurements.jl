@@ -7,6 +7,18 @@ abstract type Arduino <: Device end
 @mustimplement cmdEnd(ard::Arduino)
 @mustimplement serialDevice(ard::Arduino)
 
+function sendCommand(ard::Arduino,cmdString::String)
+  cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
+  sd = serialDevice(ard)
+  send(sd, cmd)
+  return nothing
+end
+
+function receive(ard::Arduino)
+  sd = serialDevice(ard)
+  return receive(sd)
+end
+
 function queryCommand(ard::Arduino, cmdString::String)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   sd = serialDevice(ard)

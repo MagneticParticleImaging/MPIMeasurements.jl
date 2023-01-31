@@ -48,6 +48,7 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   ard::Union{SimpleArduino,Nothing} = nothing
   rotatedCalibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   sampleSize::Int = 0
+  gauss.measdelay = 1000
   measurementTriggered::Bool = false
 end
 
@@ -60,7 +61,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gaus.measdelay = query(sd, "!DELAY*")
+  gauss.measdelay = query(sd, "!DELAY*")
   setSampleSize(gauss, params.sampleSize)
 end
 
@@ -120,17 +121,11 @@ end
   start measurment in sensor 'gauss' 
 """
 function triggerMeasurment(gauss::ArduinoGaussMeter)
-  cmd = cmdStart(gauss.ard) * "DATA" * cmdEnd(gauss.ard)
-  sd = gauss.ard.sd
-    lock(sd.sdLock)
-  
   if gauss.measurementTriggered
     throw("measurement already triggered")
-  end
-  sp_flush(sd.sp, SP_BUF_INPUT)
-  send(sd, cmd)
+  end 
+  send(gauss.ard, "DATA")
   gauss.measurementTriggered = true
-  
 end
 
 
@@ -148,18 +143,14 @@ function receive(gauss::ArduinoGaussMeter)
   if !gauss.measurementTriggered
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
-    
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * 10 * 1.2) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay* 1.2) + 1)
     set_timeout(gauss.ard, timeout_ms)
     try
-      data_strings = split(receive(gauss.ard.sd), ",")
+      data_strings = split(receive(gauss.ard), ",")
       data = [parse(Float64, str) for str in data_strings]
       return data
     finally
-      sd = gauss.ard.sd
-      sp_flush(sd.sp, SP_BUF_INPUT) # TODO Why flush?
-      unlock(sd.sdLock)
       set_timeout(gauss.ard, temp)
       gauss.measurementTriggered = false
     end
