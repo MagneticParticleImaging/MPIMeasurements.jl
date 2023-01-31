@@ -326,8 +326,21 @@ function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::Unso
   return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, 1), SortedRef())
 end
 
+function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float64, 4})
+  len = length(keys(cont.simpleChannel))
+  Γ = zeros(ComplexF64, len, len, size(3, uRef)), size(4, uRef)
+  sorted = uRef[:, cont.refIndices, :, :]
+  for i = 1:size(4, Γ)
+    for j = 1:size(3, Γ)
+      Γ[:, :, j, i] = calcFieldFromRef(cont, view(sorted[:, :, j, i]), SortedRef())
+    end
+  end
+  return Γ
+end
+
 function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   len = length(keys(cont.simpleChannel))
+  N = rxNumSamplingPoints(cont.currSequence)
   Γ = zeros(ComplexF64, len, len)
 
   for d=1:len
@@ -336,7 +349,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       
       a = 0
       b = 0
-      for i = 1:rxNumSamplingPoints(cont.currSequence)
+      for i = 1:N
         a+=uRef[i,d]*cont.cosLUT[i, e]
         b+=uRef[i,d]*cont.sinLUT[i, e]
       end
