@@ -115,7 +115,6 @@ function getXYZValues(gauss::ArduinoGaussMeter)
   return applyCalibration(gauss, data)
 end
 
-#todo move to Arduino.jl
 """
   triggerMeasurment(gauss::ArduinoGaussMeter)
   start measurment in sensor 'gauss' 
@@ -123,20 +122,15 @@ end
 function triggerMeasurment(gauss::ArduinoGaussMeter)
   cmd = cmdStart(gauss.ard) * "DATA" * cmdEnd(gauss.ard)
   sd = gauss.ard.sd
-  # TODO Lock synchronization like this does not have the desired effect:
-  # For example triggerMeasurement(gauss); getTemperature(gauss); receiveMeasurement(gauss) would result in wrong values
-  # Instead use an atomic or lock concept on ArduinoGaussMeter level and restrict all communication during measurement
-  lock(sd.sdLock)
-  try
-    if gauss.measurementTriggered
-      throw("measurement already triggered")
-    end
-    sp_flush(sd.sp, SP_BUF_INPUT)
-    send(sd, cmd)
-    gauss.measurementTriggered = true
-  finally
-    unlock(sd.sdLock)
+    lock(sd.sdLock)
+  
+  if gauss.measurementTriggered
+    throw("measurement already triggered")
   end
+  sp_flush(sd.sp, SP_BUF_INPUT)
+  send(sd, cmd)
+  gauss.measurementTriggered = true
+  
 end
 
 
@@ -151,23 +145,19 @@ end
 """
 
 function recive(gauss::ArduinoGaussMeter)
-  #todo use lock
   if !gauss.measurementTriggered
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
-    sd = gauss.ard.sd
-    lock(sd.sdLock)
+    
     temp = get_timeout(gauss.ard)
     timeout_ms = max(1000, floor(Int, gauss.sampleSize * 10 * 1.2) + 1)
     set_timeout(gauss.ard, timeout_ms)
-    # TODO Function has no "defined" return value if receive or parse fail
     try
       data_strings = split(receive(gauss.ard.sd), ",")
       data = [parse(Float64, str) for str in data_strings]
       return data
-    catch e
-      throw(e)
     finally
+      sd = gauss.ard.sd
       sp_flush(sd.sp, SP_BUF_INPUT) # TODO Why flush?
       unlock(sd.sdLock)
       set_timeout(gauss.ard, temp)
