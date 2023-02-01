@@ -326,13 +326,13 @@ function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::Unso
   return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, 1), SortedRef())
 end
 
-function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float64, 4})
+function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
   len = length(keys(cont.simpleChannel))
-  Γ = zeros(ComplexF64, len, len, size(3, uRef)), size(4, uRef)
+  Γ = zeros(ComplexF64, len, len, size(uRef, 3), size(uRef, 4))
   sorted = uRef[:, cont.refIndices, :, :]
-  for i = 1:size(4, Γ)
-    for j = 1:size(3, Γ)
-      Γ[:, :, j, i] = calcFieldFromRef(cont, view(sorted[:, :, j, i]), SortedRef())
+  for i = 1:size(Γ, 4)
+    for j = 1:size(Γ, 3)
+      Γ[:, :, j, i] = calcFieldFromRef(cont, view(sorted, :, :, j, i), SortedRef())
     end
   end
   return Γ
@@ -355,11 +355,10 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       end
       a*=2/N
       b*=2/N
-
+      # TODO *im and *(-1) depending on waveform
       Γ[d,e] = -(c*(b+im*a)*im)
     end
   end
-  @show Γ
   return Γ
 end
 
