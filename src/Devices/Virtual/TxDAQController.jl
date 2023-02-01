@@ -299,8 +299,8 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   for d=1:D
     Y = round(Int64, cycle*dfFreq[d] )
     for n=1:N
-      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
-      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N) / N #sqrt(N)*2
+      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N)
+      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N)
     end
   end
   return sinLUT, cosLUT
@@ -323,21 +323,38 @@ function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 4}, ::Unso
   return calcFieldFromRef(cont, uRef[:, :, :, 1], UnsortedRef())
 end
 function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::UnsortedRef)
-  return calcFieldFromRef(cont, uRef[:, cont.refIndices, :], SortedRef())
+  return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, 1), SortedRef())
+end
+
+function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float64, 4})
+  len = length(keys(cont.simpleChannel))
+  Γ = zeros(ComplexF64, len, len, size(3, uRef)), size(4, uRef)
+  sorted = uRef[:, cont.refIndices, :, :]
+  for i = 1:size(4, Γ)
+    for j = 1:size(3, Γ)
+      Γ[:, :, j, i] = calcFieldFromRef(cont, view(sorted[:, :, j, i]), SortedRef())
+    end
+  end
+  return Γ
 end
 
 function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   len = length(keys(cont.simpleChannel))
+  N = rxNumSamplingPoints(cont.currSequence)
   Γ = zeros(ComplexF64, len, len)
 
   for d=1:len
     c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
     for e=1:len
-
-      uVolt = float(uRef[1:rxNumSamplingPoints(cont.currSequence),d,1])
-
-      a = 2*sum(uVolt.*cont.cosLUT[:,e])
-      b = 2*sum(uVolt.*cont.sinLUT[:,e])
+      
+      a = 0
+      b = 0
+      for i = 1:N
+        a+=uRef[i,d]*cont.cosLUT[i, e]
+        b+=uRef[i,d]*cont.sinLUT[i, e]
+      end
+      a*=2/N
+      b*=2/N
 
       Γ[d,e] = -(c*(b+im*a)*im)
     end
