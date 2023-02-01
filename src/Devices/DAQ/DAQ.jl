@@ -211,43 +211,6 @@ function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence)
   return endSample
 end
 
-function addFramesToAvg(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
-  #setIndex - 1 = how many frames were written to the buffer
-
-  # Compute how many frames there will be
-  avgSize = size(avgBuffer.buffer)
-  resultFrames = div(avgBuffer.setIndex - 1 + size(frames, 4), avgSize[4])
-
-  result = nothing
-  if resultFrames > 0
-    result = zeros(Float32, avgSize[1], avgSize[2], avgSize[3], resultFrames)
-  end
-
-  setResult = 1
-  fr = 1 
-  while fr <= size(frames, 4)
-    # How many left vs How many can fit into avgBuffer
-    fit = min(size(frames, 4) - fr, avgSize[4] - avgBuffer.setIndex)
-    
-    # Insert into buffer
-    toFrames = fr + fit 
-    toAvg = avgBuffer.setIndex + fit 
-    avgBuffer.buffer[:, :, :, avgBuffer.setIndex:toAvg] = frames[:, :, :, fr:toFrames]
-    avgBuffer.setIndex += length(avgBuffer.setIndex:toAvg)
-    fr = toFrames + 1
-    
-    # Average and add to result
-    if avgBuffer.setIndex - 1 == avgSize[4]
-      avgFrame = mean(avgBuffer.buffer, dims=4)[:,:,:,:]
-      result[:, :, :, setResult] = avgFrame
-      setResult += 1
-      avgBuffer.setIndex = 1    
-    end
-  end
-
-  return result
-end
-
 function updateFrameBuffer!(measState::SequenceMeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
@@ -273,7 +236,7 @@ function handleNewFrame(::FrameAveragedAsyncMeas, measState::SequenceMeasState, 
   isNewFrameAvailable = false
 
   fr = 0
-  framesAvg = addFramesToAvg(measState.avgBuffer, uMeas)
+  framesAvg = addFrames!(measState.avgBuffer, uMeas)
   if !isnothing(framesAvg)
     fr = addFramesFrom(measState, framesAvg)
     isNewFrameAvailable = true
