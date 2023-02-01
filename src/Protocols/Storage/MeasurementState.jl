@@ -1,17 +1,25 @@
-abstract type AsyncBuffer end
+abstract type MeasurementState end
+
+abstract type StorageBuffer end
+abstract type IntermediateBuffer <: StorageBuffer end
+abstract type ResultBuffer <: StorageBuffer end
+# Insertable-Trait for buffer? push!, insert! and read, index as interface
+
+abstract type AsyncBuffer <: IntermediateBuffer end
+
 abstract type AsyncMeasTyp end
 struct FrameAveragedAsyncMeas <: AsyncMeasTyp end
 struct RegularAsyncMeas <: AsyncMeasTyp end
 # TODO Update
 asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
-mutable struct FrameAverageBuffer
-  buffer::Array{Float32, 4}
+mutable struct AverageBuffer{T} <: IntermediateBuffer where {T<:Number}
+  buffer::Array{T, 4}
   setIndex::Int
 end
-FrameAverageBuffer(samples, channels, periods, avgFrames) = FrameAverageBuffer(zeros(Float32, samples, channels, periods, avgFrames), 1)
+AverageBuffer(samples, channels, periods, avgFrames) = AverageBuffer{Float32}(zeros(Float32, samples, channels, periods, avgFrames), 1)
 
-function addFrames!(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
+function push!(avgBuffer::AverageBuffer{T}, frames::Array{T, 4}) where {T<:Number}
   #setIndex - 1 = how many frames were written to the buffer
 
   # Compute how many frames there will be
@@ -20,7 +28,7 @@ function addFrames!(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
 
   result = nothing
   if resultFrames > 0
-    result = zeros(Float32, avgSize[1], avgSize[2], avgSize[3], resultFrames)
+    result = zeros(T, avgSize[1], avgSize[2], avgSize[3], resultFrames)
   end
 
   setResult = 1
@@ -48,20 +56,68 @@ function addFrames!(avgBuffer::FrameAverageBuffer, frames::Array{Float32, 4})
   return result
 end
 
-mutable struct SequenceMeasState
+abstract type MeasurementBuffer <: ResultBuffer end
+# TODO Error handling? Throw own error or crash with index error
+# TODO read only return elements written to so far?
+mutable struct SimpleFrameBuffer <: MeasurementBuffer
+  nextFrame::Integer
+  data::Array{Float32,4}
+end
+function SimpleFrameBuffer(sequence::Sequence)
+  numFrames = acqNumFrames(sequence)
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence)
+  numChannel = length(rxChannels(sequence))
+  buffer = zeros(Float32, rxNumSamplingPoints, numChannel, numPeriods, numFrames)
+  return SimpleFrameBuffer(1, buffer)
+end
+function insert!(buffer::SimpleFrameBuffer, from::Integer, frames::Array{Float32,4})
+  to = from + size(frames, 4) - 1
+  buffer.data[:,:,:,from:to] = frames
+  # TODO advancing nextFrame on insert seems wrong
+  buffer.nextFrame = to + 1
+end
+function push!(buffer::SimpleFrameBuffer, frames::Array{Float32, 4})
+  from = buffer.nextFrame
+  insert!(buffer, from, frames)
+  return buffer
+end
+read(buffer::SimpleFrameBuffer) = buffer.data
+index(buffer::SimpleFrameBuffer) = buffer.nextFrame
+
+mutable struct AveragedFrameBuffer <: MeasurementBuffer
+  avgBuffer::AverageBuffer{Float32}
+  simple::SimpleFrameBuffer
+end
+function AveragedFrameBuffer(sequence::Sequence)
+  frameAverage = acqNumFrameAverages(sequence)
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence)
+  numChannel = length(rxChannels(sequence))
+  avgBuffer = AverageBuffer(rxNumSamplingPoints, numChannel, numPeriods, frameAverage)
+  simple = SimpleFrameBuffer(sequence)
+  return AveragedFrameBuffer(avgBuffer, simple)
+end
+function push!(buffer::AveragedFrameBuffer, frames::Array{Float32, 4})
+  framesAvg = push!(buffer.avgBuffer, frames)
+  if !isnothing(framesAvg)
+    push!(buffer.simple, framesAvg)
+  end
+  return buffer
+end
+read(buffer::AveragedFrameBuffer) = read(buffer.simple)
+index(buffer::AveragedFrameBuffer) = index(buffer.simple)
+
+
+mutable struct SequenceMeasState <: MeasurementState
   numFrames::Int
-  nextFrame::Int
   channel::Union{Channel, Nothing}
   producer::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
-  # All data
   asyncBuffer::AsyncBuffer
-  # Measurement data
-  buffer::Array{Float32,4}
-  avgBuffer::Union{FrameAverageBuffer, Nothing}
+  measBuffer::MeasurementBuffer
   #temperatures::Matrix{Float64} temps are not implemented atm
   # Reference data
-  refBuffer::Union{Nothing, Array{ComplexF64, 4}}
   type::AsyncMeasTyp
 end
 

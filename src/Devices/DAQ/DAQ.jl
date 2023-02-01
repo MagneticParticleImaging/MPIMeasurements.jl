@@ -202,7 +202,7 @@ calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelI
 @mustimplement startProducer(channel::Channel, daq::AbstractDAQ, numFrames)
 @mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
 @mustimplement AsyncBuffer(daq::AbstractDAQ) # Buffer structure that contains channel elements
-@mustimplement updateAsyncBuffer!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
+@mustimplement push!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
 @mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
 
 function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence)
@@ -214,48 +214,8 @@ end
 function updateFrameBuffer!(measState::SequenceMeasState, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
-    #isNewFrameAvailable, fr = 
-    handleNewFrame(measState.type, measState, uMeas)
-    #if isNewFrameAvailable && fr > 0
-    #  measState.currFrame = fr 
-    #  measState.consumed = false
-    #end
+    push!(measState.measBuffer, uMeas)
   end
-end
-
-function handleNewFrame(::RegularAsyncMeas, measState::SequenceMeasState, uMeas)
-  isNewFrameAvailable = false
-
-  fr = addFramesFrom(measState, uMeas)
-  isNewFrameAvailable = true
-
-  return isNewFrameAvailable, fr
-end
-
-function handleNewFrame(::FrameAveragedAsyncMeas, measState::SequenceMeasState, uMeas)
-  isNewFrameAvailable = false
-
-  fr = 0
-  framesAvg = addFrames!(measState.avgBuffer, uMeas)
-  if !isnothing(framesAvg)
-    fr = addFramesFrom(measState, framesAvg)
-    isNewFrameAvailable = true
-  end
-
-  return isNewFrameAvailable, fr
-end
-
-function addFramesFrom(measState::SequenceMeasState, frames::Array{Float32, 4})
-  fr = measState.nextFrame
-  to = fr + size(frames, 4) - 1
-  limit = size(measState.buffer, 4)
-  @debug "Add frames $fr to $to to framebuffer with $limit size"
-  if to <= limit
-    measState.buffer[:,:,:,fr:to] = frames
-    measState.nextFrame = to + 1
-    return fr
-  end
-  return -1 
 end
 
 include("RedPitayaDAQ.jl")

@@ -410,7 +410,7 @@ AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{Per
 
 channelType(daq::RedPitayaDAQ) = SampleChunk
 
-function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+function push!(buffer::RedPitayaAsyncBuffer, chunk)
   samples = chunk.samples
   perfs = chunk.performance
   push!(buffer.performance, perfs)

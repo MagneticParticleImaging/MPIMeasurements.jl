@@ -11,24 +11,21 @@ SequenceMeasState(x, sequence::ControlSequence) = SequenceMeasState(x, sequence.
 SequenceMeasState(protocol::Protocol, x) = SequenceMeasState(getDAQ(scanner(protocol)), x)
 function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence)
   numFrames = acqNumFrames(sequence)
-  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
-  numPeriods = acqNumPeriodsPerFrame(sequence)
   frameAverage = acqNumFrameAverages(sequence)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  # TODO implement properly with only RxMeasurementChannels
-  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames) # TODO: Change to Array{Float32, 4}(undef, rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)?
-  #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
-  avgBuffer = nothing
+  buffer = nothing
+  # TODO with trait + function, maybe depend on DAQ
   if frameAverage > 1
-    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, frameAverage)), 1)
+    buffer = AveragedFrameBuffer(sequence)
+  else 
+    buffer = SimpleFrameBuffer(sequence)
   end
   channel = Channel{channelType(daq)}(32)
 
   # Prepare measState
-  measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
-  measState.channel = channel
+  measState = SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(daq), buffer, asyncMeasType(sequence))
 
   return measState
 end
@@ -119,7 +116,7 @@ function asyncConsumer(channel::Channel, protocol::Protocol)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      updateAsyncBuffer!(measState.asyncBuffer, chunk)
+      push!(measState.asyncBuffer, chunk)
       updateFrameBuffer!(measState, daq)
     end
     sleep(0.001)

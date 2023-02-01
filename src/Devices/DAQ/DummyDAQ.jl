@@ -125,7 +125,7 @@ function frameAverageBufferSize(daq::DummyDAQ, frameAverages)
     return daq.params.rxNumSamplingPoints, 1, 1, frameAverages
 end
 
-function updateAsyncBuffer!(buffer::DummyAsyncBuffer, chunk)
+function push!(buffer::DummyAsyncBuffer, chunk)
     samples = chunk
     if !isnothing(buffer.samples)
         buffer.samples = hcat(buffer.samples, samples)

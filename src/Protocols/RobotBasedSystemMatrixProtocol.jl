@@ -345,7 +345,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      updateAsyncBuffer!(asyncBuffer, chunk)
+      push!(asyncBuffer, chunk)
     end
     if !isready(channel)
       sleep(0.001)

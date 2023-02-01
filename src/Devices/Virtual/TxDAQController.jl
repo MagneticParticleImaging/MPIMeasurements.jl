@@ -210,7 +210,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
         while isopen(channel) || isready(channel)
           while isready(channel)
             chunk = take!(channel)
-            updateAsyncBuffer!(buffer, chunk)
+            push!(buffer, chunk)
           end
           sleep(0.001)
         end      
