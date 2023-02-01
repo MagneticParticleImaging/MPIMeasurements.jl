@@ -318,12 +318,12 @@ function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix
   end
 end
 
-calcFieldFromRef(cont::ControlSequence, uRef) = calcFieldFromRef(cont, uRef, UnsortedRef())
-function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 4}, ::UnsortedRef)
-  return calcFieldFromRef(cont, uRef[:, :, :, 1], UnsortedRef())
+calcFieldFromRef(cont::ControlSequence, uRef; frame::Int64 = 1, period::Int64 = 1) = calcFieldFromRef(cont, uRef, UnsortedRef(), frame = frame, period = period)
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 4}, ::UnsortedRef; frame::Int64 = 1, period::Int64 = 1)
+  return calcFieldFromRef(cont, uRef[:, :, :, frame], UnsortedRef(), period = period)
 end
-function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::UnsortedRef)
-  return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, 1), SortedRef())
+function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::UnsortedRef; period::Int64 = 1)
+  return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, period), SortedRef())
 end
 
 function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
