@@ -342,6 +342,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       Γ[d,e] = -(c*(b+im*a)*im)
     end
   end
+  @show Γ
   return Γ
 end
 
@@ -436,7 +437,7 @@ function updateControlSequence!(cont::ControlSequence, newTx::Matrix)
     for (k, comp) in enumerate(comps)
       val = 0.0
       # First component is a diagonal entry from the matrix
-      if length(comps) == 1 || k == i
+      if k == 1
         val = newTx[i, i]
       # All other components are "in order" and skip the diagonal entry
       else
