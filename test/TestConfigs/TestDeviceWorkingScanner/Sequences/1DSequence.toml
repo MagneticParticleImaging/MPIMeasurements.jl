@@ -3,7 +3,6 @@ name = "1DSequence"
 description = "Precise description."
 targetScanner = "testscanner"
 baseFrequency = "125.0MHz"
-triggered = false
 
 [Fields]
 
@@ -19,6 +18,7 @@ type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
+type = "PeriodicElectricalComponent"
 divider = 4800
 amplitude = ["0.02T"]
 phase = ["0.0rad"]

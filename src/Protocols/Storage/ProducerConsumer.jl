@@ -41,6 +41,10 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
     enableACPower(su)
     # TODO Send expected enable time to SU
   end
+  tempControl = getTemperatureController(scanner_)
+  if !isnothing(tempControl)
+    disableControl(tempControl)
+  end
   robots = getRobots(scanner_)
   for robot in robots
     disable(robot)
@@ -49,7 +53,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
   amps = getAmplifiers(scanner_)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
+    channelIdx = id.(vcat(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
     @sync for amp in amps
       @async turnOn(amp)
@@ -86,12 +90,20 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
       @error "Could not disable su"
       @error ex
     end
+    try 
+      if !isnothing(tempControl)
+        enableControl(tempControl)
+      end
+    catch ex
+      @error "Could not enable heating control"
+      @error ex
+    end
     for robot in robots
       try
         enable(robot)
       catch ex
         @error "Could not turn off roboter $(deviceID(robot))"
-        @error ex 
+      @error ex 
       end
     end
   end
