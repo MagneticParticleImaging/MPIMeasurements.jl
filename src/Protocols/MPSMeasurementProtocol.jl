@@ -49,6 +49,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::MPSMeasurementProtocol)
@@ -134,6 +135,7 @@ function performMeasurement(protocol::MPSMeasurementProtocol)
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
+  protocol.unit = "Frames"
   measurement(protocol)
 end
 
@@ -222,7 +224,13 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DataQueryEvent)
         data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.seqMeasState.buffer
+    data = copy(protocol.seqMeasState.buffer)
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
