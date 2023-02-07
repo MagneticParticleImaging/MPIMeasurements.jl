@@ -11,12 +11,23 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   controlTx::Bool = false
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
-  "Sequence to measure"
-  sequence::Union{Sequence, Nothing} = nothing
   "Remember background measurement"
   rememberBGMeas::Bool = false
   "Tracer that is being used for the measurement"
-  tracer::Union{Tracer, Nothing} = nothing 
+  tracer::Union{Tracer, Nothing} = nothing
+
+  "Sequence to measure"
+  sequence::Union{Sequence, Nothing} = nothing
+
+  # TODO: This is only for 1D MPS systems for now
+  "Start value of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetStart::typeof(1.0u"T") = -0.012u"T"
+  "Stop value of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetStop::typeof(1.0u"T") = 0.012u"T"
+  "Number of values of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetNum::Integer = 101
+  "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
+  dfPeriodsPerOffset::Integer = 100
 
   #=
   Notizen für MPS:
@@ -32,8 +43,44 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
     dict["sequence"] = sequence
     delete!(dict, "sequence")
   end
-  params = params_from_dict(MPsMeasurementProtocolParams, dict)
+
+  params = params_from_dict(MPSMeasurementProtocolParams, dict)
+
+  divider = nothing
+  offsetFieldIdx = nothing
+  offsetChannelIdx = nothing
+  for (fieldIdx, field) in enumerate(fields(sequence))
+    for (channelIdx, channel) in enumerate(channels(field))
+      if channel isa PeriodicElectricalChannel
+        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
+        divider = channel.components[1].divider
+      elseif channel isa ContinuousElectricalChannel
+        offsetFieldIdx = fieldIdx
+        offsetChannelIdx = channelIdx
+      end
+    end
+  end
+
+  if isnothing(divider)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
+  end
+
+  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
+  end
+
+  samplesPerOffset = ustrip(u"Hz", sequence.general.baseFrequency) / divider * params.dfPeriodsPerOffset
+  numSamples = samplesPerOffset * params.offsetNum
+
+  chanOffset = (params.offsetStop + params.offsetStart) /2
+  amplitude = abs(params.offsetStop - chanOffset)
+
+  @info samplesPerOffset numSamples chanOffset amplitude
+  
+  oldChannel = sequence.fields[offsetFieldIdx].channels[offsetChannelIdx]
+  sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=samplesPerOffset, divider=numSamples, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
   params.sequence = sequence
+
   return params
 end
 MPSMeasurementProtocolParams(dict::Dict) = params_from_dict(MPSMeasurementProtocolParams, dict)
@@ -61,7 +108,7 @@ function requiredDevices(protocol::MPSMeasurementProtocol)
 end
 
 function _init(protocol::MPSMeasurementProtocol)
-  if isnothing(protocol.params.sequence)
+  if isnothing(sequence(protocol))
     throw(IllegalStateException("Protocol requires a sequence"))
   end
   protocol.done = false
@@ -80,7 +127,7 @@ end
 
 function timeEstimate(protocol::MPSMeasurementProtocol)
   est = "Unknown"
-  if !isnothing(protocol.params.sequence)
+  if !isnothing(sequence(protocol))
     params = protocol.params
     seq = params.sequence
     totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
@@ -121,7 +168,7 @@ function performMeasurement(protocol::MPSMeasurementProtocol)
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
-    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+    acqNumFrames(sequence(protocol), protocol.params.bgFrames)
 
     @debug "Taking background measurement."
     measurement(protocol)
@@ -132,7 +179,7 @@ function performMeasurement(protocol::MPSMeasurementProtocol)
   end
 
   @debug "Setting number of foreground frames."
-  acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  acqNumFrames(sequence(protocol), protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
   protocol.unit = "Frames"
@@ -184,12 +231,12 @@ end
 
 function asyncMeasurement(protocol::MPSMeasurementProtocol)
   scanner_ = scanner(protocol)
-  sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  sequence_ = sequence(protocol)
+  prepareAsyncMeasurement(protocol, sequence_)
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+    controlTx(protocol.txCont, sequence_, protocol.txCont.currTx)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence_, prepTx = !protocol.params.controlTx)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
   return protocol.seqMeasState
@@ -264,10 +311,12 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
+  filename = saveasMDF(store, scanner, sequence(protocol), data, mdf, bgdata = bgdata)
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
 protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
+
+sequence(protocol::MPSMeasurementProtocol) = protocol.params.sequence
