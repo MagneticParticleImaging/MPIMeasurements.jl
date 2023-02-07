@@ -74,12 +74,12 @@ end
 function insert!(buffer::SimpleFrameBuffer, from::Integer, frames::Array{Float32,4})
   to = from + size(frames, 4) - 1
   buffer.data[:,:,:,from:to] = frames
-  # TODO advancing nextFrame on insert seems wrong
-  buffer.nextFrame = to + 1
+  return to
 end
 function push!(buffer::SimpleFrameBuffer, frames::Array{Float32, 4})
   from = buffer.nextFrame
-  insert!(buffer, from, frames)
+  to = insert!(buffer, from, frames)
+  buffer.nextFrame = to + 1
   return buffer
 end
 read(buffer::SimpleFrameBuffer) = buffer.data
@@ -97,6 +97,42 @@ function AveragedFrameBuffer(sequence::Sequence)
   avgBuffer = AverageBuffer(rxNumSamplingPoints, numChannel, numPeriods, frameAverage)
   simple = SimpleFrameBuffer(sequence)
   return AveragedFrameBuffer(avgBuffer, simple)
+end
+function push!(buffer::AveragedFrameBuffer, frames::Array{Float32, 4})
+  framesAvg = push!(buffer.avgBuffer, frames)
+  if !isnothing(framesAvg)
+    push!(buffer.simple, framesAvg)
+  end
+  return buffer
+end
+read(buffer::AveragedFrameBuffer) = read(buffer.simple)
+index(buffer::AveragedFrameBuffer) = index(buffer.simple)
+
+abstract type FieldBuffer <: ResultBuffer end
+mutable struct SimpleFieldBuffer <: FieldBuffer
+  nextFrame::Integer
+  data::Array{ComplexF64, 4}
+end
+function insert!(buffer::SimpleFieldBuffer, from::Integer, frames::Array{ComplexF64, 4})
+  # TODO duplicate to SimpleFrameBuffer
+  to = from + size(frames, 4) - 1
+  buffer.data[:,:,:,from:to] = frames
+  return to
+end
+function push!(buffer::SimpleFieldBuffer, frames::Array{ComplexF64, 4})
+  from = buffer.nextFrame
+  to = insert!(buffer, from, frames)
+  buffer.nextFrame = to + 1
+  return buffer
+end
+push!(buffer::SimpleFieldBuffer, frames::Array{Float32, 4}) = push!(buffer, calcFieldsFromRef(buffer.cont, frames))
+read(buffer::SimpleFieldBuffer) = buffer.data
+index(buffer::SimpleFieldBuffer) = buffer.nextFrame
+
+
+mutable struct AveragedFieldBuffer <: FieldBuffer
+  avgBuffer::AverageBuffer{Float32}
+  simple::SimpleFieldBuffer
 end
 function push!(buffer::AveragedFrameBuffer, frames::Array{Float32, 4})
   framesAvg = push!(buffer.avgBuffer, frames)

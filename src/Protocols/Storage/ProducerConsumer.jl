@@ -116,8 +116,7 @@ function asyncConsumer(channel::Channel, protocol::Protocol)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      push!(measState.asyncBuffer, chunk)
-      updateFrameBuffer!(measState, daq)
+      updateBuffers!(measState, daq, chunk)
     end
     sleep(0.001)
   end
@@ -129,3 +128,11 @@ function asyncConsumer(channel::Channel, protocol::Protocol)
   #end
 end
 
+function updateBuffers!(measState::SequenceMeasState, daq::AbstractDAQ, chunk)
+  push!(measState.asyncBuffer, chunk)
+  buffers = [measState.measBuffer]
+  if !isnothing(measState.fieldBuffer)
+    push!(buffers, measState.fieldBuffer)
+  end
+  updateBuffers!(buffers, daq)
+end

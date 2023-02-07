@@ -211,14 +211,21 @@ function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence)
   return endSample
 end
 
-function updateFrameBuffer!(measState::SequenceMeasState, daq::AbstractDAQ)
+function updateBuffers!(buffers::Vector{StorageBuffer}, daq::AbstractDAQ)
   uMeas, uRef = retrieveMeasAndRef!(measState.asyncBuffer, daq)
   if !isnothing(uMeas)
-    push!(measState.measBuffer, uMeas)
+    for buffer in buffers
+      if buffer isa MeasurementBuffer
+        push!(buffer, uMeas)
+      elseif buffer isa FieldBuffer
+        push!(buffer, uRef)
+      else
+        @warn "Unknown buffer type $(typeof(buffer))"
+      end
+    end
   end
 end
 
 include("RedPitayaDAQ.jl")
 include("DummyDAQ.jl")
 include("SimpleSimulatedDAQ.jl")
-
