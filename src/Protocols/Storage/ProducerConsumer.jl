@@ -11,21 +11,18 @@ SequenceMeasState(x, sequence::ControlSequence) = SequenceMeasState(x, sequence.
 SequenceMeasState(protocol::Protocol, x) = SequenceMeasState(getDAQ(scanner(protocol)), x)
 function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence)
   numFrames = acqNumFrames(sequence)
-  frameAverage = acqNumFrameAverages(sequence)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  buffer = nothing
-  # TODO with trait + function, maybe depend on DAQ
-  if frameAverage > 1
-    buffer = AveragedFrameBuffer(sequence)
-  else 
-    buffer = SimpleFrameBuffer(sequence)
+  buffer = SimpleFrameBuffer(sequence)
+  if acqNumFrameAverages(sequence) > 1
+    buffer = AverageBuffer(buffer, sequence)
   end
   channel = Channel{channelType(daq)}(32)
+  buffer = FrameSplitterBuffer(daq, [buffer])
 
   # Prepare measState
-  measState = SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(daq), buffer, asyncMeasType(sequence))
+  measState = SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), nothing, asyncMeasType(sequence))
 
   return measState
 end
@@ -116,7 +113,7 @@ function asyncConsumer(channel::Channel, protocol::Protocol)
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      updateBuffers!(measState, daq, chunk)
+      push!(measState.sequenceBuffer, chunk)
     end
     sleep(0.001)
   end
@@ -126,13 +123,4 @@ function asyncConsumer(channel::Channel, protocol::Protocol)
   #if length(measState.temperatures) > 0
   #  params["calibTemperatures"] = measState.temperatures
   #end
-end
-
-function updateBuffers!(measState::SequenceMeasState, daq::AbstractDAQ, chunk)
-  push!(measState.asyncBuffer, chunk)
-  buffers = [measState.measBuffer]
-  if !isnothing(measState.fieldBuffer)
-    push!(buffers, measState.fieldBuffer)
-  end
-  updateBuffers!(buffers, daq)
 end

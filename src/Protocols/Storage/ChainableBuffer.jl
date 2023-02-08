@@ -1,10 +1,10 @@
 mutable struct AverageBuffer{T} <: IntermediateBuffer where {T<:Number}
+  target::StorageBuffer
   buffer::Array{T,4}
   setIndex::Int
-  target::StorageBuffer
 end
-AverageBuffer(samples, channels, periods, avgFrames) = AverageBuffer{Float32}(zeros(Float32, samples, channels, periods, avgFrames), 1)
-
+AverageBuffer(buffer::StorageBuffer, samples, channels, periods, avgFrames) = AverageBuffer{Float32}(buffer, zeros(Float32, samples, channels, periods, avgFrames), 1)
+AverageBuffer(buffer::StorageBuffer, sequence::Sequence) = AverageBuffer(buffer, rxNumSamplesPerPeriod(sequence), length(rxChannels(sequence)), acqNumPeriodsPerFrame(sequence), acqNumFrameAverages(sequence))
 function push!(avgBuffer::AverageBuffer{T}, frames::Array{T,4}) where {T<:Number}
   #setIndex - 1 = how many frames were written to the buffer
 
@@ -80,6 +80,7 @@ abstract type FieldBuffer <: SinkBuffer end
 mutable struct DriveFieldBuffer <: FieldBuffer
   nextFrame::Integer
   data::Array{ComplexF64,4}
+  cont::ControlSequence
 end
 function insert!(buffer::DriveFieldBuffer, from::Integer, frames::Array{ComplexF64,4})
   # TODO duplicate to SimpleFrameBuffer
