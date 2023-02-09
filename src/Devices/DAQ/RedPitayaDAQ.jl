@@ -406,8 +406,9 @@ mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
   samples::Union{Matrix{Int16}, Nothing}
   performance::Vector{Vector{PerformanceData}}
   target::StorageBuffer
+  daq::RedPitayaDAQ
 end
-AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
+AsyncBuffer(buffer::StorageBuffer, daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1), buffer, daq)
 
 channelType(daq::RedPitayaDAQ) = SampleChunk
 
@@ -428,14 +429,14 @@ function push!(buffer::RedPitayaAsyncBuffer, chunk)
       @warn "RedPitaya $i lost sequence steps"
     end
   end
-  frames = convertSamplesToFrames!(buffer, daq)
+  frames = convertSamplesToFrames!(buffer)
   if !isnothing(frames)
-    return push!(buffer.target)
+    return push!(buffer.target, frames)
   else
     return nothing
   end
 end
-sinks!(buffer::RedPitayaAsyncBuffer, sinks::Vector{SinkBuffer}) = sink!(buffer.target, sinks)
+sinks!(buffer::RedPitayaAsyncBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
 function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
   return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
@@ -483,7 +484,8 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
 end
 
 
-function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
+function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer)
+  daq = buffer.daq
   unusedSamples = buffer.samples
   samples = buffer.samples
   frames = nothing

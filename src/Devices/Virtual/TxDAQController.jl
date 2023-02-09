@@ -192,13 +192,14 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   # Hacky solution
   controlPhaseDone = false
   i = 1
+  len = length(keys(control.simpleChannel))
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
       # Prepare control measurement
       setup(daq, control.currSequence)
       channel = Channel{channelType(daq)}(32)
-      buffer = AsyncBuffer(daq)
+      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64,len, len, 1, 1), control)]), daq)
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
@@ -219,8 +220,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Control measurement finished"
 
       @info "Evaluating control step"
-      uMeas, uRef = retrieveMeasAndRef!(buffer, daq)
-      txCont.ref = uRef
+      uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1]
       if !isnothing(uRef)
         controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone

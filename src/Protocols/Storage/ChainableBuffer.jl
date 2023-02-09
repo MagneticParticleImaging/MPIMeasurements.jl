@@ -121,9 +121,9 @@ function push!(buffer::FrameSplitterBuffer, frames)
   end
   return result
 end
-function sinks!(sinks::Vector{StorageBuffer}, buffer::FrameSplitterBuffer)
+function sinks!(buffer::FrameSplitterBuffer, sinks::Vector{SinkBuffer})
   for buf in buffer.targets
-    sinks!(sinks, buf)
+    sinks!(buf, sinks)
   end
   return sinks
 end

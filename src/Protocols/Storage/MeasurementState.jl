@@ -12,11 +12,21 @@ struct RegularAsyncMeas <: AsyncMeasTyp end
 # TODO Update
 asyncMeasType(sequence::Sequence) = acqNumFrameAverages(sequence) > 1 ? FrameAveragedAsyncMeas() : RegularAsyncMeas()
 
-sinks(buffer::StorageBuffer) = sinks(buffer, SinkBuffer[])
+sinks(buffer::StorageBuffer) = sinks!(buffer, SinkBuffer[])
 function sinks(buffer::StorageBuffer, type::Type{T}) where {T<:SinkBuffer}
   return [sink for sink in sinks(buffer) if sink isa type]
 end
-sinks(buffer::SinkBuffer, sinks::Vector{SinkBuffer}) = push!(sinks, buffer)
+function sink(buffer::StorageBuffer, type::Type{T}) where {T<:SinkBuffer}
+  result = sinks(buffer, type)
+  if length(result) == 0
+    return nothing
+  elseif length(result) == 1
+    return result[1]
+  else
+    error("Cannot unambiguously retrieve a sink of type $type")
+  end
+end
+sinks!(buffer::SinkBuffer, sinks::Vector{SinkBuffer}) = push!(sinks, buffer)
 
 mutable struct SequenceMeasState <: MeasurementState
   numFrames::Int

@@ -119,7 +119,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
     @debug "Taking background measurement."
     protocol.unit = "BG Frames"
     measurement(protocol)
-    protocol.bgMeas = read(protocol.seqMeasState.measBuffer)
+    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
@@ -213,14 +213,14 @@ end
 function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(index(protocol.seqMeasState.measBuffer) - 1, 0)
+    data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
     if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
-        data = read(protocol.seqMeasState.measBuffer)[:, :, :, frame:frame]
+        data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = copy(read(protocol.seqMeasState.measBuffer))
+    data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
   elseif event.message == "BG"
     if length(protocol.bgMeas) > 0
       data = copy(protocol.bgMeas)
@@ -239,7 +239,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(index(protocol.seqMeasState.measBuffer) - 1, framesTotal)
+    framesDone = min(index(sinks(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
@@ -253,7 +253,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
-  data = read(protocol.seqMeasState.measBuffer)
+  data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
