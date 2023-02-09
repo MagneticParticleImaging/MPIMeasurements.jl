@@ -258,7 +258,12 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
+  drivefield = nothing
+  dfBuffer = sink(protocol.seqMeasState.sequenceBuffer, DriveFieldBuffer)
+  if !isnothing(dfBuffer)
+    drivefield = read(dfBuffer)
+  end
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata, drivefield = drivefield)
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

@@ -34,7 +34,7 @@ function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer
   end
   channel = Channel{channelType(daq)}(32)
   
-  buffers = [buffer]
+  buffers = StorageBuffer[buffer]
   if !isnothing(sequenceBuffer)
     push!(buffers, sequenceBuffer...)
   end
