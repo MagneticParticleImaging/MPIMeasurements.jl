@@ -342,6 +342,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   len = length(keys(cont.simpleChannel))
   N = rxNumSamplingPoints(cont.currSequence)
   Γ = zeros(ComplexF64, len, len)
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
 
   for d=1:len
     c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
@@ -355,8 +356,9 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       end
       a*=2/N
       b*=2/N
-      # TODO *im and *(-1) depending on waveform
-      Γ[d,e] = -(c*(b+im*a)*im)
+      # TODO *im and *(-1) depending on waveform (im for sin instead of cos, -1 as we see the derivative of the field)
+      correction = -im * dividers[d]/dividers[e]
+      Γ[d,e] = correction * (c*(b+im*a))
     end
   end
   return Γ
