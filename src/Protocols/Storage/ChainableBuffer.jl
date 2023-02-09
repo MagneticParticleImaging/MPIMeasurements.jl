@@ -74,7 +74,6 @@ function push!(buffer::SimpleFrameBuffer, frames::Array{Float32,4})
 end
 read(buffer::SimpleFrameBuffer) = buffer.data
 index(buffer::SimpleFrameBuffer) = buffer.nextFrame
-sinks(buffer::SimpleFrameBuffer) = buffer
 
 abstract type FieldBuffer <: SinkBuffer end
 mutable struct DriveFieldBuffer <: FieldBuffer

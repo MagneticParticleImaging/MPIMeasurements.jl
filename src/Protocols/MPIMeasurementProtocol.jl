@@ -239,7 +239,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(index(sinks(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
