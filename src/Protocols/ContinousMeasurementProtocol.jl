@@ -180,7 +180,7 @@ function measurement(protocol::ContinousMeasurementProtocol)
     throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
   end
 
-  return copy(measState.buffer)
+  return copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
 end
 
 function asyncMeasurement(protocol::ContinousMeasurementProtocol)

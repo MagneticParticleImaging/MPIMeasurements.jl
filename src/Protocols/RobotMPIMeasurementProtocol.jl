@@ -146,7 +146,7 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     @debug "Taking background measurement."
     protocol.unit = "BG Frames"
     measurement(protocol)
-    protocol.bgMeas = protocol.seqMeasState.buffer
+    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
     if askChoices(protocol, "Press continue when foreground measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end    
@@ -241,14 +241,14 @@ end
 function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.seqMeasState.nextFrame - 1, 0)
+    data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
     if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
-        data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
+        data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = copy(protocol.seqMeasState.buffer)
+    data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
   elseif event.message == "BG"
     if length(protocol.bgMeas) > 0
       data = copy(protocol.bgMeas)
@@ -267,7 +267,7 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::ProgressQuery
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
+    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
     reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
@@ -281,13 +281,18 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DatasetStoreS
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
-  data = protocol.seqMeasState.buffer
+  data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
   bgdata = nothing
   if length(protocol.bgMeas) > 0
     bgdata = protocol.bgMeas
   end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
-  @show filename
+  drivefield = nothing
+  dfBuffer = sink(protocol.seqMeasState.sequenceBuffer, DriveFieldBuffer)
+  if !isnothing(dfBuffer)
+    drivefield = read(dfBuffer)
+  end
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata, drivefield = drivefield)
+  @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
