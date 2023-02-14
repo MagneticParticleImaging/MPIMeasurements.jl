@@ -485,7 +485,11 @@ function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQControl
 end
 
 function checkVoltLimits(newTx, cont::ControlSequence, txCont::TxDAQController)
-  validChannel = abs.(newTx) .<  ustrip.(u"V", [channel.limitPeak for channel in collect(Base.values(cont.simpleChannel))])
+  validChannel = zeros(Bool, size(newTx, 2))
+  for i = 1:size(newTx, 2)
+    max = sum(abs.(newTx[i, :]))
+    validChannel[i] = max < ustrip(u"V", collect(Base.values(cont.simpleChannel))[i].limitPeak)
+  end
   valid = all(validChannel)
   if !valid
     @debug "Valid Tx Channel" validChannel
