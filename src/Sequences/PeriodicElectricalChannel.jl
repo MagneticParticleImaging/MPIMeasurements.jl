@@ -42,7 +42,7 @@ Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
   "Components added for this channel."
   components::Vector{ElectricalComponent}
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
-  offset::Union{typeof(1.0u"T"), typeof(1.0u"V")} = 0.0u"T"
+  offset::Union{typeof(1.0u"T"), typeof(1.0u"V"), typeof(1.0u"A")} = 0.0u"T"
   isDfChannel::Bool = true
 end
 
@@ -56,6 +56,8 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
     tmp = uparse.(channelDict["offset"])
     if eltype(tmp) <: Unitful.Current
       tmp = tmp .|> u"A"
+    elseif eltype(tmp) <: Unitful.Voltage
+      tmp = tmp .|> u"V"  
     elseif eltype(tmp) <: Unitful.BField
       tmp = tmp .|> u"T"
     else

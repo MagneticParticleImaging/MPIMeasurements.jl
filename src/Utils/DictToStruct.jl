@@ -69,7 +69,9 @@ function dict_to_splatting(type::DataType, dict::Dict)
     else
       if fieldtype(type, Symbol(key)) == String
         value = String(value)
-      else 
+      elseif fieldtype(type, Symbol(key)) == Char
+        value = String(value)[1]
+      else
         value = tryuparse.(value) # Convert with Unitful if applicable
       end
     end
