@@ -58,6 +58,7 @@ mutable struct SystemMatrixRobotMeas
   posToIdx::Vector{Int64}
   measIsBGFrame::Vector{Bool}
   temperatures::Matrix{Float32}
+  drivefield::Array{ComplexF64,4}
 end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
@@ -80,7 +81,7 @@ function SystemMatrixRobotMeas()
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0))
+    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
@@ -266,6 +267,10 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
       protocol.contSequence = controlTx(protocol.txCont, protocol.params.sequence)
       protocol.restored = false
     end
+    if isempty(protocol.systemMeasState.drivefield)
+      len = length(keys(protocol.contSequence.simpleChannel))
+      calib.drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+    end
     sequence = protocol.contSequence
   end
   
@@ -340,7 +345,11 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
     tempSensor = getTemperatureSensor(protocol.scanner)
   end
 
-  asyncBuffer = AsyncBuffer(daq)
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx
+    sequence = protocol.contSequence
+  end
+  asyncBuffer = SequenceMeasState(daq, sequence).sequenceBuffer
   numFrames = acqNumFrames(protocol.params.sequence)
   while isopen(channel) || isready(channel)
     while isready(channel)
@@ -352,17 +361,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
     end
   end
 
-  uMeas, uRef = retrieveMeasAndRef!(asyncBuffer, getDAQ(protocol.scanner))
-  step = UNCHANGED
-  @time if protocol.params.controlTx
-    @debug "Start update control sequence"
-    field = calcFieldFromRef(protocol.contSequence, uRef)
-    step = controlStep!(protocol.contSequence, protocol.txCont, field, calcDesiredField(protocol.contSequence))
-    if step == INVALID
-      throw(ErrorException("Control update failed to produce valid results"))
-    end
-    @debug "Finish update control sequence"
-  end
+  uMeas = read(sink(asyncBuffer, MeasurementBuffer))
 
   startIdx = calib.posToIdx[index]
   stopIdx = calib.posToIdx[index] + numFrames - 1
@@ -374,6 +373,17 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 
   calib.currentSignal = uMeas[:,:,:,1:1]
 
+  step = UNCHANGED
+  @time if protocol.params.controlTx
+    @debug "Start update control sequence"
+    field = read(sink(asyncBuffer, DriveFieldBuffer))
+    step = controlStep!(protocol.contSequence, protocol.txCont, field[:, :, 1, 1], calcDesiredField(protocol.contSequence))
+    calib.drivefield[:, :, :, startIdx:stopIdx] = field
+    if step == INVALID
+      throw(ErrorException("Control update failed to produce valid results"))
+    end
+    @debug "Finish update control sequence"
+  end
 
   if !isnothing(tempSensor)
     temps  = getTemperatures(tempSensor)
@@ -521,7 +531,11 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     if protocol.params.saveTemperatureData
       temperatures = protocol.systemMeasState.temperatures
     end
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures)
+    drivefield = nothing
+    if !isempty(protocol.systemMeasState.drivefield)
+      drivefield = protocol.systemMeasState.drivefield
+    end
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures, drivefield = drivefield)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
