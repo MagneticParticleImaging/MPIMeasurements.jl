@@ -357,7 +357,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
       a*=2/N
       b*=2/N
       # TODO *im and *(-1) depending on waveform (im for sin instead of cos, -1 as we see the derivative of the field)
-      correction = -im * dividers[d]/dividers[e]
+      correction = -im * dividers[e]/dividers[d]
       Γ[d,e] = correction * (c*(b+im*a))
     end
   end
