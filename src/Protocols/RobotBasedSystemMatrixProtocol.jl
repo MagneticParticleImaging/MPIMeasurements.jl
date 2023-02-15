@@ -413,6 +413,7 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   params["temperatures"] = vec(sysObj.temperatures)
+  params["drivefield"] = string.(vec(sysObj.drivefield))
   params["sequence"] = toDict(protocol.params.sequence)
 
   open(filename,"w") do f
@@ -475,6 +476,12 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)  
+
+    drivefield = params["drivefield"]
+    if !isempty(drivefield) # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
+      len = Int64(length(drivefield)/(2*numPeriods*numTotalFrames))
+      sysObj.drivefield = reshape(parse.(ComplexF64, drivefield), len, len, numPeriods, numTotalFrames)
+    end
 
     io = open(filenameSignals, "r+");
     sysObj.signals = Mmap.mmap(io, Array{Float32,4},
