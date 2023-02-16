@@ -292,7 +292,8 @@ function acqOffsetField(sequence::Sequence)
     channels = acyclicElectricalTxChannels(sequence)
     offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
     values_ =  MPIMeasurements.values(offsetChannel)
-    values3D = reshape([values_ zeros(length(values_)) zeros(length(values_))], (length(values_), 1, 3))
+    values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
+    
     return values3D
   else
     return nothing
