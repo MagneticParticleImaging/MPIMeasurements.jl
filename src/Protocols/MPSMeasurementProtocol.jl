@@ -44,6 +44,13 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
     delete!(dict, "sequence")
   end
 
+  if haskey(dict, "Tracer")
+    tracer = MPIMeasurements.Tracer(;[Symbol(key) => tryuparse(value) for (key, value) in dict["Tracer"]]...)
+    delete!(dict, "Tracer")
+  else
+    tracer = Tracer()
+  end
+
   params = params_from_dict(MPSMeasurementProtocolParams, dict)
 
   divider = nothing
@@ -80,6 +87,7 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   oldChannel = sequence.fields[offsetFieldIdx].channels[offsetChannelIdx]
   sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=samplesPerOffset, divider=numSamples, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
   params.sequence = sequence
+  params.tracer = tracer
 
   return params
 end

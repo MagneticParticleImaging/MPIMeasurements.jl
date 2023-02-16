@@ -88,5 +88,5 @@ cycleDuration(channel::ContinuousElectricalChannel, baseFrequency::typeof(1.0u"H
 
 function enableValues(channel::ContinuousElectricalChannel)
   numPatches = div(channel.divider, channel.dividerSteps)
-  return [true  for p=0:(numPatches-1)]
+  return [true for p=0:(numPatches-1)]
 end
