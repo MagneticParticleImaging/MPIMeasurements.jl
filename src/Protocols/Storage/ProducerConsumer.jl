@@ -1,12 +1,3 @@
-function asyncMeasurement(protocol::Protocol, sequence::Sequence)
-  scanner_ = scanner(protocol)
-  prepareAsyncMeasurement(protocol, sequence)
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
-  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
-  return protocol.seqMeasState
-end
-
 SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(x, sequence, StorageBuffer[])
 function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
   numFrames = acqNumFrames(sequence.targetSequence)
@@ -123,24 +114,19 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   end
 end
 
-# Default Consumer
-function asyncConsumer(channel::Channel, protocol::Protocol)
-  scanner_ = scanner(protocol)
-  daq = getDAQ(scanner_)
-  measState = protocol.seqMeasState
-
+function asyncConsumer(channel::Channel, sequenceBuffer::StorageBuffer, operationBuffers::Union{Vector{DeviceBuffer}, Nothing} = nothing)
   @debug "Consumer start"
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      push!(measState.sequenceBuffer, chunk)
+      update = push!(sequenceBuffer, chunk)
+      if !isnothing(update) && !isnothing(operationBuffers)
+        for buffer in operationBuffers
+          update!(buffer, update...)
+        end
+      end
     end
     sleep(0.001)
   end
   @debug "Consumer end"
-
-  # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
-  #if length(measState.temperatures) > 0
-  #  params["calibTemperatures"] = measState.temperatures
-  #end
 end

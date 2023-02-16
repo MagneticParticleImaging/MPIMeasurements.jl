@@ -3,6 +3,9 @@ abstract type MeasurementState end
 abstract type StorageBuffer end
 abstract type IntermediateBuffer <: StorageBuffer end
 abstract type SinkBuffer <: StorageBuffer end
+abstract type SequenceBuffer <: SinkBuffer end
+abstract type DeviceBuffer <: SinkBuffer end
+
 
 abstract type AsyncBuffer <: IntermediateBuffer end
 
@@ -34,10 +37,43 @@ mutable struct SequenceMeasState <: MeasurementState
   producer::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
   sequenceBuffer::StorageBuffer
-  sensorBuffer::Union{Vector{StorageBuffer}, Nothing}
+  deviceBuffers::Union{Vector{DeviceBuffer}, Nothing}
   type::AsyncMeasTyp
 end
 
+mutable struct ProtocolMeasState <: MeasurementState
+  measIsBg::Vector{Bool}
+  buffers::Vector{Vector{SinkBuffer}}
+end
+ProtocolMeasState() = ProtocolMeasState(Vector{Bool}[], Vector{Vector{SinkBuffer}}[])
+function push!(meas::ProtocolMeasState, buffers::Vector{SinkBuffer}; isBGMeas::Bool=false)
+  push!(meas.buffers, buffers)
+  push!(meas.measIsBg, isBGMeas)
+end
+function read(meas::ProtocolMeasState, type::Type{T}) where {T<:SinkBuffer}
+  sinks = type[]
+  for temp in meas.buffers
+    for buffer in temp
+      if buffer isa type
+        push!(sinks, buffer)
+      end
+    end
+  end
+  if !isempty(sinks)
+    results = read.(sinks)
+    return cat(results..., dims=ndims(results[1]))
+  else
+    return nothing
+  end
+end
+function measIsBGFrame(meas::ProtocolMeasState, fgFrames, bgFrames)
+  isBGFrames = Bool[]
+  for isBG in meas.measIsBg
+    frames = isBG ? ones(Bool, bgFrames) : zeros(Bool, fgFrames)
+    push!(isBGFrames, frames...)
+  end
+  return isBGFrames
+end
 #### Scanner Measurement Functions ####
 ####  Async version  ####
 SequenceMeasState() = SequenceMeasState(0, 1, nothing, nothing, nothing, DummyAsyncBuffer(nothing), zeros(Float64,0,0,0,0), nothing, nothing, RegularAsyncMeas())

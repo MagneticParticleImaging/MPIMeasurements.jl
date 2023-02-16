@@ -47,11 +47,11 @@ function push!(avgBuffer::AverageBuffer{T}, frames::Array{T,4}) where {T<:Number
 end
 sinks!(buffer::AverageBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
-abstract type MeasurementBuffer <: SinkBuffer end
+abstract type MeasurementBuffer <: SequenceBuffer end
 # TODO Error handling? Throw own error or crash with index error
 mutable struct SimpleFrameBuffer <: MeasurementBuffer
   nextFrame::Integer
-  data::Array{Float32,4}
+  data::AbstractArray{Float32,4}
 end
 function SimpleFrameBuffer(sequence::Sequence)
   numFrames = acqNumFrames(sequence)
@@ -75,7 +75,7 @@ end
 read(buffer::SimpleFrameBuffer) = buffer.data
 index(buffer::SimpleFrameBuffer) = buffer.nextFrame
 
-abstract type FieldBuffer <: SinkBuffer end
+abstract type FieldBuffer <: SequenceBuffer end
 mutable struct DriveFieldBuffer <: FieldBuffer
   nextFrame::Integer
   data::Array{ComplexF64,4}
@@ -126,3 +126,16 @@ function sinks!(buffer::FrameSplitterBuffer, sinks::Vector{SinkBuffer})
   end
   return sinks
 end
+
+mutable struct TemperatureBuffer <: DeviceBuffer
+  temperatures::Matrix{Float32}
+  sensor::TemperatureSensor
+end
+TemperatureBuffer(sensor::TemperatureSensor, numFrames::Int64) = TemperatureBuffer(zeros(Float32, numChannels(sensor), numFrames), sensor)
+update!(buffer::TemperatureBuffer, start, stop) = insert!(buffer, getTemperatures(buffer.sensor), start, stop)
+function insert!(buffer::TemperatureBuffer, temps::Vector{Float32}, start, stop)
+  buffer.temperatures[:, start:stop] = temps
+end
+insert!(buffer::TemperatureBuffer, temps::Vector{Float64}, start, stop) = insert!(buffer, convert.(Float32, temps), start, stop)
+insert!(buffer::TemperatureBuffer, temps::Vector{typeof(1.0u"°C")}, start, stop) = insert!(buffer, ustrip.(u"°C",temps), start, stop)
+read(buffer::TemperatureBuffer) = buffer.temperatures
