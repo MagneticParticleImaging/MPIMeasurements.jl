@@ -189,6 +189,7 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
   deviceBuffer = DeviceBuffer[]
   if protocol.params.controlTx
     sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
   end
   setup(daq, sequence)
   protocol.seqMeasState = SequenceMeasState(daq, sequence)
@@ -267,8 +268,9 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   data = read(protocol.protocolMeasState, MeasurementBuffer)
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
+  appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

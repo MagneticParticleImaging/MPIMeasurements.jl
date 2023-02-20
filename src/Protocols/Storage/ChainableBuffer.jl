@@ -139,6 +139,7 @@ end
 insert!(buffer::TemperatureBuffer, temps::Vector{Float64}, start, stop) = insert!(buffer, convert.(Float32, temps), start, stop)
 insert!(buffer::TemperatureBuffer, temps::Vector{typeof(1.0u"°C")}, start, stop) = insert!(buffer, ustrip.(u"°C",temps), start, stop)
 read(buffer::TemperatureBuffer) = buffer.temperatures
+
 mutable struct TxDAQControllerBuffer{A <: AbstractArray{ComplexF64, 4}} <: DeviceBuffer
   nextFrame::Integer
   applied::A
