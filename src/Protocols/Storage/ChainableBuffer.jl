@@ -139,3 +139,19 @@ end
 insert!(buffer::TemperatureBuffer, temps::Vector{Float64}, start, stop) = insert!(buffer, convert.(Float32, temps), start, stop)
 insert!(buffer::TemperatureBuffer, temps::Vector{typeof(1.0u"°C")}, start, stop) = insert!(buffer, ustrip.(u"°C",temps), start, stop)
 read(buffer::TemperatureBuffer) = buffer.temperatures
+mutable struct TxDAQControllerBuffer{A <: AbstractArray{ComplexF64, 4}} <: DeviceBuffer
+  nextFrame::Integer
+  applied::A
+  tx::TxDAQController
+end
+function TxDAQControllerBuffer(tx::TxDAQController, sequence::ControlSequence)
+  numFrames = acqNumFrames(sequence.targetSequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
+  # TODO function for length(keys(simpleChannel))
+  len = length(keys(sequence.simpleChannel))
+  buffer = zeros(ComplexF64, len, len, numPeriods, numFrames)
+  return TxDAQControllerBuffer(1, buffer, tx)
+end
+update!(buffer::TxDAQControllerBuffer, start, stop) = insert!(buffer, calcControlMatrix(buffer.tx.cont), start, stop)
+insert!(buffer::TxDAQControllerBuffer, applied::Matrix{ComplexF64}, start, stop) = buffer.applied[:, :, :, start:stop] .= applied
+read(buffer::TxDAQControllerBuffer) = buffer.applied
