@@ -66,6 +66,23 @@ function read(meas::ProtocolMeasState, type::Type{T}) where {T<:SinkBuffer}
     return nothing
   end
 end
+function measIsBGFrame(meas::ProtocolMeasState)
+  isBGFrames = Bool[]
+  for (i, buffers) in enumerate(meas.buffers)
+    frames = Int64[]
+    for buffer in buffers
+      data = read(buffer)
+      push!(frames, size(data, ndims(data)))
+    end
+    if length(unique(frames)) == 1
+      temp = meas.measIsBg[i] ? ones(Bool, frames[1]) : zeros(Bool, frames[i])
+      push!(isBGFrames, temp...)
+    else
+      throw(ErrorException("Different amount of frames for stored measurement step $frames"))
+    end
+  end
+  return isBGFrames
+end
 function measIsBGFrame(meas::ProtocolMeasState, fgFrames, bgFrames)
   isBGFrames = Bool[]
   for isBG in meas.measIsBg

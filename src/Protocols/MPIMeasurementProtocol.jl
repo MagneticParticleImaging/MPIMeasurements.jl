@@ -265,7 +265,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   scanner = protocol.scanner
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
-  isBGFrame = measIsBGFrame(protocol.protocolMeasState, protocol.params.fgFrames, protocol.params.bgFrames)
+  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)
   filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature)
