@@ -49,9 +49,9 @@ sinks!(buffer::AverageBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target,
 
 abstract type MeasurementBuffer <: SequenceBuffer end
 # TODO Error handling? Throw own error or crash with index error
-mutable struct SimpleFrameBuffer <: MeasurementBuffer
+mutable struct SimpleFrameBuffer{A<: AbstractArray{Float32, 4}} <: MeasurementBuffer
   nextFrame::Integer
-  data::AbstractArray{Float32,4}
+  data::A
 end
 function SimpleFrameBuffer(sequence::Sequence)
   numFrames = acqNumFrames(sequence)
@@ -76,9 +76,9 @@ read(buffer::SimpleFrameBuffer) = buffer.data
 index(buffer::SimpleFrameBuffer) = buffer.nextFrame
 
 abstract type FieldBuffer <: SequenceBuffer end
-mutable struct DriveFieldBuffer <: FieldBuffer
+mutable struct DriveFieldBuffer{A <: AbstractArray{ComplexF64, 4}} <: FieldBuffer
   nextFrame::Integer
-  data::Array{ComplexF64,4}
+  data::A
   cont::ControlSequence
 end
 function insert!(buffer::DriveFieldBuffer, from::Integer, frames::Array{ComplexF64,4})
@@ -127,8 +127,8 @@ function sinks!(buffer::FrameSplitterBuffer, sinks::Vector{SinkBuffer})
   return sinks
 end
 
-mutable struct TemperatureBuffer <: DeviceBuffer
-  temperatures::Matrix{Float32}
+mutable struct TemperatureBuffer{A <: AbstractArray{Float32, 2}} <: DeviceBuffer
+  temperatures::A
   sensor::TemperatureSensor
 end
 TemperatureBuffer(sensor::TemperatureSensor, numFrames::Int64) = TemperatureBuffer(zeros(Float32, numChannels(sensor), numFrames), sensor)
