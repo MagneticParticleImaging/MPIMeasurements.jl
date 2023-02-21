@@ -194,7 +194,7 @@ function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   protocol.seqMeasState = SequenceMeasState(daq, sequence)
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
 end
 

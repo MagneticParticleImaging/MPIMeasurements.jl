@@ -114,6 +114,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   end
 end
 
+asyncConsumer(measState::SequenceMeasState) = asyncConsumer(measState.channel, measState.sequenceBuffer, measState.deviceBuffers)
 function asyncConsumer(channel::Channel, sequenceBuffer::StorageBuffer, deviceBuffers::Union{Vector{DeviceBuffer}, Nothing} = nothing)
   @debug "Consumer start"
   while isopen(channel) || isready(channel)

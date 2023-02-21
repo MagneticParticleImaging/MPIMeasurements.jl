@@ -13,6 +13,8 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocolParams <: ProtocolParams
   controlTx::Bool = false
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
+  "If the temperature should be safed or not"
+  saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
   "Remember background measurement"
@@ -35,6 +37,7 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
   @add_protocol_fields RobotMPIMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+  protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -49,6 +52,9 @@ function requiredDevices(protocol::RobotMPIMeasurementProtocol)
   result = [AbstractDAQ, Robot]
   if protocol.params.controlTx
     push!(result, TxDAQController)
+  end
+  if protocol.params.saveTemperatureData
+    push!(result, TemperatureSensor)
   end
   return result
 end
@@ -147,6 +153,9 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
     protocol.unit = "BG Frames"
     measurement(protocol)
     protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = true)
+    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
     if askChoices(protocol, "Press continue when foreground measurement can be taken. Continue will result in the robot moving!", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end    
@@ -159,6 +168,8 @@ function performMeasurement(protocol::RobotMPIMeasurementProtocol)
   acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
   protocol.unit = "Frames"
   measurement(protocol)
+  deviceBuffers = protocol.seqMeasState.deviceBuffers
+  push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
 end
 
 function measurement(protocol::RobotMPIMeasurementProtocol)
@@ -208,14 +219,20 @@ function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
   daq = getDAQ(scanner_)
+  deviceBuffer = DeviceBuffer[]
   if protocol.params.controlTx
     sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
   end
   setup(daq, sequence)
   protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  end
+  protocol.seqMeasState.deviceBuffers = deviceBuffer
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol.seqMeasState)
   return protocol.seqMeasState
 end
 
@@ -281,17 +298,12 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DatasetStoreS
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
-  data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
-  bgdata = nothing
-  if length(protocol.bgMeas) > 0
-    bgdata = protocol.bgMeas
-  end
-  drivefield = nothing
-  dfBuffer = sink(protocol.seqMeasState.sequenceBuffer, DriveFieldBuffer)
-  if !isnothing(dfBuffer)
-    drivefield = read(dfBuffer)
-  end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata, drivefield = drivefield)
+  data = read(protocol.protocolMeasState, MeasurementBuffer)
+  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+  drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
+  appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
+  temperature = read(protocol.protocolMeasState, TemperatureBuffer)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end

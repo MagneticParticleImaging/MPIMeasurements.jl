@@ -51,6 +51,9 @@ function requiredDevices(protocol::MPIMeasurementProtocol)
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
+  if protocol.params.saveTemperatureData
+    push!(result, TemperatureSensor)
+  end
   return result
 end
 
@@ -199,7 +202,7 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
   protocol.seqMeasState.deviceBuffers = deviceBuffer
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol.seqMeasState.sequenceBuffer, protocol.seqMeasState.deviceBuffers)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
 end
 
