@@ -59,6 +59,7 @@ mutable struct SystemMatrixRobotMeas
   measIsBGFrame::Vector{Bool}
   temperatures::Matrix{Float32}
   drivefield::Array{ComplexF64,4}
+  applied::Array{ComplexF64,4}
 end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
@@ -81,7 +82,7 @@ function SystemMatrixRobotMeas()
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
+    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
@@ -270,6 +271,7 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
     if isempty(protocol.systemMeasState.drivefield)
       len = length(keys(protocol.contSequence.simpleChannel))
       calib.drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      calib.applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
     end
     sequence = protocol.contSequence
   end
@@ -356,7 +358,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   if protocol.params.controlTx
     sequence = protocol.contSequence
     push!(sinks, DriveFieldBuffer(1, view(calib.drivefield, :, :, :, startIdx:stopIdx), sequence))
-    # TODO push applied field
+    push!(deviceBuffer, TxDAQControllerBuffer(1, view(calib.applied, :, :, :, startIdx:stopIdx), protocol.txCont))
   end
 
   sequenceBuffer = AsyncBuffer(FrameSplitterBuffer(daq, sinks), daq)
@@ -397,6 +399,7 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   params["temperatures"] = vec(sysObj.temperatures)
   params["drivefield"] = string.(vec(sysObj.drivefield))
+  params["applied"] = string.(vec(sysObj.applied))
   params["sequence"] = toDict(protocol.params.sequence)
 
   open(filename,"w") do f
@@ -460,11 +463,18 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)  
 
+    # Drive Field
     drivefield = params["drivefield"]
     if !isempty(drivefield) # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
       len = Int64(length(drivefield)/(2*numPeriods*numTotalFrames))
       sysObj.drivefield = reshape(parse.(ComplexF64, drivefield), len, len, numPeriods, numTotalFrames)
     end
+    applied = params["applied"]
+    if !isempty(applied)
+      len = Int64(length(applied)/(2*numPeriods*numTotalFrames))
+      sysObj.applied = reshape(parse.(ComplexF64, applied), len, len, numPeriods, numTotalFrames)
+    end
+
 
     io = open(filenameSignals, "r+");
     sysObj.signals = Mmap.mmap(io, Array{Float32,4},
@@ -525,7 +535,11 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     if !isempty(protocol.systemMeasState.drivefield)
       drivefield = protocol.systemMeasState.drivefield
     end
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures, drivefield = drivefield)
+    applied = nothing
+    if !isempty(protocol.systemMeasState.applied)
+      applied = protocol.systemMeasState.applied
+    end
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures, drivefield = drivefield, applied = applied)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
