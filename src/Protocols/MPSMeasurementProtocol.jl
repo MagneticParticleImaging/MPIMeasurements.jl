@@ -76,16 +76,15 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
     throw(ProtocolConfigurationError("The sequence `$(name(sequence))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
   end
 
-  samplesPerOffset = ustrip(u"Hz", sequence.general.baseFrequency) / divider * params.dfPeriodsPerOffset
-  numSamples = samplesPerOffset * params.offsetNum
+  stepDivider = divider * params.dfPeriodsPerOffset
+  offsetDivider = stepDivider * params.offsetNum
 
   chanOffset = (params.offsetStop + params.offsetStart) /2
   amplitude = abs(params.offsetStop - chanOffset)
-
-  @info samplesPerOffset numSamples chanOffset amplitude
+  @info stepDivider offsetDivider chanOffset amplitude
   
   oldChannel = sequence.fields[offsetFieldIdx].channels[offsetChannelIdx]
-  sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=samplesPerOffset, divider=numSamples, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
+  sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
   params.sequence = sequence
   params.tracer = tracer
 
