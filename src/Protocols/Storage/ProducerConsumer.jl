@@ -114,14 +114,14 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   end
 end
 
-function asyncConsumer(channel::Channel, sequenceBuffer::StorageBuffer, operationBuffers::Union{Vector{DeviceBuffer}, Nothing} = nothing)
+function asyncConsumer(channel::Channel, sequenceBuffer::StorageBuffer, deviceBuffers::Union{Vector{DeviceBuffer}, Nothing} = nothing)
   @debug "Consumer start"
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
       update = push!(sequenceBuffer, chunk)
-      if !isnothing(update) && !isnothing(operationBuffers)
-        for buffer in operationBuffers
+      if !isnothing(update) && !isnothing(deviceBuffers)
+        for buffer in deviceBuffers
           update!(buffer, update...)
         end
       end

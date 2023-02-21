@@ -338,60 +338,43 @@ end
 function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtocol, index)
   calib = protocol.systemMeasState
   @info "readData"
-  daq = getDAQ(protocol.scanner)
-  
-  tempSensor = nothing
+  daq = getDAQ(protocol.scanner)  
+  numFrames = acqNumFrames(protocol.params.sequence)
+  startIdx = calib.posToIdx[index]
+  stopIdx = startIdx + numFrames - 1
+
+  # Prepare Buffer
+  deviceBuffer = DeviceBuffer[]
   if protocol.params.saveTemperatureData
     tempSensor = getTemperatureSensor(protocol.scanner)
+    push!(deviceBuffer, TemperatureBuffer(view(calib.temperatures, :, startIdx:stopIdx), tempSensor))
   end
 
+  sinks = StorageBuffer[]
+  push!(sinks, SimpleFrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx)))
   sequence = protocol.params.sequence
   if protocol.params.controlTx
     sequence = protocol.contSequence
-  end
-  asyncBuffer = SequenceMeasState(daq, sequence).sequenceBuffer
-  numFrames = acqNumFrames(protocol.params.sequence)
-  while isopen(channel) || isready(channel)
-    while isready(channel)
-      chunk = take!(channel)
-      push!(asyncBuffer, chunk)
-    end
-    if !isready(channel)
-      sleep(0.001)
-    end
+    push!(sinks, DriveFieldBuffer(1, view(calib.drivefield, :, :, :, startIdx:stopIdx), sequence))
+    # TODO push applied field
   end
 
-  uMeas = read(sink(asyncBuffer, MeasurementBuffer))
-
-  startIdx = calib.posToIdx[index]
-  stopIdx = calib.posToIdx[index] + numFrames - 1
-
-  calib.signals[:,:,:,startIdx:stopIdx] = uMeas
-
+  sequenceBuffer = AsyncBuffer(FrameSplitterBuffer(daq, sinks), daq)
+  asyncConsumer(channel, sequenceBuffer, deviceBuffer)
 
   calib.measIsBGFrame[ startIdx:stopIdx ] .= calib.measIsBGPos[index]
 
-  calib.currentSignal = uMeas[:,:,:,1:1]
+  calib.currentSignal = calib.signals[:,:,:,stopIdx:stopIdx]
 
   step = UNCHANGED
   @time if protocol.params.controlTx
     @debug "Start update control sequence"
-    field = read(sink(asyncBuffer, DriveFieldBuffer))
+    field = calib.drivefield[:, :, 1, stopIdx]
     step = controlStep!(protocol.contSequence, protocol.txCont, field[:, :, 1, 1], calcDesiredField(protocol.contSequence))
-    calib.drivefield[:, :, :, startIdx:stopIdx] = field
     if step == INVALID
       throw(ErrorException("Control update failed to produce valid results"))
     end
     @debug "Finish update control sequence"
-  end
-
-  if !isnothing(tempSensor)
-    temps  = getTemperatures(tempSensor)
-    for l in startIdx:stopIdx
-      for c = 1:numChannels(tempSensor)
-        calib.temperatures[c,l] = temps[c]
-      end
-    end
   end
 
   @info "store"
