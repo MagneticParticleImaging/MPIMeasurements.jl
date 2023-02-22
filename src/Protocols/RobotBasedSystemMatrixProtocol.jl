@@ -272,6 +272,14 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
       len = length(keys(protocol.contSequence.simpleChannel))
       calib.drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
       calib.applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      filename = "/tmp/sysObjObsvField.bin"
+      io = open(filename, "w+");  
+      drivefield = Mmap.mmap(io, Array{ComplexF64,4}, size(calib.drivefield));
+      calib.drivefield = drivefield
+      filename = "/tmp/sysObjAppliedField.bin"
+      io = open(filename, "w+");  
+      applied = Mmap.mmap(io, Array{ComplexF64,4}, size(calib.applied));
+      calib.applied = applied
     end
     sequence = protocol.contSequence
   end
@@ -398,8 +406,8 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   params["temperatures"] = vec(sysObj.temperatures)
-  params["drivefield"] = string.(vec(sysObj.drivefield))
-  params["applied"] = string.(vec(sysObj.applied))
+  params["drivefield"] = size(sysObj.drivefield, 1)
+  params["applied"] = size(sysObj.applied, 1)
   params["sequence"] = toDict(protocol.params.sequence)
 
   open(filename,"w") do f
@@ -407,12 +415,16 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   end
 
   Mmap.sync!(sysObj.signals)
+  Mmap.sync!(sysObj.drivefield)
+  Mmap.sync!(sysObj.applied)
   return
 end
 
 function restore(protocol::RobotBasedSystemMatrixProtocol)
   filename = "/tmp/sysObj.toml"
   filenameSignals = "/tmp/sysObj.bin"
+  filenameObsvField = "/tmp/sysObjObsvField.bin"
+  filenameAppliedField = "/tmp/sysObjAppliedField.bin"
 
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
@@ -466,13 +478,13 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     # Drive Field
     drivefield = params["drivefield"]
     if !isempty(drivefield) # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
-      len = Int64(length(drivefield)/(2*numPeriods*numTotalFrames))
-      sysObj.drivefield = reshape(parse.(ComplexF64, drivefield), len, len, numPeriods, numTotalFrames)
+      io = open(filenameObsvField, "r+")
+      sysObj.drivefield = Mmap.mmap(io, Array{ComplexF64, 4}, (drivefield, drivefield, numPeriods, numTotalFrames))
     end
     applied = params["applied"]
     if !isempty(applied)
-      len = Int64(length(applied)/(2*numPeriods*numTotalFrames))
-      sysObj.applied = reshape(parse.(ComplexF64, applied), len, len, numPeriods, numTotalFrames)
+      io = open(filenameAppliedField, "r+")
+      sysObj.applied = Mmap.mmap(io, Array{ComplexF64, 4}, (applied, applied, numPeriods, numTotalFrames))
     end
 
 
