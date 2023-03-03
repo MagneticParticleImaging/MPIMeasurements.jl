@@ -147,6 +147,7 @@ function startMeasurement(protocol::RobotBasedTDesignFieldProtocol)
   startTx(daq)
   current = 0
   # Wait for measurement proper frame to start
+  timing = getTiming(daq)
   while current < timing.start
     current = currentWP(daq.rpc)
     sleep(0.01)
