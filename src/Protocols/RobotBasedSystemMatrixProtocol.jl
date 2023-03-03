@@ -195,7 +195,7 @@ function enterExecute(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
-  if isfile("/tmp/sysObj.toml")
+  if isfile(protocol, "meta.toml")
     message = """Found existing calibration file! \n
     Should it be resumed?"""
     if askConfirmation(protocol, message)
@@ -204,9 +204,7 @@ function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
   end
   # Set signals to zero if we didn't restore
   if !protocol.restored
-    filenameSignals = "/tmp/sysObj.bin"
-    io = open(filenameSignals, "w+");
-    signals = Mmap.mmap(io, Array{Float32,4}, size(protocol.systemMeasState.signals));
+    signals = mmap!(io, "signals.bin", protocol.systemMeasState.signals);
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
   end
@@ -214,14 +212,7 @@ end
 
 function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   # TODO should cleanup remove temp files? Would require a handler to differentiate between successful and unsuccesful "end"
-  removeTempFiles(protocol)
-end
-
-function removeTempFiles(protocol::RobotBasedSystemMatrixProtocol)
-  filename = "/tmp/sysObj.toml"
-  filenameSignals = "/tmp/sysObj.bin"
-  rm(filename, force=true)
-  rm(filenameSignals, force=true)
+  rm(dir(protocol), force = true, recursive = true)
 end
 
 function enterPause(protocol::RobotBasedSystemMatrixProtocol)
@@ -270,16 +261,10 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
     end
     if isempty(protocol.systemMeasState.drivefield)
       len = length(keys(protocol.contSequence.simpleChannel))
-      calib.drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-      calib.applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-      filename = "/tmp/sysObjObsvField.bin"
-      io = open(filename, "w+");  
-      drivefield = Mmap.mmap(io, Array{ComplexF64,4}, size(calib.drivefield));
-      calib.drivefield = drivefield
-      filename = "/tmp/sysObjAppliedField.bin"
-      io = open(filename, "w+");  
-      applied = Mmap.mmap(io, Array{ComplexF64,4}, size(calib.applied));
-      calib.applied = applied
+      drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
+      applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
     end
     sequence = protocol.contSequence
   end
@@ -393,7 +378,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 end
 
 function store(protocol::RobotBasedSystemMatrixProtocol, index)
-  filename = "/tmp/sysObj.toml"
+  filename = file(protocol, "meta.toml")
   rm(filename, force=true)
 
   sysObj = protocol.systemMeasState
@@ -406,8 +391,6 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   params["temperatures"] = vec(sysObj.temperatures)
-  params["drivefield"] = size(sysObj.drivefield, 1)
-  params["applied"] = size(sysObj.applied, 1)
   params["sequence"] = toDict(protocol.params.sequence)
 
   open(filename,"w") do f
@@ -421,19 +404,13 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
 end
 
 function restore(protocol::RobotBasedSystemMatrixProtocol)
-  filename = "/tmp/sysObj.toml"
-  filenameSignals = "/tmp/sysObj.bin"
-  filenameObsvField = "/tmp/sysObjObsvField.bin"
-  filenameAppliedField = "/tmp/sysObjAppliedField.bin"
 
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
-  if isfile(filename)
-    params = TOML.parsefile(filename)
+  if isfile(protocol, "meta.toml")
+    params = TOML.parsefile(file(protocol, "meta.toml"))
     sysObj.currPos = params["currPos"]
     protocol.stopped = false
-    #params["stopped"]
-    #sysObj.currentSignal = params["currentSignal"]
     protocol.params.waitTime = params["waitTime"]
     sysObj.measIsBGPos = params["measIsBGPos"]
     sysObj.posToIdx = params["posToIdx"]
@@ -458,7 +435,6 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     end
 
 
-    numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
     seq = protocol.params.sequence
 
     storedSeq = sequenceFromDict(params["sequence"])
@@ -471,26 +447,26 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
       protocol.params.sequence
     end
 
+    # Drive Field
+    if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
+      sysObj.drivefield = mmap(protocol, "observedField.bin", ComplexF64)
+    end
+    if isfile(protocol, "appliedField.bin")
+      sysObj.applied = mmap(protocol, "appliedField.bin", ComplexF64)
+    end
+
+
+    sysObj.signals = mmap(protocol, "signals.bin", Float32)
+
+    numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
-    numPeriods = acqNumPeriodsPerFrame(seq)  
-
-    # Drive Field
-    drivefield = params["drivefield"]
-    if !isempty(drivefield) # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
-      io = open(filenameObsvField, "r+")
-      sysObj.drivefield = Mmap.mmap(io, Array{ComplexF64, 4}, (drivefield, drivefield, numPeriods, numTotalFrames))
-    end
-    applied = params["applied"]
-    if !isempty(applied)
-      io = open(filenameAppliedField, "r+")
-      sysObj.applied = Mmap.mmap(io, Array{ComplexF64, 4}, (applied, applied, numPeriods, numTotalFrames))
+    numPeriods = acqNumPeriodsPerFrame(seq)
+    paramSize = (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
+    if size(sysObj.signals) != 
+      throw(DimensionMismatch("Dimensions of stored signals $(size(sysObj.signals)) does not match initialized signals $paramSize"))
     end
 
-
-    io = open(filenameSignals, "r+");
-    sysObj.signals = Mmap.mmap(io, Array{Float32,4},
-          (rxNumSamplingPoints,numRxChannels, numPeriods, numTotalFrames));
     protocol.restored = true
     @info "Restored system matrix measurement"
   end

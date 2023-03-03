@@ -77,6 +77,7 @@ include("Devices/Devices.jl")
 include("Protocols/Storage/ChainableBuffer.jl")
 include("Protocols/Protocol.jl")
 include("Protocols/Storage/ProducerConsumer.jl") # Depends on MPIScanner and Protocols
+include("Utils/MmapFiles.jl")
 include("Utils/Console/Console.jl")
 
 """
