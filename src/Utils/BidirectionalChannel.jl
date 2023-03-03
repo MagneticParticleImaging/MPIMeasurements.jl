@@ -17,6 +17,8 @@ function BidirectionalChannel{T}(biChannel::BidirectionalChannel{T}) where {T}
     return BidirectionalChannel(in, out)
 end
 
+BidirectionalChannel(biChannel::BidirectionalChannel{T}) where {T} = BidirectionalChannel{T}(biChannel)
+
 inChannel(biChannel::BidirectionalChannel) = biChannel.in
 outChannel(biChannel::BidirectionalChannel) = biChannel.out
 
