@@ -40,6 +40,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
+  stopped::Bool = false
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
@@ -153,6 +154,12 @@ function measurement(protocol::MPIMeasurementProtocol)
   while !istaskdone(consumer)
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())
+    if protocol.cancelled || protocol.stopped
+      Base.throwto(producer, StopException())
+      if protocol.stopped
+        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+      end
+    end
     sleep(0.05)
   end
   protocol.measuring = false

@@ -448,7 +448,6 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   if !isnothing(daq.acqSeq)
     timing = getTiming(daq)
   end
-  startTx(daq)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   startSample = timing.start
@@ -463,24 +462,45 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # Start pipeline
   @debug "Pipeline started"
   try
+    startTx(daq)
     @debug currentWP(daq.rpc)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
-    @info "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
-    if serverMode(daq.rpc) == ACQUISITION
-      for ch in daq.rampingChannel
-        enableRampDown!(daq.rpc, ch, true)
-      end
-      # TODO wait
-      masterTrigger!(daq.rpc, false)
-      serverMode!(daq.rpc, CONFIGURATION)
-    end
     daq.rpv = nothing
-    rethrow(e)
+    try 
+      stopProducer(daq)
+    catch e2
+      @error "Could not stop producer"
+    end
+    if e isa StopException
+      # RedPitayas functional, we want to stop signals and then prepare for new measurement
+      @info "Attempting reconnect to reset pipeline"
+      daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
+      return nothing
+    else
+      # RedPitayas non-function potentially, try to get back control
+      @info "Attempting reconnect to reset pipeline"
+      daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
+      stopTx(daq)
+      rethrow(e)
+    end
   end
   @debug "Pipeline finished"
   return timing.finish
+end
+
+function stopProducer(daq::RedPitayaDAQ)
+  @warn "Attempting to ramp down signal"
+  if serverMode(daq.rpc) == ACQUISITION && masterTrigger(daq.rpc)
+    for ch in daq.rampingChannel
+      enableRampDown!(daq.rpc, ch, true)
+    end
+    while !rampDownDone(daq.rpc)
+      sleep(0.001)
+    end
+    masterTrigger!(daq.rpc, false)
+    serverMode!(daq.rpc, CONFIGURATION)
+  end
 end
 
 

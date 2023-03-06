@@ -56,8 +56,9 @@ function Base.show(io::IO, ex::DeviceException)
   end
 end
 
-abstract type ProtocolException end
+abstract type ProtocolException <: Exception end
 struct CancelException <: ProtocolException end
+struct StopException <: ProtocolException end
 struct IllegalStateException <: ProtocolException 
   message::AbstractString
 end
