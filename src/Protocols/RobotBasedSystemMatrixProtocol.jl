@@ -204,7 +204,7 @@ function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
   end
   # Set signals to zero if we didn't restore
   if !protocol.restored
-    signals = mmap!(io, "signals.bin", protocol.systemMeasState.signals);
+    signals = mmap!(protocol, "signals.bin", protocol.systemMeasState.signals);
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
   end
@@ -463,7 +463,7 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
     numPeriods = acqNumPeriodsPerFrame(seq)
     paramSize = (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
-    if size(sysObj.signals) != 
+    if size(sysObj.signals) != paramSize
       throw(DimensionMismatch("Dimensions of stored signals $(size(sysObj.signals)) does not match initialized signals $paramSize"))
     end
 

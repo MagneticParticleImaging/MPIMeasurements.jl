@@ -14,6 +14,7 @@ using ProgressMeter
 using InteractiveUtils
 using Graphics: @mustimplement
 using Mmap
+using Scratch
 using StringEncodings
 using DocStringExtensions
 using MacroTools
@@ -23,7 +24,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
 import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
-import Base: ==, isequal, hash
+import Base: ==, isequal, hash, isfile
 
 using Reexport
 @reexport using MPIFiles
