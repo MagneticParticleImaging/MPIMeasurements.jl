@@ -180,19 +180,21 @@ function measurement(protocol::ContinousMeasurementProtocol)
     throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
   end
 
-  return copy(measState.buffer)
+  return copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
 end
 
 function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   scanner_ = protocol.scanner
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  daq = getDAQ(scanner_)
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+    sequence = controlTx(protocol.txCont, sequence)
   end
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
 end
 

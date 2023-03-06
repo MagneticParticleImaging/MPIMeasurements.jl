@@ -156,7 +156,13 @@ divider(component::ElectricalComponent, trigger::Integer=1) = length(component.d
 
 export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
-amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V"), typeof(1.0u"A")}; period::Integer=1) = component.amplitude[period] = value
+function amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1)
+  if eltype(component.amplitude) != typeof(value) && length(component.amplitude) == 1
+      component.amplitude = typeof(value)[value]
+  else
+    component.amplitude[period] = value
+  end
+end
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
 amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
 
@@ -187,6 +193,8 @@ end
 export id
 id(component::PeriodicElectricalComponent) = component.id
 id(component::ArbitraryElectricalComponent) = component.id
+
+push!(channel::PeriodicElectricalChannel, comp::ElectricalComponent) = push!(channel.components, comp)
 
 function toDict!(dict, component::ElectricalComponent)
   dict["type"] = string(typeof(component))
