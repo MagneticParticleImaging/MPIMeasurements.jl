@@ -14,7 +14,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Remember background measurement"
   rememberBGMeas::Bool = false
   "Tracer that is being used for the measurement"
-  tracer::Union{Tracer, Nothing} = nothing
+  #tracer::Union{Tracer, Nothing} = nothing
   "If the temperature should be safed or not"
   saveTemperatureData::Bool = false
   "Sequence to measure"
@@ -29,13 +29,6 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   offsetNum::Integer = 101
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 100
-
-  #=
-  Notizen für MPS:
-  - Pause zwischen Messungen
-  - Angabe der Offset-Positionen
-  - Zuordnung der Quellen zu den Kanälen
-  =#
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
@@ -45,12 +38,12 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
     delete!(dict, "sequence")
   end
 
-  if haskey(dict, "Tracer")
-    tracer = MPIMeasurements.Tracer(;[Symbol(key) => tryuparse(value) for (key, value) in dict["Tracer"]]...)
-    delete!(dict, "Tracer")
-  else
-    tracer = Tracer()
-  end
+  # if haskey(dict, "Tracer")
+  #   tracer = MPIMeasurements.Tracer(;[Symbol(key) => tryuparse(value) for (key, value) in dict["Tracer"]]...)
+  #   delete!(dict, "Tracer")
+  # else
+  #   tracer = Tracer()
+  # end
 
   params = params_from_dict(MPSMeasurementProtocolParams, dict)
 
@@ -87,7 +80,7 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   oldChannel = sequence.fields[offsetFieldIdx].channels[offsetChannelIdx]
   sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
   params.sequence = sequence
-  params.tracer = tracer
+  #params.tracer = tracer
 
   return params
 end
@@ -125,7 +118,6 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
     protocol.txCont = getDevice(protocol.scanner, TxDAQController)
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
