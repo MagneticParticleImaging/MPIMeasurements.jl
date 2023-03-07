@@ -75,7 +75,7 @@ function measIsBGFrame(meas::ProtocolMeasState)
       push!(frames, size(data, ndims(data)))
     end
     if length(unique(frames)) == 1
-      temp = meas.measIsBg[i] ? ones(Bool, frames[1]) : zeros(Bool, frames[i])
+      temp = meas.measIsBg[i] ? ones(Bool, frames[1]) : zeros(Bool, frames[1])
       push!(isBGFrames, temp...)
     else
       throw(ErrorException("Different amount of frames for stored measurement step $frames"))
