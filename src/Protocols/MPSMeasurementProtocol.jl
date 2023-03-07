@@ -130,7 +130,7 @@ function _init(protocol::MPSMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
-
+  protocol.protocolMeasState = ProtocolMeasState()
   return nothing
 end
 
