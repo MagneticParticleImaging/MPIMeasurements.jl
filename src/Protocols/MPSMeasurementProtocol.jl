@@ -29,15 +29,20 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   offsetNum::Integer = 101
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 100
+  "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
+  deletedDfPeriodsPerOffset::Integer = 1
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
-  sequence = nothing
+  sequence_ = nothing
   if haskey(dict, "sequence")
-    sequence = Sequence(scanner, dict["sequence"])
-    dict["sequence"] = sequence
+    sequence_ = Sequence(scanner, dict["sequence"])
     delete!(dict, "sequence")
   end
+  
+  params = params_from_dict(MPSMeasurementProtocolParams, dict)
+  params.sequence = sequence_
 
+  # TODO: Move to somewhere where it is used after setting the values in the GUI
   # if haskey(dict, "Tracer")
   #   tracer = MPIMeasurements.Tracer(;[Symbol(key) => tryuparse(value) for (key, value) in dict["Tracer"]]...)
   #   delete!(dict, "Tracer")
@@ -45,41 +50,6 @@ function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   #   tracer = Tracer()
   # end
 
-  params = params_from_dict(MPSMeasurementProtocolParams, dict)
-
-  divider = nothing
-  offsetFieldIdx = nothing
-  offsetChannelIdx = nothing
-  for (fieldIdx, field) in enumerate(fields(sequence))
-    for (channelIdx, channel) in enumerate(channels(field))
-      if channel isa PeriodicElectricalChannel
-        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
-        divider = channel.components[1].divider
-      elseif channel isa ContinuousElectricalChannel
-        offsetFieldIdx = fieldIdx
-        offsetChannelIdx = channelIdx
-      end
-    end
-  end
-
-  if isnothing(divider)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
-  end
-
-  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
-  end
-
-  stepDivider = divider * params.dfPeriodsPerOffset
-  offsetDivider = stepDivider * params.offsetNum
-
-  chanOffset = (params.offsetStop + params.offsetStart) /2
-  amplitude = abs(params.offsetStop - chanOffset)
-  @info stepDivider offsetDivider chanOffset amplitude
-  
-  oldChannel = sequence.fields[offsetFieldIdx].channels[offsetChannelIdx]
-  sequence.fields[offsetFieldIdx].channels[offsetChannelIdx] = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, waveform=WAVEFORM_SAWTOOTH_RISING)
-  params.sequence = sequence
   #params.tracer = tracer
 
   return params
@@ -123,6 +93,9 @@ function _init(protocol::MPSMeasurementProtocol)
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
   protocol.protocolMeasState = ProtocolMeasState()
+
+  setupSequence(protocol)
+
   return nothing
 end
 
@@ -136,7 +109,7 @@ function timeEstimate(protocol::MPSMeasurementProtocol)
     totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
-    @show est
+    @info "The estimated duration is $est s."
   end
   return est
 end
@@ -147,9 +120,68 @@ function enterExecute(protocol::MPSMeasurementProtocol)
   protocol.finishAcknowledged = false
 end
 
+function getRelevantDfDivider(protocol::MPSMeasurementProtocol)
+  sequence_ = sequence(protocol)
+
+  divider = nothing
+  offsetFieldIdx = nothing
+  offsetChannelIdx = nothing
+  for (fieldIdx, field) in enumerate(fields(sequence_))
+    for (channelIdx, channel) in enumerate(channels(field))
+      if channel isa PeriodicElectricalChannel
+        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
+        divider = channel.components[1].divider
+      elseif channel isa ContinuousElectricalChannel
+        offsetFieldIdx = fieldIdx
+        offsetChannelIdx = channelIdx
+      end
+    end
+  end
+
+  if isnothing(divider)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
+  end
+
+  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
+  end
+
+  return divider, offsetFieldIdx, offsetChannelIdx
+end
+
+function createOffsetChannel(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
+  sequence_ = sequence(protocol)
+
+  divider, offsetFieldIdx, offsetChannelIdx = getRelevantDfDivider(protocol)
+
+  stepDivider = divider * (protocol.params.dfPeriodsPerOffset + deletedPeriodsPerOffset)
+  offsetDivider = stepDivider * protocol.params.offsetNum
+
+  chanOffset = (protocol.params.offsetStop + protocol.params.offsetStart) / 2
+  amplitude = abs(protocol.params.offsetStop - protocol.params.offsetStart) / 2
+  
+  oldChannel = sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx]
+  newChannel = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, offset=chanOffset, waveform=WAVEFORM_SAWTOOTH_RISING)
+
+  @info "Values used for the creation of the offset channel" divider stepDivider offsetDivider chanOffset amplitude
+
+  return newChannel, offsetFieldIdx, offsetChannelIdx
+end
+
+function setupSequence(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
+  sequence_ = sequence(protocol)
+  newChannel, offsetFieldIdx, offsetChannelIdx = createOffsetChannel(protocol, deletedPeriodsPerOffset=deletedPeriodsPerOffset)
+  
+  @info "Offset values used for the measurement" MPIMeasurements.values(newChannel)
+  
+  sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx] = newChannel
+  protocol.params.sequence = sequence_
+end
+
 function _execute(protocol::MPSMeasurementProtocol)
   @debug "Measurement protocol started"
 
+  setupSequence(protocol)
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
@@ -318,6 +350,23 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   scanner = protocol.scanner
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
+
+  if protocol.params.deletedDfPeriodsPerOffset > 0
+    numSamples_ = size(data, 1)
+    numChannels_ = size(data, 2)
+    numPeriods_ = size(data, 3)
+    numFrames_ = size(data, 4)
+
+    numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
+
+    data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
+    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
+    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
+
+    # Reset sequence since the info is used for the MDF
+    setupSequence(protocol, deletedPeriodsPerOffset=0)
+  end
+
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
