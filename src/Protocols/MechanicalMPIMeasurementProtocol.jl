@@ -37,7 +37,7 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
-  bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)]
+  bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
