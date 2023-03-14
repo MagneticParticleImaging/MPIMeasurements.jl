@@ -146,6 +146,8 @@ function _init(daq::RedPitayaDAQ)
     counterTrigger_reset!(daq.rpc)
     counterTrigger_sourceType!(daq.rpc, daq.params.counterTriggerSourceType)
     counterTrigger_sourceChannel!(daq.rpc, daq.params.counterTriggerSourceChannel)
+    DIODirection!(daq.rpc, daq.params.counterTriggerSourceChannel, DIO_IN)
+    counterTrigger_enabled!(daq.rpc, true)
   end
 
   daq.present = true
@@ -677,8 +679,6 @@ function startTx(daq::RedPitayaDAQ; useCounterTrigger::Bool=false, referenceCoun
   if daq.params.useCounterTrigger && useCounterTrigger
     counterTrigger_referenceCounter!(rp, referenceCounter)
     counterTrigger_presamples!(rp, presamples)
-
-    counterTrigger_enabled!(daq.rpc, true)
   elseif !daq.params.useCounterTrigger && useCounterTrigger
     @warn "Usage of the counter trigger was specified for starting tx, but is not enabled in the device params. Nothing is being done."
   else
@@ -687,6 +687,13 @@ function startTx(daq::RedPitayaDAQ; useCounterTrigger::Bool=false, referenceCoun
 
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
+
+  if daq.params.useCounterTrigger && useCounterTrigger
+    counterTrigger_arm!(rp)
+  elseif !daq.params.useCounterTrigger && useCounterTrigger
+    @warn "Usage of the counter trigger was specified for starting tx, but is not enabled in the device params. Nothing is being done."
+  end
+  
   @debug "Started tx"
 end
 
