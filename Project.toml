@@ -37,6 +37,7 @@ ThreadPools = "b189fb0b-2eb5-4ed4-bc0c-d34c51242431"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 UnitfulAngles = "6fb2a4bd-7999-5318-a3b2-8ad61056cd98"
+UnitfulMoles = "999f2bd7-36bf-5ba7-9bc1-c9473aa75374"
 
 [compat]
 Compat = "3.25"

@@ -76,6 +76,14 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
       calib = nothing
       if haskey(value, "calibration")
         calib = uparse.(value["calibration"])
+
+        if unit(upreferred(calib)) == upreferred(u"V/T")
+          calib = calib .|> u"V/T"
+        elseif unit(upreferred(calib)) == upreferred(u"V/A")
+          calib = calib .|> u"V/A"
+        else
+          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
+        end
       end
       channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
     end
