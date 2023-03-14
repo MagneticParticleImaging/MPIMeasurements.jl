@@ -417,12 +417,14 @@ end
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
   samples::Union{Matrix{Int16}, Nothing}
   performance::Vector{Vector{PerformanceData}}
+  target::StorageBuffer
+  daq::RedPitayaDAQ
 end
-AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
+AsyncBuffer(buffer::StorageBuffer, daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1), buffer, daq)
 
 channelType(daq::RedPitayaDAQ) = SampleChunk
 
-function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+function push!(buffer::RedPitayaAsyncBuffer, chunk)
   samples = chunk.samples
   perfs = chunk.performance
   push!(buffer.performance, perfs)
@@ -438,8 +440,15 @@ function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
     if p.status.stepsLost
       @warn "RedPitaya $i lost sequence steps"
     end
+  end
+  frames = convertSamplesToFrames!(buffer)
+  if !isnothing(frames)
+    return push!(buffer.target, frames)
+  else
+    return nothing
+  end
 end
-end
+sinks!(buffer::RedPitayaAsyncBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
 function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
   return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
@@ -487,7 +496,8 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
 end
 
 
-function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
+function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer)
+  daq = buffer.daq
   unusedSamples = buffer.samples
   samples = buffer.samples
   frames = nothing
@@ -515,28 +525,26 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
   return frames
 end
 
-function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
-  frames = convertSamplesToFrames!(buffer, daq)
-  uMeas = nothing
-  uRef = nothing
-  if !isnothing(frames)
-    rxIds = channelIdx(daq, daq.rxChanIDs)
-    refIds = channelIdx(daq, daq.refChanIDs)
-    # Map channel index to their respective index in the view
-    if !isnothing(daq.rpv)
-      rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
-      refIds = map(x->clusterToView(daq.rpv, x), rxIds)
-    end
-    uMeas = frames[:,rxIds,:,:]
-    uRef = frames[:, refIds,:,:]
+function retrieveMeasAndRef!(frames::Array{Float32, 4}, daq::RedPitayaDAQ)
+  rxIds = channelIdx(daq, daq.rxChanIDs)
+  refIds = channelIdx(daq, daq.refChanIDs)
+  # Map channel index to their respective index in the view
+  if !isnothing(daq.rpv)
+    rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
+    refIds = map(x->clusterToView(daq.rpv, x), refIds)
   end
+  uMeas = frames[:,rxIds,:,:]
+  uRef = frames[:, refIds,:,:]
   return uMeas, uRef
 end
 
 #### Tx and Rx
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
+  stopTx(daq)
   setupRx(daq, sequence)
   setupTx(daq, sequence)
+  prepareTx(daq, sequence)
+  setSequenceParams(daq, sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)

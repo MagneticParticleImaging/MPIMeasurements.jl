@@ -272,8 +272,8 @@ getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 
 Retrieve all devices of a specific `deviceType`. Returns an empty vector if none are found
 """
-function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
-  matchingDevices = Vector{Device}()
+function getDevices(scanner::MPIScanner, deviceType::Type{T}) where {T<:Device}
+  matchingDevices = Vector{T}()
   for (deviceID, device) in scanner.devices
     if typeof(device) <: deviceType && isPresent(device)
       push!(matchingDevices, device)
