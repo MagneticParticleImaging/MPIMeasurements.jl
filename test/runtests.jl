@@ -13,3 +13,5 @@ include("Scanner/ScannerTests.jl")
 testScanner = "TestSimpleSimulatedScanner"
 include("Devices/DeviceTests.jl")
 #include("Safety/SafetyTests.jl")
+
+include("Utils/UtilTests.jl")

@@ -1,8 +1,8 @@
-export MPIMeasurementProtocol, MPIMeasurementProtocolParams
+export MPSMeasurementProtocol, MPSMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the MPSMeasurementProtocol
 """
-Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
+Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
   fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
@@ -11,32 +11,57 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   controlTx::Bool = false
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
+  "Remember background measurement"
+  rememberBGMeas::Bool = false
+  "Tracer that is being used for the measurement"
+  #tracer::Union{Tracer, Nothing} = nothing
   "If the temperature should be safed or not"
   saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
-  "Remember background measurement"
-  rememberBGMeas::Bool = false
+
+  # TODO: This is only for 1D MPS systems for now
+  "Start value of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetStart::typeof(1.0u"T") = -0.012u"T"
+  "Stop value of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetStop::typeof(1.0u"T") = 0.012u"T"
+  "Number of values of the MPS offset measurement. Overwrites parts of the sequence definition."
+  offsetNum::Integer = 101
+  "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
+  dfPeriodsPerOffset::Integer = 100
+  "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
+  deletedDfPeriodsPerOffset::Integer = 1
 end
-function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
-  sequence = nothing
+function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
+  sequence_ = nothing
   if haskey(dict, "sequence")
-    sequence = Sequence(scanner, dict["sequence"])
-    dict["sequence"] = sequence
+    sequence_ = Sequence(scanner, dict["sequence"])
     delete!(dict, "sequence")
   end
-  params = params_from_dict(MPIMeasurementProtocolParams, dict)
-  params.sequence = sequence
+  
+  params = params_from_dict(MPSMeasurementProtocolParams, dict)
+  params.sequence = sequence_
+
+  # TODO: Move to somewhere where it is used after setting the values in the GUI
+  # if haskey(dict, "Tracer")
+  #   tracer = MPIMeasurements.Tracer(;[Symbol(key) => tryuparse(value) for (key, value) in dict["Tracer"]]...)
+  #   delete!(dict, "Tracer")
+  # else
+  #   tracer = Tracer()
+  # end
+
+  #params.tracer = tracer
+
   return params
 end
-MPIMeasurementProtocolParams(dict::Dict) = params_from_dict(MPIMeasurementProtocolParams, dict)
+MPSMeasurementProtocolParams(dict::Dict) = params_from_dict(MPSMeasurementProtocolParams, dict)
 
-Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
-  @add_protocol_fields MPIMeasurementProtocolParams
+Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
+  @add_protocol_fields MPSMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
-  
+
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
@@ -46,19 +71,16 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
   unit::String = ""
 end
 
-function requiredDevices(protocol::MPIMeasurementProtocol)
+function requiredDevices(protocol::MPSMeasurementProtocol)
   result = [AbstractDAQ]
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
-  if protocol.params.saveTemperatureData
-    push!(result, TemperatureSensor)
-  end
   return result
 end
 
-function _init(protocol::MPIMeasurementProtocol)
-  if isnothing(protocol.params.sequence)
+function _init(protocol::MPSMeasurementProtocol)
+  if isnothing(sequence(protocol))
     throw(IllegalStateException("Protocol requires a sequence"))
   end
   protocol.done = false
@@ -69,13 +91,17 @@ function _init(protocol::MPIMeasurementProtocol)
   else
     protocol.txCont = nothing
   end
+  protocol.bgMeas = zeros(Float32,0,0,0,0)
   protocol.protocolMeasState = ProtocolMeasState()
+
+  setupSequence(protocol)
+
   return nothing
 end
 
-function timeEstimate(protocol::MPIMeasurementProtocol)
+function timeEstimate(protocol::MPSMeasurementProtocol)
   est = "Unknown"
-  if !isnothing(protocol.params.sequence)
+  if !isnothing(sequence(protocol))
     params = protocol.params
     seq = params.sequence
     totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
@@ -83,21 +109,79 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
     totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
-    @show est
+    @info "The estimated duration is $est s."
   end
   return est
 end
 
-function enterExecute(protocol::MPIMeasurementProtocol)
+function enterExecute(protocol::MPSMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
-  protocol.unit = ""
 end
 
-function _execute(protocol::MPIMeasurementProtocol)
+function getRelevantDfDivider(protocol::MPSMeasurementProtocol)
+  sequence_ = sequence(protocol)
+
+  divider = nothing
+  offsetFieldIdx = nothing
+  offsetChannelIdx = nothing
+  for (fieldIdx, field) in enumerate(fields(sequence_))
+    for (channelIdx, channel) in enumerate(channels(field))
+      if channel isa PeriodicElectricalChannel
+        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
+        divider = channel.components[1].divider
+      elseif channel isa ContinuousElectricalChannel
+        offsetFieldIdx = fieldIdx
+        offsetChannelIdx = channelIdx
+      end
+    end
+  end
+
+  if isnothing(divider)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
+  end
+
+  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
+    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
+  end
+
+  return divider, offsetFieldIdx, offsetChannelIdx
+end
+
+function createOffsetChannel(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
+  sequence_ = sequence(protocol)
+
+  divider, offsetFieldIdx, offsetChannelIdx = getRelevantDfDivider(protocol)
+
+  stepDivider = divider * (protocol.params.dfPeriodsPerOffset + deletedPeriodsPerOffset)
+  offsetDivider = stepDivider * protocol.params.offsetNum
+
+  chanOffset = (protocol.params.offsetStop + protocol.params.offsetStart) / 2
+  amplitude = abs(protocol.params.offsetStop - protocol.params.offsetStart) / 2
+  
+  oldChannel = sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx]
+  newChannel = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, offset=chanOffset, waveform=WAVEFORM_SAWTOOTH_RISING)
+
+  @info "Values used for the creation of the offset channel" divider stepDivider offsetDivider chanOffset amplitude
+
+  return newChannel, offsetFieldIdx, offsetChannelIdx
+end
+
+function setupSequence(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
+  sequence_ = sequence(protocol)
+  newChannel, offsetFieldIdx, offsetChannelIdx = createOffsetChannel(protocol, deletedPeriodsPerOffset=deletedPeriodsPerOffset)
+  
+  @info "Offset values used for the measurement" MPIMeasurements.values(newChannel)
+  
+  sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx] = newChannel
+  protocol.params.sequence = sequence_
+end
+
+function _execute(protocol::MPSMeasurementProtocol)
   @debug "Measurement protocol started"
 
+  setupSequence(protocol)
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
@@ -112,15 +196,14 @@ function _execute(protocol::MPIMeasurementProtocol)
   @debug "Protocol channel closed after execution."
 end
 
-function performMeasurement(protocol::MPIMeasurementProtocol)
+function performMeasurement(protocol::MPSMeasurementProtocol)
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
-    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+    acqNumFrames(sequence(protocol), protocol.params.bgFrames)
 
     @debug "Taking background measurement."
-    protocol.unit = "BG Frames"
     measurement(protocol)
     protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
     deviceBuffers = protocol.seqMeasState.deviceBuffers
@@ -131,7 +214,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
   end
 
   @debug "Setting number of foreground frames."
-  acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  acqNumFrames(sequence(protocol), protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
   protocol.unit = "Frames"
@@ -140,7 +223,7 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
   push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
 end
 
-function measurement(protocol::MPIMeasurementProtocol)
+function measurement(protocol::MPSMeasurementProtocol)
   # Start async measurement
   protocol.measuring = true
   measState = asyncMeasurement(protocol)
@@ -183,7 +266,7 @@ function measurement(protocol::MPIMeasurementProtocol)
 
 end
 
-function asyncMeasurement(protocol::MPIMeasurementProtocol)
+function asyncMeasurement(protocol::MPSMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
   daq = getDAQ(scanner_)
@@ -205,25 +288,25 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
 end
 
 
-function cleanup(protocol::MPIMeasurementProtocol)
+function cleanup(protocol::MPSMeasurementProtocol)
   # NOP
 end
 
-function stop(protocol::MPIMeasurementProtocol)
+function stop(protocol::MPSMeasurementProtocol)
   put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
 end
 
-function resume(protocol::MPIMeasurementProtocol)
+function resume(protocol::MPSMeasurementProtocol)
    put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
 end
 
-function cancel(protocol::MPIMeasurementProtocol)
+function cancel(protocol::MPSMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
   # TODO stopTx and reconnect for pipeline and so on
 end
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
     data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
@@ -248,7 +331,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
 end
 
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
@@ -260,13 +343,30 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::ProgressQueryEvent
   put!(protocol.biChannel, reply)
 end
 
-handleEvent(protocol::MPIMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+handleEvent(protocol::MPSMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
 
-function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
+function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
+
+  if protocol.params.deletedDfPeriodsPerOffset > 0
+    numSamples_ = size(data, 1)
+    numChannels_ = size(data, 2)
+    numPeriods_ = size(data, 3)
+    numFrames_ = size(data, 4)
+
+    numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
+
+    data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
+    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
+    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
+
+    # Reset sequence since the info is used for the MDF
+    setupSequence(protocol, deletedPeriodsPerOffset=0)
+  end
+
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
@@ -276,5 +376,7 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
-protocolInteractivity(protocol::MPIMeasurementProtocol) = Interactive()
-protocolMDFStudyUse(protocol::MPIMeasurementProtocol) = UsingMDFStudy()
+protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
+
+sequence(protocol::MPSMeasurementProtocol) = protocol.params.sequence
