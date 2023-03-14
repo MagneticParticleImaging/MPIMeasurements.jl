@@ -126,7 +126,7 @@ end
 function _setup(rob::IselRobot)
   rob.sd = initSerialDevice(rob, rob.params)
 
-  # TODO: verify the way to identify the controller version 
+  # TODO: verify the way to identify the controller version
   if queryIsel(rob, "@0Id 1600,1600,1600,1600") == "5"
     rob.controllerVersion = 1
   else
@@ -156,7 +156,7 @@ function _enable(robot::IselRobot, version::IselC142)
   _setMotorCurrent(robot, true)
 end
 
-function _disable(robot::IselRobot) 
+function _disable(robot::IselRobot)
   writeIOOutput(robot, zeros(Bool, 8))
   _disable(robot, controllerVersion(robot))
 end
@@ -214,7 +214,7 @@ function _isReferenced(robot::IselRobot)
 end
 _isReferenced(robot::IselRobot, version::IselC142) = robot.isReferenced
 function _isReferenced(robot::IselRobot, version::IseliMCS8)
-  try 
+  try
     currPos = getPosition(robot)
     currPos[1] += 0.01u"mm"
     #need to add 0.01mm, otherwise moveAbs returns 0 although it is no longer referenced
@@ -224,7 +224,7 @@ function _isReferenced(robot::IselRobot, version::IseliMCS8)
     @debug ex
   end
   return false
-end 
+end
 
 function _reset(rob::IselRobot)
   close(rob)
@@ -275,7 +275,6 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
   rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
   @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
 
-
   if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
     cmd = string("@0A"," ",steps[1],",",vel[1], ",",steps[2],",",vel[2], ",",steps[3],",",vel[3], ",",0,",",30)
     ret = queryIsel(rob, cmd)
@@ -283,7 +282,6 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
   else
     error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
   end
-
   rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
 
@@ -295,7 +293,7 @@ function waitEnableTime(robot::IselRobot)
 end
 
 macro minimumISELversion(version::Int)
-  return esc(quote 
+  return esc(quote
     if rob.controllerVersion < $version
         @error "The desired function $(var"#self#") is not available for ISEL version $(rob.controllerVersion), the minimum version is $($version)"
         return nothing
@@ -424,7 +422,7 @@ function setStartStopFreq(robot::IselRobot, version::IseliMCS8, frequency)
   end
 end
 function setStartStopFreq(robot::IselRobot, frequency)
-  setStartStopFreq(robot, controllerVersion(robot), frequency)  
+  setStartStopFreq(robot, controllerVersion(robot), frequency)
 end
 
 """ Sets brake, brake=false no current on brake , brake=true current on brake """
@@ -462,7 +460,7 @@ invertAxesYZ(robot::IselRobot) = invertAxes(robot, [false, true, true])
 
 """ Inverts the axis for z """
 invertAxisZ(robot::IselRobot) = invertAxes(robot, [false, false, true])
-    
+
 
 function checkIselError(ret::AbstractString)
   if ret != "0"
