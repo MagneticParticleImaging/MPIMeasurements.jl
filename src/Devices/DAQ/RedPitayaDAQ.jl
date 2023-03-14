@@ -14,8 +14,6 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
-  "Flag for using the counter trigger"
-  useCounterTrigger::Bool = false
   "Source type of the counter trigger"
   counterTriggerSourceType::CounterTriggerSourceType =  COUNTER_TRIGGER_DIO
   "DIO pin used for the counter trigger"
@@ -112,6 +110,13 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumFrames::Int = 1
   acqNumFrameAverages::Int = 1
   acqNumAverages::Int = 1
+
+  "Flag for using the counter trigger"
+  useCounterTrigger::Bool = false
+  "Reference counter for the counter trigger"
+  referenceCounter::Integer = 0
+  "Samples prior to acquisition for the counter trigger"
+  presamples::Integer = 0
 end
 
 function _init(daq::RedPitayaDAQ)
@@ -142,7 +147,7 @@ function _init(daq::RedPitayaDAQ)
   end
   triggerMode!(daq.rpc, string(daq.params.triggerMode))
 
-  if daq.params.useCounterTrigger
+  if daq.useCounterTrigger
     counterTrigger_reset!(daq.rpc)
     counterTrigger_sourceType!(daq.rpc, daq.params.counterTriggerSourceType)
     counterTrigger_sourceChannel!(daq.rpc, daq.params.counterTriggerSourceChannel)
@@ -675,12 +680,10 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
-function startTx(daq::RedPitayaDAQ; useCounterTrigger::Bool=false, referenceCounter::Integer=0, presamples::Integer=0)
-  if daq.params.useCounterTrigger && useCounterTrigger
-    counterTrigger_referenceCounter!(rp, referenceCounter)
-    counterTrigger_presamples!(rp, presamples)
-  elseif !daq.params.useCounterTrigger && useCounterTrigger
-    @warn "Usage of the counter trigger was specified for starting tx, but is not enabled in the device params. Nothing is being done."
+function startTx(daq::RedPitayaDAQ)
+  if daq.useCounterTrigger
+    counterTrigger_referenceCounter!(rp, daq.referenceCounter)
+    counterTrigger_presamples!(rp, daq.presamples)
   else
     counterTrigger_enabled!(daq.rpc, false)
   end
@@ -688,12 +691,10 @@ function startTx(daq::RedPitayaDAQ; useCounterTrigger::Bool=false, referenceCoun
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
 
-  if daq.params.useCounterTrigger && useCounterTrigger
+  if daq.useCounterTrigger
     counterTrigger_arm!(rp)
-  elseif !daq.params.useCounterTrigger && useCounterTrigger
-    @warn "Usage of the counter trigger was specified for starting tx, but is not enabled in the device params. Nothing is being done."
   end
-  
+
   @debug "Started tx"
 end
 
