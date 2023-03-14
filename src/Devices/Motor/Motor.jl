@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 export Motor, StepperMotor
 
 abstract type Motor <: Device end

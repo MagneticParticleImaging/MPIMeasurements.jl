@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 export Display
 
 abstract type Display <: Device end

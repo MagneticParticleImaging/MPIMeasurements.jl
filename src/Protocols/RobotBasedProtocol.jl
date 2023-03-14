@@ -1,5 +1,3 @@
-using Base: Integer
-
 export RobotBasedProtocol, positions, postMoveWaitTime, numCooldowns, robotVelocity, switchBrakes, preMoveAction, postMoveAction
 
 abstract type RobotBasedProtocol <: Protocol end
