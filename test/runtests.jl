@@ -4,6 +4,10 @@ using Unitful
 
 using MPIMeasurements
 
+# Add test configurations to path
+testConfigDir = normpath(string(@__DIR__), "TestConfigs")
+addConfigurationPath(testConfigDir)
+
 @testset "MPIMeasurements" begin
   @testset "Aqua" begin
     @warn "Ambiguities and piracies are accepted for now"
@@ -11,10 +15,6 @@ using MPIMeasurements
   end
 
   include("TestDevices.jl")
-
-  # Add test configurations to path
-  testConfigDir = normpath(string(@__DIR__), "TestConfigs")
-  addConfigurationPath(testConfigDir)
 
   include("Scanner/ScannerTests.jl")
 
