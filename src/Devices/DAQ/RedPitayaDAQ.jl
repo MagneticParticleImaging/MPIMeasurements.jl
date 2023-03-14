@@ -289,7 +289,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
   end
-  
+
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
     @async begin
@@ -573,7 +573,7 @@ end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
-  end  
+  end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
   @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, componentIdx, freq)
