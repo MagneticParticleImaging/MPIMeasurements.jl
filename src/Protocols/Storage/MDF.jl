@@ -1,5 +1,5 @@
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, mdf::MDFv2InMemory; bgdata::Union{Array{Float32,4}, Nothing}=nothing, temperatures::Union{Array{Float32}, Nothing}=nothing)
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory;temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 	if !ismissing(studyName(mdf))
 		name = studyName(mdf)
 	else
@@ -19,7 +19,35 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	fillMDFScanner(mdf, scanner)
 	fillMDFTracer(mdf)
 
-	fillMDFMeasurement(mdf, sequence, data, bgdata, temperatures)
+	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFAcquisition(mdf, scanner, sequence)
+
+	filename = getNewExperimentPath(study)
+
+	return saveasMDF(filename, mdf)
+end
+
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, mdf::MDFv2InMemory; bgdata::Union{Array{Float32,4}, Nothing}=nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+	if !ismissing(studyName(mdf))
+		name = studyName(mdf)
+	else
+		name = "n.a."
+	end
+
+	if !isnothing(studyTime(mdf))
+		date = studyTime(mdf)
+	else
+		date = now()
+	end
+
+	study = Study(store, name; date=date)
+
+	fillMDFStudy(mdf, study)
+	fillMDFExperiment(mdf, study)
+	fillMDFScanner(mdf, scanner)
+	fillMDFTracer(mdf)
+
+	fillMDFMeasurement(mdf, sequence, data, bgdata, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 
 	filename = getNewExperimentPath(study)
@@ -28,8 +56,9 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 end
 
 
+
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing)
+														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -56,7 +85,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	@debug isBackgroundFrame
 
-	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures)
+	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 	fillMDFCalibration(mdf, positions, deltaSampleSize = deltaSampleSize)
 
@@ -181,28 +210,33 @@ function fillMDFTracer(mdf::MDFv2InMemory)
 	return
 end
 
-
 function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
-    bgdata::Union{Array{Float32}, Nothing}, temperatures::Union{Array{Float32}, Nothing}=nothing)
-
+    bgdata::Nothing; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Nothing=nothing, bgTransmit::Nothing=nothing)
+	numFrames = acqNumFrames(sequence)
+	isBackgroundFrame = zeros(Bool, numFrames)
+	return fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+end
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
+	bgdata::Union{Array{Float32}}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Union{Array{ComplexF64}, Nothing}=nothing, bgTransmit::Union{Array{ComplexF64}, Nothing}=nothing)
 	# /measurement/ subgroup
 	numFrames = acqNumFrames(sequence)
-
-	if isnothing(bgdata)
-		isBackgroundFrame = zeros(Bool, numFrames)
-		data_ = data
-	else
-		numBGFrames = size(bgdata,4)
-		data_ = cat(bgdata, data, dims=4)
-		isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
-		numFrames = numFrames + numBGFrames
+	numBGFrames = size(bgdata,4)
+	data_ = cat(bgdata, data, dims=4)
+	drivefield_ = drivefield
+	if !isnothing(bgDriveField)
+		drivefield_ = cat(bgDriveField, drivefield, dims=4)
 	end
-
-	return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame, temperatures)
+	applied_ = applied
+	if !isnothing(bgTransmit)
+		applied_ = cat(bgTransmit, applied, dims=4)
+	end
+	isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
+	numFrames = numFrames + numBGFrames
+	return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32}, isBackgroundFrame::Vector{Bool}, temperatures::Union{Array{Float32}, Nothing}=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 	# /measurement/ subgroup
 	numFrames = size(data, 4)
 
@@ -218,6 +252,12 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 	measIsTransferFunctionCorrected(mdf, false)
 	if !isnothing(temperature)
 		MPIFiles.measTemperatures(mdf, temperatures)
+	end
+	if !isnothing(drivefield)
+		MPIFiles.measObservedDriveField(mdf, drivefield)
+	end
+	if !isnothing(applied)
+		MPIFiles.measAppliedDriveField(mdf, applied)
 	end
 	return
 end

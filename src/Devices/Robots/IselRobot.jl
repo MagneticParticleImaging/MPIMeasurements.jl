@@ -43,7 +43,7 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   stepsPermm::Float64 = 100
 
   serial_port::String
-  @add_serial_device_fields '\r'
+  @add_serial_device_fields "\r"
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -65,7 +65,7 @@ Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   stepsPermm::Float64 = 100
 
   description::String
-  @add_serial_device_fields '\r'
+  @add_serial_device_fields "\r"
 
   namedPositions::Dict{String,Vector{typeof(1.0u"mm")}} = Dict("origin" => [0,0,0]u"mm")
   referenceOrder::String = "zyx"
@@ -177,6 +177,7 @@ end
 
 function _doReferenceDrive(rob::IselRobot)
   # Minor shift for not hitting the limit switch
+  waitEnableTime(rob)
   prepareReferenceDrive(rob, controllerVersion(rob))
 
   tempTimeout = rob.sd.timeout_ms

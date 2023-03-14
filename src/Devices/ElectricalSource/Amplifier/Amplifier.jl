@@ -57,16 +57,16 @@ getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
 export getAmplifier
 getAmplifier(scanner::MPIScanner) = getDevice(scanner, Amplifier)
 
-function getRequiredAmplifier(scanner::MPIScanner, sequence::Sequence)
-  return getRequiredAmplifier(getAmplifier(scanner), sequence)
+function getRequiredAmplifiers(scanner::MPIScanner, sequence::Sequence)
+  return getRequiredAmplifiers(getAmplifiers(scanner), sequence)
 end
-function getRequiredAmplifier(device::Device, sequence::Sequence)
+function getRequiredAmplifiers(device::Device, sequence::Sequence)
   if hasDependency(device, Amplifier)
-    return getRequiredAmplifier(dependencies(device, Amplifier), sequence)
+    return getRequiredAmplifiers(dependencies(device, Amplifier), sequence)
   end
   return []
 end
-function getRequiredAmplifier(amps::Vector{Amplifier}, sequence::Sequence)
+function getRequiredAmplifiers(amps::Vector{Amplifier}, sequence::Sequence)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))

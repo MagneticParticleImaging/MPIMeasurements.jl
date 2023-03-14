@@ -2,7 +2,7 @@ export  Protocol, ProtocolParams, name, description, scanner, params, add_protoc
         init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
         InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
-        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
+        ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, FileStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
 
 abstract type ProtocolParams end
@@ -245,6 +245,9 @@ struct DatasetStoreStorageRequestEvent <: StorageRequestEvent
   datastore::DatasetStore
   mdf::MDFv2InMemory
 end
+struct FileStorageRequestEvent <: StorageRequestEvent
+  filename::AbstractString
+end 
 struct StorageSuccessEvent <: ProtocolEvent
   filename::AbstractString
 end
@@ -313,8 +316,8 @@ isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDF
 
 include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
+include("MPIForceProtocol.jl")
 include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
-include("RobotBasedSystemMatrixProtocol.jl")
 include("ContinousMeasurementProtocol.jl")
 #include("TransferFunctionProtocol.jl")
