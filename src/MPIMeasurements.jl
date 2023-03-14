@@ -17,16 +17,19 @@ using Scratch
 using StringEncodings
 using DocStringExtensions
 using MacroTools
+using LibSerialPort
 
 using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
+import Base.write, Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
 import Base: ==, isequal, hash, isfile
 
-using Reexport
-@reexport using MPIFiles
+#using Reexport
+#@reexport using MPIFiles
+
+using MPIFiles
 import MPIFiles: hasKeyAndValue, 
     acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
     acqNumFrames, acqNumAverages,
@@ -65,11 +68,11 @@ all other fields should have default values.
 """
 abstract type Device end
 
+include("Utils/Mustimplement.jl")
 include("Sequences/Sequence.jl")
 include("Scanner.jl")
 include("Devices/Device.jl")
 include("Utils/Utils.jl")
-
 
 include("Protocols/Storage/MDF.jl") # Defines stuff needed in devices
 include("Protocols/Storage/MeasurementState.jl")

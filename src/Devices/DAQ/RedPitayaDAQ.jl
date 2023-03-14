@@ -1,8 +1,7 @@
-export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       setTxParamsAll, disconnect, RampingMode, NONE, HOLD, STARTUP
-
+export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
+export RedPitayaDAQParams
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
@@ -86,6 +85,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
   return channels
 end
 
+export RedPitayaDAQ
 Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   @add_device_fields RedPitayaDAQParams
 

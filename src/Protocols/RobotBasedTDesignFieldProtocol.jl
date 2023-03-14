@@ -1,4 +1,4 @@
-export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement, filename
+export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement
 
 Base.@kwdef mutable struct RobotBasedTDesignFieldProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
