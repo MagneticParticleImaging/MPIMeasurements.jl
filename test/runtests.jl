@@ -1,6 +1,7 @@
 using Test
 using Aqua
 using Unitful
+using Statistics
 
 using MPIMeasurements
 
@@ -15,12 +16,8 @@ addConfigurationPath(testConfigDir)
   end
 
   include("TestDevices.jl")
-
   include("Scanner/ScannerTests.jl")
-
-  testScanner = "TestSimpleSimulatedScanner"
   include("Devices/DeviceTests.jl")
   #include("Safety/SafetyTests.jl")
-
   include("Utils/UtilTests.jl")
 end
