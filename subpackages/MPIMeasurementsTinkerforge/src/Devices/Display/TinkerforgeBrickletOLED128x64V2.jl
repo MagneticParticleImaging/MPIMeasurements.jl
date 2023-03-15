@@ -8,22 +8,13 @@ end
 TinkerforgeBrickletOLED128x64V2DisplayParams(dict::Dict) = params_from_dict(TinkerforgeBrickletOLED128x64V2DisplayParams, dict)
 
 Base.@kwdef mutable struct TinkerforgeBrickletOLED128x64V2Display <: Display
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::TinkerforgeBrickletOLED128x64V2DisplayParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  MPIMeasurements.@add_device_fields TinkerforgeBrickletOLED128x64V2DisplayParams
 
   deviceInternal::Union{PyTinkerforge.BrickletOLED128x64V2, Missing} = missing
   ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 end
 
-function init(disp::TinkerforgeBrickletOLED128x64V2Display)
+function MPIMeasurements.init(disp::TinkerforgeBrickletOLED128x64V2Display)
   @debug "Initializing Tinkerforge display unit with ID `$(disp.deviceID)`."
 
   disp.ipcon = PyTinkerforge.IPConnection()
@@ -33,8 +24,8 @@ function init(disp::TinkerforgeBrickletOLED128x64V2Display)
   disp.present = true
 end
 
-neededDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
-optionalDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
+MPIMeasurements.neededDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
+MPIMeasurements.optionalDependencies(::TinkerforgeBrickletOLED128x64V2Display) = []
 Base.close(disp::TinkerforgeBrickletOLED128x64V2Display) = PyTinkerforge.disconnect(disp.ipcon)
 isTinkerforgeDevice(::TinkerforgeBrickletOLED128x64V2Display) = true
 

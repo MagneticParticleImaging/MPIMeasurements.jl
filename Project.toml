@@ -14,7 +14,6 @@ MPIFiles = "371237a9-e6c1-5201-9adb-3d8cfa78fa9f"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
-PyTinkerforge = "7f8b0ca4-cb0e-484e-9ab2-c46751bbb33a"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 RedPitayaDAQServer = "c544963a-496b-56d4-a5fe-f99a3f174c8f"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
@@ -35,7 +34,6 @@ LibSerialPort = "0.5.2"
 MPIFiles = "0.12.4"
 MacroTools = "0.5.6"
 ProgressMeter = "1.5"
-PyTinkerforge = "2.1.29"
 RedPitayaDAQServer = "0.5.2"
 Reexport = "0.2, 1.0"
 ReplMaker = "0.2.7"
@@ -47,10 +45,11 @@ julia = "1.7"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [targets]
-test = ["Aqua", "Plots", "Statistics", "Test", "Unitful"]
+test = ["Aqua", "Pkg", "Plots", "Statistics", "Test", "Unitful"]

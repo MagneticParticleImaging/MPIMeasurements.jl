@@ -26,6 +26,7 @@ import REPL: TerminalMenus
 import Base.write, Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
 import Base: ==, isequal, hash, isfile
 
+# Reexporting MPIFiles is disliked by Aqua since there are undefined exports. Therefore, I disabled reexporting here.
 #using Reexport
 #@reexport using MPIFiles
 
@@ -37,7 +38,6 @@ import MPIFiles: hasKeyAndValue,
     rxBandwidth, rxNumChannels, rxNumSamplingPoints
 
 using RedPitayaDAQServer
-import PyTinkerforge
 
 const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
 

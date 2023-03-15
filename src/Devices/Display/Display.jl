@@ -29,5 +29,3 @@ export backlightOff
 backlightOff(disp::Display) = setBacklight(disp, false)
 
 include("SimulatedDisplay.jl")
-include("TinkerforgeBrickletLCD20x4Display.jl")
-include("TinkerforgeBrickletOLED128x64V2.jl")

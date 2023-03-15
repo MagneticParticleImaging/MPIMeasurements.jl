@@ -3,8 +3,6 @@ export DCSource
 abstract type DCSource <: ElectricalSource end
 
 include("SimulatedDCSource.jl")
-include("TinkerforgeBrickDC.jl")
-include("TinkerforgeBrickletDCV2Source.jl")
 
 Base.close(t::DCSource) = nothing
 

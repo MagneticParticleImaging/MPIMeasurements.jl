@@ -3,7 +3,6 @@ export DistanceSensor
 abstract type DistanceSensor <: Device end
 
 include("SimulatedDistanceSensor.jl")
-include("TinkerforgeBrickletDistanceIRV2DistanceSensor.jl")
 
 Base.close(t::DistanceSensor) = nothing
 

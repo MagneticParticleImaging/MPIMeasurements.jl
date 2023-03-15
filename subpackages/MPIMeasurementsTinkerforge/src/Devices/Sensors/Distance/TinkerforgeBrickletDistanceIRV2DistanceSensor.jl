@@ -11,22 +11,13 @@ end
 TinkerforgeBrickletDistanceIRV2DistanceSensorParams(dict::Dict) = params_from_dict(TinkerforgeBrickletDistanceIRV2DistanceSensorParams, dict)
 
 Base.@kwdef mutable struct TinkerforgeBrickletDistanceIRV2DistanceSensor <: Display
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::TinkerforgeBrickletDistanceIRV2DistanceSensorParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  MPIMeasurements.@add_device_fields TinkerforgeBrickletDistanceIRV2DistanceSensorParams
 
   deviceInternal::Union{PyTinkerforge.BrickletDistanceIRV2, Missing} = missing
   ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 end
 
-function init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
+function MPIMeasurements.init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
   @debug "Initializing Tinkerforge distance sensor unit with ID `$(disp.deviceID)`."
 
   disp.ipcon = PyTinkerforge.IPConnection()
@@ -39,8 +30,8 @@ function init(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor)
   movingAverageLength(disp, disp.params.movingAverageLength)
 end
 
-neededDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
-optionalDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
+MPIMeasurements.neededDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
+MPIMeasurements.optionalDependencies(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = []
 Base.close(disp::TinkerforgeBrickletDistanceIRV2DistanceSensor) = PyTinkerforge.disconnect(disp.ipcon)
 isTinkerforgeDevice(::TinkerforgeBrickletDistanceIRV2DistanceSensor) = true
 

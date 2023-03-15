@@ -38,4 +38,3 @@ export progress
 
 include("SimulatedMotor.jl")
 include("SimulatedStepperMotor.jl")
-include("TinkerforgeStepperMotor.jl")
