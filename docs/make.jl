@@ -1,5 +1,6 @@
 using Documenter
 using MPIMeasurements
+using Unitful
 
 makedocs(
     sitename = "MPIMeasurements",

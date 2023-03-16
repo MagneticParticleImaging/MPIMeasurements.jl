@@ -1,5 +1,5 @@
 export IselRobot, IselRobotParams, IselRobotPortParams, IselRobotPoolParams
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
+export simRefZYX
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 export readIOInput, writeIOOutput
@@ -244,8 +244,9 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
 
   tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
   # calclulate the timeout needed to do the full movement
+  minimum(getPositionScannerCoords(rob))
   # TODO: following code can fail for negativ pos values. Pos values should be calclulated as pos minus current posistion
-  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* (maximum(pos)/minimum(rob.params.defaultVel))/Unitful.s)])
+  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* ((maximum(pos)-minimum(getPositionScannerCoords(rob)))/minimum(rob.params.defaultVel))/Unitful.s)])
   rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
   @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
 

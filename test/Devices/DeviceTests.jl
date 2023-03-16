@@ -12,6 +12,7 @@ include("CollisionModule/ColisionModuleTests.jl")
 #include("Robots/RobotTests.jl")
 
 @testset "Devices" begin
+  testScanner = "TestSimpleSimulatedScanner"
   mpiScanner = MPIScanner(testScanner)
   for device in getDevices(mpiScanner, Device)
     deviceTest(device)

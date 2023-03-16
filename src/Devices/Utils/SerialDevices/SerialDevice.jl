@@ -14,7 +14,7 @@ macro add_serial_device_fields(delim, ndatabits=8, parity=SP_PARITY_NONE)
 	end)
 end
 
-function serial_device_splatting(params::DeviceParams) 
+function serial_device_splatting(params::DeviceParams)
 	result = Dict{Symbol,Any}()
 	for field in [:delim_read, :delim_write, :baudrate, :ndatabits, :parity, :nstopbits, :timeout_ms]
 		if hasfield(typeof(params), field)
@@ -46,7 +46,7 @@ mutable struct SerialDevice
 end
 
 function SerialDevice(port::SerialPort, portName::String; delim_read::Union{String, Nothing} = nothing, delim_write::Union{String, Nothing} = nothing, timeout_ms = 1000)
-	return SerialDevice(port, portName, timeout_ms, delim_read, delim_write)	
+	return SerialDevice(port, portName, timeout_ms, delim_read, delim_write)
 end
 
 function SerialDevice(port::String; baudrate::Integer, delim_read::Union{String, Nothing} = nothing, delim_write::Union{String, Nothing} = nothing, timeout_ms = 1000, ndatabits::Integer = 8,
@@ -187,7 +187,7 @@ function query!(sd::SerialDevice, cmd, data::AbstractArray; delimited::Bool=fals
 		send(sd,cmd)
 		if delimited
 			receiveDelimited(sd, data)
-		else 
+		else
 			receive(sd, data)
 		end
 		# Discard remaining data

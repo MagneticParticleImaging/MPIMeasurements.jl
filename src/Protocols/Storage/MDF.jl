@@ -276,7 +276,8 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
 	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
-	MPIFiles.acqOffsetField(mdf, ustrip.(u"T", acqOffsetField(sequence)))
+	offsetField_ = acqOffsetField(sequence)
+	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) ? nothing : ustrip.(u"T", offsetField_))
 	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime)
 
 	# /acquisition/drivefield/ subgroup

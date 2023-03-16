@@ -1,0 +1,25 @@
+name = "MPIMeasurementsTinkerforge"
+uuid = "d675d913-ccd6-4348-b2aa-96021284e7df"
+authors = ["Jonas Schumacher <github735@jonasschumacher.de>"]
+version = "0.1.0"
+
+[deps]
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+MPIMeasurements = "a874a27a-e9a7-503d-98b6-bf61df4bb725"
+PyTinkerforge = "7f8b0ca4-cb0e-484e-9ab2-c46751bbb33a"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[compat]
+DocStringExtensions = "0.8.5"
+MPIMeasurements = "0.3.0"
+PyTinkerforge = "2.1.29"
+Unitful = "1.6"
+julia = "1.7"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Aqua", "Test"]
