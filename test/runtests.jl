@@ -27,6 +27,7 @@ addConfigurationPath(testConfigDir)
     for packageName ∈ packageNames
       basePath = joinpath("..", "subpackages", packageName)
       Pkg.activate(basePath)
+      Pkg.instantiate()
       include(joinpath(basePath, "test", "runtests.jl"))
     end
   end
