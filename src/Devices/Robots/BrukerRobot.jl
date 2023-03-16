@@ -1,9 +1,6 @@
-using Unitful
-
 export BrukerRobot, BrukerRobotParams
 
 export moveCenter, movePark
-
 
 Base.@kwdef struct BrukerRobotParams <: DeviceParams
   connectionName::String = "RobotServer"

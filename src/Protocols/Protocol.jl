@@ -1,6 +1,6 @@
-export  Protocol, ProtocolParams, name, description, scanner, params, add_protocol_fields, runProtocol,
-        init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
-        InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
+export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
+        init, execute, cleanup, timeEstimate, ProtocolEvent,
+        DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, FileStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
@@ -10,6 +10,7 @@ abstract type ProtocolParams end
 export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
 @enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
 
+export @add_protocol_fields
 macro add_protocol_fields(paramType)
   return esc(quote
     name::AbstractString

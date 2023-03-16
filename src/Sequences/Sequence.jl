@@ -195,7 +195,7 @@ hasPeriodicElectricalTxChannels(sequence::Sequence) = length(periodicElectricalT
 export hasAcyclicElectricalTxChannels
 hasAcyclicElectricalTxChannels(sequence::Sequence) = length(acyclicElectricalTxChannels(sequence)) > 0
 
-export hasContinuousElectricalTxChannels
+export hasContinuousElectricalChannels
 hasContinuousElectricalChannels(sequence::Sequence) = any(isContinuous.(electricalTxChannels(sequence)))
 
 export hasStepwiseElectricalChannels

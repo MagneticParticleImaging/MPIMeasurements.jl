@@ -12,22 +12,25 @@ using Unitful
 using TOML
 using ProgressMeter
 using InteractiveUtils
-using Graphics: @mustimplement
 using Mmap
 using Scratch
 using StringEncodings
 using DocStringExtensions
 using MacroTools
+using LibSerialPort
 
 using ReplMaker
 import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
-import Base.write,  Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
+import Base.write, Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
 import Base: ==, isequal, hash, isfile
 
-using Reexport
-@reexport using MPIFiles
+# Reexporting MPIFiles is disliked by Aqua since there are undefined exports. Therefore, I disabled reexporting here.
+#using Reexport
+#@reexport using MPIFiles
+
+using MPIFiles
 import MPIFiles: hasKeyAndValue, 
     acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
     acqNumFrames, acqNumAverages,
@@ -35,7 +38,6 @@ import MPIFiles: hasKeyAndValue,
     rxBandwidth, rxNumChannels, rxNumSamplingPoints
 
 using RedPitayaDAQServer
-import PyTinkerforge
 
 const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
 
@@ -66,11 +68,11 @@ all other fields should have default values.
 """
 abstract type Device end
 
+include("Utils/Mustimplement.jl")
 include("Sequences/Sequence.jl")
 include("Scanner.jl")
 include("Devices/Device.jl")
 include("Utils/Utils.jl")
-
 
 include("Protocols/Storage/MDF.jl") # Defines stuff needed in devices
 include("Protocols/Storage/MeasurementState.jl")

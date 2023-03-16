@@ -16,3 +16,8 @@ port(::TinkerforgeDevice, device::T) where T <:Device = device.params.port
 export uid
 uid(device::T) where T <: Device = isTinkerforgeDevice(device) ? uid(TinkerforgeDevice(), device) : error("`uid` not implemented for device of type $(typeof(device)).")
 uid(::TinkerforgeDevice, device::T) where T <:Device = device.params.uid
+
+include("Display/Display.jl")
+include("ElectricalSource/ElectricalSource.jl")
+include("Motor/TinkerforgeStepperMotor.jl")
+include("Sensors/Sensors.jl")

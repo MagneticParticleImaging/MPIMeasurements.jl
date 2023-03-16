@@ -1,5 +1,5 @@
 export IselRobot, IselRobotParams, IselRobotPortParams, IselRobotPoolParams
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
+export simRefZYX
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 export readIOInput, writeIOOutput

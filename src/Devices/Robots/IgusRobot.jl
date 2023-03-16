@@ -1,6 +1,5 @@
 export IgusRobot, IgusRobotParams
 
-using Sockets
 const SDOObj = @NamedTuple{addr::UInt16, subidx::UInt8, bytes::UInt8}
 
 # available objects defined in D1 (motor controller) handbook section 6.4.13
