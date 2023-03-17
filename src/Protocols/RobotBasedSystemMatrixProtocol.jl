@@ -501,7 +501,21 @@ function handleEvent(protocl::RobotBasedSystemMatrixProtocol, event::ProgressQue
 end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
-  put!(protocol.biChannel, DataAnswerEvent(protocol.systemMeasState.currentSignal, event))
+  data = nothing
+  if event.message == "CURR"
+    data = protocol.systemMeasState.currentSignal
+  elseif event.message == "BG"
+    sysObj = protocol.systemMeasState
+    index = sysObj.currPos
+    while index > 1 && !sysObj.measIsBGPos[index]
+      index = index - 1
+    end
+    startIdx = sysObj.posToIdx[index]
+    data = copy(sysObj.signals[:, :, :, startIdx:startIdx])
+  else
+    put!(protocol.biChannel, UnknownDataQueryEvent(event))
+  end
+  put!(protocol.biChannel, DataAnswerEvent(data, event))
 end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
