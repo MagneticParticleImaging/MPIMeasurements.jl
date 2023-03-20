@@ -277,8 +277,8 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
 	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
 	offsetField_ = acqOffsetField(sequence)
-	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) ? nothing : ustrip.(u"T", offsetField_))
-	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime)
+	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) || !all(x-> x isa Unitful.MagneticFlux, offsetField_) ? nothing : ustrip.(u"T", offsetField_))
+	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime) # TODO as parameter, start time from protocol
 
 	# /acquisition/drivefield/ subgroup
 	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))

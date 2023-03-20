@@ -7,8 +7,8 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   channels::Dict{String, DAQChannelParams}
   "IPs of the Red Pitayas"
   ips::Vector{String}
-  "Trigger mode of the Red Pitayas. Default: `EXTERNAL`."
-  triggerMode::RedPitayaDAQServer.TriggerMode = EXTERNAL
+  "Trigger mode of the Red Pitayas. Default: `ALL_INTERNAL`."
+  triggerMode::RedPitayaDAQServer.ClusterTriggerSetup = ALL_INTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
@@ -111,7 +111,7 @@ end
 function _init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
-    daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
   catch e
     if hasDependency(daq, SurveillanceUnit)
       su = dependency(daq, SurveillanceUnit)
@@ -134,7 +134,6 @@ function _init(daq::RedPitayaDAQ)
     masterTrigger!(daq.rpc, false)
     serverMode!(daq.rpc, CONFIGURATION)
   end
-  triggerMode!(daq.rpc, string(daq.params.triggerMode))
 
   daq.present = true
 end
