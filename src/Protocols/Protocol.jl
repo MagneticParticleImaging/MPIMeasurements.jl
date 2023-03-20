@@ -1,4 +1,4 @@
-export  Protocol, ProtocolParams, name, description, scanner, params, runProtocol,
+export  Protocol, ProtocolParams, name, description, scanner, params,
         init, execute, cleanup, timeEstimate, ProtocolEvent,
         DecisionEvent, AnswerEvent, StopEvent, PauseEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
