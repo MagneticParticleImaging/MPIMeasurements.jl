@@ -510,7 +510,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControl
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
+    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode=daq.params.triggerMode)
     if serverMode(daq.rpc) == ACQUISITION
       for ch in daq.rampingChannel
         enableRampDown!(daq.rpc, ch, true)
@@ -696,12 +696,13 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
-function startTx(daq::RedPitayaDAQ, isControlStep=false)
+function startTx(daq::RedPitayaDAQ; isControlStep=false)
   if usesCounterTrigger(daq) && !isControlStep
     counterTrigger_enabled!(daq.rpc, true)
     counterTrigger_referenceCounter!(daq.rpc, daq.referenceCounter)
     counterTrigger_presamples!(daq.rpc, daq.presamples)
   else
+    @warn "Disabled counter trigger" usesCounterTrigger(daq) isControlStep
     counterTrigger_enabled!(daq.rpc, false)
   end
 

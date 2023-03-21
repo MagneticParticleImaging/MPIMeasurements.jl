@@ -407,14 +407,7 @@ function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_couplin
   else
     β = diagm(diag(Γ))*inv(diagm(diag(κ)))
   end
-
-  @warn "control debug"
-  show(stdout, "text/plain", Γ)
-  show(stdout, "text/plain", Ω)
-  show(stdout, "text/plain", κ)
-  show(stdout, "text/plain", β)
-
-
+  
   newTx = inv(β)*Ω
   @debug "Last matrix:" κ
   @debug "Ref matrix" Γ

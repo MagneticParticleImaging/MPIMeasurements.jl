@@ -199,13 +199,13 @@ calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelI
 
 
 #### Measurement Related Functions ####
-@mustimplement startProducer(channel::Channel, daq::AbstractDAQ, numFrames, isControlStep)
+@mustimplement startProducer(channel::Channel, daq::AbstractDAQ, numFrames; isControlStep)
 @mustimplement channelType(daq::AbstractDAQ) # What is written to the channel
 @mustimplement AsyncBuffer(buffer::StorageBuffer, daq::AbstractDAQ) # Buffer structure that contains channel elements
 @mustimplement push!(buffer::AsyncBuffer, chunk) # Adds channel element to buffer
 @mustimplement retrieveMeasAndRef!(buffer::AsyncBuffer, daq::AbstractDAQ) # Retrieve all available measurement and reference frames from the buffer
 
-function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence, isControlStep=false)
+function asyncProducer(channel::Channel, daq::AbstractDAQ, sequence::Sequence; isControlStep=false)
   numFrames = acqNumFrames(sequence) * acqNumFrameAverages(sequence)
   endSample = startProducer(channel, daq, numFrames, isControlStep=isControlStep)
   return endSample
