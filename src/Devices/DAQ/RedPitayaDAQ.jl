@@ -13,6 +13,8 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
+  "Flag for using the counter trigger"
+  useCounterTrigger::Bool = false
   "Source type of the counter trigger"
   counterTriggerSourceType::CounterTriggerSourceType =  COUNTER_TRIGGER_DIO
   "DIO pin used for the counter trigger"
@@ -111,8 +113,6 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumFrameAverages::Int = 1
   acqNumAverages::Int = 1
 
-  "Flag for using the counter trigger"
-  useCounterTrigger::Bool = false
   "Reference counter for the counter trigger"
   referenceCounter::Integer = 0
   "Samples prior to acquisition for the counter trigger"
@@ -162,6 +162,29 @@ optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
 
+export enableCounterTrigger!
+enableCounterTrigger!(daq::RedPitayaDAQ) = daq.useCounterTrigger = true
+
+export disableCounterTrigger!
+disableCounterTrigger!(daq::RedPitayaDAQ) = daq.useCounterTrigger = true
+
+export usesCounterTrigger
+usesCounterTrigger(daq::RedPitayaDAQ) = daq.useCounterTrigger
+
+export referenceCounter
+referenceCounter(daq::RedPitayaDAQ) = daq.referenceCounter
+
+export referenceCounter!
+referenceCounter!(daq::RedPitayaDAQ, referenceCounter) = daq.referenceCounter = referenceCounter
+
+export presamples
+presamples(daq::RedPitayaDAQ) = daq.presamples
+
+export presamples!
+presamples!(daq::RedPitayaDAQ, presamples) = daq.presamples = presamples
+
+export counterTrigger_lastCounter
+counterTrigger_lastCounter(daq::RedPitayaDAQ) = counterTrigger_lastCounter(daq.rpc)
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
