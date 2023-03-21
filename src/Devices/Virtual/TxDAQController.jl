@@ -202,7 +202,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
-        endSample = asyncProducer(channel, daq, control.currSequence)
+        endSample = asyncProducer(channel, daq, control.currSequence, isControlStep=true)
         endSequence(daq, endSample)
       end
       bind(channel, producer)
@@ -221,6 +221,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Evaluating control step"
       uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1]
       if !isnothing(uRef)
+        @warn uRef
         controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone
           @info "Could control"
@@ -404,8 +405,16 @@ function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_couplin
   if correct_coupling
     β = Γ*inv(κ)
   else
-    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+    β = diagm(diag(Γ))*inv(diagm(diag(κ)))
   end
+
+  @warn "control debug"
+  show(stdout, "text/plain", Γ)
+  show(stdout, "text/plain", Ω)
+  show(stdout, "text/plain", κ)
+  show(stdout, "text/plain", β)
+
+
   newTx = inv(β)*Ω
   @debug "Last matrix:" κ
   @debug "Ref matrix" Γ

@@ -12,3 +12,6 @@ end
 
 # I only add this here until https://github.com/JuliaLang/julia/pull/42272 is decided.
 Base.convert(::Type{IPAddr}, str::AbstractString) = parse(IPAddr, str)
+
+# TODO: Remove this type piracy
+Base.convert(::Type{ClusterTriggerSetup}, str::AbstractString) = stringToEnum(str, ClusterTriggerSetup)

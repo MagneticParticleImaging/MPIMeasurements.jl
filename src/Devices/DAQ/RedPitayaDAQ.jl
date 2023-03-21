@@ -146,11 +146,11 @@ function _init(daq::RedPitayaDAQ)
     serverMode!(daq.rpc, CONFIGURATION)
   end
 
-  if daq.useCounterTrigger
+  if usesCounterTrigger(daq)
     counterTrigger_reset!(daq.rpc)
     counterTrigger_sourceType!(daq.rpc, daq.params.counterTriggerSourceType)
     counterTrigger_sourceChannel!(daq.rpc, daq.params.counterTriggerSourceChannel)
-    DIODirection!(daq.rpc, daq.params.counterTriggerSourceChannel, DIO_IN)
+    DIODirection!(master(daq.rpc), daq.params.counterTriggerSourceChannel, DIO_IN)
     counterTrigger_enabled!(daq.rpc, true)
   end
 
@@ -162,14 +162,8 @@ optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
 
-export enableCounterTrigger!
-enableCounterTrigger!(daq::RedPitayaDAQ) = daq.useCounterTrigger = true
-
-export disableCounterTrigger!
-disableCounterTrigger!(daq::RedPitayaDAQ) = daq.useCounterTrigger = true
-
 export usesCounterTrigger
-usesCounterTrigger(daq::RedPitayaDAQ) = daq.useCounterTrigger
+usesCounterTrigger(daq::RedPitayaDAQ) = daq.params.useCounterTrigger
 
 export referenceCounter
 referenceCounter(daq::RedPitayaDAQ) = daq.referenceCounter
@@ -184,7 +178,7 @@ export presamples!
 presamples!(daq::RedPitayaDAQ, presamples) = daq.presamples = presamples
 
 export counterTrigger_lastCounter
-counterTrigger_lastCounter(daq::RedPitayaDAQ) = counterTrigger_lastCounter(daq.rpc)
+counterTrigger_lastCounter(daq::RedPitayaDAQ) = RedPitayaDAQServer.counterTrigger_lastCounter(daq.rpc)
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
@@ -491,13 +485,13 @@ function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
   return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
 end
 
-function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
+function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControlStep=false)
   # TODO How to signal end of sequences without any LUTs
   timing = nothing
   if !isnothing(daq.acqSeq)
     timing = getTiming(daq)
   end
-  startTx(daq)
+  startTx(daq, isControlStep=isControlStep)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   startSample = timing.start
@@ -702,10 +696,11 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
-function startTx(daq::RedPitayaDAQ)
-  if daq.useCounterTrigger
-    counterTrigger_referenceCounter!(rp, daq.referenceCounter)
-    counterTrigger_presamples!(rp, daq.presamples)
+function startTx(daq::RedPitayaDAQ, isControlStep=false)
+  if usesCounterTrigger(daq) && !isControlStep
+    counterTrigger_enabled!(daq.rpc, true)
+    counterTrigger_referenceCounter!(daq.rpc, daq.referenceCounter)
+    counterTrigger_presamples!(daq.rpc, daq.presamples)
   else
     counterTrigger_enabled!(daq.rpc, false)
   end
@@ -713,8 +708,8 @@ function startTx(daq::RedPitayaDAQ)
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
 
-  if daq.useCounterTrigger
-    counterTrigger_arm!(rp)
+  if usesCounterTrigger(daq) && !isControlStep
+    counterTrigger_arm!(daq.rpc)
   end
 
   @debug "Started tx"
