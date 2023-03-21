@@ -3,8 +3,8 @@ import Base: convert
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient, scannerDatasetStore,
        name, configDir, generalParams, getDevice, getDevices, getSequenceList,
-       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
-       getProtocolList, setProtocol, getTransferFunctionList
+       asyncMeasurement, SequenceMeasState, asyncProducer,
+       getProtocolList, getTransferFunctionList
 
 """
     $(SIGNATURES)

@@ -155,7 +155,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   # Prepare and check channel under control
   daq = dependency(txCont, AbstractDAQ)
   
-
   Ω = calcDesiredField(control)
   txCont.cont = control
 
@@ -404,7 +403,7 @@ end
 function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_coupling::Bool = false)
   if correct_coupling
     β = Γ*inv(κ)
-  else 
+  else
     β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
   end
   newTx = inv(β)*Ω

@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 export Amplifier, AmplifierMode, AMP_VOLTAGE_MODE, AMP_CURRENT_MODE, AmplifierVoltageMode,
        AMP_HIGH_VOLTAGE_MODE, AMP_LOW_VOLTAGE_MODE, getAmplifiers, getAmplifier, state,
        turnOn, turnOff, mode, voltageMode, matchingNetwork, temperature, toCurrentMode,

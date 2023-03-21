@@ -5,9 +5,6 @@ include("ArduinoTemperatureSensor.jl")
 include("DummyTemperatureSensor.jl")
 #include("FOTemp.jl")
 include("SimulatedTemperatureSensor.jl")
-include("TinkerforgeBrickletIndustrialPTCSensor.jl")
-include("TinkerforgeBrickletPTCSensor.jl")
-include("TinkerforgeBrickletPTCV2Sensor.jl")
 
 Base.close(t::TemperatureSensor) = nothing
 

@@ -1,5 +1,5 @@
 export SimulationControllerParams, SimulationController, getSimulationControllers,
-       getSimulationController, getSimulatedCoilTemperatures
+       getSimulationController
 
 Base.@kwdef struct SimulationControllerParams <: DeviceParams
   "Initial coil temperatures mapped by the tx channel IDs."

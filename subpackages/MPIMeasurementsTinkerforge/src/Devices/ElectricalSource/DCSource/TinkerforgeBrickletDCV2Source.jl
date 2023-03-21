@@ -11,22 +11,13 @@ end
 TinkerforgeBrickletDCV2SourceParams(dict::Dict) = params_from_dict(TinkerforgeBrickletDCV2SourceParams, dict)
 
 Base.@kwdef mutable struct TinkerforgeBrickletDCV2Source <: Display
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::TinkerforgeBrickletDCV2SourceParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String, Union{Device, Missing}}
+  MPIMeasurements.@add_device_fields TinkerforgeBrickletDCV2SourceParams
 
   deviceInternal::Union{PyTinkerforge.BrickletDCV2, Missing} = missing
   ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
 end
 
-function init(source::TinkerforgeBrickletDCV2Source)
+function MPIMeasurements.init(source::TinkerforgeBrickletDCV2Source)
   @debug "Initializing Tinkerforge DC source unit with ID `$(disp.deviceID)`."
 
   source.ipcon = PyTinkerforge.IPConnection()
@@ -40,8 +31,8 @@ function init(source::TinkerforgeBrickletDCV2Source)
   return
 end
 
-neededDependencies(::TinkerforgeBrickletDCV2Source) = []
-optionalDependencies(::TinkerforgeBrickletDCV2Source) = []
+MPIMeasurements.neededDependencies(::TinkerforgeBrickletDCV2Source) = []
+MPIMeasurements.optionalDependencies(::TinkerforgeBrickletDCV2Source) = []
 Base.close(source::TinkerforgeBrickletDCV2Source) = PyTinkerforge.disconnect(source.ipcon)
 isTinkerforgeDevice(::TinkerforgeBrickletDCV2Source) = true
 

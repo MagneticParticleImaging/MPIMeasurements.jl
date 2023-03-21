@@ -39,10 +39,10 @@ function convert(::Type{TinkerforgeStepResolution}, x::Integer)
 end
 
 export enable
-@mustimplement enable(motor::TinkerforgeStepperMotor)
+MPIMeasurements.@mustimplement enable(motor::TinkerforgeStepperMotor)
 
 export disable
-@mustimplement disable(motor::TinkerforgeStepperMotor)
+MPIMeasurements.@mustimplement disable(motor::TinkerforgeStepperMotor)
 
 # Note: This is commented out because I am not sure how to handle the callback. Using a global variable would only work with one device.
 # function allDataCallback(current_velocity, current_position, remaining_step, stack_voltage, external_voltage,
