@@ -702,7 +702,6 @@ function startTx(daq::RedPitayaDAQ; isControlStep=false)
     counterTrigger_referenceCounter!(daq.rpc, daq.referenceCounter)
     counterTrigger_presamples!(daq.rpc, daq.presamples)
   else
-    @warn "Disabled counter trigger" usesCounterTrigger(daq) isControlStep
     counterTrigger_enabled!(daq.rpc, false)
   end
 
@@ -710,6 +709,7 @@ function startTx(daq::RedPitayaDAQ; isControlStep=false)
   masterTrigger!(daq.rpc, true)
 
   if usesCounterTrigger(daq) && !isControlStep
+    @info "Arming trigger"
     counterTrigger_arm!(daq.rpc)
   end
 

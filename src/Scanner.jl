@@ -51,7 +51,6 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
 
   # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
-    @info "Initializing device with id `$deviceID`."
     params = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]

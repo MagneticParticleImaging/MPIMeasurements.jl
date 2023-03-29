@@ -221,7 +221,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Evaluating control step"
       uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1]
       if !isnothing(uRef)
-        @warn uRef
         controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone
           @info "Could control"
