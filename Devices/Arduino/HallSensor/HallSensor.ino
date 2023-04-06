@@ -8,7 +8,7 @@
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
 int sample_size = 1000;
-
+bool fast_mode_on = false;
 // Communication
 #define INPUT_BUFFER_SIZE 3000
 #define VALUE_BUFFER_SIZE 1024
@@ -23,6 +23,7 @@ int getTemp(char *);
 int getVersion(char *);
 int getCommands(char *);
 int setSampleSize(char *);
+int setFastMode(char *);
 
 typedef struct
 {
@@ -36,7 +37,8 @@ commandHandler_t cmdHandler[] = {
     {"TEMP", getTemp},
     {"VERSION", getVersion},
     {"COMMANDS", getCommands},
-    {"SAMPLES", setSampleSize}};
+    {"SAMPLES", setSampleSize},
+    {"FASTMODE", setFastMode}};
 
 int getCommands(char *)
 {
@@ -47,7 +49,8 @@ int getCommands(char *)
   Serial.print("'!TEMP*#' ");
   Serial.print("'!COMMANDS*#' ");
   Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
-  Serial.println("#");
+  Serial.print("'!FASTMODE*#x =1|0'")
+      Serial.println("#");
 }
 
 bool updateBufferUntilDelim(char delim)
@@ -172,60 +175,90 @@ int getData(char *)
 
   // calculating mean values Mean =sum(x[i])/sample_size
   // measurement is stored for calculating the variance in a second go
-  for (int i = 0; i < sample_size * 3; i += 3)
+  if fast_mode_on
   {
-    sensor.updateData();
-    start = millis();
-
-    x = sensor.getRawX();
-    y = sensor.getRawY();
-    z = sensor.getRawZ();
-
-    value_buffer[i] = x;
-    value_buffer[i + 1] = y;
-    value_buffer[i + 2] = z;
-
-    sumX += x;
-    sumY += y;
-    sumZ += z;
-
-    // waiting until new data is ready in the sensor
-    end = millis();
-    if (end - start < MEASDELAY)
+    for (int i = 0; i < sample_size * 3; i += 3)
     {
-      delay(MEASDELAY - (end - start));
+      sensor.updateData();
+      start = millis();
+
+      x = sensor.getRawX();
+      y = sensor.getRawY();
+      z = sensor.getRawZ();
+
+      sumX += x;
+      sumY += y;
+      sumZ += z;
+
+      // waiting until new data is ready in the sensor
+      end = millis();
+      if (end - start < MEASDELAY)
+      {
+        delay(MEASDELAY - (end - start));
+      }
+    }
+  }
+  else
+  {
+    for (int i = 0; i < sample_size * 3; i += 3)
+    {
+      sensor.updateData();
+      start = millis();
+
+      x = sensor.getRawX();
+      y = sensor.getRawY();
+      z = sensor.getRawZ();
+
+      value_buffer[i] = x;
+      value_buffer[i + 1] = y;
+      value_buffer[i + 2] = z;
+
+      sumX += x;
+      sumY += y;
+      sumZ += z;
+
+      // waiting until new data is ready in the sensor
+      end = millis();
+      if (end - start < MEASDELAY)
+      {
+        delay(MEASDELAY - (end - start));
+      }
     }
   }
   meanX = (float)sumX / sample_size;
   meanY = (float)sumY / sample_size;
   meanZ = (float)sumZ / sample_size;
 
-  // calculating var var(x) = sum((x[i]-x_mean)^2)/(sample_size-1)
-  // for sample_size = 1 the variance is zero
-  if (sample_size > 1)
-  {
-    for (int i = 0; i < sample_size * 3; i += 3)
-    {
-      sumXX += ((float)value_buffer[i] - meanX) * ((float)value_buffer[i] - meanX);
-      sumYY += ((float)value_buffer[i + 1] - meanY) * ((float)value_buffer[i + 1] - meanY);
-      sumZZ += ((float)value_buffer[i + 2] - meanZ) * ((float)value_buffer[i + 2] - meanZ);
-    }
-
-    varX = sumXX / (sample_size - 1);
-    varY = sumYY / (sample_size - 1);
-    varZ = sumZZ / (sample_size - 1);
-  }
   Serial.print(meanX, 7);
   Serial.print(",");
   Serial.print(meanY, 7);
   Serial.print(",");
   Serial.print(meanZ, 7);
-  Serial.print(",");
-  Serial.print(varX, 7);
-  Serial.print(",");
-  Serial.print(varY, 7);
-  Serial.print(",");
-  Serial.print(varZ, 7);
+
+  if !fast_mode_on
+  {
+    // calculating var var(x) = sum((x[i]-x_mean)^2)/(sample_size-1)
+    // for sample_size = 1 the variance is zero
+    if (sample_size > 1)
+    {
+      for (int i = 0; i < sample_size * 3; i += 3)
+      {
+        sumXX += ((float)value_buffer[i] - meanX) * ((float)value_buffer[i] - meanX);
+        sumYY += ((float)value_buffer[i + 1] - meanY) * ((float)value_buffer[i + 1] - meanY);
+        sumZZ += ((float)value_buffer[i + 2] - meanZ) * ((float)value_buffer[i + 2] - meanZ);
+      }
+
+      varX = sumXX / (sample_size - 1);
+      varY = sumYY / (sample_size - 1);
+      varZ = sumZZ / (sample_size - 1);
+    }
+    Serial.print(",");
+    Serial.print(varX, 7);
+    Serial.print(",");
+    Serial.print(varY, 7);
+    Serial.print(",");
+    Serial.print(varZ, 7);
+  }
   Serial.println("#");
   Serial.flush();
 }
@@ -257,12 +290,30 @@ int getVersion(char *)
 
 int setSampleSize(char *command)
 {
-  int value_int = atoi(command + 7); 
+  int value_int = atoi(command + 7);
   if (value_int > 0 && value_int <= VALUE_BUFFER_SIZE)
   {
     sample_size = value_int;
   }
   Serial.print(sample_size);
+  Serial.println("#");
+}
+
+int SetFastMode(char *command)
+{
+  int value_int = atoi(command+5)
+  if ( value_int ==0){
+    fast_mode_on = false;
+  }
+  else if(value_int == 1){
+    fast_mode_on = true;
+  }
+  else{
+    Serial.print("value must be 0 or 1");
+    Serial.println("#"); 
+    return
+  }
+  Serial.print(fast_mode_on);
   Serial.println("#");
 }
 

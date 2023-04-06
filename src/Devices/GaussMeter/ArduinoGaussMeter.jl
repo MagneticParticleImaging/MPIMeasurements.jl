@@ -10,6 +10,7 @@ Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration = Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
+  fastModeOn::Bool
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
@@ -24,6 +25,7 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration::Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
+  fastModeOn::Bool
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -50,6 +52,7 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   sampleSize::Int = 0
   measdelay = 1000
   measurementTriggered::Bool = false
+  fastModeOn:: Bool = false
 end
 
 neededDependencies(::ArduinoGaussMeter) = []
@@ -61,8 +64,9 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gauss.measdelay = parse(Int64,query(sd, "!DELAY*"))
+  gauss.measdelay = parse(Int64, query(sd, "!DELAY*"))
   setSampleSize(gauss, params.sampleSize)
+  setFast(gauss,params.fastModeOn)
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -123,7 +127,7 @@ end
 function triggerMeasurment(gauss::ArduinoGaussMeter)
   if gauss.measurementTriggered
     throw("measurement already triggered")
-  end 
+  end
   sendCommand(gauss.ard, "DATA")
   gauss.measurementTriggered = true
 end
@@ -144,7 +148,7 @@ function receive(gauss::ArduinoGaussMeter)
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay* 1.2) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 1.2) + 1)
     set_timeout(gauss.ard, timeout_ms)
     try
       data_strings = split(receive(gauss.ard), ",")
@@ -210,6 +214,14 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   gauss.sampleSize = updatedSampleSize
   return updatedSampleSize
 end
+
+function setFast(gauss:ArduinoGaussMeter, on::Bool)
+  data_string = queryCommand(gauss.ard, "FAST" * string(Int(on)))
+  updatedSampleSize = parse(Bool, data_string)
+  gauss.FastModeOn = updatedSampleSize
+  return gauss.FastModeOn
+end
+
 
 function getSampleSize(gauss::ArduinoGaussMeter)
   return gauss.sampleSize
