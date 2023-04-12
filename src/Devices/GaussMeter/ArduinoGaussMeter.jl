@@ -84,7 +84,7 @@ end
 function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HALLSENS:3"))
+    if !(startswith(reply, "HALLSENS:4"))
       close(sd)
       throw(ScannerConfigurationError(string("Connected to wrong Device", reply)))
     end
@@ -215,11 +215,20 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   return updatedSampleSize
 end
 
-function setFast(gauss:ArduinoGaussMeter, on::Bool)
-  data_string = queryCommand(gauss.ard, "FAST" * string(Int(on)))
-  updatedSampleSize = parse(Bool, data_string)
-  gauss.FastModeOn = updatedSampleSize
-  return gauss.FastModeOn
+function setFast(gauss::ArduinoGaussMeter, fastModeOn::Bool)
+  data_string = queryCommand(gauss.ard, "FASTMODE" * string(Int(fastModeOn)))
+  @info(fastModeOn)
+  @info(data_string)
+  updatedFastMode = parse(Int, data_string)
+  println(updatedFastMode)
+  println(typeof(updatedFastMode))
+  println(updatedFastMode != fastModeOn)
+  if updatedFastMode != fastModeOn
+    throw(error("FastMode not set right"))
+  end
+  gauss.fastModeOn = updatedFastMode
+
+  return gauss.fastModeOn
 end
 
 

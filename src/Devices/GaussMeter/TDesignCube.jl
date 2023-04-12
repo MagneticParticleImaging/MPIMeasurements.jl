@@ -5,6 +5,7 @@ Base.@kwdef struct TDesignCubeParams <: DeviceParams
     N::Int64
     radius::typeof(1.0u"mm") = 0.0u"mm"
     sampleSize:: Int64 = 100
+    fastModeOn:: Bool = false
 end
 TDesignCubeParams(dict::Dict) = params_from_dict(TDesignCubeParams, dict)
 
@@ -20,6 +21,7 @@ optionalDependencies(::TDesignCube) = []
 
 function _init(cube::TDesignCube)
     sampleSize = cube.params.sampleSize
+    fastModeOn = cube.params.fastModeOn
     sensors = dependencies(cube, ArduinoGaussMeter)
     if length(sensors) != cube.params.N
         close.(sensors) # TODO @NH Should not close devices here
@@ -27,7 +29,8 @@ function _init(cube::TDesignCube)
     end
     sort!(sensors,by=x-> x.params.position)
     cube.sensors = sensors
-    setSampleSize(cube,cube.sampleSize)
+    setSampleSize(cube,sampleSize)
+    setFast(cube,fastModeOn)
 end
 
 export setSampleSize
@@ -39,6 +42,17 @@ function setSampleSize(cube::TDesignCube,sampleSize::Int)
         end
     end
     cube.sampleSize = sampleSize
+end
+
+export setFast
+function setFast(cube::TDesignCube,fastModeOn::Bool)
+    for sensor in cube.sensors
+        returnFastModeOn = setFast(sensor,fastModeOn)
+        if returnFastModeOn != fastModeOn
+            throw("sensors coud not be updated") 
+        end
+    end
+    cube.sampleSize = fastModeOn
 end
 
 export getSampleSize

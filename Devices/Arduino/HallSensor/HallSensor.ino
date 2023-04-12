@@ -1,5 +1,5 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "3.0"
+#define VERSION "4.0"
 #define BAUDRATE 9600
 #define MEASDELAY 2
 
@@ -49,8 +49,8 @@ int getCommands(char *)
   Serial.print("'!TEMP*#' ");
   Serial.print("'!COMMANDS*#' ");
   Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
-  Serial.print("'!FASTMODE*#x =1|0'")
-      Serial.println("#");
+  Serial.print("'!FASTMODEx*# x =1|0'");
+  Serial.println("#");
 }
 
 bool updateBufferUntilDelim(char delim)
@@ -175,7 +175,7 @@ int getData(char *)
 
   // calculating mean values Mean =sum(x[i])/sample_size
   // measurement is stored for calculating the variance in a second go
-  if fast_mode_on
+  if (fast_mode_on)
   {
     for (int i = 0; i < sample_size * 3; i += 3)
     {
@@ -235,7 +235,7 @@ int getData(char *)
   Serial.print(",");
   Serial.print(meanZ, 7);
 
-  if !fast_mode_on
+  if (!fast_mode_on)
   {
     // calculating var var(x) = sum((x[i]-x_mean)^2)/(sample_size-1)
     // for sample_size = 1 the variance is zero
@@ -297,24 +297,30 @@ int setSampleSize(char *command)
   }
   Serial.print(sample_size);
   Serial.println("#");
+  Serial.flush();
 }
 
-int SetFastMode(char *command)
+int setFastMode(char *command)
 {
-  int value_int = atoi(command+5)
-  if ( value_int ==0){
+  int value_int = atoi(command + 8);
+  if (value_int == 0)
+  {
     fast_mode_on = false;
   }
-  else if(value_int == 1){
+  else if (value_int == 1)
+  {
     fast_mode_on = true;
   }
-  else{
+  else
+  {
     Serial.print("value must be 0 or 1");
-    Serial.println("#"); 
-    return
+    Serial.println("#");
+    Serial.flush();
+    return 0;
   }
   Serial.print(fast_mode_on);
   Serial.println("#");
+  Serial.flush();
 }
 
 void loop()
