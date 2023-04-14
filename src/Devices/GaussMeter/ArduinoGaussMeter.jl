@@ -19,7 +19,7 @@ ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDi
 
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
-  position::Int64 = 1
+  position::Vector{Float64} = [0.0, 0.0, 0.0]
   calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3)) * 0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
