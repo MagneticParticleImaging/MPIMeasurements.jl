@@ -112,6 +112,12 @@ function getXYZValues(gauss::LakeShore460GaussMeter)
   return gauss.params.coordinateTransformation*(field.*multipliers)*Unitful.T
 end
 
+function getXYZValues(gauss::LakeShore460GaussMeter, analog::Array{4, Float64})
+	# Samples, channel, periods/patches, frames
+	# Average or median of patch -> map to x, y, z
+	# return result
+end
+
 function getField(gauss::LakeShore460GaussMeter)
 	field = "OL"
     while occursin("OL",field)

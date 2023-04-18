@@ -1,6 +1,9 @@
-export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement
+export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement, TDesignMeasurementMode, STATIC_DIGITAL, STATIC_ANALOG, DYNAMIC_DAQ
+
+@enum TDesignMeasurementMode STATIC_DIGITAL STATIC_ANALOG DYNAMIC_DAQ
 
 Base.@kwdef mutable struct RobotBasedTDesignFieldProtocolParams <: RobotBasedProtocolParams
+  mode::TDesignMeasurementMode
   sequence::Union{Sequence, Nothing} = nothing
   radius::typeof(1.0u"mm") = 0.0u"mm"
   center::ScannerCoords = ScannerCoords([0.0u"mm", 0.0u"mm", 0.0u"mm"])
@@ -28,7 +31,7 @@ Base.@kwdef mutable struct RobotBasedTDesignFieldProtocol <: RobotBasedProtocol
   restored::Bool = false
   finishAcknowledged::Bool = false
 
-  measurement::Union{Matrix{Float64}, Nothing} = nothing
+  measurement::Union{Array{4, Float64}, Nothing} = nothing
   tDesign::Union{SphericalTDesign, Nothing} = nothing
   positions::Union{Vector{ScannerCoords}, Nothing} = nothing
   indices::Union{Vector{Int64}, Nothing} = nothing
@@ -46,7 +49,24 @@ function _init(protocol::RobotBasedTDesignFieldProtocol)
   (pos, indices) = sortPositions(protocol, protocol.tDesign)
   protocol.positions = pos
   protocol.indices = indices
-  protocol.measurement = zeros(Float64, 3, length(protocol.tDesign))
+  protocol.measurement = prepareMeasurementBuffer(protocol) 
+  zeros(Float64, 3, length(protocol.tDesign))
+end
+
+function prepareMeasurementBuffer(protocol)
+  # Samples x Channel (xyz) x Points x Patches
+  if protocol.params.mode == STATIC_DIGITAL
+    if acqNumPatches(protocol.params.sequence) > 1
+      throw(IllegalStateException("STATIC_DIGITAL TDesign measurement cannot handle multiple patches"))
+    end
+    return zeros(Float64, 1, 3, length(protocol.tDesign), 1)
+  elseif protocol.params.mode == STATIC_ANALOG
+    return zeros(Float64, 1, 3, length(protocol.tDesign), acqNumPatches(protocol.params.sequence))
+  elseif protocol.params.mode == DYNAMIC_DAQ
+     return zeros(Float64, rxNumSamplingPoints(protocol.params.sequence), rxChannels(protocol.params.sequence), length(protocol.tDesign), acqNumPatches(protocol.params.sequence))
+  else
+    throw(IllegalStateException("$(protocol.params.mode) is not yet implemented"))
+  end
 end
 
 function sortPositions(protocol::RobotBasedTDesignFieldProtocol, tDesign::SphericalTDesign)
@@ -55,6 +75,7 @@ function sortPositions(protocol::RobotBasedTDesignFieldProtocol, tDesign::Spheri
   return sortPositions(tDesign, current)
 end
 
+# TODO move to MPIFiles.Positions
 function sortPositions(tDesign::SphericalTDesign, start)
   current = start
   tempPositions = collect(tDesign)
@@ -179,10 +200,23 @@ function stopMeasurement(protocol::RobotBasedTDesignFieldProtocol)
 end
 
 function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
-  daq = getDAQ(protocol.scanner)
   startMeasurement(protocol)
+
+  finalizer = nothing
+  if protocol.params.mode == STATIC_DIGITAL
+    finalizer = performStaticDigitalMeasurement(protocol)
+  elseif protocol.params.mode == STATIC_ANALOG
+    finalizer = performStaticAnalaogMeasurement(protocol)
+  elseif protocol.params.mode == DYNAMIC_DAQ
+    finalizer = performDynamicDAQMeasurement(protocol)
+  else
+    throw(IllegalStateException("$(protocol.params.mode) is not yet implemented"))
+  end
+  protocol.finalizer = finalizer
+end
+
+function performStaticDigitalMeasurement(protocol::RobotBasedTDesignFieldProtocol)
   gaussmeter = getGaussMeter(scanner(protocol))
-  
   field = getXYZValues(protocol, gaussmeter)
   timing = getTiming(daq)
   current = currentWP(daq.rpc)
@@ -190,12 +224,27 @@ function performMeasurement(protocol::RobotBasedTDesignFieldProtocol)
     @warn current
     @warn "Magnetic field was measured too late"
   end
-  protocol.finalizer = @tspawnat protocol.scanner.generalParams.consumerThreadID finishMeasurement(protocol, gaussmeter, field, protocol.currPos)
+  return @tspawnat protocol.scanner.generalParams.consumerThreadID finishMeasurement(protocol, gaussmeter, field, protocol.currPos)
 end
+
+function performStaticDigitalMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  gaussmeter = getGaussMeter(scanner(protocol))
+  fields = performDAQMeasurement(protocol)
+  fields = getXYZValues(gaussmeter, fields)
+  protocol.measurement[1, :, protocol.indices[index], : ] = ustrip.(u"T", fields)
+  return @tspawnat protocol.scanner.generalParams.consumerThreadID stopMeasurement(protocol)
+end
+
+function performDynamicDAQMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  fields = performDAQMeasurement(protocol)
+  protocol.measurement[:, :, protocol.indices[index], :] = fields[:, :, :, 1] 
+  return @tspawnat protocol.scanner.generalParams.consumerThreadID stopMeasurement(protocol)
+end
+
 
 getXYZValues(::RobotBasedTDesignFieldProtocol, gauss::GaussMeter) = getXYZValues(gauss)
 function finishMeasurement(protocol::RobotBasedTDesignFieldProtocol, ::GaussMeter, field, index::Int64)
-  protocol.measurement[:, protocol.indices[index]] = ustrip.(u"T", field)
+  protocol.measurement[1, :, protocol.indices[index], :] = ustrip.(u"T", field)
   stopMeasurement(protocol)
 end
 
@@ -210,6 +259,65 @@ function finishMeasurement(protocol::RobotBasedTDesignFieldProtocol, gauss::Lake
     @async stopMeasurement(protocol)
   end
 end
+
+function performDAQMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  measState = asyncMeasurement(protocol)
+  producer = measState.producer
+  consumer = measState.consumer
+
+  # Handle events
+  while !istaskdone(consumer)
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
+  end
+
+  # Check tasks
+  ex = nothing
+  if Base.istaskfailed(producer)
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
+  end
+  if Base.istaskfailed(consumer)
+    currExceptions = current_exceptions(consumer)
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    if isnothing(ex)
+      ex = currExceptions[1][:exception]
+    end
+  end
+  if !isnothing(ex)
+    throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
+  end
+  return read(sink(measState.sequenceBuffer, MeasurementBuffer))
+end
+
+function asyncMeasurement(protocol::RobotBasedTDesignFieldProtocol)
+  scanner_ = scanner(protocol)
+  sequence = protocol.params.sequence
+  daq = getDAQ(scanner_)
+  deviceBuffer = DeviceBuffer[]
+  if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  setup(daq, sequence)
+  seqMeasState = SequenceMeasState(daq, sequence)
+  seqMeasState.deviceBuffers = deviceBuffer
+  seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(seqMeasState.channel, protocol, sequence)
+  bind(seqMeasState.channel, protocol.seqMeasState.producer)
+  seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(seqMeasState)
+  return seqMeasState
+end
+
 
 function stop(protocol::RobotBasedTDesignFieldProtocol)
   if protocol.currPos <= length(protocol.positions)
