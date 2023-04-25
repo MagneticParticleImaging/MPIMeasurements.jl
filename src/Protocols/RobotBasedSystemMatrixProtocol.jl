@@ -19,7 +19,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   controlTx::Bool = false
   "Sequence used for the calibration at each position"
   sequence::Union{Sequence, Nothing} = nothing
-  positions::Union{GridPositions, Nothing} = nothing
+  positions::Union{Positions, Nothing} = nothing
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   if haskey(dict, "Positions")
@@ -50,7 +50,7 @@ mutable struct SystemMatrixRobotMeas
   consumer::Union{Task, Nothing}
   producer::Union{Task, Nothing}
   #store::DatasetStore # Do we need this?
-  positions::GridPositions
+  positions::Positions
   currPos::Int
   signals::Array{Float32,4}
   currentSignal::Array{Float32,4}
