@@ -96,7 +96,7 @@ end
 
 
 
-function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
 	# /calibration/ subgroup
 
@@ -135,6 +135,8 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampl
 
 	return
 end
+fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing) = @warn  "Storing positions of type $(typeof(positions)) in MDF is not implemented"
+
 
 
 
