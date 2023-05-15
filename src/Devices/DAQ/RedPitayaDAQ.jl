@@ -15,74 +15,30 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   rampingFraction::Float32 = 1.0
 end
 
-Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
-  channelIdx::Int64
-  limitPeak::typeof(1.0u"V")
-  sinkImpedance::SinkImpedance = SINK_HIGH
-  allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
-  feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
-end
-
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
+function createDAQChannel(RedPitayaLUTChannelParams, dict::Dict{String, Any})
+  calib = nothing
+  if haskey(dict, "calibration")
+    calib = uparse.(dict["calibration"])
+
+    if unit(upreferred(calib)) == upreferred(u"V/T")
+      calib = calib .|> u"V/T"
+    elseif unit(upreferred(calib)) == upreferred(u"V/A")
+      calib = calib .|> u"V/A"
+    else
+      error("The values have to be either given as a V/T or in V/A. You supplied the type `$(eltype(calib))`.")
+    end
+  end
+  return RedPitayaLUTChannelParams(channelIdx=dict["channel"], calibration = calib)
+end
+
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function RedPitayaDAQParams(dict::Dict{String, Any})
   return createDAQParams(RedPitayaDAQParams, dict)
-end
-
-function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
-  # TODO This is mostly copied from createDAQChannels, maybe manage to get rid of the duplication
-  channels = Dict{String, DAQChannelParams}()
-  for (key, value) in dict
-    splattingDict = Dict{Symbol, Any}()
-    if value["type"] == "tx"
-      splattingDict[:channelIdx] = value["channel"]
-      splattingDict[:limitPeak] = uparse(value["limitPeak"])
-
-      if haskey(value, "sinkImpedance")
-        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
-
-      if haskey(value, "allowedWaveforms")
-        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-      end
-
-      if haskey(value, "feedback")
-        channelID=value["feedback"]["channelID"]
-        calibration=uparse(value["feedback"]["calibration"])
-
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
-
-      if haskey(value, "calibration")
-        splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      channels[key] = RedPitayaTxChannelParams(;splattingDict...)
-    elseif value["type"] == "rx"
-      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
-    elseif value["type"] == "txSlow"
-      calib = nothing
-      if haskey(value, "calibration")
-        calib = uparse.(value["calibration"])
-
-        if unit(upreferred(calib)) == upreferred(u"V/T")
-          calib = calib .|> u"V/T"
-        elseif unit(upreferred(calib)) == upreferred(u"V/A")
-          calib = calib .|> u"V/A"
-        else
-          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
-        end
-      end
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
-    end
-  end
-
-  return channels
 end
 
 export RedPitayaDAQ
@@ -164,7 +120,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   for channel in txChannels
     m = nothing
     idx = channel[2].channelIdx
-    if channel[2] isa RedPitayaTxChannelParams
+    if channel[2] isa TxChannelParams
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
@@ -636,7 +592,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
-  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
   daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
 
   # Construct view to save bandwidth
@@ -707,7 +663,7 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     for comp in periodicElectricalComponents(channel)
       # Lengths check == 1 happens in setupTx already
       amp = amplitude(comp)
-      if dimension(amp) == dimension(1.0u"T")
+      if dimension(amp) != dimension(1.0u"V")
         amp = (amp * calibration(daq, name))
       end
       push!(amps, amp)

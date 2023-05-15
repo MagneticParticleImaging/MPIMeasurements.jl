@@ -61,44 +61,53 @@ Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
 Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
   channelIdx::Int64
 end
 
+function createDAQChannel(::Type{DAQTXChannelParams}, dict::Dict{String,Any})
+    splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelIdx] = dict["channel"]
+  splattingDict[:limitPeak] = uparse(dict["limitPeak"])
+
+  if haskey(dict, "sinkImpedance")
+    splattingDict[:sinkImpedance] = dict["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
+      end
+
+  if haskey(dict, "allowedWaveforms")
+    splattingDict[:allowedWaveforms] = toWaveform.(dict["allowedWaveforms"])
+      end
+
+  if haskey(dict, "feedback")
+    channelID = dict["feedback"]["channelID"]
+    calibration = uparse(dict["feedback"]["calibration"]) # TODO/JA: change parsing to allow Transfer Function filename (TransferFunction(...))
+        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
+      end
+
+  if haskey(dict, "calibration")
+    splattingDict[:calibration] = uparse.(dict["calibration"]) # TODO/JA: tx calibration
+      end
+
+  return DAQTxChannelParams(;splattingDict...)
+end
+
+
+
+createDAQChannel(::Type{DAQRxChannelParams}, value) = DAQRxChannelParams(channelIdx=value["channel"])
+
 "Create DAQ channel description from device dict part."
 function createDAQChannels(dict::Dict{String, Any})
   channels = Dict{String, DAQChannelParams}()
   for (key, value) in dict
-    splattingDict = Dict{Symbol, Any}()
     if value["type"] == "tx"
-      splattingDict[:channelIdx] = value["channel"]
-      splattingDict[:limitPeak] = uparse(value["limitPeak"])
-
-      if haskey(value, "sinkImpedance")
-        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
-
-      if haskey(value, "allowedWaveforms")
-        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-      end
-
-      if haskey(value, "feedback")
-        channelID=value["feedback"]["channelID"]
-        calibration=uparse(value["feedback"]["calibration"])
-
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
-
-      if haskey(value, "calibration")
-        splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      channels[key] = DAQTxChannelParams(;splattingDict...)
+      channels[key] = createDAQChannel(DAQTxChannelParams, value)
     elseif value["type"] == "rx"
-      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
+      channels[key] = createDAQChannel(DAQRxChannelParams, value)
+    elseif value["type"] == "tx_slow"
+      channels[key] = createDAQChannel(RedPitayaLUTChannelParams, value)
     end
   end
 
@@ -128,7 +137,7 @@ function createDAQParams(DAQType::Type{T}, dict::Dict{String, Any}) where {T <: 
 
   splattingDict = dict_to_splatting(mainDict)
   splattingDict[:channels] = createDAQChannels(DAQType, channelDict)
-
+  # TODO: check if DAQ type can actually support all types of channels
   try
     return DAQType(;splattingDict...)
   catch e
