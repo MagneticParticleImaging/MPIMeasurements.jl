@@ -58,12 +58,15 @@ mutable struct SystemMatrixRobotMeas
   posToIdx::Vector{Int64}
   measIsBGFrame::Vector{Bool}
   temperatures::Matrix{Float32}
+  drivefield::Array{ComplexF64,4}
+  applied::Array{ComplexF64,4}
 end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   @add_protocol_fields RobotBasedSystemMatrixProtocolParams
   systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
   txCont::Union{TxDAQController, Nothing} = nothing
+  contSequence::Union{ControlSequence, Nothing} = nothing
   stopped::Bool = false
   cancelled::Bool = false
   restored::Bool = false
@@ -79,7 +82,7 @@ function SystemMatrixRobotMeas()
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0))
+    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
@@ -160,10 +163,10 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
       throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
     end
     protocol.txCont = controllers[1]
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
+  protocol.contSequence = nothing
 
   return nothing
 end
@@ -192,7 +195,7 @@ function enterExecute(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
-  if isfile("/tmp/sysObj.toml")
+  if isfile(protocol, "meta.toml")
     message = """Found existing calibration file! \n
     Should it be resumed?"""
     if askConfirmation(protocol, message)
@@ -201,9 +204,7 @@ function initMeasData(protocol::RobotBasedSystemMatrixProtocol)
   end
   # Set signals to zero if we didn't restore
   if !protocol.restored
-    filenameSignals = "/tmp/sysObj.bin"
-    io = open(filenameSignals, "w+");
-    signals = Mmap.mmap(io, Array{Float32,4}, size(protocol.systemMeasState.signals));
+    signals = mmap!(protocol, "signals.bin", protocol.systemMeasState.signals);
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
   end
@@ -211,14 +212,7 @@ end
 
 function cleanup(protocol::RobotBasedSystemMatrixProtocol)
   # TODO should cleanup remove temp files? Would require a handler to differentiate between successful and unsuccesful "end"
-  removeTempFiles(protocol)
-end
-
-function removeTempFiles(protocol::RobotBasedSystemMatrixProtocol)
-  filename = "/tmp/sysObj.toml"
-  filenameSignals = "/tmp/sysObj.bin"
-  rm(filename, force=true)
-  rm(filenameSignals, force=true)
+  rm(dir(protocol), force = true, recursive = true)
 end
 
 function enterPause(protocol::RobotBasedSystemMatrixProtocol)
@@ -251,36 +245,34 @@ end
 function duringMovement(protocol::RobotBasedSystemMatrixProtocol, moving::Task)
   calib = protocol.systemMeasState
   wait(calib.producer)
-  prepareDAQ(protocol)
   wait(calib.consumer)
+  prepareDAQ(protocol)
 end
 
 function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
   calib = protocol.systemMeasState
   daq = getDAQ(protocol.scanner)
-  allowControlLoop = mod1(calib.currPos, 11) == 1  || protocol.restored
-  
-  # Prepare Sequence
-  if protocol.restored || (calib.currPos == 1) || (calib.measIsBGPos[calib.currPos] != calib.measIsBGPos[calib.currPos-1])
-    acqNumFrames(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
-    #acqNumFrameAverages(protocol.params.sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
-    acqNumFrameAverages(protocol.params.sequence, 1)
-    setup(daq, protocol.params.sequence) #TODO setupTx might be fine once while setupRx needs to be done for each new sequence
-    setSequenceParams(daq, protocol.params.sequence)
-    protocol.restored = false
-  end
 
-  # Prepare Tx
-  if protocol.params.controlTx
-    if allowControlLoop
-      controlTx(protocol.txCont, protocol.params.sequence, protocol.txCont.currTx)
-    else
-      setTxParams(daq, txFromMatrix(protocol.txCont, protocol.txCont.currTx)...)
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx 
+    if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
+      protocol.contSequence = controlTx(protocol.txCont, protocol.params.sequence)
+      protocol.restored = false
     end
-  else
-    prepareTx(daq, protocol.params.sequence)
+    if isempty(protocol.systemMeasState.drivefield)
+      len = length(keys(protocol.contSequence.simpleChannel))
+      drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
+      applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
+    end
+    sequence = protocol.contSequence
   end
-  setSequenceParams(daq, protocol.params.sequence) # TODO make this nicer and not redundant
+  
+  acqNumFrames(sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
+  #acqNumFrameAverages(sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
+  acqNumFrameAverages(sequence, 1)
+  setup(daq, sequence)
 end
 
 function postMovement(protocol::RobotBasedSystemMatrixProtocol)
@@ -298,14 +290,21 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
   enableACPower(su)
-  disableControl(tempControl)
+  if tempControl != nothing
+    disableControl(tempControl)
+  end
   @sync for amp in amps
     @async turnOn(amp)
   end
 
   # Start measurement
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx
+    sequence = protocol.contSequence.targetSequence
+  end
+
   channel = Channel{channelType(daq)}(32)
-  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence, prepTx = false, prepSeq = false)
+  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, protocol.params.sequence)
   bind(channel, calib.producer)
   calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol, index)
   while !istaskdone(calib.producer)
@@ -324,7 +323,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     @sync for amp in amps
       @async turnOff(amp)
     end
-    enableControl(tempControl)
+    if tempControl != nothing
+      enableControl(tempControl)
+    end
     disableACPower(su)
   end
 end
@@ -332,45 +333,43 @@ end
 function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtocol, index)
   calib = protocol.systemMeasState
   @info "readData"
-  daq = getDAQ(protocol.scanner)
-  
-  tempSensor = nothing
+  daq = getDAQ(protocol.scanner)  
+  numFrames = acqNumFrames(protocol.params.sequence)
+  startIdx = calib.posToIdx[index]
+  stopIdx = startIdx + numFrames - 1
+
+  # Prepare Buffer
+  deviceBuffer = DeviceBuffer[]
   if protocol.params.saveTemperatureData
     tempSensor = getTemperatureSensor(protocol.scanner)
+    push!(deviceBuffer, TemperatureBuffer(view(calib.temperatures, :, startIdx:stopIdx), tempSensor))
   end
 
-  asyncBuffer = AsyncBuffer(daq)
-  numFrames = acqNumFrames(protocol.params.sequence)
-  while isopen(channel) || isready(channel)
-    while isready(channel)
-      chunk = take!(channel)
-      updateAsyncBuffer!(asyncBuffer, chunk)
-    end
-    if !isready(channel)
-      sleep(0.001)
-    end
+  sinks = StorageBuffer[]
+  push!(sinks, SimpleFrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx)))
+  sequence = protocol.params.sequence
+  if protocol.params.controlTx
+    sequence = protocol.contSequence
+    push!(sinks, DriveFieldBuffer(1, view(calib.drivefield, :, :, :, startIdx:stopIdx), sequence))
+    push!(deviceBuffer, TxDAQControllerBuffer(1, view(calib.applied, :, :, :, startIdx:stopIdx), protocol.txCont))
   end
 
-  uMeas, uRef = retrieveMeasAndRef!(asyncBuffer, getDAQ(protocol.scanner))
-
-  startIdx = calib.posToIdx[index]
-  stopIdx = calib.posToIdx[index] + numFrames - 1
-
-  calib.signals[:,:,:,startIdx:stopIdx] = uMeas
-
+  sequenceBuffer = AsyncBuffer(FrameSplitterBuffer(daq, sinks), daq)
+  asyncConsumer(channel, sequenceBuffer, deviceBuffer)
 
   calib.measIsBGFrame[ startIdx:stopIdx ] .= calib.measIsBGPos[index]
 
-  calib.currentSignal = uMeas[:,:,:,1:1]
+  calib.currentSignal = calib.signals[:,:,:,stopIdx:stopIdx]
 
-
-  if !isnothing(tempSensor)
-    temps  = getTemperatures(tempSensor)
-    for l in startIdx:stopIdx
-      for c = 1:numChannels(tempSensor)
-        calib.temperatures[c,l] = temps[c]
-      end
+  step = UNCHANGED
+  @time if protocol.params.controlTx
+    @debug "Start update control sequence"
+    field = calib.drivefield[:, :, 1, stopIdx]
+    step = controlStep!(protocol.contSequence, protocol.txCont, field[:, :, 1, 1], calcDesiredField(protocol.contSequence))
+    if step == INVALID
+      throw(ErrorException("Control update failed to produce valid results"))
     end
+    @debug "Finish update control sequence"
   end
 
   @info "store"
@@ -379,7 +378,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
 end
 
 function store(protocol::RobotBasedSystemMatrixProtocol, index)
-  filename = "/tmp/sysObj.toml"
+  filename = file(protocol, "meta.toml")
   rm(filename, force=true)
 
   sysObj = protocol.systemMeasState
@@ -399,21 +398,19 @@ function store(protocol::RobotBasedSystemMatrixProtocol, index)
   end
 
   Mmap.sync!(sysObj.signals)
+  Mmap.sync!(sysObj.drivefield)
+  Mmap.sync!(sysObj.applied)
   return
 end
 
 function restore(protocol::RobotBasedSystemMatrixProtocol)
-  filename = "/tmp/sysObj.toml"
-  filenameSignals = "/tmp/sysObj.bin"
 
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
-  if isfile(filename)
-    params = TOML.parsefile(filename)
+  if isfile(protocol, "meta.toml")
+    params = TOML.parsefile(file(protocol, "meta.toml"))
     sysObj.currPos = params["currPos"]
     protocol.stopped = false
-    #params["stopped"]
-    #sysObj.currentSignal = params["currentSignal"]
     protocol.params.waitTime = params["waitTime"]
     sysObj.measIsBGPos = params["measIsBGPos"]
     sysObj.posToIdx = params["posToIdx"]
@@ -438,7 +435,6 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
     end
 
 
-    numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
     seq = protocol.params.sequence
 
     storedSeq = sequenceFromDict(params["sequence"])
@@ -451,13 +447,26 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
       protocol.params.sequence
     end
 
+    # Drive Field
+    if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
+      sysObj.drivefield = mmap(protocol, "observedField.bin", ComplexF64)
+    end
+    if isfile(protocol, "appliedField.bin")
+      sysObj.applied = mmap(protocol, "appliedField.bin", ComplexF64)
+    end
+
+
+    sysObj.signals = mmap(protocol, "signals.bin", Float32)
+
+    numTotalFrames = numFGPos*protocol.params.fgFrames + protocol.params.bgFrames*numBGPos
     numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
-    numPeriods = acqNumPeriodsPerFrame(seq)  
+    numPeriods = acqNumPeriodsPerFrame(seq)
+    paramSize = (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
+    if size(sysObj.signals) != paramSize
+      throw(DimensionMismatch("Dimensions of stored signals $(size(sysObj.signals)) does not match initialized signals $paramSize"))
+    end
 
-    io = open(filenameSignals, "r+");
-    sysObj.signals = Mmap.mmap(io, Array{Float32,4},
-          (rxNumSamplingPoints,numRxChannels, numPeriods, numTotalFrames));
     protocol.restored = true
     @info "Restored system matrix measurement"
   end
@@ -510,7 +519,15 @@ function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetSto
     if protocol.params.saveTemperatureData
       temperatures = protocol.systemMeasState.temperatures
     end
-    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures)
+    drivefield = nothing
+    if !isempty(protocol.systemMeasState.drivefield)
+      drivefield = protocol.systemMeasState.drivefield
+    end
+    applied = nothing
+    if !isempty(protocol.systemMeasState.applied)
+      applied = protocol.systemMeasState.applied
+    end
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures = temperatures, drivefield = drivefield, applied = applied)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end

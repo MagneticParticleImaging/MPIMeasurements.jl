@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 export Motor, StepperMotor
 
 abstract type Motor <: Device end
@@ -40,4 +38,3 @@ export progress
 
 include("SimulatedMotor.jl")
 include("SimulatedStepperMotor.jl")
-include("TinkerforgeStepperMotor.jl")

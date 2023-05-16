@@ -1,5 +1,3 @@
-using Graphics: @mustimplement
-
 export SurveillanceUnit, getSurveillanceUnits, getSurveillanceUnit, enableACPower, disableACPower, getTemperatures, getACStatus, resetDAQ
 
 abstract type SurveillanceUnit <: Device end

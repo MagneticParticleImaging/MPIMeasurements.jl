@@ -1,15 +1,34 @@
-using MPIMeasurements
 using Test
+using Aqua
 using Unitful
+using Pkg
+using Statistics
 
-include("TestDevices.jl")
+using MPIMeasurements
 
 # Add test configurations to path
 testConfigDir = normpath(string(@__DIR__), "TestConfigs")
 addConfigurationPath(testConfigDir)
 
-include("Scanner/ScannerTests.jl")
+@testset "MPIMeasurements" begin
+  @testset "Aqua" begin
+    @warn "Ambiguities and piracies are accepted for now"
+    Aqua.test_all(MPIMeasurements, ambiguities=false, piracy=false)
+  end
 
-testScanner = "TestSimpleSimulatedScanner"
-include("Devices/DeviceTests.jl")
-#include("Safety/SafetyTests.jl")
+  include("TestDevices.jl")
+  include("Scanner/ScannerTests.jl")
+  include("Devices/DeviceTests.jl")
+  #include("Safety/SafetyTests.jl")
+  include("Utils/UtilTests.jl")
+
+  @testset "Subpackages" begin
+    packageNames = ["MPIMeasurementsTinkerforge"]
+    for packageName ∈ packageNames
+      basePath = joinpath("..", "subpackages", packageName)
+      Pkg.activate(basePath)
+      Pkg.instantiate()
+      include(joinpath(basePath, "test", "runtests.jl"))
+    end
+  end
+end

@@ -1,15 +1,14 @@
-export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       setTxParamsAll, disconnect, RampingMode, NONE, HOLD, STARTUP
-
+export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
+export RedPitayaDAQParams
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
   "IPs of the Red Pitayas"
   ips::Vector{String}
-  "Trigger mode of the Red Pitayas. Default: `EXTERNAL`."
-  triggerMode::RedPitayaDAQServer.TriggerMode = EXTERNAL
+  "Trigger mode of the Red Pitayas. Default: `ALL_INTERNAL`."
+  triggerMode::RedPitayaDAQServer.ClusterTriggerSetup = ALL_INTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
@@ -70,6 +69,14 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
       calib = nothing
       if haskey(value, "calibration")
         calib = uparse.(value["calibration"])
+
+        if unit(upreferred(calib)) == upreferred(u"V/T")
+          calib = calib .|> u"V/T"
+        elseif unit(upreferred(calib)) == upreferred(u"V/A")
+          calib = calib .|> u"V/A"
+        else
+          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
+        end
       end
       channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
     end
@@ -78,6 +85,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
   return channels
 end
 
+export RedPitayaDAQ
 Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   @add_device_fields RedPitayaDAQParams
 
@@ -103,7 +111,7 @@ end
 function _init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
-    daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
   catch e
     if hasDependency(daq, SurveillanceUnit)
       su = dependency(daq, SurveillanceUnit)
@@ -126,7 +134,6 @@ function _init(daq::RedPitayaDAQ)
     masterTrigger!(daq.rpc, false)
     serverMode!(daq.rpc, CONFIGURATION)
   end
-  triggerMode!(daq.rpc, string(daq.params.triggerMode))
 
   daq.present = true
 end
@@ -289,7 +296,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
   end
-  
+
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
     @async begin
@@ -405,12 +412,14 @@ end
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
   samples::Union{Matrix{Int16}, Nothing}
   performance::Vector{Vector{PerformanceData}}
+  target::StorageBuffer
+  daq::RedPitayaDAQ
 end
-AsyncBuffer(daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1))
+AsyncBuffer(buffer::StorageBuffer, daq::RedPitayaDAQ) = RedPitayaAsyncBuffer(nothing, Vector{Vector{PerformanceData}}(undef, 1), buffer, daq)
 
 channelType(daq::RedPitayaDAQ) = SampleChunk
 
-function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
+function push!(buffer::RedPitayaAsyncBuffer, chunk)
   samples = chunk.samples
   perfs = chunk.performance
   push!(buffer.performance, perfs)
@@ -426,8 +435,15 @@ function updateAsyncBuffer!(buffer::RedPitayaAsyncBuffer, chunk)
     if p.status.stepsLost
       @warn "RedPitaya $i lost sequence steps"
     end
+  end
+  frames = convertSamplesToFrames!(buffer)
+  if !isnothing(frames)
+    return push!(buffer.target, frames)
+  else
+    return nothing
+  end
 end
-end
+sinks!(buffer::RedPitayaAsyncBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
 function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
   return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
@@ -475,7 +491,8 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
 end
 
 
-function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
+function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer)
+  daq = buffer.daq
   unusedSamples = buffer.samples
   samples = buffer.samples
   frames = nothing
@@ -503,28 +520,26 @@ function convertSamplesToFrames!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ
   return frames
 end
 
-function retrieveMeasAndRef!(buffer::RedPitayaAsyncBuffer, daq::RedPitayaDAQ)
-  frames = convertSamplesToFrames!(buffer, daq)
-  uMeas = nothing
-  uRef = nothing
-  if !isnothing(frames)
-    rxIds = channelIdx(daq, daq.rxChanIDs)
-    refIds = channelIdx(daq, daq.refChanIDs)
-    # Map channel index to their respective index in the view
-    if !isnothing(daq.rpv)
-      rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
-      refIds = map(x->clusterToView(daq.rpv, x), rxIds)
-    end
-    uMeas = frames[:,rxIds,:,:]
-    uRef = frames[:, refIds,:,:]
+function retrieveMeasAndRef!(frames::Array{Float32, 4}, daq::RedPitayaDAQ)
+  rxIds = channelIdx(daq, daq.rxChanIDs)
+  refIds = channelIdx(daq, daq.refChanIDs)
+  # Map channel index to their respective index in the view
+  if !isnothing(daq.rpv)
+    rxIds = map(x->clusterToView(daq.rpv, x), rxIds)
+    refIds = map(x->clusterToView(daq.rpv, x), refIds)
   end
+  uMeas = frames[:,rxIds,:,:]
+  uRef = frames[:, refIds,:,:]
   return uMeas, uRef
 end
 
 #### Tx and Rx
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
+  stopTx(daq)
   setupRx(daq, sequence)
   setupTx(daq, sequence)
+  prepareTx(daq, sequence)
+  setSequenceParams(daq, sequence)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
@@ -565,7 +580,7 @@ end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
-  end  
+  end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
   @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, componentIdx, freq)

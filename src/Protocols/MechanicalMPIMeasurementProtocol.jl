@@ -204,7 +204,6 @@ function asyncMeasurement(protocol::MechanicalMPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-
 function cleanup(protocol::MechanicalMPIMeasurementProtocol)
   # NOP
 end
