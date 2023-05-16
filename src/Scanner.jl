@@ -52,15 +52,18 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
   # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     params = nothing
+    configFile = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
+      configFile = joinpath(configDir, "Scanner.toml")
     else
       params = deviceParams(configDir, deviceID)
+      configFile = joinpath(configDir, "Devices", deviceID*".toml")
     end
 
     if !isnothing(params)
       deviceType = pop!(params, "deviceType")
-
+      
       dependencies_ = Dict{String, Union{Device, Missing}}()
       if haskey(params, "dependencies")
         deviceDepencencies = pop!(params, "dependencies")
@@ -80,7 +83,7 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
         error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
       end
 
-      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
+      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_, configFile=configFile) # All other fields must have default values!
     else
       throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
     end
@@ -190,8 +193,8 @@ Basic description of a scanner.
 mutable struct MPIScanner
   "Name of the scanner"
   name::String
-  "Path to the used configuration directory."
-  configDir::String
+  "Path to the used configuration file."
+  configFile::String
   "General parameters of the scanner like its bore size or gradient."
   generalParams::MPIScannerGeneral
   "Device instances instantiated by the scanner from its configuration."
@@ -226,7 +229,7 @@ mutable struct MPIScanner
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(configDir, params["Devices"], robust = robust)
 
-    scanner = new(name, configDir, generalParams, devices)
+    scanner = new(name, filename, generalParams, devices)
 
     return scanner
   end
@@ -246,8 +249,11 @@ end
 "Name of the scanner"
 name(scanner::MPIScanner) = scanner.name
 
+"Path to the used configuration file"
+configFile(scanner::MPIScanner) = scanner.configFile
+
 "Path to the used configuration directory."
-configDir(scanner::MPIScanner) = scanner.configDir
+configDir(scanner::MPIScanner) = dirname(scanner.configFile)
 
 "General parameters of the scanner like its bore size or gradient."
 generalParams(scanner::MPIScanner) = scanner.generalParams

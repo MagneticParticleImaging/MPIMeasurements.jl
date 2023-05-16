@@ -33,6 +33,8 @@ macro add_device_fields(paramType)
     present::Bool = false
     #"Vector of dependencies for this device."
     dependencies::Dict{String,Union{Device,Missing}}
+    #"Path of the config used to load the device (either Scanner.toml or Device.toml)"
+    configFile::String
   end)
 end
 
@@ -50,6 +52,18 @@ isPresent(device::Device) = device.present
 
 "Retrieve the dependencies of a device."
 dependencies(device::Device) = device.dependencies
+
+"Retrieve the configuration file of a device."
+configFile(device::Device) = device.configFile
+
+"Retrieve the configuration directory of the scanner."
+function configDir(device::Device)
+  if basename(device.configFile) == "Scanner.toml"
+    return dirname(device.configFile) # if the device is read from a Scanner.toml the directory is the scanner directory
+  else
+    return joinpath(splitpath(device.configFile)[1:end-2]...) # otherwise the Device.toml is in the Devices folder
+  end
+end
 
 "Retrieve all dependencies of a certain type."
 dependencies(device::Device, type::DataType) = [dependency for dependency in Base.values(dependencies(device)) if dependency isa type]
