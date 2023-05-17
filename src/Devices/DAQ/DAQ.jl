@@ -52,7 +52,7 @@ abstract type RxChannelParams <: DAQChannelParams end
 
 Base.@kwdef struct DAQFeedback
   channelID::AbstractString
-  calibration::Union{typeof(1.0u"T/V"), Nothing} = nothing
+  calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
 Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
@@ -61,7 +61,7 @@ Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
+  calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
 Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
@@ -69,32 +69,40 @@ Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
 end
 
 function createDAQChannel(::Type{DAQTXChannelParams}, dict::Dict{String,Any})
-    splattingDict = Dict{Symbol, Any}()
+  splattingDict = Dict{Symbol, Any}()
   splattingDict[:channelIdx] = dict["channel"]
   splattingDict[:limitPeak] = uparse(dict["limitPeak"])
 
   if haskey(dict, "sinkImpedance")
     splattingDict[:sinkImpedance] = dict["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
+  end
 
   if haskey(dict, "allowedWaveforms")
     splattingDict[:allowedWaveforms] = toWaveform.(dict["allowedWaveforms"])
-      end
+  end
 
   if haskey(dict, "feedback")
     channelID = dict["feedback"]["channelID"]
-    calibration = uparse(dict["feedback"]["calibration"]) # TODO/JA: change parsing to allow Transfer Function filename (TransferFunction(...))
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
+    calibration_tf = parse_into_tf(dict["feedback"]["calibration"])
+    splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration_tf)
+  end
 
   if haskey(dict, "calibration")
-    splattingDict[:calibration] = uparse.(dict["calibration"]) # TODO/JA: tx calibration
-      end
+    splattingDict[:calibration] = parse_info_tf(dict["calibration"])
+  end
 
   return DAQTxChannelParams(;splattingDict...)
 end
 
-
+function parse_into_tf(value::String)
+  if occursin(".h5", value) # case 1: filename to transfer function, the TF will be read the first time calibration() is called, (done in _init(), to prevent delays while using the device)
+    calibration_tf = value
+  else # case 2: single value, extended into transfer function with no frequency dependency
+    calibration_value = uparse(value)
+    calibration_tf = TransferFunction([0,10e6],[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
+  end
+  return calibration_tf
+end
 
 createDAQChannel(::Type{DAQRxChannelParams}, value) = DAQRxChannelParams(channelIdx=value["channel"])
 
@@ -202,8 +210,21 @@ allowedWaveforms(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, cha
 isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Waveform) = waveform in allowedWaveforms(daq, channelID)
 feedback(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).feedback
 feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).channelID
-feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).calibration
-calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).calibration
+function feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString)
+  if isa(feedback(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
+    feedback(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",feedback(daq, channelID).calibration))
+  else
+    return feedback(daq, channelID).calibration
+  end
+end
+function calibration(daq::AbstractDAQ, channelID::AbstractString)
+  if isa(channel(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
+    channel(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",channel(daq, channelID).calibration))
+  else
+    return channel(daq, channelID).calibration 
+  end
+end
+  
 
 
 

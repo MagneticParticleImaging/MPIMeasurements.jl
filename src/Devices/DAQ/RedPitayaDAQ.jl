@@ -65,6 +65,14 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 end
 
 function _init(daq::RedPitayaDAQ)
+  # force all calibration transfer functions to be read from disk
+  for channelID in keys(daq.params.channels)
+    if isa(channel(daq, channelID), DAQTxChannelParams)
+      calibration(daq, channelID)
+      feedbackCalibration(daq, channelID)
+    end
+  end
+
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
@@ -521,7 +529,7 @@ function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, b
 end
 function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-  offsetVolts = offset(channel)*calibration(daq, id(channel))
+  offsetVolts = offset(channel)*calibration(daq, id(channel))(0) # use DC value for offsets
   @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
   for (idx, component) in enumerate(components(channel))
     setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
@@ -663,19 +671,25 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     for comp in periodicElectricalComponents(channel)
       # Lengths check == 1 happens in setupTx already
       amp = amplitude(comp)
+      pha = phase(comp)
       if dimension(amp) != dimension(1.0u"V")
-        amp = (amp * calibration(daq, name))
+        f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
+        complex_comp = (amp*exp(im*pha)) * calibration(daq, name)(f_comp)
+        amp = abs(complex_comp)
+        pha = angle(complex_comp)
       end
       push!(amps, amp)
-      push!(phases, phase(comp))
+      push!(phases, pha)
     end
     comps = arbitraryElectricalComponents(channel)
     if length(comps) > 2
       throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
     elseif length(comps) == 1
       wave = values(comps[1])
-      if dimension(wave[1]) != dimension(1.0u"V")
-        wave = wave.*calibration(daq, name)
+      if dimension(wave[1]) != dimension(1.0u"V") # TODO/JA: make sure that the controller always uses V as its component waveform
+        f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
+        f_awg = rfftfreq(2^14, f_comp*2^14)
+        wave = irfft(rfft(wave).*calibration(daq, name)(f_awg), 2^14)
       end
       allAwg[name] = wave
     end

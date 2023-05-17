@@ -184,7 +184,7 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod::Integer, numPerio
     if dimension(daq.amplitude[1]) == dimension(u"T")
       factor = 1.0u"T/T"
     else
-      factor = 1/scannerChannel.calibration
+      factor = 1/scannerChannel.calibration # TODO/JA: figure out how to include change here
     end
 
     temperatureRise = daq.params.temperatureRise[sendChannelID]
@@ -215,12 +215,12 @@ function readDataPeriods(daq::SimpleSimulatedDAQ, startPeriod::Integer, numPerio
       Bᵢ = Bₘₐₓ.*sin.(2π*f*t.+ϕ) # Desired, ideal field without drift
       Bᵣ = (Bₘₐₓ.+ΔB).*sin.(2π*f*t.+ϕ.+Δϕ) # Field with drift of phase and amplitude
 
-      uₜₓ .+= Bᵢ.*sendChannel.calibration
+      uₜₓ .+= Bᵢ.*sendChannel.calibration # TODO/JA: figure out how to include change here
       uᵣₓ .+= simulateLangevinInduced(t, Bᵣ, f, ϕ.+Δϕ) # f is not completely correct due to the phase change, but this is only a rough approximation anyways
 
       # Assumes the same induced voltage from the field as given out with uₜₓ,
       # just with a slight change in phase and amplitude
-      uᵣₑ .+= Bᵣ.*sendChannel.calibration
+      uᵣₑ .+= Bᵣ.*sendChannel.calibration # TODO/JA: figure out how to include change here
     end
     
     # Assumes one reference and one measurement channel for each send channel
