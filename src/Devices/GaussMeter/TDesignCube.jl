@@ -1,4 +1,4 @@
-export TDesignCubeParams, TDesignCube, setSampleSize, getSampleSize, getT, getN, getRadius
+export TDesignCubeParams, TDesignCube, setSampleSize, getSampleSize, getT, getN, getRadius, getPositions
 
 Base.@kwdef struct TDesignCubeParams <: DeviceParams
     T::Int64
@@ -27,6 +27,7 @@ function _init(cube::TDesignCube)
         close.(sensors) # TODO @NH Should not close devices here
         throw("missing Sensors")
     end
+    #TODO chang sorting to sensor 
     sort!(sensors,by=x-> x.params.position)
     cube.sensors = sensors
     setSampleSize(cube,sampleSize)
@@ -75,6 +76,16 @@ getT(cube::TDesignCube) = cube.params.T
 getN(cube::TDesignCube) = cube.params.N
 getRadius(cube::TDesignCube) = cube.params.radius
 
+function getPositions(cube)
+    positions = zeros(cube.params.N,3)
+    for (i,sensor) in cube.sensorss
+        positions[i,:] = getPositions(sensor)
+    end
+    return positions
+end
+
 function close(cube::TDesignCube)
-    # NOP
+    for sensor in cube.sensors
+        close(sensor)
+    end
 end 

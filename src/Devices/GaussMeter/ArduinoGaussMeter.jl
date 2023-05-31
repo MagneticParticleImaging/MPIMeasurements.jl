@@ -1,4 +1,4 @@
-export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXValue, triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXYZValues,triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
 
@@ -64,7 +64,7 @@ function _init(gauss::ArduinoGaussMeter)
   @info "Connection to ArduinoGaussMeter established."
   ard = SimpleArduino(; commandStart=params.commandStart, commandEnd=params.commandEnd, sd=sd)
   gauss.ard = ard
-  gauss.measdelay = parse(Int64, query(sd, "!DELAY*"))
+  gauss.measdelay = parse(Int64, queryCommand(ard, "DELAY*"))
   setSampleSize(gauss, params.sampleSize)
   setFast(gauss,params.fastModeOn)
 end
@@ -120,10 +120,11 @@ function getXYZValues(gauss::ArduinoGaussMeter)
   return applyCalibration(gauss, data)
 end
 
+
 """
   triggerMeasurment(gauss::ArduinoGaussMeter)
   start measurment in sensor 'gauss' 
-"""
+  """
 function triggerMeasurment(gauss::ArduinoGaussMeter)
   if gauss.measurementTriggered
     throw("measurement already triggered")
@@ -189,10 +190,11 @@ function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   return calibrated_means
 end
 
-"""
-  setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)::Int
 
-  sets sample size for measurment
+"""
+setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)::Int
+
+sets sample size for measurment
 
   #Arguments 
   -`sampleSize` number of mesurments done by the sensor 1=>sample_size<=1024
@@ -217,12 +219,7 @@ end
 
 function setFast(gauss::ArduinoGaussMeter, fastModeOn::Bool)
   data_string = queryCommand(gauss.ard, "FASTMODE" * string(Int(fastModeOn)))
-  @info(fastModeOn)
-  @info(data_string)
   updatedFastMode = parse(Int, data_string)
-  println(updatedFastMode)
-  println(typeof(updatedFastMode))
-  println(updatedFastMode != fastModeOn)
   if updatedFastMode != fastModeOn
     throw(error("FastMode not set right"))
   end
@@ -246,4 +243,10 @@ function getTemperature(gauss::ArduinoGaussMeter)
   return parse(Float32, temp_str)
 end
 
+
+getPosition(gauss::ArduinoGaussMeter) = gauss.params.position
+
+getXValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[1]
+getYValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[2]
+getZValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[3]
 close(gauss::ArduinoGaussMeter) = close(gauss.ard)
