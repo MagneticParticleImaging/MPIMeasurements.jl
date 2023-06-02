@@ -80,7 +80,8 @@ end
 function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HALLSENS:4"))
+    """todo fix number"""
+    if !(startswith(reply, "HALLSENS:"))
       close(sd)
       throw(ScannerConfigurationError(string("Connected to wrong Device", reply)))
     end
@@ -145,7 +146,7 @@ function receive(gauss::ArduinoGaussMeter)
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 1.2) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 10) + 1)
     set_timeout(gauss.ard, timeout_ms)
     try
       data_strings = split(receive(gauss.ard), ",")
@@ -200,11 +201,7 @@ sets sample size for measurment
   -updatedSampleSize
 """
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
-  if (sampleSize > 1024 || sampleSize < 1)
-    throw(error("no valid sample size, pick size from 1 to 1024"))
-  end
-  # TODO problem on time out probabil wrong value on device
-  data_string = queryCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
+  data_string = queryCommand(gauss.ard, "SAMPLES" * string(sampleSize))
   updatedSampleSize = parse(Int, data_string)
   if (updatedSampleSize !== sampleSize)
     throw(error("wrong sample size set"))

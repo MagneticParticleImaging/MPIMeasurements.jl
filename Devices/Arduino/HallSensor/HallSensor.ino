@@ -1,20 +1,20 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "4.0"
+#define VERSION "5.0"
 #define BAUDRATE 9600
 #define MEASDELAY 1
+#define INPUT_BUFFER_SIZE 3000
+#define MAX_SAMPLE_SIZE 10000
 
 #include <Tle493d_w2b6.h>
 
 // Tlv493d Opject
 Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
-int sample_size = 1000;
-bool fast_mode_on = false;
+
 // Communication
-#define INPUT_BUFFER_SIZE 3000
-#define VALUE_BUFFER_SIZE 1024
 char input_buffer[INPUT_BUFFER_SIZE];
-int16_t value_buffer[VALUE_BUFFER_SIZE * 3];
 unsigned int input_pos = 0;
+
+int sample_size = 1000;
 
 int getDelay(char *);
 int getData(char *);
@@ -23,7 +23,6 @@ int getTemp(char *);
 int getVersion(char *);
 int getCommands(char *);
 int setSampleSize(char *);
-int setFastMode(char *);
 
 typedef struct
 {
@@ -37,8 +36,7 @@ commandHandler_t cmdHandler[] = {
     {"TEMP", getTemp},
     {"VERSION", getVersion},
     {"COMMANDS", getCommands},
-    {"SAMPLES", setSampleSize},
-    {"FASTMODE", setFastMode}};
+    {"SAMPLES", setSampleSize}};
 
 int getCommands(char *)
 {
@@ -48,8 +46,7 @@ int getCommands(char *)
   Serial.print("'!VERSION*#' ");
   Serial.print("'!TEMP*#' ");
   Serial.print("'!COMMANDS*#' ");
-  Serial.print("'!SAMPLESx*# 1>=x>=1024' ");
-  Serial.print("'!FASTMODEx*# x =1|0'");
+  Serial.print("'!SAMPLESx*# 1>=x>=10000' ");
   Serial.println("#");
 }
 
@@ -162,103 +159,62 @@ int getDelay(char *)
 
 int getData(char *)
 {
-  unsigned long start, end, startFP, endA;
+  unsigned long start;
   int16_t x = 0, y = 0, z = 0;
+  int16_t x_1 = 0, y_1 = 0, z_1 = 0;
   int32_t sumX = 0, sumY = 0, sumZ = 0;
-  float sumXX = 0, sumYY = 0, sumZZ = 0;
+  int32_t sumXX = 0, sumYY = 0, sumZZ = 0;
   float varX = 0, varY = 0, varZ = 0;
   float meanX = 0, meanY = 0, meanZ = 0;
 
   // updateData reads values from sensor and reading triggers next measurement
   sensor.updateData();
   delay(MEASDELAY);
-
-  // calculating mean values Mean =sum(x[i])/sample_size
-  // measurement is stored for calculating the variance in a second go
-  if (fast_mode_on)
+  
+  //storing first measurement as approximation of mean value
+  x_1 = sensor.getRawX();
+  y_1 = sensor.getRawY();
+  z_1 = sensor.getRawZ();
+  
+  for (int i = 0; i < sample_size; i += 1)
   {
-    for (int i = 0; i < sample_size * 3; i += 3)
-    {
-      sensor.updateData();
-      start = millis();
+    sensor.updateData();
+    start = millis();
 
-      x = sensor.getRawX();
-      y = sensor.getRawY();
-      z = sensor.getRawZ();
+    x = sensor.getRawX()-x_1;
+    y = sensor.getRawY()-y_1;
+    z = sensor.getRawZ()-z_1;
 
-      sumX += x;
-      sumY += y;
-      sumZ += z;
+    sumX += x;
+    sumY += y;
+    sumZ += z;
 
-      // waiting until new data is ready in the sensor
-      end = millis();
-      if (end - start < MEASDELAY)
-      {
-        delay(MEASDELAY - (end - start));
-      }
-    }
+    sumXX += x * x;
+    sumYY += y * y;
+    sumZZ += z * z;
+    //waiting until new data is ready in the sensor
+    while( millis()<MEASDELAY+start){};
   }
-  else
-  {
-    for (int i = 0; i < sample_size * 3; i += 3)
-    {
-      sensor.updateData();
-      start = millis();
+  
+  meanX = (float)sumX / sample_size + x_1;
+  meanY = (float)sumY / sample_size + y_1;
+  meanZ = (float)sumZ / sample_size + z_1;
 
-      x = sensor.getRawX();
-      y = sensor.getRawY();
-      z = sensor.getRawZ();
-
-      value_buffer[i] = x;
-      value_buffer[i + 1] = y;
-      value_buffer[i + 2] = z;
-
-      sumX += x;
-      sumY += y;
-      sumZ += z;
-
-      // waiting until new data is ready in the sensor
-      end = millis();
-      if (end - start < MEASDELAY)
-      {
-        delay(MEASDELAY - (end - start));
-      }
-    }
-  }
-  meanX = (float)sumX / sample_size;
-  meanY = (float)sumY / sample_size;
-  meanZ = (float)sumZ / sample_size;
+  varX = ((float)sumXX - (float)sumX * sumX / sample_size) / (sample_size - 1);
+  varY = ((float)sumYY - (float)sumY * sumY / sample_size) / (sample_size - 1);
+  varZ = ((float)sumZZ - (float)sumZ * sumZ / sample_size) / (sample_size - 1);
 
   Serial.print(meanX, 7);
   Serial.print(",");
   Serial.print(meanY, 7);
   Serial.print(",");
   Serial.print(meanZ, 7);
-
-  if (!fast_mode_on)
-  {
-    // calculating var var(x) = sum((x[i]-x_mean)^2)/(sample_size-1)
-    // for sample_size = 1 the variance is zero
-    if (sample_size > 1)
-    {
-      for (int i = 0; i < sample_size * 3; i += 3)
-      {
-        sumXX += ((float)value_buffer[i] - meanX) * ((float)value_buffer[i] - meanX);
-        sumYY += ((float)value_buffer[i + 1] - meanY) * ((float)value_buffer[i + 1] - meanY);
-        sumZZ += ((float)value_buffer[i + 2] - meanZ) * ((float)value_buffer[i + 2] - meanZ);
-      }
-
-      varX = sumXX / (sample_size - 1);
-      varY = sumYY / (sample_size - 1);
-      varZ = sumZZ / (sample_size - 1);
-    }
-    Serial.print(",");
-    Serial.print(varX, 7);
-    Serial.print(",");
-    Serial.print(varY, 7);
-    Serial.print(",");
-    Serial.print(varZ, 7);
-  }
+  Serial.print(",");
+  Serial.print(varX, 7);
+  Serial.print(",");
+  Serial.print(varY, 7);
+  Serial.print(",");
+  Serial.print(varZ, 7);
   Serial.println("#");
   Serial.flush();
 }
@@ -291,34 +247,11 @@ int getVersion(char *)
 int setSampleSize(char *command)
 {
   int value_int = atoi(command + 7);
-  if (value_int > 0 && value_int <= VALUE_BUFFER_SIZE)
+  if (value_int > 0 && value_int <= MAX_SAMPLE_SIZE)
   {
     sample_size = value_int;
   }
   Serial.print(sample_size);
-  Serial.println("#");
-  Serial.flush();
-}
-
-int setFastMode(char *command)
-{
-  int value_int = atoi(command + 8);
-  if (value_int == 0)
-  {
-    fast_mode_on = false;
-  }
-  else if (value_int == 1)
-  {
-    fast_mode_on = true;
-  }
-  else
-  {
-    Serial.print("value must be 0 or 1");
-    Serial.println("#");
-    Serial.flush();
-    return 0;
-  }
-  Serial.print(fast_mode_on);
   Serial.println("#");
   Serial.flush();
 }

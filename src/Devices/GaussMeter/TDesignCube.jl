@@ -29,7 +29,6 @@ function _init(cube::TDesignCube)
     sort!(sensors,by=x-> x.params.position)
     cube.sensors = sensors
     setSampleSize(cube,sampleSize)
-    setFast(cube,fastModeOn)
 end
 
 export setSampleSize
