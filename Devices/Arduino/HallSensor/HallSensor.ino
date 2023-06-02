@@ -1,7 +1,7 @@
 #define ARDUINO_TYPE "HALLSENS"
 #define VERSION "4.0"
 #define BAUDRATE 9600
-#define MEASDELAY 2
+#define MEASDELAY 1
 
 #include <Tle493d_w2b6.h>
 

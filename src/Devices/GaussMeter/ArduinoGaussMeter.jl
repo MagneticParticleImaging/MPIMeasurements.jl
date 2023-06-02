@@ -10,7 +10,6 @@ Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration = Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
-  fastModeOn::Bool
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
@@ -25,7 +24,6 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration::Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
-  fastModeOn::Bool
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -52,7 +50,6 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   sampleSize::Int = 0
   measdelay = 1000
   measurementTriggered::Bool = false
-  fastModeOn:: Bool = false
 end
 
 neededDependencies(::ArduinoGaussMeter) = []
@@ -66,7 +63,6 @@ function _init(gauss::ArduinoGaussMeter)
   gauss.ard = ard
   gauss.measdelay = parse(Int64, queryCommand(ard, "DELAY*"))
   setSampleSize(gauss, params.sampleSize)
-  setFast(gauss,params.fastModeOn)
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -216,18 +212,6 @@ function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
   gauss.sampleSize = updatedSampleSize
   return updatedSampleSize
 end
-
-function setFast(gauss::ArduinoGaussMeter, fastModeOn::Bool)
-  data_string = queryCommand(gauss.ard, "FASTMODE" * string(Int(fastModeOn)))
-  updatedFastMode = parse(Int, data_string)
-  if updatedFastMode != fastModeOn
-    throw(error("FastMode not set right"))
-  end
-  gauss.fastModeOn = updatedFastMode
-
-  return gauss.fastModeOn
-end
-
 
 function getSampleSize(gauss::ArduinoGaussMeter)
   return gauss.sampleSize
