@@ -10,7 +10,6 @@ Base.@kwdef struct ArduinoGaussMeterDirectParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration = Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
-  fastModeOn::Bool
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
 end
@@ -25,7 +24,6 @@ Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   translation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   biasCalibration::Vector{Float64} = [0.0, 0.0, 0.0]
   sampleSize::Int
-  fastModeOn::Bool
 
   @add_serial_device_fields "#"
   @add_arduino_fields "!" "*"
@@ -52,7 +50,6 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   sampleSize::Int = 0
   measdelay = 1000
   measurementTriggered::Bool = false
-  fastModeOn:: Bool = false
 end
 
 neededDependencies(::ArduinoGaussMeter) = []
@@ -66,7 +63,6 @@ function _init(gauss::ArduinoGaussMeter)
   gauss.ard = ard
   gauss.measdelay = parse(Int64, queryCommand(ard, "DELAY*"))
   setSampleSize(gauss, params.sampleSize)
-  setFast(gauss,params.fastModeOn)
 end
 
 function initSerialDevice(gauss::ArduinoGaussMeter, params::ArduinoGaussMeterDirectParams)
@@ -84,7 +80,8 @@ end
 function checkSerialDevice(gauss::ArduinoGaussMeter, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HALLSENS:4"))
+    """todo fix number"""
+    if !(startswith(reply, "HALLSENS:"))
       close(sd)
       throw(ScannerConfigurationError(string("Connected to wrong Device", reply)))
     end
@@ -149,7 +146,7 @@ function receive(gauss::ArduinoGaussMeter)
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 1.2) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 10) + 1)
     set_timeout(gauss.ard, timeout_ms)
     try
       data_strings = split(receive(gauss.ard), ",")
@@ -204,28 +201,13 @@ sets sample size for measurment
   -updatedSampleSize
 """
 function setSampleSize(gauss::ArduinoGaussMeter, sampleSize::Int)
-  if (sampleSize > 1024 || sampleSize < 1)
-    throw(error("no valid sample size, pick size from 1 to 1024"))
-  end
-  # TODO problem on time out probabil wrong value on device
-  data_string = queryCommand(gauss.ard, "SAMPLES" * string(sampleSize)) # TODO Check if wanted value was set, otherwise throw error and there query HallSensor for valid > 0 values
+  data_string = queryCommand(gauss.ard, "SAMPLES" * string(sampleSize))
   updatedSampleSize = parse(Int, data_string)
   if (updatedSampleSize !== sampleSize)
     throw(error("wrong sample size set"))
   end
   gauss.sampleSize = updatedSampleSize
   return updatedSampleSize
-end
-
-function setFast(gauss::ArduinoGaussMeter, fastModeOn::Bool)
-  data_string = queryCommand(gauss.ard, "FASTMODE" * string(Int(fastModeOn)))
-  updatedFastMode = parse(Int, data_string)
-  if updatedFastMode != fastModeOn
-    throw(error("FastMode not set right"))
-  end
-  gauss.fastModeOn = updatedFastMode
-
-  return gauss.fastModeOn
 end
 
 
