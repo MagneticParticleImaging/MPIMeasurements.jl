@@ -1,4 +1,6 @@
 export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXYZValues,triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature
+
+
 abstract type ArduinoGaussMeterParams <: DeviceParams end
 
 
@@ -18,6 +20,7 @@ ArduinoGaussMeterDirectParams(dict::Dict) = params_from_dict(ArduinoGaussMeterDi
 
 Base.@kwdef struct ArduinoGaussMeterDescriptionParams <: ArduinoGaussMeterParams
   description::String
+  positionID::Int
   position::Vector{Float64} = [0.0, 0.0, 0.0]
   calibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3)) * 0.125
   rotation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
@@ -46,7 +49,6 @@ end
 Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino,Nothing} = nothing
-  rotatedCalibration::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   sampleSize::Int = 0
   measdelay = 1000
   measurementTriggered::Bool = false
@@ -100,6 +102,7 @@ end
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
 function getRawXYZValues(gauss::ArduinoGaussMeter)
+  
   triggerMeasurment(gauss)
   data = receive(gauss)
   return data
@@ -146,7 +149,7 @@ function receive(gauss::ArduinoGaussMeter)
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 10) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 1.2) + 1)
     set_timeout(gauss.ard, timeout_ms)
     try
       data_strings = split(receive(gauss.ard), ",")
@@ -154,7 +157,7 @@ function receive(gauss::ArduinoGaussMeter)
       return data
     finally
       set_timeout(gauss.ard, temp)
-      gauss.measurementTriggered = false
+    gauss.measurementTriggered = false
     end
   end
 end
@@ -183,7 +186,7 @@ Varianz can't be calibrated
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   # TODO Sanity checks on data, does it have the expected size
-  calibrated_means = gauss.params.rotation * (gauss.params.calibration * (means - gauss.params.biasCalibration))
+  calibrated_means = gauss.params.rotation * ((gauss.params.calibration * means) - gauss.params.biasCalibration)
   return calibrated_means
 end
 
@@ -224,10 +227,5 @@ function getTemperature(gauss::ArduinoGaussMeter)
   return parse(Float32, temp_str)
 end
 
-
 getPosition(gauss::ArduinoGaussMeter) = gauss.params.position
-
-getXValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[1]
-getYValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[2]
-getZValue(gauss::ArduinoGaussMeter) = getXYZValues(gauss)[3]
 close(gauss::ArduinoGaussMeter) = close(gauss.ard)
