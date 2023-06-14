@@ -135,7 +135,7 @@ end
 
 
 """
-  receive(gauss::ArduinoGaussMeter)::Array{Float64,1}
+  receiveRawMeasument(gauss::ArduinoGaussMeter)::Array{Float64,1}
   
     collecting the measurment data for sensor 'gauss'
     triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first. 
@@ -144,7 +144,7 @@ end
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
 
-function receive(gauss::ArduinoGaussMeter)
+function receiveRaWMeasurment(gauss::ArduinoGaussMeter)
   if !gauss.measurementTriggered
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
@@ -166,7 +166,7 @@ end
 function reset(gauss::ArduinoGaussMeter)
   if gauss.measurementTriggered
     try
-      receive(gauss)
+      receiveRawMeasurment(gauss)
     catch
       gauss.measurementTriggered = false
     end
@@ -181,7 +181,7 @@ receiveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
   #return
     [x_mean,y_mean,z_mean, x_var,y_var,z_var]
 """
-receiveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, receive(gauss))
+receiveMeasurment(gauss::ArduinoGaussMeter) = applyCalibration(gauss, receiveRawMeasurment(gauss))
 
 """
 applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})::Array{Float64,1}
