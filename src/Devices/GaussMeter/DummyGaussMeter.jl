@@ -1,7 +1,7 @@
 export DummyGaussMeter, DummyGaussMeterParams
 
 Base.@kwdef struct DummyGaussMeterParams <: DeviceParams
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  positionID = 0
 end
 DummyGaussMeterParams(dict::Dict) = params_from_dict(DummyGaussMeterParams, dict)
 
@@ -17,7 +17,12 @@ neededDependencies(::DummyGaussMeter) = []
 optionalDependencies(::DummyGaussMeter) = []
 
 Base.close(gauss::DummyGaussMeter) = nothing
-
+getXYZValues(gauss::DummyGaussMeter) = [getXValue(gauss::DummyGaussMeter) ,getYValue(gauss::DummyGaussMeter) ,getZValue(gauss::DummyGaussMeter) ]
+function triggerMeasurment(gauss::DummyGaussMeter) 
+  #NOP
+end
+receiveMeasurment(gauss::DummyGaussMeter) =getXYZValues(gauss)
+setSampleSize(gauss::DummyGaussMeter, sampleSize) = sampleSize
 getXValue(gauss::DummyGaussMeter) = 1.0u"mT"
 getYValue(gauss::DummyGaussMeter) = 2.0u"mT"
 getZValue(gauss::DummyGaussMeter) = 3.0u"mT"

@@ -1,0 +1,244 @@
+[General]
+boreSize = "70mm"
+facility = "Institute for Biomedical Imaging"
+manufacturer = "IBI"
+name = "DummyCalibCube"
+topology = "FFP"
+gradient = "42T/m"
+datasetStore = ""
+defaultSequence = "1DSequence"
+defaultProtocol = "MPIMeasurement"
+producerThreadID = 2
+consumerThreadID = 3
+protocolThreadID = 4
+
+[Devices]
+initializationOrder = [
+  "ard_pool",
+  "sensor1",
+  "sensor2",
+  "sensor3",
+  "sensor4",
+  "sensor5",
+  "sensor6",
+  "sensor7",
+  "sensor8",
+  "sensor9",
+  "sensor10",
+  "sensor11",
+  "sensor12",
+  "sensor13",
+  "sensor14",
+  "sensor15",
+  "sensor16",
+  "sensor17",
+  "sensor18",
+  "sensor19",
+  "sensor20",
+  "sensor21",
+  "sensor22",
+  "sensor23",
+  "sensor24",
+  "sensor25",
+  "sensor26",
+  "cube",
+]
+
+[Devices.ard_pool]
+deviceType = "SerialPortPool"
+blacklist = []
+
+[Devices.cube]
+dependencies = [
+  "sensor1",
+  "sensor2",
+  "sensor3",
+  "sensor4",
+  "sensor5",
+  "sensor6",
+  "sensor7",
+  "sensor8",
+  "sensor9",
+  "sensor10",
+  "sensor11",
+  "sensor12",
+  "sensor13",
+  "sensor14",
+  "sensor15",
+  "sensor16",
+  "sensor17",
+  "sensor18",
+  "sensor19",
+  "sensor20",
+  "sensor21",
+  "sensor22",
+  "sensor23",
+  "sensor24",
+  "sensor25",
+  "sensor26"
+]
+deviceType = "TDesignCube"
+T = 6
+N = 26
+radius = "45.00mm"
+sampleSize = 500
+
+[Devices.sensor1]
+dependencies = ["ard_pool"]
+positionID = 1
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor2]
+dependencies = ["ard_pool"]
+positionID = 2
+deviceType = "DummyGaussMeter"
+
+
+[Devices.sensor3]
+dependencies = ["ard_pool"]
+positionID = 3
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor4]
+dependencies = ["ard_pool"]
+positionID = 4
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor5]
+dependencies = ["ard_pool"]
+positionID = 5
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor6]
+dependencies = ["ard_pool"]
+positionID = 6
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor7]
+dependencies = ["ard_pool"]
+positionID = 7
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor8]
+dependencies = ["ard_pool"]
+positionID = 8
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor9]
+dependencies = ["ard_pool"]
+positionID = 9
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor10]
+dependencies = ["ard_pool"]
+positionID = 10
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor11]
+dependencies = ["ard_pool"]
+positionID = 11
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor12]
+dependencies = ["ard_pool"]
+positionID = 12
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor13]
+dependencies = ["ard_pool"]
+positionID = 13
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor14]
+dependencies = ["ard_pool"]
+positionID = 14
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor15]
+dependencies = ["ard_pool"]
+positionID = 15
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor16]
+dependencies = ["ard_pool"]
+positionID = 16
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor17]
+dependencies = ["ard_pool"]
+positionID = 17
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor18]
+dependencies = ["ard_pool"]
+positionID = 18
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor19]
+dependencies = ["ard_pool"]
+positionID = 19
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor20]
+dependencies = ["ard_pool"]
+positionID = 20
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor21]
+dependencies = ["ard_pool"]
+positionID = 21
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor22]
+dependencies = ["ard_pool"]
+positionID = 22
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor23]
+dependencies = ["ard_pool"]
+positionID = 23
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor24]
+dependencies = ["ard_pool"]
+positionID = 24
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor25]
+dependencies = ["ard_pool"]
+positionID = 25
+deviceType = "DummyGaussMeter"
+
+[Devices.sensor26]
+dependencies = ["ard_pool"]
+positionID = 26
+deviceType = "DummyGaussMeter"
+
+
+#POS - ID
+#1  - 000591152818
+#2  - 000591153050 
+#3  - 000591152804
+#4  - 000591153036
+#5  - 000591152900
+#6  - 000591152773
+#7  - 000591152905
+#8  - 000591152786
+#9  - 000591106144
+#10 - 000591152925
+#11 - 000591152752
+#12 - 000591152836
+#13 - 000591153208
+#14 - 000591153053
+#15 - 000591153000
+#16 - 000591153086
+#17 - 000591152858
+#18 - 000591152745
+#19 - 000591153163
+#20 - 000591152865
+#21 - 000591152814
+#22 - 000591153184
+#23 - 000591152914
+#24 - 000591152820
+#25 - 000591152996
+#26 - 000591153059

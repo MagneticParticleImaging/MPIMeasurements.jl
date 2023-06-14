@@ -48,7 +48,7 @@ device configuration struct.
 """
 function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false)
   devices = Dict{String, Device}()
-
+  println(DeviceParams)
   # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     params = nothing
