@@ -150,6 +150,7 @@ void setup()
   sensor.begin();
   sensor.disableTemp();
 }
+
 int getDelay(char *)
 {
   Serial.print(MEASDELAY, 7);
@@ -170,6 +171,7 @@ int getData(char *)
   // updateData reads values from sensor and reading triggers next measurement
   sensor.updateData();
   delay(MEASDELAY);
+  sensor.updateData();
   
   //storing first measurement as approximation of mean value
   x_1 = sensor.getRawX();
