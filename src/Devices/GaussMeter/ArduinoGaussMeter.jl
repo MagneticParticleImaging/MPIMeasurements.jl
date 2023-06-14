@@ -1,4 +1,4 @@
-export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXYZValues,triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature
+export ArduinoGaussMeter, ArduinoGaussMeterParams, ArduinoGaussMeterDirectParams, ArduinoGaussMeterPoolParams, ArduinoGaussMeterDescriptionParams, getRawXYZValues, getXYZValues, triggerMeasurment, receive, receiveMeasurment, setSampleSize, getSampleSize, getTemperature,reset
 
 
 abstract type ArduinoGaussMeterParams <: DeviceParams end
@@ -40,7 +40,7 @@ function ArduinoGaussMeterDescriptionParams(dict::Dict)
     dict["rotation"] = Float64.(reshape(dict["rotation"], 3, 3))
   end
   if haskey(dict, "calibration")
-    dict["calibration"] = Float64.(reshape(dict["calibration"], 3, 3))
+    dict["calibration"] = Float64.(reshape(dict["calibration"], 3, 3))'
   end
   params_from_dict(ArduinoGaussMeterDescriptionParams, dict)
 end
@@ -50,7 +50,7 @@ Base.@kwdef mutable struct ArduinoGaussMeter <: GaussMeter
   @add_device_fields ArduinoGaussMeterParams
   ard::Union{SimpleArduino,Nothing} = nothing
   sampleSize::Int = 0
-  measdelay = 1000
+  measdelay = 1
   measurementTriggered::Bool = false
 end
 
@@ -102,7 +102,7 @@ end
     [x_raw_mean,y_raw_mean,z_raw_mean, x_raw_var,y_raw_var,z_raw_var]
 """
 function getRawXYZValues(gauss::ArduinoGaussMeter)
-  
+
   triggerMeasurment(gauss)
   data = receive(gauss)
   return data
@@ -127,7 +127,7 @@ end
   """
 function triggerMeasurment(gauss::ArduinoGaussMeter)
   if gauss.measurementTriggered
-    throw("measurement already triggered")
+    throw("measurement already triggered, you have to reset the sensor, use reset()")
   end
   sendCommand(gauss.ard, "DATA")
   gauss.measurementTriggered = true
@@ -149,7 +149,8 @@ function receive(gauss::ArduinoGaussMeter)
     throw("triggerMeasurment(gauss::ArduinoGaussMeter) has to be called first")
   else
     temp = get_timeout(gauss.ard)
-    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 1.2) + 1)
+    timeout_ms = max(1000, floor(Int, gauss.sampleSize * gauss.measdelay * 4) + 1)
+    (timeout_ms)
     set_timeout(gauss.ard, timeout_ms)
     try
       data_strings = split(receive(gauss.ard), ",")
@@ -157,11 +158,20 @@ function receive(gauss::ArduinoGaussMeter)
       return data
     finally
       set_timeout(gauss.ard, temp)
-    gauss.measurementTriggered = false
+      gauss.measurementTriggered = false
     end
   end
 end
 
+function reset(gauss::ArduinoGaussMeter)
+  if gauss.measurementTriggered
+    try
+      receive(gauss)
+    catch
+      gauss.measurementTriggered = false
+    end
+  end
+end
 """
 receiveMeasurment(gauss::ArduinoGaussMeter)::Array{Float64,1}
   collecting, calibrating and returning measurment for 'gauss'-sensor in mT
@@ -186,7 +196,7 @@ Varianz can't be calibrated
 function applyCalibration(gauss::ArduinoGaussMeter, data::Vector{Float64})
   means = data[1:3]
   # TODO Sanity checks on data, does it have the expected size
-  calibrated_means = gauss.params.rotation * ((gauss.params.calibration * means) - gauss.params.biasCalibration)
+  calibrated_means = gauss.params.rotation * ((gauss.params.calibration * means) + gauss.params.biasCalibration) .* 1.0u"mT"
   return calibrated_means
 end
 
@@ -224,7 +234,7 @@ returns tempreture of the sensor, do not expect a high tempreture resolution
 """
 function getTemperature(gauss::ArduinoGaussMeter)
   temp_str = queryCommand(gauss.ard, "TEMP")
-  return parse(Float32, temp_str)
+  return parse(Float32, temp_str)u"°C"
 end
 
 getPosition(gauss::ArduinoGaussMeter) = gauss.params.position
