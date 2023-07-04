@@ -75,8 +75,17 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
       for channel in periodicChannel
         otherComp = filter(!in(periodicElectricalComponents(channel)), periodicComponents)
         for comp in periodicElectricalComponents(channel)
-          # TODO smarter init value, maybe min between 1/10 and target (<- target might not be V)
-          amplitude!(comp, simpleChannel[channel].limitPeak/10)
+          # TODO: maybe remove code duplication with prepareTX, using T here would work, but then the TXDAQController does not know the V amplitude that was sent
+            amp = amplitude(comp)
+            pha = phase(comp)
+            if dimension(amp) == dimension(1.0u"T")
+              f_comp = ustrip(u"Hz", _baseFrequency) / divider(comp)
+              complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
+              amplitude!(comp,uconvert(u"V",abs(complex_comp)))
+              phase!(comp,angle(complex_comp)u"rad")
+            else
+              error("The amplitude for a channel that is controlled by a TxDAQController needs to be given in T")
+            end
         end
         if txCont.params.correctCrossCoupling
           for comp in otherComp
@@ -329,6 +338,7 @@ function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
   len = length(keys(cont.simpleChannel))
   N = rxNumSamplingPoints(cont.currSequence)
   dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
 
   Γ = zeros(ComplexF64, len, len, size(uRef, 3), size(uRef, 4))
   sorted = uRef[:, cont.refIndices, :, :]
@@ -338,7 +348,7 @@ function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
     end
   end
   for d =1:len
-    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
+    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
     for e=1:len
       correction = c * -im * dividers[e]/dividers[d] * 2/N
       for j = 1:size(Γ, 3)
@@ -355,10 +365,11 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   len = length(keys(cont.simpleChannel))
   N = rxNumSamplingPoints(cont.currSequence)
   dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
   Γ = zeros(ComplexF64, len, len)
   calcFieldFromRef!(Γ, cont, uRef, SortedRef())
   for d =1:len
-    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
+    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
     for e=1:len
       correction = c * -im * dividers[e]/dividers[d] * 2/N
       Γ[d,e] = correction * Γ[d,e]
@@ -381,7 +392,7 @@ end
 
 function calcDesiredField(cont::ControlSequence)
   seqChannel = keys(cont.simpleChannel)
-  temp = [ustrip(amplitude(components(ch)[1])) * exp(im*ustrip(phase(components(ch)[1]))) for ch in seqChannel]
+  temp = [ustrip(u"T",amplitude(components(ch)[1])) * exp(im*ustrip(u"rad",phase(components(ch)[1]))) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
 
@@ -488,13 +499,18 @@ function updateControlSequence!(cont::ControlSequence, newTx::Matrix)
 end
 
 function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQController)
-  calibFieldToVoltEstimate = [ustrip(u"V/T", ch.calibration) for ch in collect(Base.values(cont.simpleChannel))]
-  calibFieldToVoltMeasured = abs.(diag(oldTx) ./ diag(Γ))
-  deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
-  @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $deviation"
-  valid = maximum( deviation ) < txCont.params.fieldToVoltDeviation
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  calibFieldToVoltEstimate = [ustrip(u"V/T", collect(Base.values(cont.simpleChannel))[idx].calibration(frequencies[idx])) for idx in 1:length(keys(cont.simpleChannel))]
+  calibFieldToVoltMeasured = (diag(oldTx) ./ diag(Γ))
+  abs_deviation = 1.0 .- abs.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
+  phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
+  @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $abs_deviation"
+  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
   if !valid
-    @warn "Measured field to volt deviates by $deviation from estimate, exceeding allowed deviation"
+    @warn "Measured field to volt deviates by $abs_deviation from estimate, exceeding allowed deviation"
+  elseif maximum(abs.(phase_deviation)) > 10/180*pi
+    @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Continuing anyways..."
   end
   return valid
 end

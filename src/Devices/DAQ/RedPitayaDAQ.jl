@@ -20,7 +20,7 @@ Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
-function createDAQChannel(RedPitayaLUTChannelParams, dict::Dict{String, Any})
+function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
   calib = nothing
   if haskey(dict, "calibration")
     calib = uparse.(dict["calibration"])
@@ -438,7 +438,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
+    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode=daq.params.triggerMode)
     if serverMode(daq.rpc) == ACQUISITION
       for ch in daq.rampingChannel
         enableRampDown!(daq.rpc, ch, true)
@@ -697,7 +697,7 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     allAmps[name] = amps
     allPhases[name] = phases
   end
-
+  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases
   setTxParams(daq, allAmps, allPhases, allAwg)
 end
 

@@ -50,12 +50,12 @@ abstract type DAQChannelParams end
 abstract type TxChannelParams <: DAQChannelParams end
 abstract type RxChannelParams <: DAQChannelParams end
 
-Base.@kwdef struct DAQFeedback
+Base.@kwdef mutable struct DAQFeedback
   channelID::AbstractString
   calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
-Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
+Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   channelIdx::Int64
   limitPeak::typeof(1.0u"V")
   sinkImpedance::SinkImpedance = SINK_HIGH
@@ -68,7 +68,7 @@ Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
   channelIdx::Int64
 end
 
-function createDAQChannel(::Type{DAQTXChannelParams}, dict::Dict{String,Any})
+function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
   splattingDict = Dict{Symbol, Any}()
   splattingDict[:channelIdx] = dict["channel"]
   splattingDict[:limitPeak] = uparse(dict["limitPeak"])
@@ -88,7 +88,7 @@ function createDAQChannel(::Type{DAQTXChannelParams}, dict::Dict{String,Any})
   end
 
   if haskey(dict, "calibration")
-    splattingDict[:calibration] = parse_info_tf(dict["calibration"])
+    splattingDict[:calibration] = parse_into_tf(dict["calibration"])
   end
 
   return DAQTxChannelParams(;splattingDict...)
@@ -99,7 +99,7 @@ function parse_into_tf(value::String)
     calibration_tf = value
   else # case 2: single value, extended into transfer function with no frequency dependency
     calibration_value = uparse(value)
-    calibration_tf = TransferFunction([0,10e6],[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
+    calibration_tf = TransferFunction([0,10e6],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
   end
   return calibration_tf
 end
