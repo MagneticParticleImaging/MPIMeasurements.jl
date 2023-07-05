@@ -242,6 +242,17 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
   end
 end
 
+export divider!
+function divider!(channel::PeriodicElectricalChannel, componentId::AbstractString, value::Integer)
+  index = findfirst(x -> id(x) == componentId, channel.components)
+  if !isnothing(index)
+    divider!(channel.components[index], value)
+  else
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+  end
+end
+
+
 export acqGradient
 acqGradient(sequence::Sequence) = nothing # TODO: Implement
 
