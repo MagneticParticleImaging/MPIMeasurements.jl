@@ -350,7 +350,7 @@ function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
   for d =1:len
     c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
     for e=1:len
-      correction = c * -im * dividers[e]/dividers[d] * 2/N
+      correction = c * dividers[e]/dividers[d] * 2/N
       for j = 1:size(Γ, 3)
         for i = 1:size(Γ, 4)
           Γ[d, e, j, i] = correction * Γ[d, e, j, i]
@@ -371,7 +371,7 @@ function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   for d =1:len
     c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
     for e=1:len
-      correction = c * -im * dividers[e]/dividers[d] * 2/N
+      correction = c * dividers[e]/dividers[d] * 2/N
       Γ[d,e] = correction * Γ[d,e]
     end
   end

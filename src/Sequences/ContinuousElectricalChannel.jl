@@ -51,7 +51,19 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Continu
   end
 
   if haskey(channelDict, "phase")
-    phase = uparse.(channelDict["phase"])
+    phaseDict = Dict("cosine"=>0.0u"rad", "cos"=>0.0u"rad","sine"=>pi/2u"rad", "sin"=>pi/2u"rad","-cosine"=>pi*u"rad", "-cos"=>pi*u"rad","-sine"=>-pi/2u"rad", "-sin"=>-pi/2u"rad")
+    phase = []
+    for x in channelDict["phase"]
+      try
+        push!(phase, uparse.(x))
+      catch
+        if haskey(phaseDict, x)
+          push!(phase, phaseDict[x])
+        else
+          error("The value $x for the phase could not be parsed. Use either a unitful value, or one of the predefined keywords ($(keys(phaseDict)))")
+        end
+      end
+    end      
   else
     phase = 0.0u"rad"  # Default phase
   end

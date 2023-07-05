@@ -676,7 +676,7 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
         f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
         complex_comp = (amp*exp(im*pha)) * calibration(daq, name)(f_comp)
         amp = abs(complex_comp)
-        pha = angle(complex_comp)
+        pha = angle(complex_comp)u"rad"
       end
       push!(amps, amp)
       push!(phases, pha)

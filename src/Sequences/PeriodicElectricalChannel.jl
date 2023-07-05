@@ -108,7 +108,19 @@ function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElec
   end
 
   if haskey(componentDict, "phase")
-    phase = uparse.(componentDict["phase"])
+    phaseDict = Dict("sine"=>0.0u"rad", "sin"=>0.0u"rad","cosine"=>pi/2u"rad", "cos"=>pi/2u"rad","-sine"=>pi*u"rad", "-sin"=>pi*u"rad","-cosine"=>-pi/2u"rad", "-cos"=>-pi/2u"rad")
+    phase = []
+    for x in componentDict["phase"]
+      try
+        push!(phase, uparse.(x))
+      catch
+        if haskey(phaseDict, x)
+          push!(phase, phaseDict[x])
+        else
+          error("The value $x for the phase could not be parsed. Use either a unitful value, or one of the predefined keywords ($(keys(phaseDict)))")
+        end
+      end
+    end
   else
     phase = fill(0.0u"rad", length(divider)) # Default phase
   end
@@ -151,8 +163,9 @@ cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz"
 
 isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
 
-export divider
+export divider, divider!
 divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
+divider!(component::PeriodicElectricalComponent,value::Integer) = component.divider = value
 
 export amplitude, amplitude!
 amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
