@@ -35,6 +35,7 @@ const quit = "quit\n"
 const exit_ = "exit\n"
 const err = "err?\n"
 
+coordinateSystem(rob::BrukerRobot) = ScannerCoordinateSystem(dof(rob))
 
 dof(rob::BrukerRobot) = 3
 axisRange(rob::BrukerRobot) = rob.params.axisRange
