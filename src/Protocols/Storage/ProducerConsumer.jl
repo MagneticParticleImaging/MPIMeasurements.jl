@@ -2,8 +2,7 @@ SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothin
 function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
   numFrames = acqNumFrames(sequence.targetSequence)
   numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
-  # TODO function for length(keys(simpleChannel))
-  len = length(keys(sequence.simpleChannel))
+  len = numControlledChannels(sequence)
   buffer = DriveFieldBuffer(1, zeros(ComplexF64, len, len, numPeriods, numFrames), sequence)
   avgFrames = acqNumFrameAverages(sequence.targetSequence)
   if avgFrames > 1

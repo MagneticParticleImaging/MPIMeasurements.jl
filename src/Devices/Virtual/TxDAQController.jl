@@ -22,7 +22,7 @@ mutable struct ControlSequence
   targetSequence::Sequence
   currSequence::Sequence
   # Periodic Electric Components
-  simpleChannel::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
+  controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
   sinLUT::Union{Matrix{Float64}, Nothing}
   cosLUT::Union{Matrix{Float64}, Nothing}
   refIndices::Vector{Int64}
@@ -200,7 +200,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
   # Hacky solution
   controlPhaseDone = false
   i = 1
-  len = length(keys(control.simpleChannel))
+  len = numControlledChannels(control)
   try
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
@@ -295,6 +295,8 @@ end
 getControlledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel && length(arbitraryElectricalComponents(channel)) == 0]
 getUncontrolledChannel(::TxDAQController, seq::Sequence) = [channel for field in seq.fields if !field.control for channel in field.channels if typeof(channel) <: PeriodicElectricalChannel]
 
+numControlledChannels(cont::ControlSequence) = length(keys(cont.controlledChannelsDict))
+
 function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence)
   N = rxNumSamplingPoints(seq)
   D = length(seqChannel)
@@ -335,9 +337,9 @@ function calcFieldFromRef(cont::ControlSequence, uRef::Array{Float32, 3}, ::Unso
 end
 
 function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
-  len = length(keys(cont.simpleChannel))
+  len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
-  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.controlledChannelsDict)]
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
 
   Γ = zeros(ComplexF64, len, len, size(uRef, 3), size(uRef, 4))
@@ -348,7 +350,7 @@ function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
     end
   end
   for d =1:len
-    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
+    c = ustrip(u"T/V", collect(Base.values(cont.controlledChannelsDict))[d].feedback.calibration(frequencies[d]))
     for e=1:len
       correction = c * dividers[e]/dividers[d] * 2/N
       for j = 1:size(Γ, 3)
@@ -362,14 +364,14 @@ function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
 end
 
 function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
-  len = length(keys(cont.simpleChannel))
+  len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
-  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.controlledChannelsDict)]
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
   Γ = zeros(ComplexF64, len, len)
   calcFieldFromRef!(Γ, cont, uRef, SortedRef())
   for d =1:len
-    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration(frequencies[d]))
+    c = ustrip(u"T/V", collect(Base.values(cont.controlledChannelsDict))[d].feedback.calibration(frequencies[d]))
     for e=1:len
       correction = c * dividers[e]/dividers[d] * 2/N
       Γ[d,e] = correction * Γ[d,e]
@@ -391,7 +393,7 @@ function calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::ControlSequen
 end
 
 function calcDesiredField(cont::ControlSequence)
-  seqChannel = keys(cont.simpleChannel)
+  seqChannel = keys(cont.controlledChannelsDict)
   temp = [ustrip(u"T",amplitude(components(ch)[1])) * exp(im*ustrip(u"rad",phase(components(ch)[1]))) for ch in seqChannel]
   return convert(Matrix{ComplexF64}, diagm(temp))
 end
@@ -444,7 +446,7 @@ end
 function calcControlMatrix(cont::ControlSequence)
   # TxDAQController only works on one field atm (possible future TODO: update to multiple fields, matrix per field)
   field = fields(cont.currSequence)[1]
-  len = length(keys(cont.simpleChannel))
+  len = numControlledChannels(cont)
   κ = zeros(ComplexF64, len, len)
   # In each channel the first component is the channels "own" component, the following are the ordered correction components of the other channel
   # -> For Channel 2 its components in the matrix row should be c2 c1 c3 for a 3x3 matrix 
@@ -499,9 +501,9 @@ function updateControlSequence!(cont::ControlSequence, newTx::Matrix)
 end
 
 function checkFieldToVolt(oldTx, Γ, cont::ControlSequence, txCont::TxDAQController)
-  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.controlledChannelsDict)]
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
-  calibFieldToVoltEstimate = [ustrip(u"V/T", collect(Base.values(cont.simpleChannel))[idx].calibration(frequencies[idx])) for idx in 1:length(keys(cont.simpleChannel))]
+  calibFieldToVoltEstimate = [ustrip(u"V/T", collect(Base.values(cont.controlledChannelsDict))[idx].calibration(frequencies[idx])) for idx in 1:numControlledChannels(cont)]
   calibFieldToVoltMeasured = (diag(oldTx) ./ diag(Γ))
   abs_deviation = 1.0 .- abs.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
@@ -519,7 +521,7 @@ function checkVoltLimits(newTx, cont::ControlSequence, txCont::TxDAQController)
   validChannel = zeros(Bool, size(newTx, 2))
   for i = 1:size(newTx, 2)
     max = sum(abs.(newTx[i, :]))
-    validChannel[i] = max < ustrip(u"V", collect(Base.values(cont.simpleChannel))[i].limitPeak)
+    validChannel[i] = max < ustrip(u"V", collect(Base.values(cont.controlledChannelsDict))[i].limitPeak)
   end
   valid = all(validChannel)
   if !valid

@@ -260,7 +260,7 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
       protocol.restored = false
     end
     if isempty(protocol.systemMeasState.drivefield)
-      len = length(keys(protocol.contSequence.simpleChannel))
+      len = numControlledChannels(protocol.contSequence)
       drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
       calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
       applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))

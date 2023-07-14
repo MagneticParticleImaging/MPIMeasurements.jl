@@ -148,8 +148,7 @@ end
 function TxDAQControllerBuffer(tx::TxDAQController, sequence::ControlSequence)
   numFrames = acqNumFrames(sequence.targetSequence)
   numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
-  # TODO function for length(keys(simpleChannel))
-  len = length(keys(sequence.simpleChannel))
+  len = numControlledChannels(sequence)
   buffer = zeros(ComplexF64, len, len, numPeriods, numFrames)
   return TxDAQControllerBuffer(1, buffer, tx)
 end
