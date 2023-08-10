@@ -1,15 +1,14 @@
-export RedPitayaDAQParams, RedPitayaDAQ, disconnect, setSlowDAC, getSlowADC, connectToServer,
-       setTxParamsAll, disconnect, RampingMode, NONE, HOLD, STARTUP
-
+export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
+export RedPitayaDAQParams
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
   "IPs of the Red Pitayas"
   ips::Vector{String}
-  "Trigger mode of the Red Pitayas. Default: `EXTERNAL`."
-  triggerMode::RedPitayaDAQServer.TriggerMode = EXTERNAL
+  "Trigger mode of the Red Pitayas. Default: `ALL_INTERNAL`."
+  triggerMode::RedPitayaDAQServer.ClusterTriggerSetup = ALL_INTERNAL
   "Time to wait after a reset has been issued."
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
@@ -70,6 +69,14 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
       calib = nothing
       if haskey(value, "calibration")
         calib = uparse.(value["calibration"])
+
+        if unit(upreferred(calib)) == upreferred(u"V/T")
+          calib = calib .|> u"V/T"
+        elseif unit(upreferred(calib)) == upreferred(u"V/A")
+          calib = calib .|> u"V/A"
+        else
+          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
+        end
       end
       channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
     end
@@ -78,6 +85,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
   return channels
 end
 
+export RedPitayaDAQ
 Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   @add_device_fields RedPitayaDAQParams
 
@@ -103,7 +111,7 @@ end
 function _init(daq::RedPitayaDAQ)
   # Restart the DAQ if necessary
   try
-    daq.rpc = RedPitayaCluster(daq.params.ips)
+    daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
   catch e
     if hasDependency(daq, SurveillanceUnit)
       su = dependency(daq, SurveillanceUnit)
@@ -126,7 +134,6 @@ function _init(daq::RedPitayaDAQ)
     masterTrigger!(daq.rpc, false)
     serverMode!(daq.rpc, CONFIGURATION)
   end
-  triggerMode!(daq.rpc, string(daq.params.triggerMode))
 
   daq.present = true
 end
@@ -289,7 +296,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
   end
-  
+
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))
   @sync for (i, rp) in enumerate(daq.rpc)
     @async begin
@@ -573,7 +580,7 @@ end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
-  end  
+  end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
   @add_batch batch frequencyDAC!(daq.rpc, channelIdx_, componentIdx, freq)

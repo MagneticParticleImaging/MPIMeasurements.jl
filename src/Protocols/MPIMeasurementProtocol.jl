@@ -103,8 +103,6 @@ function _execute(protocol::MPIMeasurementProtocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
 
-  debugCount = 0
-
   while !(protocol.finishAcknowledged)
     handleEvents(protocol)
     protocol.cancelled && throw(CancelException())

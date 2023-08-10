@@ -1,4 +1,4 @@
-export RobotBasedMagneticFieldStaticProtocolParams, RobotBasedMagneticFieldStaticProtocol, measurement, filename
+export RobotBasedMagneticFieldStaticProtocolParams, RobotBasedMagneticFieldStaticProtocol, measurement
 
 Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing

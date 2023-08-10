@@ -122,7 +122,7 @@ Read out current content of the output buffer of the serial devive. Returns a St
 function receive(sd::SerialDevice)
 	lock(sd.sdLock)
 	try
-		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		set_read_timeout(sd.sp, sd.timeout_ms//1000)
 		reply = readuntil(sd.sp, sd.delim_read)
 		@debug "$(sd.portName) received: $reply"
 		return reply
@@ -134,7 +134,7 @@ end
 function receive(sd::SerialDevice, array::AbstractArray)
 	lock(sd.sdLock)
 	try
-		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		set_read_timeout(sd.sp, sd.timeout_ms//1000)
 		return read!(sd.sp, array)
 	finally
 		unlock(sd.sdLock)
@@ -144,7 +144,7 @@ end
 function receiveDelimited(sd::SerialDevice, array::AbstractArray)
 	lock(sd.sdLock)
 	try
-		set_read_timeout(sd.sp, sd.timeout_ms/1000)
+		set_read_timeout(sd.sp, sd.timeout_ms//1000)
 		buf = IOBuffer()
 		done = false
 		while bytesavailable(sd.sp) > 0 || !done

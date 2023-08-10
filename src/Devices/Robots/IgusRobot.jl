@@ -1,6 +1,5 @@
 export IgusRobot, IgusRobotParams
 
-using Sockets
 const SDOObj = @NamedTuple{addr::UInt16, subidx::UInt8, bytes::UInt8}
 
 # available objects defined in D1 (motor controller) handbook section 6.4.13
@@ -339,7 +338,7 @@ function sendAndReceiveTelegram(rob::IgusRobot, telegram::Vector{UInt8})
 
     write(rob.socket, telegram)
 
-    rsp = read(rob.socket, answerBytes)
+    rsp = Base.read(rob.socket, answerBytes)
 
     if telegram[1] != rsp[1]
         @error "Die erhaltene Antwort stimmt nicht mit der ID der Anfrage überein. Dies passiert eigentlich nur, wenn man auch etwas falsches/unerwartetes geschickt hat und die Steuerung überfordert ist... Der Socket wird geschlossen und die Verbindung bei der nächsten Anfrage neu aufgebaut, dies kann den Fehler beheben. Eventuell sollte hier jedoch eine excpetion geworfen werden"
