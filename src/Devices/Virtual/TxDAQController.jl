@@ -104,7 +104,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   currSeq = Sequence(;general = general, acquisition = acq, fields = _fields)
 
   duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
-  acqNumFrames(currSeq, duration)
+  acqNumFrames(currSeq, max(duration, 1))
 
   return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT, refIndices)
 end
