@@ -226,6 +226,40 @@ function calibration(daq::AbstractDAQ, channelID::AbstractString)
 end
   
 
+export applyForwardCalibration!
+function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
+
+  # TODO/JA: what about the other types of channels? 
+
+  for channel in periodicElectricalTxChannels(seq) 
+
+    offsetVolts = offset(channel)*calibration(daq, id(channel))(0) # use DC value for offsets
+    offset!(channel, offsetVolts)
+
+    for comp in periodicElectricalComponents(channel)
+        amp = amplitude(comp)
+        pha = phase(comp)
+        if dimension(amp) != dimension(1.0u"V")
+          f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
+          complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
+          amplitude!(comp,uconvert(u"V",abs(complex_comp)))
+          phase!(comp,angle(complex_comp)u"rad")
+        end
+    end
+
+    for aw_comp in arbitraryElectricalComponents(channel)
+      wave = values(aw_comp)
+      if dimension(wave[1]) != dimension(1.0u"V")
+        f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
+        f_awg = rfftfreq(2^14, f_comp*2^14)
+        wave = irfft(rfft(wave).*calibration(daq, name)(f_awg), 2^14)
+        values!(aw_comp, wave)
+      end
+      
+    end  
+  end
+end
+
 
 
 #### Measurement Related Functions ####

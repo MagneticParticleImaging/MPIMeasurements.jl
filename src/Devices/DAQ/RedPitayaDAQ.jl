@@ -514,6 +514,8 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
 
+  applyForwardCalibration!(sequence, daq)
+
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
     baseFreq = txBaseFrequency(sequence)
