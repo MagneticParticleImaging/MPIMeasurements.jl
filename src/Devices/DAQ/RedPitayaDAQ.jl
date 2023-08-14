@@ -515,7 +515,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   end
 
   applyForwardCalibration!(sequence, daq)
-
+  
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
     baseFreq = txBaseFrequency(sequence)
@@ -531,11 +531,19 @@ function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, b
 end
 function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-  offsetVolts = offset(channel)*calibration(daq, id(channel))(0) # use DC value for offsets
-  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-  for (idx, component) in enumerate(components(channel))
+  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offset(channel)))
+
+  for (idx, component) in enumerate(periodicElectricalComponents(channel)) # in the future add the SweepElectricalComponents as well
     setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
   end
+  
+  awgComps = arbitraryElectricalComponents(channel) 
+  if length(awgComps) > 1
+    throw(SequenceConfigurationError("The channel with the ID $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
+  elseif length(awgComps) == 1
+    setupTxComponent!(batch, daq, channel, awgComps[1], 0, baseFreq)
+  end
+
 end
 
 function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component, componentIdx, baseFreq)
@@ -545,7 +553,7 @@ function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel,
 end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
-    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform if a fourth is necessary."))
   end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
@@ -665,41 +673,28 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
-  for channel in periodicElectricalTxChannels(sequence)
+    for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
-    amps = []
-    phases = []
-    wave = nothing
-    for comp in periodicElectricalComponents(channel)
-      # Lengths check == 1 happens in setupTx already
-      amp = amplitude(comp)
-      pha = phase(comp)
-      if dimension(amp) != dimension(1.0u"V")
-        f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
-        complex_comp = (amp*exp(im*pha)) * calibration(daq, name)(f_comp)
-        amp = abs(complex_comp)
-        pha = angle(complex_comp)u"rad"
-      end
-      push!(amps, amp)
-      push!(phases, pha)
+    # This should set all unused components to zero, but what about unused channels?
+    amps = zeros(typeof(1.0u"V"), 3)
+    phases = zeros(typeof(1.0u"rad"), 3)
+    wave = zeros(typeof(1.0u"V"), 2^14)
+    for (i,comp) in enumerate(periodicElectricalComponents(channel))
+      # Length check < 3 happens in setupTx already
+      amps[i] = amplitude(comp)
+      phases[i] = phase(comp)
     end
+    # Length check < 1 happens in setupTx already
     comps = arbitraryElectricalComponents(channel)
-    if length(comps) > 2
-      throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
-    elseif length(comps) == 1
+    if length(comps)==1
       wave = values(comps[1])
-      if dimension(wave[1]) != dimension(1.0u"V") # TODO/JA: make sure that the controller always uses V as its component waveform
-        f_comp = ustrip(u"Hz", txBaseFrequency(sequence)) / divider(comp)
-        f_awg = rfftfreq(2^14, f_comp*2^14)
-        wave = irfft(rfft(wave).*calibration(daq, name)(f_awg), 2^14)
-      end
-      allAwg[name] = wave
     end
 
+    allAwg[name] = wave
     allAmps[name] = amps
     allPhases[name] = phases
   end
-  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases
+  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases allAwg
   setTxParams(daq, allAmps, allPhases, allAwg)
 end
 
@@ -827,7 +822,7 @@ numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all 
 numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
 numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
 numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
-numComponentsMax(daq::RedPitayaDAQ) = 3
+numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 
