@@ -148,8 +148,8 @@ end
 function TxDAQControllerBuffer(tx::TxDAQController, sequence::ControlSequence)
   numFrames = acqNumFrames(sequence.targetSequence)
   numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
-  len = numControlledChannels(sequence)
-  buffer = zeros(ComplexF64, len, len, numPeriods, numFrames)
+  bufferShape = controlMatrixShape(sequence)
+  buffer = zeros(ComplexF64, bufferShape[1], bufferShape[2], numPeriods, numFrames)
   return TxDAQControllerBuffer(1, buffer, tx)
 end
 update!(buffer::TxDAQControllerBuffer, start, stop) = insert!(buffer, calcControlMatrix(buffer.tx.cont), start, stop)
