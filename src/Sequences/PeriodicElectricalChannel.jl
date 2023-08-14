@@ -31,6 +31,7 @@ Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
   divider::Integer
+  "Values for the waveform of the component"
   values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
 end
 
@@ -42,8 +43,9 @@ Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
   "Components added for this channel."
   components::Vector{ElectricalComponent}
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
-  offset::Union{typeof(1.0u"T"), typeof(1.0u"V")} = 0.0u"T"
+  offset::Union{typeof(1.0u"T"), typeof(1.0u"A"), typeof(1.0u"V")} = 0.0u"T"
   isDfChannel::Bool = true
+  dcEnabled::Bool = true
 end
 
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
@@ -56,16 +58,21 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
     tmp = uparse.(channelDict["offset"])
     if eltype(tmp) <: Unitful.Current
       tmp = tmp .|> u"A"
+    elseif eltype(tmp) <: Unitful.Voltage
+      tmp = tmp .|> u"V"
     elseif eltype(tmp) <: Unitful.BField
       tmp = tmp .|> u"T"
     else
-      error("The value for an offset has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+      error("The value for an offset has to be either given as a voltage, current or in tesla. You supplied the type `$(eltype(tmp))`.")
     end
     splattingDict[:offset] = tmp
   end
 
   if haskey(channelDict, "isDfChannel")
     splattingDict[:isDfChannel] = channelDict["isDfChannel"]
+  end
+  if haskey(channelDict, "dcEnabled")
+    splattingDict[:isDfChannel] = channelDict["dcEnabled"]
   end
 
   components = Vector{ElectricalComponent}()
@@ -148,8 +155,9 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
   return ArbitraryElectricalComponent(id=componentID, divider=divider, values=values)
 end
 
-export offset
+export offset, offset!
 offset(channel::PeriodicElectricalChannel) = channel.offset
+offset!(channel::PeriodicElectricalChannel, offset::Union{typeof(1.0u"T"),typeof(1.0u"V")}) = channel.offset = offset
 
 export components
 components(channel::PeriodicElectricalChannel) = channel.components
@@ -162,6 +170,16 @@ arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(c
 cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
 
 isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
+
+# TODO/JA: check if this can automatically be implemented for all setters (and getters)
+function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
+  index = findfirst(x -> id(x) == componentId, channel.components)
+  if !isnothing(index)
+    waveform!(channel.components[index], value)
+  else
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+  end
+end
 
 export divider, divider!
 divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
@@ -178,30 +196,24 @@ function amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(
 end
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
 amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
+amplitude!(component::ArbitraryElectricalComponent, values) = error("Can not change the amplitude of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
 
 export phase, phase!
 phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
 phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
 phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
-phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
-phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad" #component.phase[period]
+phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = error("Can not change the phase of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
+phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad"
 
+export values, values!
+values(component::ArbitraryElectricalComponent) = component.values
+values!(component::ArbitraryElectricalComponent, values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}) = component.values = values
 
 export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform
 waveform!(component::ElectricalComponent, value) = component.waveform = value
 waveform(::ArbitraryElectricalComponent) = WAVEFORM_ARBITRARY
-
-values(component::ArbitraryElectricalComponent) = component.values
-
-function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
-  index = findfirst(x -> id(x) == componentId, channel.components)
-  if !isnothing(index)
-    waveform!(channel.components[index], value)
-  else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
-  end
-end
+waveform!(::ArbitraryElectricalComponent, value) = error("Can not change the waveform type of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
 
 export id
 id(component::PeriodicElectricalComponent) = component.id

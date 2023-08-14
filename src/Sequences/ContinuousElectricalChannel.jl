@@ -13,7 +13,7 @@ Base.@kwdef struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # T
   "Phase of the component for each period of the field."
   phase::typeof(1.0u"rad")
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
-  offset::Union{typeof(1.0u"T"), typeof(1.0u"A")} = 0.0u"T"
+  offset::Union{typeof(1.0u"T"), typeof(1.0u"V"), typeof(1.0u"A")} = 0.0u"T"
   "Waveform of the component."
   waveform::Waveform = WAVEFORM_SINE
 end
@@ -51,7 +51,7 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Continu
   end
 
   if haskey(channelDict, "phase")
-    phaseDict = Dict("cosine"=>0.0u"rad", "cos"=>0.0u"rad","sine"=>pi/2u"rad", "sin"=>pi/2u"rad","-cosine"=>pi*u"rad", "-cos"=>pi*u"rad","-sine"=>-pi/2u"rad", "-sin"=>-pi/2u"rad")
+    phaseDict = Dict("sine"=>0.0u"rad", "sin"=>0.0u"rad","cosine"=>pi/2u"rad", "cos"=>pi/2u"rad","-sine"=>pi*u"rad", "-sin"=>pi*u"rad","-cosine"=>-pi/2u"rad", "-cos"=>-pi/2u"rad")
     phase = []
     for x in channelDict["phase"]
       try
