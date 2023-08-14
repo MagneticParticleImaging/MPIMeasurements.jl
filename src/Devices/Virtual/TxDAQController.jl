@@ -58,7 +58,7 @@ optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, Temperat
 
 function ControlSequence(txCont::TxDAQController, target::Sequence, daq::AbstractDAQ)
 
-  if any(!isa.(getControlledChannels(target), PeriodicElectricalChannel))
+  if any(.!isa.(getControlledChannels(target), PeriodicElectricalChannel))
     error("A field that requires control can only have PeriodicElectricalChannels.") # TODO/JA: check if this limitation can be lifted: would require special care when merging a sequence
   end
 
@@ -71,7 +71,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
-  if txCont.correctCrossCoupling # use the old controller # TODO/JA: fix logic to decide which controller should be used
+  if txCont.params.correctCrossCoupling # use the old controller # TODO/JA: fix logic to decide which controller should be used
 
     if length(fields(currSeq)) > 1
       throw(IllegalStateException("Sequence requires control of multiple fields, which is currently not implemented with cross-coupling correction."))
@@ -113,14 +113,14 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   else # use the new controller
     
     # AW offset gets ignored -> should be zero anyways
-    if any(x->mean.(values.(arbitraryElectricalComponents(x))).>1u"µT", seqControlledChannels)
+    if any(x->any(mean.(values.(arbitraryElectricalComponents(x))).>1u"µT"), seqControlledChannels)
       error("The DC-component of arbitrary waveform components cannot be handled during control! Please remove any DC-offset from your waveform and use the offset parameter of the corresponding channel!")
     end
 
     # all channels on the same ref must agree with their offset -> just choose one of the channels that has the dcEnabled Flag
     
 
-    rfftIndices = createRFFTindices(controlledChannelsDict, target)
+    rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
     return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices)
   end
@@ -135,15 +135,15 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
   # N for every single-frequency component that has N periods in the sequence
   # every Mth sample for all arbitraryWaveform components
   numControlledChannels = length(keys(controlledChannelsDict))
-  rfftSize = div(lcm(dfDivider(seq)),2)+1
+  rfftSize = Int(div(lcm(dfDivider(seq))/(upreferred(txBaseFrequency(seq)/rxSamplingRate(seq))),2)+1)
   index_mask = falses(numControlledChannels, numComponentsMax(daq)+1, rfftSize)
 
   refChannelIdx = [channelIdx(daq, ch.feedback.channelID) for ch in collect(Base.values(controlledChannelsDict))]
   
 
   for (i, channel) in enumerate(keys(controlledChannelsDict))
-    for (j, comp) in components(channel)
-      dfCyclesPerPeriod = lcm(dfDivider(seq))/divider(comp)
+    for (j, comp) in enumerate(components(channel))
+      dfCyclesPerPeriod = Int(lcm(dfDivider(seq))/divider(comp))
       if isa(comp, PeriodicElectricalComponent)
         index_mask[i,j,dfCyclesPerPeriod+1] = true
       elseif isa(comp, ArbitraryElectricalComponent)
@@ -161,8 +161,8 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
   uniqueRefChIdx = unique(refChannelIdx)  
   combinedRefChannelMask = falses(length(uniqueRefChIdx), size(allComponentMask, 2))
   # if two controlled channels are on the same ref channel they should be combined, maybe there is a more elegant way to do this, but I cant figure it out
-  for i in 1:numControlledChannels
-    combinedRefChannelMask .|= allComponentMask[findfirst(x->x==refChannelIdx[i], uniqueRefChIdx),:]
+  for i in 1:numControlledChannels 
+    combinedRefChannelMask[findfirst(x->x==refChannelIdx[i], uniqueRefChIdx),:] .|= allComponentMask[i,:]
   end
   # if the total number of trues is smaller than the full array, there is an overlap of different components in the same FFT bin somewhere
   if sum(combinedRefChannelMask) < sum(index_mask)
@@ -261,12 +261,13 @@ function createControlledChannelsDict(seqControlledChannels::Vector{PeriodicElec
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
     if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
+      @debug "Found missing control def: " name isnothing(daqChannel) isnothing(daqChannel.feedback) !in(daqChannel.feedback.channelID, daq.refChanIDs)
       push!(missingControlDef, name)
     else
       dict[seqChannel] = daqChannel
     end
   end
-  
+    
   if length(missingControlDef) > 0
     message = "The sequence requires control for the following channel " * join(string.(missingControlDef), ", ", " and ") * ", but either the channel was not defined or had no defined feedback channel."
     throw(IllegalStateException(message))

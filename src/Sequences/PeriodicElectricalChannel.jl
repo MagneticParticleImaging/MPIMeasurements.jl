@@ -37,7 +37,7 @@ end
 
 """Electrical channel based on based on periodic base functions. Only the
 PeriodicElectricalChannel counts for the cycle length calculation"""
-Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
+Base.@kwdef mutable struct PeriodicElectricalChannel <: ElectricalTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   "Components added for this channel."
