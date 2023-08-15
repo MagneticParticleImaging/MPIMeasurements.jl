@@ -692,7 +692,7 @@ function calcControlMatrix(cont::CrossCouplingControlSequence)
 end
 
 function calcControlMatrix(cont::AWControlSequence)
-  oldTx = zeros(ComplexF64, size(cont.rfftIndices)[3:4]...)
+  oldTx = zeros(ComplexF64, controlMatrixShape(cont))
   for (i, channel) in enumerate(getControlledChannels(cont))
     if cont.rfftIndices[i,end,1]
       oldTx[i,1] = ustrip(u"V", offset(channel))
