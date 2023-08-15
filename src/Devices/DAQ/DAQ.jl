@@ -226,7 +226,14 @@ function calibration(daq::AbstractDAQ, channelID::AbstractString)
 end
   
 
-export applyForwardCalibration!
+export applyForwardCalibration!, applyForwardCalibration
+
+function applyForwardCalibration(seq::Sequence, daq::AbstractDAQ)
+  seqCopy = deepcopy(seq)
+  applyForwardCalibration!(seqCopy, daq)
+  return seqCopy
+end
+
 function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
 
   # TODO/JA: what about the other types of channels? 
@@ -258,6 +265,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
       
     end  
   end
+  nothing
 end
 
 

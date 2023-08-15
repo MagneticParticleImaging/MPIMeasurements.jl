@@ -508,17 +508,17 @@ end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
-  periodicChannels = periodicElectricalTxChannels(sequence)
+  sequenceVolt = applyForwardCalibration(sequence, daq)
+
+  periodicChannels = periodicElectricalTxChannels(sequenceVolt)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
-
-  applyForwardCalibration!(sequence, daq)
-  
+    
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
-    baseFreq = txBaseFrequency(sequence)
+    baseFreq = txBaseFrequency(sequenceVolt)
     for channel in periodicChannels
       setupTxChannel!(batch, daq, channel, baseFreq)
     end
