@@ -327,7 +327,7 @@ export dfDivider
 function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  result = zeros(Int64, (dfNumChannels(sequence), maxComponents))
+  result = ones(Int64, (dfNumChannels(sequence), maxComponents)) # Otherwise the dfCycle is miscalculated in the case of a different amount of components
   
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)

@@ -135,7 +135,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
   # N for every single-frequency component that has N periods in the sequence
   # every Mth sample for all arbitraryWaveform components
   numControlledChannels = length(keys(controlledChannelsDict))
-  rfftSize = Int(div(lcm(dfDivider(seq))/(upreferred(txBaseFrequency(seq)/rxSamplingRate(seq))),2)+1)
+  rfftSize = Int(div(rxNumSamplingPoints(seq),2)+1)
   index_mask = falses(numControlledChannels, numComponentsMax(daq)+1, rfftSize)
 
   refChannelIdx = [channelIdx(daq, ch.feedback.channelID) for ch in collect(Base.values(controlledChannelsDict))]
@@ -432,7 +432,7 @@ function getControlResult(cont::ControlSequence)::Sequence
   acq = cont.target.acquisition
 
   _fields = MagneticField[]
-  for field in fields(cont.currSeq)
+  for field in fields(cont.currSequence)
       _id = id(field)
       safeStart = safeStartInterval(field)
       safeTrans = safeTransitionInterval(field)
@@ -458,9 +458,9 @@ setup(daq::AbstractDAQ, sequence::ControlSequence) = setup(daq, getControlResult
 # TODO/JA: check if changes here needs changes somewhere else
 getControlledFields(seq::Sequence) = [field for field in seq.fields if field.control]
 getControlledChannels(seq::Sequence) = [channel for field in seq.fields if field.control for channel in field.channels]
-# TODO/JA: is getControlledChannels(cont) always equal to getControlledChannels(cont.currSeq) ??
+# The elements of collect(getControlledChannels(cont)) are always identical (===) to getControlledChannels(cont.currSequence)
 getControlledChannels(cont::ControlSequence) = keys(cont.controlledChannelsDict) # maybe add collect here as well? for most uses this not needed
-getControlledDAQChannels(cont::ControlSequence) = collect(Base.values(cont.contrlledChannelsDict))
+getControlledDAQChannels(cont::ControlSequence) = collect(Base.values(cont.controlledChannelsDict))
 getPrimaryComponents(cont::CrossCouplingControlSequence) = [components(channel)[i] for (i,channel) in enumerate(getControlledChannels(cont))]
 
 acyclicElectricalTxChannels(cont::ControlSequence) = acyclicElectricalTxChannels(cont.targetSequence)
@@ -663,12 +663,12 @@ function calcDesiredField(cont::AWControlSequence)
       desiredField[1,i] = ustrip(u"T", offset(channel))
     end
 
-    for (j, comp) in components(channel)
+    for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
         if ustrip(u"T",amplitude(comp)) == 0
           @warn "You tried to control a field to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
         end
-        desiredField[i, cont.rfftIndices[i,j,:]] = ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
+        desiredField[i, cont.rfftIndices[i,j,:]] .= ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
         desiredField[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"T",values(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
       end
@@ -682,7 +682,7 @@ end
 function calcControlMatrix(cont::CrossCouplingControlSequence)
   κ = zeros(ComplexF64, controlMatrixShape(cont))
   for (i, channel) in enumerate(getControlledChannels(cont))
-    for (j, comp) in periodicElectricalComponents(channel)
+    for (j, comp) in enumerate(periodicElectricalComponents(channel))
       κ[i, j] = ustrip(u"V", amplitude(comp)) * exp(im*ustrip(u"rad", phase(comp)))
     end
   end
@@ -695,9 +695,9 @@ function calcControlMatrix(cont::AWControlSequence)
     if cont.rfftIndices[i,end,1]
       oldTx[i,1] = ustrip(u"V", offset(channel))
     end
-    for (j, comp) in components(channel)
+    for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
-        oldTx[i, cont.rfftIndices[i,j,:]] = ustrip(u"V",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
+        oldTx[i, cont.rfftIndices[i,j,:]] .= ustrip(u"V",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
         oldTx[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"V",values(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
       end
@@ -709,7 +709,7 @@ end
 
 # Convert New Tx from matrix in V to currSequence
 function updateControlSequence!(cont::CrossCouplingControlSequence, newTx::Matrix)
-  for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSeq))
+  for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     for (j, comp) in enumerate(periodicElectricalComponents(channel))
       amplitude!(comp, abs(newTx[i, j])*1.0u"V")
       phase!(comp, angle(newTx[i, j])*1.0u"rad")
@@ -718,15 +718,15 @@ function updateControlSequence!(cont::CrossCouplingControlSequence, newTx::Matri
 end
 
 function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
-  for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSeq))
+  for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     if cont.rfftIndices[i,end,1]
-      offset!(channel, newTx[i,1]*1.0u"V")
+      offset!(channel, abs(newTx[i,1])*1.0u"V")
     end
     for (j, comp) in enumerate(periodicElectricalComponents(channel))
       if isa(comp, PeriodicElectricalComponent)
-        amplitude!(comp, abs(newTx[i, cont.rfftIndices[i,j,:]])*1.0u"V")
-        phase!(comp, angle(newTx[i, cont.rfftIndices[i,j,:]])*1.0u"rad"+(pi/2)u"rad")
-       isa(comp, ArbitraryElectricalComponent)
+        amplitude!(comp, abs.(newTx[i, cont.rfftIndices[i,j,:]])[]*1.0u"V")
+        phase!(comp, angle.(newTx[i, cont.rfftIndices[i,j,:]])[]*1.0u"rad"+(pi/2)u"rad")
+      elseif isa(comp, ArbitraryElectricalComponent)
         spectrum = zeros(ComplexF64, 2^13+1)
         spectrum[2:sum(cont.rfftIndices[i,j,:])+1] .= newTx[i, cont.rfftIndices[i,j,:]]
         values!(comp, irfft(spectrum, 2^14)*(0.5*2^14)*u"V")
@@ -792,10 +792,11 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
   return valid
 end
 
-function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence)
+function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
   validChannel = zeros(Bool, numControlledChannels(cont))
+  N = rxNumSamplingPoints(cont.currSequence)
 
-  testSignalTime = irfft(newTx, lcm(dfDivider(cont.currSequence)), 2)
+  testSignalTime = irfft(newTx, N, 2)*0.5N
 
   validChannel = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
   
@@ -804,5 +805,9 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence)
     @debug "Valid Tx Channel" validChannel
     @warn "New control sequence exceeds voltage limits of tx channel"
   end
+  if return_time_signal
+    return testSignalTime
+  else
   return valid
+  end
 end
