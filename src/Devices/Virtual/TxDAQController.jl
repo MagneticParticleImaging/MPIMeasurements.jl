@@ -541,14 +541,9 @@ function updateControlMatrix(::CrossCouplingControlSequence, txCont::TxDAQContro
 end
 
 function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
-  # TODO/JA: can we divide by zero here accidentally? Will the fieldtoVolt check fail, if we include the components, that are not part of the signal
-  newTx = zeros(ComplexF64, controlMatrixShape(cont))
-  # potentially blank out every component that we are not controlling? -> maybe not necessary, but could increase noise
-  β = Γ[:,2:end] / κ[:,2:end]
-  newTx[:,2:end] = inv(β) * Ω[:,2:end]
-
-  # no coupling for DC!
-  newTx[:,1] = κ[:,1]./Γ[:,1].*Ω[:,1]
+  # For now we completely ignore coupling and hope that it can find good values anyways
+  # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
+  newTx = κ./Γ.*Ω
 
   @debug "Last matrix:" κ
   @debug "Ref matrix" Γ
@@ -670,6 +665,9 @@ function calcDesiredField(cont::AWControlSequence)
 
     for (j, comp) in components(channel)
       if isa(comp, PeriodicElectricalComponent)
+        if ustrip(u"T",amplitude(comp)) == 0
+          @warn "You tried to control a field to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
+        end
         desiredField[i, cont.rfftIndices[i,j,:]] = ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
         desiredField[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"T",values(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
