@@ -126,6 +126,11 @@ function fieldDictToFields(fieldsDict::Dict{String, Any})
     if haskey(fieldDict, "safeErrorInterval")
       splattingDict[:safeErrorInterval] = uparse(fieldDict["safeErrorInterval"])
     end
+    
+    if splattingDict["decouple"] && !splattingDict["control"]
+      @warn "A field that needs to be decoupled, will always be controlled!"
+      splattingDict["control"] = true
+    end
 
     field = MagneticField(;splattingDict...)
     push!(fields, field)

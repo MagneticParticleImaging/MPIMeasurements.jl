@@ -50,7 +50,7 @@ safeEndInterval(field::MagneticField) = field.safeEndInterval
 export safeErrorInterval
 safeErrorInterval(field::MagneticField) = field.safeErrorInterval
 
-control(field::MagneticField) = field.control
+control(field::MagneticField) = field.control || field.decouple
 decouple(field::MagneticField) = field.decouple
 
 export electricalTxChannels

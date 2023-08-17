@@ -6,7 +6,6 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   controlPause::Float64
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
-  correctCrossCoupling::Bool = false
   controlDC::Bool = false
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
@@ -71,54 +70,34 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
-  if txCont.params.correctCrossCoupling # use the old controller # TODO/JA: fix logic to decide which controller should be used
+  controlSequenceType = decideControlSequenceType(target)
 
-    if length(fields(currSeq)) > 1
-      throw(IllegalStateException("Sequence requires control of multiple fields, which is currently not implemented with cross-coupling correction."))
-    end
-    
-    # Check that we only control three channels, as our RedPitayaDAQs only have 3 signal components atm
-    if length(controlledChannelsDict) > 3
-      throw(IllegalStateException("Sequence requires controlling of more than three channels, which is not possible with cross-coupling correction."))
-    end
-
-    # Check that channels only have one component
-    if any(x -> length(x.components) > 1, seqControlledChannels)
-      throw(IllegalStateException("Sequence has channel with more than one component. Such a channel cannot be controlled with cross-coupling correction"))
-    end
-
-    if any(x -> isa(x.components, ArbitraryElectricalComponent), seqControlledChannels)
-      throw(IllegalStateException("Sequence has a channel with an ArbitraryElectricalComponent. Such a channel cannot be controlled with cross-coupling correction"))
-    end
-
+  if controlSequenceType==CrossCouplingControlSequence    
+      
     # temporarily remove first (and only) component from each channel
-    comps = [popfirst!(periodicElectricalComponents(channel)) for channel in periodicElectricalTxChannels(fields(currSeq)[1])]
-    
-    # insert all components into each channel in the same order, all comps from the other channels are set to 0T
-    for (i, channel) in enumerate(periodicElectricalTxChannels(fields(currSeq)[1]))
-      for (j, comp) in enumerate(comps)
-        copy_ = deepcopy(comp)
-        if i!=j        
-          amplitude!(copy_, 0.0u"T")
+      comps = [popfirst!(periodicElectricalComponents(channel)) for channel in periodicElectricalTxChannels(fields(currSeq)[1])]
+      
+      # insert all components into each channel in the same order, all comps from the other channels are set to 0T
+      for (i, channel) in enumerate(periodicElectricalTxChannels(fields(currSeq)[1]))
+        for (j, comp) in enumerate(comps)
+          copy_ = deepcopy(comp)
+          if i!=j        
+            amplitude!(copy_, 0.0u"T")
+          end
+          push!(channel.components, copy_)
         end
-        push!(channel.components, copy_)
       end
-    end
 
     sinLUT, cosLUT = createLUTs(seqControlledChannels, currSeq) # TODO/JA: check if this makes a difference between target and currSeq, though it should not
     
-
     return CrossCouplingControlSequence(target, currSeq, controlledChannelsDict, sinLUT, cosLUT, refIndices)
 
-  else # use the new controller
+  elseif controlSequenceType == AWControlSequence # use the new controller
     
-    # AW offset gets ignored -> should be zero anyways
+    # AW offset will get ignored -> should be zero
     if any(x->any(mean.(values.(arbitraryElectricalComponents(x))).>1u"µT"), seqControlledChannels)
       error("The DC-component of arbitrary waveform components cannot be handled during control! Please remove any DC-offset from your waveform and use the offset parameter of the corresponding channel!")
     end
-
-    # all channels on the same ref must agree with their offset -> just choose one of the channels that has the dcEnabled Flag
-    
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
@@ -126,6 +105,24 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   end
 end
 
+function decideControlSequenceType(target::Sequence)
+
+  hasAWComponent = any(isa.([component for channel in getControlledChannels(target) for component in channel.components], ArbitraryElectricalComponent))
+  moreThanOneComponent = any(x -> length(x.components) > 1, getControlledChannels(target))
+  moreThanThreeChannels = length(getControlledChannels(target)) > 3
+  moreThanOneField = length(getControlledFields(target)) > 1
+  needsDecoupling_ = needsDecoupling(target)
+
+  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent
+      return CrossCouplingControlSequence
+  elseif needsDecoupling_
+    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent)"))
+  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent
+    return CrossCouplingControlSequence
+  else 
+    return AWControlSequence 
+  end
+end
 
 """
 This function creates the correct indices into a channel-wise rfft of the reference channels for each channel in the controlledChannelsDict
@@ -245,7 +242,7 @@ function prepareSequenceForControl(seq::Sequence)
         end
       end
       contField = MagneticField(;id = _id, channels = periodicChannel, safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
-          safeEndInterval = safeEnd, safeErrorInterval = safeError, control = true)
+          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = false, control = false)
       push!(_fields, contField)
     end
   end
@@ -281,10 +278,15 @@ end
 ###############################################################################
 
 function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
-  daq = dependency(txCont, AbstractDAQ)
-  setupRx(daq, seq)
-  control = ControlSequence(txCont, seq, daq) # depending on the controlled channels and settings this will select the appropiate type of ControlSequence
-  return controlTx(txCont, seq, control)
+  if needsControlOrDecoupling(seq)
+    daq = dependency(txCont, AbstractDAQ)
+    setupRx(daq, seq)
+    control = ControlSequence(txCont, seq, daq) # depending on the controlled channels and settings this will select the appropiate type of ControlSequence
+    return controlTx(txCont, seq, control)
+  else
+    @warn "The sequence you selected does not need control, even though the protocol wanted to control!"
+    return seq
+  end
 end
 
 
@@ -440,7 +442,7 @@ function getControlResult(cont::ControlSequence)::Sequence
       safeError = safeErrorInterval(field)
       #TODO/JA: should the channels be a copy? Is it even necessary to create a new object just to set control to false? Maybe this will work anyways
       contField = MagneticField(;id = _id, channels = deepcopy(channels(field)), safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
-          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple=false, control = false)
+          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = false, control = false)
       push!(_fields, contField)
   end
   for field in fields(cont.target)
@@ -526,8 +528,8 @@ end
 # Γ: Matrix from Ref
 # Ω: Desired Matrix
 # κ: Last Set Matrix
-function updateControlMatrix(::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
-  if txCont.params.correctCrossCoupling 
+function updateControlMatrix(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
+  if needsDecoupling(cont.target)
     β = Γ*inv(κ)
   else
     β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
@@ -808,6 +810,6 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
   if return_time_signal
     return testSignalTime
   else
-  return valid
+    return valid
   end
 end
