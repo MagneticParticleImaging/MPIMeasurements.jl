@@ -18,6 +18,7 @@ using StringEncodings
 using DocStringExtensions
 using MacroTools
 using LibSerialPort
+using NaturalSort
 
 using ReplMaker
 import REPL
