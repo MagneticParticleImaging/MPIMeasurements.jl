@@ -1,9 +1,10 @@
 export TxDAQControllerParams, TxDAQController, controlTx
 
 Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
-  phaseAccuracy::Float64
-  amplitudeAccuracy::Float64
+  phaseAccuracy::typeof(1.0u"rad")
+  relativeAmplitudeAccuracy::Float64
   controlPause::Float64
+  absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
   controlDC::Bool = false
@@ -349,6 +350,16 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "CONTROL STEP $i"
       # Prepare control measurement
       setup(daq, control.currSequence)
+
+      menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
+      choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
+      if choice == 1
+        println("Continuing...")
+      else
+        println("Control cancelled")
+        error("Control cancelled!")
+      end
+
       channel = Channel{channelType(daq)}(32)
       buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(control)..., 1, 1), control)]), daq)
       @info "Control measurement started"
@@ -502,16 +513,28 @@ end
 #checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, uRef) = checkFieldDeviation(cont, txCont, calcFieldFromRef(cont, uRef))
 checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = checkFieldDeviation(cont, txCont, Γ, calcDesiredField(cont))
 function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
-  if correct_coupling || isa(cont, AWControlSequence)
-    diff = Ω - Γ
-  else
-    diff = diagm(diag(Ω)) - diagm(diag(Γ))
+
+  diff = Ω - Γ
+  abs_deviation = abs.(diff)
+  rel_deviation = abs_deviation ./ abs.(Ω)
+  rel_deviation[abs.(Ω).==0] .= 0 # relative deviation does not make sense for a zero goal
+  phase_deviation = angle.(Ω).-angle.(Γ)
+  phase_deviation[abs.(Ω).==0] .= 0 # phase deviation does not make sense for a zero goal
+
+  if !needsDecoupling(cont.targetSequence) && !isa(cont,AWControlSequence)
+    abs_deviation = diag(abs_deviation)
+    rel_deviation = diag(rel_deviation)
+    phase_deviation = diag(phase_deviation)
+  elseif isa(cont, AWControlSequence)
+    # TODO/JA: select only components that are needed
   end
-  deviation = maximum(abs.(diff)) / maximum(abs.(Ω))
-  @debug "Check field deviation" Ω Γ
-  @debug "Ω - Γ = " diff
-  @info "deviation = $(deviation) allowed= $(txCont.params.amplitudeAccuracy)"
-  return deviation < txCont.params.amplitudeAccuracy
+  @debug "Check field deviation [T]" Ω Γ
+  @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
+  @info "Observed field deviation:\n\t$(abs_deviation) T\n\t$(rel_deviation*100) %\n\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
+  phase_ok = abs.(phase_deviation) .< ustrip(u"rad", txCont.params.phaseAccuracy)
+  amplitude_ok = (abs.(abs_deviation) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)) .| (abs.(rel_deviation) .< txCont.params.relativeAmplitudeAccuracy)
+  @debug "Field deviation:" amplitude_ok phase_ok
+  return all(phase_ok) && all(amplitude_ok)
 end
 
 
