@@ -65,24 +65,27 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   applyForwardCalibration!(currSeq, daq) # uses the forward calibration to convert the values for the field from T to V
 
   seqControlledChannels = getControlledChannels(currSeq)
+
+  @debug "ControlSequence" seqControlledChannels
   
   # Dict(PeriodicElectricalChannel => TxChannelParams)
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
   controlSequenceType = decideControlSequenceType(target)
+  @debug "ControlSequence: Decided on using ControlSequence of type" controlSequenceType
 
   if controlSequenceType==CrossCouplingControlSequence    
       
     # temporarily remove first (and only) component from each channel
-      comps = [popfirst!(periodicElectricalComponents(channel)) for channel in periodicElectricalTxChannels(fields(currSeq)[1])]
+      comps = [popfirst!(channel.components) for channel in periodicElectricalTxChannels(fields(currSeq)[1])]
       
       # insert all components into each channel in the same order, all comps from the other channels are set to 0T
       for (i, channel) in enumerate(periodicElectricalTxChannels(fields(currSeq)[1]))
         for (j, comp) in enumerate(comps)
           copy_ = deepcopy(comp)
           if i!=j        
-            amplitude!(copy_, 0.0u"T")
+            amplitude!(copy_, 0.0u"V")
           end
           push!(channel.components, copy_)
         end
@@ -112,6 +115,7 @@ function decideControlSequenceType(target::Sequence)
   moreThanThreeChannels = length(getControlledChannels(target)) > 3
   moreThanOneField = length(getControlledFields(target)) > 1
   needsDecoupling_ = needsDecoupling(target)
+  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_
 
   if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent
       return CrossCouplingControlSequence
@@ -180,7 +184,7 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   N = rxNumSamplingPoints(seq)
   D = length(seqChannel)
 
-  dfCyclesPerPeriod = Int[lcm(dfDivider(seq))/divider(components(chan)[i]) for (i,chan) in enumerate(seqChan)]
+  dfCyclesPerPeriod = Int[lcm(dfDivider(seq))/divider(components(chan)[i]) for (i,chan) in enumerate(seqChannel)]
 
   sinLUT = zeros(D,N)
   cosLUT = zeros(D,N)
@@ -242,7 +246,7 @@ function prepareSequenceForControl(seq::Sequence)
         end
       end
       contField = MagneticField(;id = _id, channels = periodicChannel, safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
-          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = false, control = false)
+          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = decouple(field), control = true)
       push!(_fields, contField)
     end
   end
@@ -282,7 +286,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
     daq = dependency(txCont, AbstractDAQ)
     setupRx(daq, seq)
     control = ControlSequence(txCont, seq, daq) # depending on the controlled channels and settings this will select the appropiate type of ControlSequence
-    return controlTx(txCont, seq, control)
+    return controlTx(txCont, control)
   else
     @warn "The sequence you selected does not need control, even though the protocol wanted to control!"
     return seq
@@ -429,9 +433,9 @@ function getControlResult(cont::ControlSequence)::Sequence
   
   # Use the magnetic field that are controlled from currSeq and all uncontrolled fields and general settings from target
 
-  _name = "Control Result for target $(name(cont.target))"
-  general = GeneralSettings(;name=_name, description = descrption(cont.target), targetScanner = targetScanner(cont.target), baseFrequency = baseFrequency(cont.target))
-  acq = cont.target.acquisition
+  _name = "Control Result for target $(name(cont.targetSequence))"
+  general = GeneralSettings(;name=_name, description = description(cont.targetSequence), targetScanner = targetScanner(cont.targetSequence), baseFrequency = baseFrequency(cont.target))
+  acq = cont.targetSequence.acquisition
 
   _fields = MagneticField[]
   for field in fields(cont.currSequence)
@@ -445,7 +449,7 @@ function getControlResult(cont::ControlSequence)::Sequence
           safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = false, control = false)
       push!(_fields, contField)
   end
-  for field in fields(cont.target)
+  for field in fields(cont.targetSequence)
     if !control(field)
       push!(_fields, field)
     end
@@ -516,6 +520,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
   @debug "Updating control values"
   κ = calcControlMatrix(cont)
   newTx = updateControlMatrix(cont, txCont, Γ, Ω, κ)
+
   if checkFieldToVolt(κ, Γ, cont, txCont) && checkVoltLimits(newTx, cont)
     updateControlSequence!(cont, newTx)
     return true
@@ -529,16 +534,16 @@ end
 # Ω: Desired Matrix
 # κ: Last Set Matrix
 function updateControlMatrix(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
-  if needsDecoupling(cont.target)
+  if needsDecoupling(cont.targetSequence)
     β = Γ*inv(κ)
   else
     β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
   end
   newTx = inv(β)*Ω
-  @debug "Last matrix:" κ
-  @debug "Ref matrix" Γ
-  @debug "Desired matrix" Ω
-  @debug "New matrix" newTx 
+  @debug "Last TX matrix [V]:" κ
+  @debug "Ref matrix [T]:" Γ
+  @debug "Desired matrix [T]:" Ω
+  @debug "New TX matrix [V]:" newTx 
   return newTx
 end
 
@@ -547,10 +552,10 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
 
-  @debug "Last matrix:" κ
-  @debug "Ref matrix" Γ
-  @debug "Desired matrix" Ω
-  @debug "New matrix" newTx 
+  @debug "Last TX matrix [V]:" κ
+  @debug "Ref matrix [T]:" Γ
+  @debug "Desired matrix [V]:" Ω
+  @debug "New TX matrix [T]:" newTx 
 
   return newTx
 end
@@ -571,7 +576,7 @@ end
 function calcFieldsFromRef(cont::CrossCouplingControlSequence, uRef::Array{Float32, 4})
   len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
-  dividers = Int64[divider.(getPrimaryComponents(cont))]
+  dividers = divider.(getPrimaryComponents(cont))
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
 
   Γ = zeros(ComplexF64, len, len, size(uRef, 3), size(uRef, 4))
@@ -647,7 +652,7 @@ function calcDesiredField(cont::CrossCouplingControlSequence)
   desiredField = zeros(ComplexF64, controlMatrixShape(cont))
   for (i, channel) in enumerate(getControlledChannels(cont.targetSequence))
     comp = components(channel)[1]
-    desiredField[i, i] = ustrip(u"V", amplitude(comp)) * exp(im*ustrip(u"rad", phase(comp)))
+    desiredField[i, i] = ustrip(u"T", amplitude(comp)) * exp(im*ustrip(u"rad", phase(comp)))
   end
   return desiredField
 end
@@ -744,17 +749,18 @@ end
 
 
 function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController)
-  dividers = Int64[divider.(getPrimaryComponents(cont))]
+  dividers = divider.(getPrimaryComponents(cont))
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
   calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
   calibFieldToVoltMeasured = (diag(oldTx) ./ diag(Γ))
 
-  abs_deviation = 1.0 .- abs.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
+  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
-  @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $abs_deviation"
+  @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate) V/T and got $(calibFieldToVoltMeasured) V/T, deviation: $(abs_deviation*100) %"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
+  
   if !valid
-    @warn "Measured field to volt deviates by $abs_deviation from estimate, exceeding allowed deviation"
+    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
@@ -767,7 +773,7 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   calibFieldToVoltEstimate = reduce(vcat,[ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
   calibFieldToVoltMeasured = oldTx ./ Γ
 
-  abs_deviation = 1.0 .- abs.(calibFieldToVoltMeasured[cont.rfftIndices,:]./calibFieldToVoltEstimate[cont.rfftIndices,:]) # TODO/JA: fix indicies!!!
+  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured[cont.rfftIndices,:]./calibFieldToVoltEstimate[cont.rfftIndices,:]) # TODO/JA: fix indicies!!!
   phase_deviation = angle.(calibFieldToVoltMeasured[cont.rfftIndices,:]./calibFieldToVoltEstimate[cont.rfftIndices,:])
   @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $abs_deviation"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation

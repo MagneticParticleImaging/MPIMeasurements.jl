@@ -239,9 +239,11 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
   # TODO/JA: what about the other types of channels? 
 
   for channel in periodicElectricalTxChannels(seq) 
-
-    offsetVolts = offset(channel)*calibration(daq, id(channel))(0) # use DC value for offsets
-    offset!(channel, uconvert(u"V",abs(offsetVolts)))
+    off = offset(channel)
+    if dimension(off) != dimension(1.0u"V")
+      offsetVolts = off*calibration(daq, id(channel))(0) # use DC value for offsets
+      offset!(channel, uconvert(u"V",abs(offsetVolts)))
+    end
 
     for comp in periodicElectricalComponents(channel)
         amp = amplitude(comp)
