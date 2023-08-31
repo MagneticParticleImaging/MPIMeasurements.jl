@@ -434,7 +434,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
   # Start pipeline
   @debug "Pipeline started"
   try
-    @debug currentWP(daq.rpc)
+    @debug "Producer:" currentWP(daq.rpc)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
@@ -561,7 +561,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, componentIdx, waveform_)
 end
@@ -573,7 +573,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   # Waveform is set together with amplitudes for arbitrary waveforms
 end
@@ -617,7 +617,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
   for i in map(x->div(x -1, 2) + 1, rxIDs)
-    @debug i
+    @debug "setupRx: Adding RP id $i to cluster view"
     selection[i] = true
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
@@ -669,7 +669,6 @@ end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
-  @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
@@ -694,7 +693,8 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     allAmps[name] = amps
     allPhases[name] = phases
   end
-  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases allAwg
+  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases awg=lineplot(1:2^14,ustrip.(u"V",hcat(collect(Base.values(allAwg))...)),ylabel="AWG / V", name=collect(Base.keys(allAwg)), canvas=DotCanvas, border=:ascii, height=10, xlim=(1,2^14))
+
   setTxParams(daq, allAmps, allPhases, allAwg)
 end
 

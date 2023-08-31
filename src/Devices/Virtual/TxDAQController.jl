@@ -74,7 +74,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
   controlSequenceType = decideControlSequenceType(target)
-  @debug "ControlSequence: Decided on using ControlSequence of type" controlSequenceType
+  @debug "ControlSequence: Decided on using ControlSequence of type $controlSequenceType"
 
   if controlSequenceType==CrossCouplingControlSequence    
       
@@ -99,7 +99,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   elseif controlSequenceType == AWControlSequence # use the new controller
     
     # AW offset will get ignored -> should be zero
-    if any(x->any(mean.(values.(arbitraryElectricalComponents(x))).>1u"µT"), seqControlledChannels)
+    if any(x->any(mean.(scaledValues.(arbitraryElectricalComponents(x))).>1u"µT"), getControlledChannels(target))
       error("The DC-component of arbitrary waveform components cannot be handled during control! Please remove any DC-offset from your waveform and use the offset parameter of the corresponding channel!")
     end
 
@@ -150,8 +150,9 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
         index_mask[i,j,dfCyclesPerPeriod+1] = true
       elseif isa(comp, ArbitraryElectricalComponent)
         # the frequency samples have a spacing dfCyclesPerPeriod in the spectrum, only use a maximum number of 2^13+1 points, since the waveform has a buffer length of 2^14 (=> rfft 2^13+1)
-        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:minimum(rfftSize, (2^13+1)*dfCyclesPerPeriod+1)] .= true
-        @info "Debug: createRFFTindices" divider(comp) sum(index_mask[i,j,:])
+        N_harmonics = findlast(x->x>1e-8, abs.(rfft(values(comp)/0.5length(values(comp)))))
+        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod+1)] .= true
+        @debug "createRFFTindices: AWG component" divider(comp) sum(index_mask[i,j,:]) N_harmonics
       end
     end
     index_mask[i,end,1] = ~any(index_mask[findall(x->x==refChannelIdx[i], refChannelIdx),end,1]) && channel.dcEnabled # use the first DC enabled channel going to each ref channel to control the DC value with
@@ -180,6 +181,8 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
   
   return index_mask
 end
+
+allComponentMask(cont::AWControlSequence) = .|(eachslice(cont.rfftIndices, dims=2)...)
 
 function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence)
   N = rxNumSamplingPoints(seq)
@@ -521,7 +524,9 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
     rel_deviation = diag(rel_deviation)
     phase_deviation = diag(phase_deviation)
   elseif isa(cont, AWControlSequence)
-    # TODO/JA: select only components that are needed
+    abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
+    rel_deviation = rel_deviation[allComponentMask(cont)]'
+    phase_deviation = phase_deviation[allComponentMask(cont)]'
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
@@ -539,7 +544,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
   κ = calcControlMatrix(cont)
   newTx = updateControlMatrix(cont, txCont, Γ, Ω, κ)
 
-  if checkFieldToVolt(κ, Γ, cont, txCont) && checkVoltLimits(newTx, cont)
+  if checkFieldToVolt(κ, Γ, cont, txCont, Ω) && checkVoltLimits(newTx, cont)
     updateControlSequence!(cont, newTx)
     return true
   else
@@ -570,10 +575,10 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
 
-  @debug "Last TX matrix [V]:" κ
-  @debug "Ref matrix [T]:" Γ
-  @debug "Desired matrix [V]:" Ω
-  @debug "New TX matrix [T]:" newTx 
+  #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
+  #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
+  #@debug "Desired matrix [V]:" Ω=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Ω,cont,return_time_signal=true)')
+  #@debug "New TX matrix [T]:" newTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(newTx,cont,return_time_signal=true)')
 
   return newTx
 end
@@ -623,7 +628,7 @@ function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   # do rfft channel wise and correct with the transfer function, return as (num control channels x len rfft x periods x frames) Matrix, the selection of [:,:,1,1] is done in controlTx
   spectrum = rfft(uRef, 1)/0.5N
   sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
-  frequencies = rfftfreq(N, rxSamplingRate(cont.currSequence))  
+  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   fb_calibration = reduce(vcat, [ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
   return sortedSpectrum.*fb_calibration
 end
@@ -768,7 +773,7 @@ end
 
 
 
-function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController)
+function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   dividers = divider.(getPrimaryComponents(cont))
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
   calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
@@ -787,18 +792,19 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   return valid
 end
 
-function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::AWControlSequence, txCont::TxDAQController)
+function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::AWControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   N = rxNumSamplingPoints(cont.currSequence)
-  frequencies = rfftfreq(N, rxSamplingRate(cont.currSequence))
+  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   calibFieldToVoltEstimate = reduce(vcat,[ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
   calibFieldToVoltMeasured = oldTx ./ Γ
 
-  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured[cont.rfftIndices,:]./calibFieldToVoltEstimate[cont.rfftIndices,:]) # TODO/JA: fix indicies!!!
-  phase_deviation = angle.(calibFieldToVoltMeasured[cont.rfftIndices,:]./calibFieldToVoltEstimate[cont.rfftIndices,:])
-  @debug "We expected $(calibFieldToVoltEstimate) and got $(calibFieldToVoltMeasured), deviation: $abs_deviation"
+  mask = allComponentMask(cont) .& (abs.(Ω).>1e-15)
+  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured[mask]./calibFieldToVoltEstimate[mask])
+  phase_deviation = angle.(calibFieldToVoltMeasured[mask]./calibFieldToVoltEstimate[mask])
+  #@debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[allComponentMask(cont)]) V/T and got $(calibFieldToVoltMeasured[allComponentMask(cont)]) V/T, deviation: $abs_deviation"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
   if !valid
-    @warn "Measured field to volt deviates by $abs_deviation from estimate, exceeding allowed deviation"
+    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
@@ -826,16 +832,16 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
 
   testSignalTime = irfft(newTx, N, 2)*0.5N
 
-  validChannel = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
-  
-  valid = all(validChannel)
-  if !valid
-    @debug "Valid Tx Channel" validChannel
-    @warn "New control sequence exceeds voltage limits of tx channel"
-  end
   if return_time_signal
     return testSignalTime
   else
+    validChannel = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
+  
+    valid = all(validChannel)
+    if !valid
+      @debug "Valid Tx Channel" validChannel
+      @warn "New control sequence exceeds voltage limits of tx channel"
+    end
     return valid
   end
 end

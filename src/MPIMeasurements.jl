@@ -18,6 +18,7 @@ using StringEncodings
 using DocStringExtensions
 using MacroTools
 using LibSerialPort
+using UnicodePlots
 
 using ReplMaker
 import REPL

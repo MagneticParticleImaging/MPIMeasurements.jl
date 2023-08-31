@@ -24,6 +24,7 @@ StringEncodings = "69024149-9ee7-55f6-a4c4-859efe599b68"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 ThreadPools = "b189fb0b-2eb5-4ed4-bc0c-d34c51242431"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
