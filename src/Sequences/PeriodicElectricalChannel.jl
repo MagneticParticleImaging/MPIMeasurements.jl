@@ -31,8 +31,12 @@ Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
   divider::Integer
-  "Values for the waveform of the component"
-  values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+  "Amplitude scale of the base waveform for each period of the field"
+  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+  "Phase of the component for each period of the field."
+  phase::Vector{typeof(1.0u"rad")}
+  "Values for the base waveform of the component, will be multiplied by `amplitude`"
+  values::Vector{Float64}
 end
 
 """Electrical channel based on based on periodic base functions. Only the
@@ -101,8 +105,42 @@ function createChannelComponent(componentID::AbstractString, componentDict::Dict
 end
 
 function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
-  divider = componentDict["divider"]
+
+  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+
+  if haskey(componentDict, "waveform")
+    waveform = toWaveform(componentDict["waveform"])
+  else
+    waveform = WAVEFORM_SINE # Default to sine
+  end
+
+  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
   
+  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+
+  if componentDict["values"] isa AbstractString # case 1: filename to waveform
+    filename = joinpath(homedir(), ".mpi", "Waveforms", componentDict["values"])
+    try
+      values = h5read(filename, "/values")
+    catch 
+      throw(SequenceConfigurationError("Could not load the waveform $(componentDict["values"]), either the file does not exist at $filename or the file structure is wrong"))
+    end
+  else # case 2: vector of real numbers
+    values = componentDict["values"]
+  end
+
+  if abs(values[1]-values[end])>0.001 # is the jump limit of 0.1% too strict?
+    throw(SequenceConfigurationError("The first and last value of a waveform should be close enough together to not produce a jump! Please check your waveform"))
+  end
+
+  return ArbitraryElectricalComponent(id=componentID, divider=divider,amplitude=amplitude, phase=phase, values=values)
+end
+
+function extractBasicComponentProperties(componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
@@ -131,28 +169,7 @@ function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElec
   else
     phase = fill(0.0u"rad", length(divider)) # Default phase
   end
-
-  if haskey(componentDict, "waveform")
-    waveform = toWaveform(componentDict["waveform"])
-  else
-    waveform = WAVEFORM_SINE # Default to sine
-  end
-  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
-end
-
-function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
-  divider = componentDict["divider"]
-  values = uparse.(componentDict["values"])
-  if eltype(values) <: Unitful.Current
-    values = values .|> u"A"
-  elseif eltype(values) <: Unitful.Voltage
-    values = values .|> u"V"
-  elseif eltype(values) <: Unitful.BField
-    values = values .|> u"T"
-  else
-    error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
-  end    
-  return ArbitraryElectricalComponent(id=componentID, divider=divider, values=values)
+  return divider, amplitude, phase
 end
 
 export offset, offset!
@@ -186,8 +203,8 @@ divider(component::ElectricalComponent, trigger::Integer=1) = length(component.d
 divider!(component::PeriodicElectricalComponent,value::Integer) = component.divider = value
 
 export amplitude, amplitude!
-amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
-function amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1)
+amplitude(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}; period::Integer=1) = component.amplitude[period]
+function amplitude!(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, value::Union{typeof(1.0u"T"),typeof(1.0u"V"),typeof(1.0u"A")}; period::Integer=1)
   if eltype(component.amplitude) != typeof(value) && length(component.amplitude) == 1
       component.amplitude = typeof(value)[value]
   else
@@ -195,19 +212,17 @@ function amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(
   end
 end
 amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
-amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
-amplitude!(component::ArbitraryElectricalComponent, values) = error("Can not change the amplitude of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
 
 export phase, phase!
-phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
-phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
+phase(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, trigger::Integer=1) = component.phase[trigger]
+phase!(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
 phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
-phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = error("Can not change the phase of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
-phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad"
 
 export values, values!
 values(component::ArbitraryElectricalComponent) = component.values
-values!(component::ArbitraryElectricalComponent, values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}) = component.values = values
+values!(component::ArbitraryElectricalComponent, values::Vector{Float64}) = component.values = values
+scaledValues(component::ArbitraryElectricalComponent) = amplitude(component) .* circshift(values(component), round(Int,phase(component)/(2π*u"rad")*length(values(component))))
+
 
 export waveform, waveform!
 waveform(component::ElectricalComponent) = component.waveform

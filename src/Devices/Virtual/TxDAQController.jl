@@ -235,15 +235,10 @@ function prepareSequenceForControl(seq::Sequence)
       periodicChannel = [deepcopy(channel) for channel in periodicElectricalTxChannels(field)]
       #periodicComponents = [comp for channel in periodicChannel for comp in periodicElectricalComponents(channel)]
       for channel in periodicChannel
-        for comp in periodicElectricalComponents(channel)
+        for comp in components(channel)
             if dimension(amplitude(comp)) != dimension(1.0u"T")
               error("The amplitude components of a field that is controlled by a TxDAQController need to be given in T. Please fix component $(id(comp)) of channel $(id(channel))")
             end
-        end
-        for comp in arbitraryElectricalComponents(channel)
-          if dimension(values(comp)[1]) != dimension(1.0u"T")
-            error("The waveform components of a field that is controlled by a TxDAQController need to be given in T.  Please fix component $(id(comp)) of channel $(id(channel))")
-          end
         end
       end
       contField = MagneticField(;id = _id, channels = periodicChannel, safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
@@ -700,7 +695,7 @@ function calcDesiredField(cont::AWControlSequence)
         end
         desiredField[i, cont.rfftIndices[i,j,:]] .= ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
-        desiredField[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"T",values(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
+        desiredField[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"T",scaledValues(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
       end
     end
   end
@@ -729,7 +724,7 @@ function calcControlMatrix(cont::AWControlSequence)
       if isa(comp, PeriodicElectricalComponent)
         oldTx[i, cont.rfftIndices[i,j,:]] .= ustrip(u"V",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
-        oldTx[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"V",values(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
+        oldTx[i, cont.rfftIndices[i,j,:]] .= rfft(ustrip.(u"V",scaledValues(comp)))[2:sum(cont.rfftIndices[i,j,:])+1]/(0.5*2^14) # the buffer length should always be 2^14 currently
       end
     end
   end
@@ -759,7 +754,9 @@ function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
       elseif isa(comp, ArbitraryElectricalComponent)
         spectrum = zeros(ComplexF64, 2^13+1)
         spectrum[2:sum(cont.rfftIndices[i,j,:])+1] .= newTx[i, cont.rfftIndices[i,j,:]]
-        values!(comp, irfft(spectrum, 2^14)*(0.5*2^14)*u"V")
+        amplitude!(comp, 1.0u"V")
+        phase!(comp, 0.0u"rad")
+        values!(comp, irfft(spectrum, 2^14)*(0.5*2^14))
       end
     end
   end

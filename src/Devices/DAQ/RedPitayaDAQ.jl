@@ -687,7 +687,7 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     # Length check < 1 happens in setupTx already
     comps = arbitraryElectricalComponents(channel)
     if length(comps)==1
-      wave = values(comps[1])
+      wave = scaledValues(comps[1])
     end
 
     allAwg[name] = wave
