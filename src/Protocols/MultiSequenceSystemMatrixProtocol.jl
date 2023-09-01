@@ -202,10 +202,17 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
       break
     end
 
-    wait(calib.producer)
-    wait(calib.consumer)
-    prepareDAQ(protocol)
-    # TODO wait time
+    wasRestored = protocol.restored
+    timePreparing = @elapsed begin
+      wait(calib.producer)
+      wait(calib.consumer)
+      prepareDAQ(protocol)
+    end
+    diffTime = protocol.params.waitTime - timePreparing
+    if diffTime > 0.0 && !wasRestored && protocol.systemMeasState.currPos > 1
+      @info "Wait $diffTime s for next measurement"
+      sleep(diffTime)
+    end
 
     performMeasurement(protocol)
     if protocol.systemMeasState.currPos > length(protocol.params.sequences)
@@ -236,9 +243,9 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   daq = getDAQ(protocol.scanner)
 
   sequence = protocol.params.sequences[index]
-  #if protocol.params.controlTx
-  #  sequence = protocol.contSequence.targetSequence
-  #end
+  if protocol.params.controlTx
+    sequence = protocol.contSequence.targetSequence
+  end
 
   channel = Channel{channelType(daq)}(32)
   calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, sequence)
@@ -262,7 +269,6 @@ function prepareDAQ(protocol::MultiSequenceSystemMatrixProtocol)
   if protocol.params.controlTx
     if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
       protocol.contSequence = controlTx(protocol.txCont, protocol.params.sequence)
-      protocol.restored = false
     end
     #if isempty(protocol.systemMeasState.drivefield)
     #  len = length(keys(protocol.contSequence.simpleChannel))
@@ -274,6 +280,9 @@ function prepareDAQ(protocol::MultiSequenceSystemMatrixProtocol)
     sequence = protocol.contSequence
   end
   setup(daq, sequence)
+  if protocol.restored
+    protocol.restored = false
+  end
 end
 
 function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProtocol, index)
