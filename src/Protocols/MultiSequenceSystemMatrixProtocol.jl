@@ -13,6 +13,8 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolPa
   positions::Union{Positions, Nothing} = nothing
   "Flag if the calibration should be saved as a system matrix or not"
   saveAsSystemMatrix::Bool = true
+  "Seconds to wait between measurements"
+  waitTime::Float64 = 0.0
 end
 function MultiSequenceSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   positions = nothing
@@ -132,9 +134,27 @@ function enterExecute(protocol::MultiSequenceSystemMatrixProtocol)
   protocol.systemMeasState.currPos = 1
 end
 
+function initMeasData(protocol::MultiSequenceSystemMatrixProtocol)
+  if isfile(protocol, "meta.toml")
+    message = """Found existing calibration file! \n
+    Should it be resumed?"""
+    if askConfirmation(protocol, message)
+      restore(protocol)
+    end
+  end
+  # Set signals to zero if we didn't restore
+  if !protocol.restored
+    signals = mmap!(protocol, "signals.bin", protocol.systemMeasState.signals);
+    protocol.systemMeasState.signals = signals  
+    protocol.systemMeasState.signals[:] .= 0.0
+  end
+end
+
+
 function _execute(protocol::MultiSequenceSystemMatrixProtocol)
   @debug "Measurement protocol started"
 
+  initMeasData(protocol)
 
   finished = false
   notifiedStop = false
@@ -287,9 +307,9 @@ function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProt
 
   calib.currentSignal = calib.signals[:, :, :, stopIdx:stopIdx]
 
-  #@info "store"
-  #timeStore = store(protocol, index)
-  #@info "done after $timeStore"
+  @info "store"
+  timeStore = @elapsed store(protocol, index)
+  @info "done after $timeStore"
 end
 
 function store(protocol::MultiSequenceSystemMatrixProtocol, index)
@@ -305,16 +325,16 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   params["measIsBGPos"] = sysObj.measIsBGPos
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
-  params["temperatures"] = vec(sysObj.temperatures)
-  params["sequence"] = toDict(protocol.params.sequence)
+  #params["temperatures"] = vec(sysObj.temperatures)
+  params["sequences"] = toDict.(protocol.params.sequences)
 
   open(filename, "w") do f
     TOML.print(f, params)
   end
 
   Mmap.sync!(sysObj.signals)
-  Mmap.sync!(sysObj.drivefield)
-  Mmap.sync!(sysObj.applied)
+  #Mmap.sync!(sysObj.drivefield)
+  #Mmap.sync!(sysObj.applied)
   return
 end
 
@@ -330,31 +350,17 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
     sysObj.measIsBGPos = params["measIsBGPos"]
     sysObj.posToIdx = params["posToIdx"]
     sysObj.measIsBGFrame = params["measIsBGFrame"]
-    temp = params["temperatures"]
-    if !isempty(temp) && (length(sysObj.temperatures) == length(temp))
-      sysObj.temperatures[:] .= temp
-    end
+    #temp = params["temperatures"]
+    #if !isempty(temp) && (length(sysObj.temperatures) == length(temp))
+    #  sysObj.temperatures[:] .= temp
+    #end
 
     sysObj.positions = Positions(params)
+    seq = protocol.params.sequences
 
-    numBGPos = sum(sysObj.measIsBGPos)
-    numFGPos = length(sysObj.measIsBGPos) - numBGPos
-
-    message = "Current position is $(sysObj.currPos). Resume from last background position instead?"
-    if askChoices(protocol, message, ["No", "Use"]) == 2
-      temp = sysObj.currPos
-      while temp > 1 && !sysObj.measIsBGPos[temp]
-        temp = temp - 1
-      end
-      sysObj.currPos = temp
-    end
-
-
-    seq = protocol.params.sequence
-
-    storedSeq = sequenceFromDict(params["sequence"])
+    storedSeq = sequenceFromDict.(params["sequences"])
     if storedSeq != seq
-      message = "Stored sequence does not match initialized sequence. Use stored sequence instead?"
+      message = "Stored sequences do not match initialized sequence. Use stored sequence instead?"
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
@@ -363,20 +369,20 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
     end
 
     # Drive Field
-    if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
-      sysObj.drivefield = mmap(protocol, "observedField.bin", ComplexF64)
-    end
-    if isfile(protocol, "appliedField.bin")
-      sysObj.applied = mmap(protocol, "appliedField.bin", ComplexF64)
-    end
+    #if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
+    #  sysObj.drivefield = mmap(protocol, "observedField.bin", ComplexF64)
+    #end
+    #if isfile(protocol, "appliedField.bin")
+    #  sysObj.applied = mmap(protocol, "appliedField.bin", ComplexF64)
+    #end
 
 
     sysObj.signals = mmap(protocol, "signals.bin", Float32)
 
-    numTotalFrames = numFGPos * protocol.params.fgFrames + protocol.params.bgFrames * numBGPos
-    numRxChannels = length(rxChannels(seq)) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
-    rxNumSamplingPoints = rxNumSamplesPerPeriod(seq)
-    numPeriods = acqNumPeriodsPerFrame(seq)
+    numTotalFrames = sum(acqNumFrames, seq)
+    numRxChannels = length(rxChannels(seq[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
+    rxNumSamplingPoints = rxNumSamplesPerPeriod(seq[1])
+    numPeriods = acqNumPeriodsPerFrame(seq[1])
     paramSize = (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
     if size(sysObj.signals) != paramSize
       throw(DimensionMismatch("Dimensions of stored signals $(size(sysObj.signals)) does not match initialized signals $paramSize"))
@@ -390,7 +396,7 @@ end
 
 
 function cleanup(protocol::MultiSequenceSystemMatrixProtocol)
-  # NOP
+  rm(dir(protocol), force = true, recursive = true)
 end
 
 function stop(protocol::MultiSequenceSystemMatrixProtocol)
