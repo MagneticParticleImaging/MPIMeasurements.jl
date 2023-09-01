@@ -100,6 +100,7 @@ function enterExecute(protocol::MechanicalMPIMeasurementProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.unit = ""
+  protocol.protocolMeasState = ProtocolMeasState()
 end
 
 function _execute(protocol::MechanicalMPIMeasurementProtocol)
