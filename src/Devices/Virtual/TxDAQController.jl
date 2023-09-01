@@ -7,6 +7,7 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
   correctCrossCoupling::Bool = false
+  minimumStepDuration::Float64 = 0.002
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -101,6 +102,10 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
 
   currSeq = Sequence(;general = general, acquisition = acq, fields = _fields)
+
+  duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
+  acqNumFrames(currSeq, max(duration, 1))
+
   return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT, refIndices)
 end
 
@@ -198,7 +203,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       # Prepare control measurement
       setup(daq, control.currSequence)
       channel = Channel{channelType(daq)}(32)
-      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64,len, len, 1, 1), control)]), daq)
+      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64,len, len, 1, acqNumFrames(control.currSequence)), control)]), daq)
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
@@ -219,7 +224,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Control measurement finished"
 
       @info "Evaluating control step"
-      uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1]
+      uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, end]
       if !isnothing(uRef)
         controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone
@@ -293,13 +298,13 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   base = ustrip(dfBaseFrequency(seq))
   dfFreq = [base/x.components[1].divider for x in seqChannel]
   
-  sinLUT = zeros(N,D)
-  cosLUT = zeros(N,D)
+  sinLUT = zeros(D,N)
+  cosLUT = zeros(D,N)
   for d=1:D
     Y = round(Int64, cycle*dfFreq[d] )
     for n=1:N
-      sinLUT[n,d] = sin(2 * pi * (n-1) * Y / N)
-      cosLUT[n,d] = cos(2 * pi * (n-1) * Y / N)
+      sinLUT[d,n] = sin(2 * pi * (n-1) * Y / N)
+      cosLUT[d,n] = cos(2 * pi * (n-1) * Y / N)
     end
   end
   return sinLUT, cosLUT
@@ -327,11 +332,25 @@ end
 
 function calcFieldsFromRef(cont::ControlSequence, uRef::Array{Float32, 4})
   len = length(keys(cont.simpleChannel))
+  N = rxNumSamplingPoints(cont.currSequence)
+  dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
+
   Γ = zeros(ComplexF64, len, len, size(uRef, 3), size(uRef, 4))
   sorted = uRef[:, cont.refIndices, :, :]
   for i = 1:size(Γ, 4)
     for j = 1:size(Γ, 3)
-      Γ[:, :, j, i] = calcFieldFromRef(cont, view(sorted, :, :, j, i), SortedRef())
+      calcFieldFromRef!(view(Γ, :, :, j, i), cont, view(sorted, :, :, j, i), SortedRef())
+    end
+  end
+  for d =1:len
+    c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
+    for e=1:len
+      correction = c * -im * dividers[e]/dividers[d] * 2/N
+      for j = 1:size(Γ, 3)
+        for i = 1:size(Γ, 4)
+          Γ[d, e, j, i] = correction * Γ[d, e, j, i]
+        end
+      end
     end
   end
   return Γ
@@ -340,24 +359,26 @@ end
 function calcFieldFromRef(cont::ControlSequence, uRef, ::SortedRef)
   len = length(keys(cont.simpleChannel))
   N = rxNumSamplingPoints(cont.currSequence)
-  Γ = zeros(ComplexF64, len, len)
   dividers = Int64[divider(components(channel)[1]) for channel in keys(cont.simpleChannel)]
-
-  for d=1:len
+  Γ = zeros(ComplexF64, len, len)
+  calcFieldFromRef!(Γ, cont, uRef, SortedRef())
+  for d =1:len
     c = ustrip(u"T/V", collect(Base.values(cont.simpleChannel))[d].feedback.calibration)
     for e=1:len
-      
-      a = 0
-      b = 0
-      for i = 1:N
-        a+=uRef[i,d]*cont.cosLUT[i, e]
-        b+=uRef[i,d]*cont.sinLUT[i, e]
-      end
-      a*=2/N
-      b*=2/N
-      # TODO *im and *(-1) depending on waveform (im for sin instead of cos, -1 as we see the derivative of the field)
-      correction = -im * dividers[e]/dividers[d]
-      Γ[d,e] = correction * (c*(b+im*a))
+      correction = c * -im * dividers[e]/dividers[d] * 2/N
+      Γ[d,e] = correction * Γ[d,e]
+    end
+  end
+  return Γ
+end
+
+function calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::ControlSequence, uRef, ::SortedRef)
+  len = size(Γ, 1)
+  for d=1:len
+    for e=1:len
+      a = dot(view(uRef, :, d), view(cont.cosLUT, e, :))
+      b = dot(view(uRef, :, d), view(cont.sinLUT, e, :))
+      Γ[d,e] = (b+im*a)
     end
   end
   return Γ
@@ -377,7 +398,7 @@ function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   else
     diff = diagm(diag(Ω)) - diagm(diag(Γ))
   end
-  deviation = maximum(abs.(diff)) / maximum(abs.(Ω))
+  deviation = maximum(abs.(diff)) / maximum(abs.(Ω)) # TODO maximum(abs(diff)./abs(omega))
   @debug "Check field deviation" Ω Γ
   @debug "Ω - Γ = " diff
   @info "deviation = $(deviation) allowed= $(txCont.params.amplitudeAccuracy)"
