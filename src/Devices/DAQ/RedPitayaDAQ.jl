@@ -13,6 +13,12 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
+  "Flag for using the counter trigger"
+  useCounterTrigger::Bool = false
+  "Source type of the counter trigger"
+  counterTriggerSourceType::CounterTriggerSourceType =  COUNTER_TRIGGER_DIO
+  "DIO pin used for the counter trigger"
+  counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
 Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
@@ -106,6 +112,11 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
   acqNumFrames::Int = 1
   acqNumFrameAverages::Int = 1
   acqNumAverages::Int = 1
+
+  "Reference counter for the counter trigger"
+  referenceCounter::Integer = 0
+  "Samples prior to acquisition for the counter trigger"
+  presamples::Integer = 0
 end
 
 function _init(daq::RedPitayaDAQ)
@@ -135,6 +146,14 @@ function _init(daq::RedPitayaDAQ)
     serverMode!(daq.rpc, CONFIGURATION)
   end
 
+  if usesCounterTrigger(daq)
+    counterTrigger_reset!(daq.rpc)
+    counterTrigger_sourceType!(daq.rpc, daq.params.counterTriggerSourceType)
+    counterTrigger_sourceChannel!(daq.rpc, daq.params.counterTriggerSourceChannel)
+    DIODirection!(master(daq.rpc), daq.params.counterTriggerSourceChannel, DIO_IN)
+    counterTrigger_enabled!(daq.rpc, true)
+  end
+
   daq.present = true
 end
 
@@ -143,6 +162,23 @@ optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
 
+export usesCounterTrigger
+usesCounterTrigger(daq::RedPitayaDAQ) = daq.params.useCounterTrigger
+
+export referenceCounter
+referenceCounter(daq::RedPitayaDAQ) = daq.referenceCounter
+
+export referenceCounter!
+referenceCounter!(daq::RedPitayaDAQ, referenceCounter) = daq.referenceCounter = referenceCounter
+
+export presamples
+presamples(daq::RedPitayaDAQ) = daq.presamples
+
+export presamples!
+presamples!(daq::RedPitayaDAQ, presamples) = daq.presamples = presamples
+
+export counterTrigger_lastCounter
+counterTrigger_lastCounter(daq::RedPitayaDAQ) = RedPitayaDAQServer.counterTrigger_lastCounter(daq.rpc)
 
 #### Sequence ####
 function setSequenceParams(daq::RedPitayaDAQ, sequence::Sequence)
@@ -449,13 +485,13 @@ function frameAverageBufferSize(daq::RedPitayaDAQ, frameAverages)
   return samplesPerPeriod(daq.rpc), length(daq.rxChanIDs), periodsPerFrame(daq.rpc), frameAverages
 end
 
-function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
+function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControlStep=false)
   # TODO How to signal end of sequences without any LUTs
   timing = nothing
   if !isnothing(daq.acqSeq)
     timing = getTiming(daq)
   end
-  startTx(daq)
+  startTx(daq, isControlStep=isControlStep)
 
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   startSample = timing.start
@@ -474,7 +510,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
-    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode_=daq.params.triggerMode)
+    daq.rpc = RedPitayaCluster(daq.params.ips; triggerMode=daq.params.triggerMode)
     if serverMode(daq.rpc) == ACQUISITION
       for ch in daq.rampingChannel
         enableRampDown!(daq.rpc, ch, true)
@@ -660,9 +696,23 @@ function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsP
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
-function startTx(daq::RedPitayaDAQ)
+function startTx(daq::RedPitayaDAQ; isControlStep=false)
+  if usesCounterTrigger(daq) && !isControlStep
+    counterTrigger_enabled!(daq.rpc, true)
+    counterTrigger_referenceCounter!(daq.rpc, daq.referenceCounter)
+    counterTrigger_presamples!(daq.rpc, daq.presamples)
+  else
+    counterTrigger_enabled!(daq.rpc, false)
+  end
+
   serverMode!(daq.rpc, ACQUISITION)
   masterTrigger!(daq.rpc, true)
+
+  if usesCounterTrigger(daq) && !isControlStep
+    @info "Arming trigger"
+    counterTrigger_arm!(daq.rpc)
+  end
+
   @debug "Started tx"
 end
 
@@ -675,6 +725,10 @@ function stopTx(daq::RedPitayaDAQ)
     end
   end
   clearTx!(daq)
+
+  # We just always make sure to disable the counter trigger
+  counterTrigger_enabled!(daq.rpc, false)
+
   @debug "Stopped tx"
 end
 

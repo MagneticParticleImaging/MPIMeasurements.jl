@@ -45,7 +45,7 @@ function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
 end
 
 # Based on https://github.com/MagneticParticleImaging/MPIMeasurements.jl/tree/cde1c72b820a72b3c3dfa4235b2b37bd506b0109
-mutable struct SystemMatrixRobotMeas
+mutable struct SystemMatrixMeasState
   task::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
   producer::Union{Task, Nothing}
@@ -64,7 +64,7 @@ end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   @add_protocol_fields RobotBasedSystemMatrixProtocolParams
-  systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
+  systemMeasState::Union{SystemMatrixMeasState, Nothing} = nothing
   txCont::Union{TxDAQController, Nothing} = nothing
   contSequence::Union{ControlSequence, Nothing} = nothing
   stopped::Bool = false
@@ -73,8 +73,8 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   finishAcknowledged::Bool = false
 end
 
-function SystemMatrixRobotMeas()
-  return SystemMatrixRobotMeas(
+function SystemMatrixMeasState()
+  return SystemMatrixMeasState(
     nothing,
     nothing, 
     nothing,
@@ -100,7 +100,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
-  protocol.systemMeasState = SystemMatrixRobotMeas()
+  protocol.systemMeasState = SystemMatrixMeasState()
 
   # Prepare Positions
   # Extend Positions to include background measurements, TODO behaviour if positions already includes background pos

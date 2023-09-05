@@ -207,7 +207,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
-        endSample = asyncProducer(channel, daq, control.currSequence)
+        endSample = asyncProducer(channel, daq, control.currSequence, isControlStep=true)
         endSequence(daq, endSample)
       end
       bind(channel, producer)
@@ -425,8 +425,9 @@ function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_couplin
   if correct_coupling
     β = Γ*inv(κ)
   else
-    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+    β = diagm(diag(Γ))*inv(diagm(diag(κ)))
   end
+  
   newTx = inv(β)*Ω
   @debug "Last matrix:" κ
   @debug "Ref matrix" Γ
