@@ -1,7 +1,7 @@
 export ContinuousElectricalChannel
 
 "Electrical channel with a stepwise definition of values."
-Base.@kwdef struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # TODO: Why is this named continuous?
+Base.@kwdef mutable struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # TODO: Why is this named continuous?
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   "Divider of sampling frequency."

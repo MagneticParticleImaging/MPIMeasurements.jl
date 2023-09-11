@@ -236,8 +236,6 @@ end
 
 function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
 
-  # TODO/JA: what about the other types of channels? 
-
   for channel in periodicElectricalTxChannels(seq) 
     off = offset(channel)
     if dimension(off) != dimension(1.0u"V")
@@ -246,23 +244,44 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
     end
 
     for comp in components(channel)
-        amp = amplitude(comp)
-        pha = phase(comp)
-        if dimension(amp) != dimension(1.0u"V")
-          f_comp = ustrip(u"Hz", txBaseFrequency(seq)) / divider(comp)
-          complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
-          amplitude!(comp, uconvert(u"V",abs(complex_comp)))
-          phase!(comp, angle(complex_comp)u"rad")
-          if comp isa ArbitraryElectricalComponent
-            N = length(values(comp))
-            f_awg = rfftfreq(N, f_comp*N)
-            calib = calibration(daq, id(channel))(f_awg) ./ calibration(daq, id(channel))(f_comp) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
-            values!(comp, irfft(rfft(values(comp)).*calib, N))
-          end
+      amp = amplitude(comp)
+      pha = phase(comp)
+      if dimension(amp) != dimension(1.0u"V")
+        f_comp = ustrip(u"Hz", txBaseFrequency(seq)) / divider(comp)
+        complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
+        amplitude!(comp, uconvert(u"V",abs(complex_comp)))
+        phase!(comp, angle(complex_comp)u"rad")
+        if comp isa ArbitraryElectricalComponent
+          N = length(values(comp))
+          f_awg = rfftfreq(N, f_comp*N)
+          calib = calibration(daq, id(channel))(f_awg) ./ calibration(daq, id(channel))(f_comp) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          values!(comp, irfft(rfft(values(comp)).*calib, N))
         end
-        
+      end
     end
   end
+
+  for lutChannel in acyclicElectricalTxChannels(seq)
+    if lutChannel isa StepwiseElectricalChannel
+      values = values(lutChannel)
+      if dimension(values[1]) != dimension(1.0u"V")
+        values = values.*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
+        values!(lutChannel, values)
+      end
+    elseif lutChannel isa ContinuousElectricalChannel
+      amp = lutChannel.amplitude
+      off = lutChannel.offset
+      if dimension(amp) != dimension(1.0u"V")
+        amp = amp*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
+        lutChannel.amplitude = amp
+      end
+      if dimension(off) != dimension(1.0u"V")
+        off = off*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
+        lutChannel.offfset = off
+      end
+    end
+  end
+  
   nothing
 end
 

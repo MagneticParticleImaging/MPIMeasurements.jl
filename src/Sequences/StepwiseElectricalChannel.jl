@@ -1,7 +1,7 @@
 export StepwiseElectricalChannel
 
 "Electrical channel with a stepwise definition of values."
-Base.@kwdef struct StepwiseElectricalChannel <: AcyclicElectricalTxChannel
+Base.@kwdef mutable struct StepwiseElectricalChannel <: AcyclicElectricalTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   "Divider of the component."
@@ -36,6 +36,7 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Stepwis
 end
 
 values(channel::StepwiseElectricalChannel) = channel.values
+values!(channel::StepwiseElectricalChannel, val::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}) = channel.values = val
 
 cycleDuration(channel::StepwiseElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = upreferred(channel.divider/baseFrequency)
 stepsPerCycle(channel::StepwiseElectricalChannel) = length(channel.values)

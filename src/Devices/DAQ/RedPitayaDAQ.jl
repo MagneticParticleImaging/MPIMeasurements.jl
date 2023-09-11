@@ -308,12 +308,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
   lutValues = []
   lutIdx = []
   for (lutChannel, seqChannel) in channelMapping
-    tempValues = values(seqChannel)
-    if !isnothing(lutChannel.calibration)
-      tempValues = tempValues.*lutChannel.calibration
-    end
-    tempValues = ustrip.(u"V", tempValues)
-    push!(lutValues, tempValues)
+    push!(lutValues, ustrip.(u"V", values(seqChannel)))
     push!(lutIdx, lutChannel.channelIdx)
   end
 
@@ -501,16 +496,16 @@ end
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
   setupRx(daq, sequence)
-  setupTx(daq, sequence)
-  prepareTx(daq, sequence)
-  setSequenceParams(daq, sequence)
+  sequenceVolt = applyForwardCalibration(sequence, daq)
+  setupTx(daq, sequenceVolt)
+  prepareTx(daq, sequenceVolt)
+  setSequenceParams(daq, sequenceVolt)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
-  sequenceVolt = applyForwardCalibration(sequence, daq)
-
-  periodicChannels = periodicElectricalTxChannels(sequenceVolt)
+  
+  periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
@@ -518,7 +513,7 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
-    baseFreq = txBaseFrequency(sequenceVolt)
+    baseFreq = txBaseFrequency(sequence)
     for channel in periodicChannels
       setupTxChannel!(batch, daq, channel, baseFreq)
     end
