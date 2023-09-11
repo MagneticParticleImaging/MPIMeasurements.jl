@@ -605,7 +605,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
-  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa TxChannelParams]
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
   daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
 
   # Construct view to save bandwidth

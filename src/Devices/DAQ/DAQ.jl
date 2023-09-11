@@ -263,21 +263,21 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
 
   for lutChannel in acyclicElectricalTxChannels(seq)
     if lutChannel isa StepwiseElectricalChannel
-      values = values(lutChannel)
+      values = lutChannel.values
       if dimension(values[1]) != dimension(1.0u"V")
-        values = values.*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
-        values!(lutChannel, values)
+        values = values.*calibration(daq, id(lutChannel))
+        lutChannel.values = values
       end
     elseif lutChannel isa ContinuousElectricalChannel
       amp = lutChannel.amplitude
       off = lutChannel.offset
       if dimension(amp) != dimension(1.0u"V")
-        amp = amp*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
+        amp = amp*calibration(daq, id(lutChannel))
         lutChannel.amplitude = amp
       end
       if dimension(off) != dimension(1.0u"V")
-        off = off*calibration(daq, id(lutChannel))(0) # use DC value for LUTChannels
-        lutChannel.offfset = off
+        off = off*calibration(daq, id(lutChannel))
+        lutChannel.offset = off
       end
     end
   end
