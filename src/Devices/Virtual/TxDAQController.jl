@@ -515,9 +515,9 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   diff = Ω - Γ
   abs_deviation = abs.(diff)
   rel_deviation = abs_deviation ./ abs.(Ω)
-  rel_deviation[abs.(Ω).==0] .= 0 # relative deviation does not make sense for a zero goal
+  rel_deviation[abs.(Ω).<1e-15] .= 0 # relative deviation does not make sense for a zero goal
   phase_deviation = angle.(Ω).-angle.(Γ)
-  phase_deviation[abs.(Ω).==0] .= 0 # phase deviation does not make sense for a zero goal
+  phase_deviation[abs.(Ω).<1e-15] .= 0 # phase deviation does not make sense for a zero goal
 
   if !needsDecoupling(cont.targetSequence) && !isa(cont,AWControlSequence)
     abs_deviation = diag(abs_deviation)
@@ -530,7 +530,7 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
-  @info "Observed field deviation:\n\t$(abs_deviation) T\n\t$(rel_deviation*100) %\n\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
+  @info "Observed field deviation:\nabs:\t$(abs_deviation) T\nrel:\t$(rel_deviation*100) %\nφ:\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
   phase_ok = abs.(phase_deviation) .< ustrip(u"rad", txCont.params.phaseAccuracy)
   amplitude_ok = (abs.(abs_deviation) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)) .| (abs.(rel_deviation) .< txCont.params.relativeAmplitudeAccuracy)
   @debug "Field deviation:" amplitude_ok phase_ok
@@ -740,7 +740,7 @@ end
 # Convert New Tx from matrix in V to currSequence
 function updateControlSequence!(cont::CrossCouplingControlSequence, newTx::Matrix)
   for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
-    for (j, comp) in enumerate(periodicElectricalComponents(channel))
+    for (j, comp) in enumerate(components(channel))
       amplitude!(comp, abs(newTx[i, j])*1.0u"V")
       phase!(comp, angle(newTx[i, j])*1.0u"rad")
     end
@@ -752,7 +752,7 @@ function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
     if cont.rfftIndices[i,end,1]
       offset!(channel, abs(newTx[i,1])*1.0u"V")
     end
-    for (j, comp) in enumerate(periodicElectricalComponents(channel))
+    for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
         amplitude!(comp, abs.(newTx[i, cont.rfftIndices[i,j,:]])[]*1.0u"V")
         phase!(comp, angle.(newTx[i, cont.rfftIndices[i,j,:]])[]*1.0u"rad"+(pi/2)u"rad")
@@ -799,9 +799,9 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   calibFieldToVoltMeasured = oldTx ./ Γ
 
   mask = allComponentMask(cont) .& (abs.(Ω).>1e-15)
-  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured[mask]./calibFieldToVoltEstimate[mask])
-  phase_deviation = angle.(calibFieldToVoltMeasured[mask]./calibFieldToVoltEstimate[mask])
-  #@debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[allComponentMask(cont)]) V/T and got $(calibFieldToVoltMeasured[allComponentMask(cont)]) V/T, deviation: $abs_deviation"
+  abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured[mask])./abs.(calibFieldToVoltEstimate[mask]))
+  phase_deviation = angle.(calibFieldToVoltMeasured[mask]) .- angle.(calibFieldToVoltEstimate[mask])
+  @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[mask]) V/T and got $(calibFieldToVoltMeasured[mask]) V/T, deviation: $abs_deviation"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
   if !valid
     @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"

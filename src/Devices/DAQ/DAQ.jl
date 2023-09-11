@@ -254,7 +254,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
         if comp isa ArbitraryElectricalComponent
           N = length(values(comp))
           f_awg = rfftfreq(N, f_comp*N)
-          calib = calibration(daq, id(channel))(f_awg) ./ calibration(daq, id(channel))(f_comp) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          calib = calibration(daq, id(channel))(f_awg) ./ (abs.(calibration(daq, id(channel))(f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(daq, id(channel))(f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
           values!(comp, irfft(rfft(values(comp)).*calib, N))
         end
       end
