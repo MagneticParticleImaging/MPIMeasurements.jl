@@ -7,6 +7,7 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
   correctCrossCoupling::Bool = false
+  minimumStepDuration::Float64 = 0.002
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -101,6 +102,10 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
 
   currSeq = Sequence(;general = general, acquisition = acq, fields = _fields)
+
+  duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
+  acqNumFrames(currSeq, max(duration, 1))
+
   return ControlSequence(target, currSeq, simpleChannel, sinLUT, cosLUT, refIndices)
 end
 
@@ -198,11 +203,11 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       # Prepare control measurement
       setup(daq, control.currSequence)
       channel = Channel{channelType(daq)}(32)
-      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64,len, len, 1, 1), control)]), daq)
+      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64,len, len, 1, acqNumFrames(control.currSequence)), control)]), daq)
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
-        endSample = asyncProducer(channel, daq, control.currSequence)
+        endSample = asyncProducer(channel, daq, control.currSequence, isControlStep=true)
         endSequence(daq, endSample)
       end
       bind(channel, producer)
@@ -219,7 +224,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, control::ControlSeque
       @info "Control measurement finished"
 
       @info "Evaluating control step"
-      uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1]
+      uRef = read(sink(buffer, DriveFieldBuffer))[:, :, 1, end]
       if !isnothing(uRef)
         controlPhaseDone = controlStep!(control, txCont, uRef, Ω) == UNCHANGED
         if controlPhaseDone
@@ -393,7 +398,7 @@ function checkFieldDeviation(Γ::Matrix, Ω::Matrix, txCont::TxDAQController)
   else
     diff = diagm(diag(Ω)) - diagm(diag(Γ))
   end
-  deviation = maximum(abs.(diff)) / maximum(abs.(Ω))
+  deviation = maximum(abs.(diff)) / maximum(abs.(Ω)) # TODO maximum(abs(diff)./abs(omega))
   @debug "Check field deviation" Ω Γ
   @debug "Ω - Γ = " diff
   @info "deviation = $(deviation) allowed= $(txCont.params.amplitudeAccuracy)"
@@ -420,8 +425,9 @@ function updateControlMatrix(Γ::Matrix, Ω::Matrix, κ::Matrix; correct_couplin
   if correct_coupling
     β = Γ*inv(κ)
   else
-    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+    β = diagm(diag(Γ))*inv(diagm(diag(κ)))
   end
+  
   newTx = inv(β)*Ω
   @debug "Last matrix:" κ
   @debug "Ref matrix" Γ

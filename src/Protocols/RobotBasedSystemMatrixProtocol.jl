@@ -19,7 +19,7 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedPro
   controlTx::Bool = false
   "Sequence used for the calibration at each position"
   sequence::Union{Sequence, Nothing} = nothing
-  positions::Union{GridPositions, Nothing} = nothing
+  positions::Union{Positions, Nothing} = nothing
 end
 function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   if haskey(dict, "Positions")
@@ -45,12 +45,12 @@ function RobotBasedSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
 end
 
 # Based on https://github.com/MagneticParticleImaging/MPIMeasurements.jl/tree/cde1c72b820a72b3c3dfa4235b2b37bd506b0109
-mutable struct SystemMatrixRobotMeas
+mutable struct SystemMatrixMeasState
   task::Union{Task,Nothing}
   consumer::Union{Task, Nothing}
   producer::Union{Task, Nothing}
   #store::DatasetStore # Do we need this?
-  positions::GridPositions
+  positions::Positions
   currPos::Int
   signals::Array{Float32,4}
   currentSignal::Array{Float32,4}
@@ -64,7 +64,7 @@ end
 
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   @add_protocol_fields RobotBasedSystemMatrixProtocolParams
-  systemMeasState::Union{SystemMatrixRobotMeas, Nothing} = nothing
+  systemMeasState::Union{SystemMatrixMeasState, Nothing} = nothing
   txCont::Union{TxDAQController, Nothing} = nothing
   contSequence::Union{ControlSequence, Nothing} = nothing
   stopped::Bool = false
@@ -73,8 +73,8 @@ Base.@kwdef mutable struct RobotBasedSystemMatrixProtocol <: RobotBasedProtocol
   finishAcknowledged::Bool = false
 end
 
-function SystemMatrixRobotMeas()
-  return SystemMatrixRobotMeas(
+function SystemMatrixMeasState()
+  return SystemMatrixMeasState(
     nothing,
     nothing, 
     nothing,
@@ -100,7 +100,7 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
-  protocol.systemMeasState = SystemMatrixRobotMeas()
+  protocol.systemMeasState = SystemMatrixMeasState()
 
   # Prepare Positions
   # Extend Positions to include background measurements, TODO behaviour if positions already includes background pos
@@ -501,7 +501,21 @@ function handleEvent(protocl::RobotBasedSystemMatrixProtocol, event::ProgressQue
 end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
-  put!(protocol.biChannel, DataAnswerEvent(protocol.systemMeasState.currentSignal, event))
+  data = nothing
+  if event.message == "CURR"
+    data = protocol.systemMeasState.currentSignal
+  elseif event.message == "BG"
+    sysObj = protocol.systemMeasState
+    index = sysObj.currPos
+    while index > 1 && !sysObj.measIsBGPos[index]
+      index = index - 1
+    end
+    startIdx = sysObj.posToIdx[index]
+    data = copy(sysObj.signals[:, :, :, startIdx:startIdx])
+  else
+    put!(protocol.biChannel, UnknownDataQueryEvent(event))
+  end
+  put!(protocol.biChannel, DataAnswerEvent(data, event))
 end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
