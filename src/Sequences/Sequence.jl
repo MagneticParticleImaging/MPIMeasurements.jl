@@ -38,6 +38,41 @@ Base.@kwdef struct Sequence
   acquisition::AcquisitionSettings
 end
 
+# Indexing Interface
+length(seq::Sequence) = length(fields(seq))
+function getindex(seq::Sequence, index::Integer)
+  1 <= index <= length(seq) || throw(BoundsError(fields(seq), index))
+  return fields(seq)[index]
+end
+function getindex(seq::Sequence, index::String)
+  for channel in seq
+    if id(channel) == index
+      return channel
+    end
+  end
+  throw(KeyError(index))
+end
+setindex!(seq::Sequence, field::MagneticField, i::Integer) = fields(seq)[i] = field
+firstindex(seq::Sequence) = start_(seq)
+lastindex(seq::Sequence) = length(seq)
+keys(seq::Sequence) = map(id, seq)
+haskey(seq::Sequence, key) = in(key, keys(seq))
+
+# Iterable Interface
+start_(seq::Sequence) = 1
+next_(seq::Sequence,state) = (seq[state],state+1)
+done_(seq::Sequence,state) = state > length(seq)
+iterate(seq::Sequence, s=start_(seq)) = done_(seq, s) ? nothing : next_(seq, s)
+
+push!(seq::Sequence, field::MagneticField) = push!(fields(seq), field)
+pop!(seq::Sequence) = pop!(fields(seq))
+empty!(seq::Sequence) = empty!(fields(seq))
+deleteat!(seq::Sequence, i) = deleteat!(fields(seq), i)
+function delete!(seq::Sequence, index::String)
+  idx = findfirst(isequal(index), map(id, seq))
+  isnothing(idx) ? throw(KeyError(index)) : deleteat!(seq, idx)
+end
+
 function Sequence(filename::AbstractString)
   return sequenceFromTOML(filename)
 end

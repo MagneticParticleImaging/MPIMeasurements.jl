@@ -24,7 +24,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
 import Base.write, Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
-import Base: ==, isequal, hash, isfile
+import Base: ==, isequal, hash, isfile, push!, pop!, empty!, getindex, setindex!, firstindex, lastindex, length, iterate, delete!, deleteat!, keys, haskey
 
 # Reexporting MPIFiles is disliked by Aqua since there are undefined exports. Therefore, I disabled reexporting here.
 #using Reexport

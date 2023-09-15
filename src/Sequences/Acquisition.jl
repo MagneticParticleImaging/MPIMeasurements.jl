@@ -28,6 +28,42 @@ Base.@kwdef mutable struct AcquisitionSettings
   numFrameAverages::Integer = 1
 end
 
+# Indexing Interface
+length(acq::AcquisitionSettings) = length(rxChannels(acq))
+function getindex(acq::AcquisitionSettings, index::Integer)
+  1 <= index <= length(acq) || throw(BoundsError(rxChannels(acq), index))
+  return rxChannels(acq)[index]
+end
+function getindex(acq::AcquisitionSettings, index::String)
+  for channel in acq
+    if id(channel) == index
+      return channel
+    end
+  end
+  throw(KeyError(index))
+end
+setindex!(acq::AcquisitionSettings, rxChannel::RxChannel, i::Integer) = rxChannels(acq)[i] = rxChannel
+firstindex(acq::AcquisitionSettings) = start_(acq)
+lastindex(acq::AcquisitionSettings) = length(acq)
+keys(acq::AcquisitionSettings) = map(id, acq)
+haskey(acq::AcquisitionSettings, key) = in(key, keys(acq))
+
+
+# Iterable Interface
+start_(acq::AcquisitionSettings) = 1
+next_(acq::AcquisitionSettings,state) = (acq[state],state+1)
+done_(acq::AcquisitionSettings,state) = state > length(acq)
+iterate(acq::AcquisitionSettings, s=start_(acq)) = done_(acq, s) ? nothing : next_(acq, s)
+
+push!(acq::AcquisitionSettings, rxChannel::RxChannel) = push!(rxChannels(acq), rxChannel)
+pop!(acq::AcquisitionSettings) = pop!(rxChannels(acq))
+empty!(acq::AcquisitionSettings) = empty!(rxChannels(acq))
+deleteat!(acq::AcquisitionSettings, i) = deleteat!(rxChannels(acq), i)
+function delete!(acq::AcquisitionSettings, index::String)
+  idx = findfirst(isequal(index), map(id, acq))
+  isnothing(idx) ? throw(KeyError(index)) : deleteat!(acq, idx)
+end
+
 acqNumFrames(acq::AcquisitionSettings) = acq.numFrames
 acqNumFrames(acq::AcquisitionSettings, val) = acq.numFrames = val
 
