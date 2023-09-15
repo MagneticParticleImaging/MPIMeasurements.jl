@@ -101,6 +101,9 @@ periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicEle
 export acyclicElectricalTxChannels
 acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
 
+export protocolElectricalTxChannels
+protocolTxChannels(field::MagneticField) = channels(field, ProtocolTxChannel)
+
 function toDict!(dict, field::MagneticField)
   for structField in [x for x in fieldnames(typeof(field)) if !in(x, [:id, :channels])]
     dict[String(structField)] = toDictValue(getproperty(field, structField))

@@ -444,6 +444,44 @@ function getTiming(daq::RedPitayaDAQ)
   return sampleTiming
 end
 
+function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
+  cpy = deepcopy(base)
+
+  # Prepare offset sequences
+  offsetMap = Dict{MagneticField, Vector{ProtocolOffsetElectricalChannel}}()
+  for field in cpy
+    for channel in channels(field, ProtocolOffsetElectricalChannel)
+      temp = get(offsetMap, field, ProtocolOffsetElectricalChannel[])
+      push!(temp, channel)
+    end
+  end
+
+  numOffsets = 1
+  for field in offsetMap
+    for offsetChannel in field
+      numOffsets*=length(values(offsetChannel))
+    end
+  end
+
+  divider = dfDivider(cpy)
+  
+  inner = 1
+  for field in offsetMap
+    for offsetChannel in field
+      offsets = values(offsetChannel)
+      outer = div(numOffsets, inner * length(offsets))
+      steps = repeat(offsets, inner = inner, outer = outer)
+      inner*=length(offsets)
+      stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
+      
+      delete!(field, id(stepwise))
+      push!(field, stepwise)
+    end
+  end
+
+  return cpy
+end
+
 #### Producer/Consumer ####
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
   samples::Union{Matrix{Int16}, Nothing}

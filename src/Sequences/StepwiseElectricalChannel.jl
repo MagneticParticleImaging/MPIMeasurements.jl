@@ -9,7 +9,7 @@ Base.@kwdef struct StepwiseElectricalChannel <: AcyclicElectricalTxChannel
   "Values corresponding to the individual steps."
   values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
   "TBD"
-  enable::Vector{Bool}
+  enable::Vector{Bool} = Bool[]
 end
 
 channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()

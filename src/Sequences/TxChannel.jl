@@ -13,6 +13,7 @@ abstract type TxChannel end
 abstract type ElectricalTxChannel <: TxChannel end
 abstract type AcyclicElectricalTxChannel <: ElectricalTxChannel end
 abstract type MechanicalTxChannel <: TxChannel end
+abstract type ProtocolTxChannel <: TxChannel end
 
 abstract type ElectricalComponent end
 
@@ -66,3 +67,4 @@ include("ContinuousMechanicalTranslationChannel.jl")
 include("StepwiseMechanicalTranslationChannel.jl")
 include("StepwiseMechanicalRotationChannel.jl")
 include("ContinuousMechanicalRotationChannel.jl")
+include("ProtocolOffsetElectricalChannel.jl")

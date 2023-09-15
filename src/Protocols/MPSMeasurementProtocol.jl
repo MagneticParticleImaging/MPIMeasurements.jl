@@ -62,6 +62,8 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
+  sequences::Vector{Sequence} = Sequence[]
+
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
@@ -94,7 +96,11 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.bgMeas = zeros(Float32,0,0,0,0)
   protocol.protocolMeasState = ProtocolMeasState()
 
-  setupSequence(protocol)
+  try
+    protocol.sequences = prepareProtocolSequences(protocol.params.seqeuence, getDAQ(scanner(protocol)))
+  catch e
+    throw(ProtocolConfigurationError(e))
+  end
 
   return nothing
 end
