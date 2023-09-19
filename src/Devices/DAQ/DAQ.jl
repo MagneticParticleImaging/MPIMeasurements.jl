@@ -239,8 +239,8 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
   for channel in periodicElectricalTxChannels(seq) 
     off = offset(channel)
     if dimension(off) != dimension(1.0u"V")
-      offsetVolts = off*calibration(daq, id(channel))(0) # use DC value for offsets
-      offset!(channel, uconvert(u"V",abs(offsetVolts)))
+      offsetVolts = off*abs(calibration(daq, id(channel))(0)) # use DC value for offsets
+      offset!(channel, uconvert(u"V",offsetVolts))
     end
 
     for comp in components(channel)
