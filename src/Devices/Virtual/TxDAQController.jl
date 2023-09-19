@@ -7,7 +7,7 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
-  controlDC::Bool = false
+  findZeroDC::Bool = false
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -33,7 +33,7 @@ mutable struct AWControlSequence <: ControlSequence
   controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
   refIndices::Vector{Int64}
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
-  # Arbitrary Waveform
+  dcCorrection::Union{Vector{Float64}, Nothing}
 end
 
 @enum ControlResult UNCHANGED UPDATED INVALID
@@ -73,7 +73,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
-  controlSequenceType = decideControlSequenceType(target)
+  controlSequenceType = decideControlSequenceType(target, txCont.params.findZeroDC)
   @debug "ControlSequence: Decided on using ControlSequence of type $controlSequenceType"
 
   if controlSequenceType==CrossCouplingControlSequence    
@@ -105,24 +105,24 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
-    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices)
+    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, nothing)
   end
 end
 
-function decideControlSequenceType(target::Sequence)
+function decideControlSequenceType(target::Sequence, findZeroDC::Bool=false)
 
   hasAWComponent = any(isa.([component for channel in getControlledChannels(target) for component in channel.components], ArbitraryElectricalComponent))
   moreThanOneComponent = any(x -> length(x.components) > 1, getControlledChannels(target))
   moreThanThreeChannels = length(getControlledChannels(target)) > 3
   moreThanOneField = length(getControlledFields(target)) > 1
   needsDecoupling_ = needsDecoupling(target)
-  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_
+  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ findZeroDC
 
-  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent
+  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && findZeroDC
       return CrossCouplingControlSequence
   elseif needsDecoupling_
-    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent)"))
-  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent
+    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($findZeroDC) is also not possible"))
+  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && findZeroDC
     return CrossCouplingControlSequence
   else 
     return AWControlSequence 
@@ -292,6 +292,29 @@ function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
   end
 end
 
+function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
+  channel = Channel{channelType(daq)}(32)
+  buf = AsyncBuffer(SimpleFrameBuffer(1, zeros(Float32,rxNumSamplesPerPeriod(seq),length(daq.rpv)*2,acqNumPeriodsPerFrame(seq),acqNumFrames(seq))), daq)
+  @info "DC Control measurement started"
+  producer = @async begin
+    @debug "Starting DC control producer" 
+    endSample = startProducer(channel, daq, 1)
+    endSequence(daq, endSample)
+  end
+  bind(channel, producer)
+  consumer = @async begin
+    while isopen(channel) || isready(channel)
+      while isready(channel)
+        chunk = take!(channel)
+        push!(buf, chunk)
+      end
+      sleep(0.001)
+    end      
+  end
+  
+  wait(consumer)
+  return mean(read(buf.target)[:,channelIdx(daq, daq.refChanIDs),1,1], dims=1)
+end
 
 function controlTx(txCont::TxDAQController, control::ControlSequence)
   # Prepare and check channel under control
@@ -335,13 +358,33 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   i = 1
 
   try
-    if txCont.params.controlDC # is this only possible with AWControlSequence?? -> maybe do for all channels that are dcEnabled
-      # create sequence with every field off, dc set to zero, basically trigger off
+    if txCont.params.findZeroDC # this is only possible with AWControlSequence
+      # create sequence with every field off, dc set to zero
       # calculate mean for each ref channel
-      # create sequence with offsets set to -mean(ref)(V)*feedback.calibration(T/V)*forwardcalibration(V/T)
-      # optional: send sequence and calculate perfect zero with two points
-      # update redpitaya DAC calibration values 
-      error("The DC offset control is not yet implemented")
+      # create sequence with offsets set to small value
+      # measure men for each ref channel again
+      # use the two measurements to find the DC value that needs to be output to achieve zero on the reference channel
+      # always add found value to DC values in control
+      dc_cont = deepcopy(control)
+      signals = zeros(ComplexF64,controlMatrixShape(control))
+      updateControlSequence!(dc_cont, signals)
+      setup(daq, dc_cont.currSequence)
+      ref_offsets_0 = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
+
+      δ = ustrip.(u"V", [1u"mT"*abs(calibration(daq, id(channel))(0)) for channel in getControlledChannels(control)]) # use DC value for offsets
+      @debug "findZeroDC: Now outputting the following DC values: [V]" δ
+      signals[:,1] .= δ 
+      updateControlSequence!(dc_cont, signals)
+      setup(daq, dc_cont.currSequence)
+      ref_offsets_δ = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
+
+      dc_correction = -ref_offsets_0./((ref_offsets_δ.-ref_offsets_0)./δ)
+
+      if any(abs.(dc_correction).>maximum(δ)) # We do not accept any change that is larger than what we would expect for 1mT
+        error("DC correction too large!")
+      end
+      @debug "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
+      control.dcCorrection = dc_correction
     end
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
@@ -753,7 +796,11 @@ end
 function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
   for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     if cont.rfftIndices[i,end,1]
-      offset!(channel, abs(newTx[i,1])*1.0u"V")
+      if !isnothing(cont.dcCorrection)
+        offset!(channel, (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V")
+      else
+        offset!(channel, real(newTx[i,1])*1.0u"V")
+      end
     end
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
