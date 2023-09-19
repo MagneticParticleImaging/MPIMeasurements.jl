@@ -349,13 +349,15 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       # Prepare control measurement
       setup(daq, control.currSequence)
 
-      menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
-      choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
-      if choice == 1
-        println("Continuing...")
-      else
-        println("Control cancelled")
-        error("Control cancelled!")
+      if "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
+        menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
+        choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
+        if choice == 1
+          println("Continuing...")
+        else
+          println("Control cancelled")
+          error("Control cancelled!")
+        end
       end
 
       channel = Channel{channelType(daq)}(32)
@@ -443,7 +445,7 @@ function getControlResult(cont::ControlSequence)::Sequence
   # Use the magnetic field that are controlled from currSeq and all uncontrolled fields and general settings from target
 
   _name = "Control Result for target $(name(cont.targetSequence))"
-  general = GeneralSettings(;name=_name, description = description(cont.targetSequence), targetScanner = targetScanner(cont.targetSequence), baseFrequency = baseFrequency(cont.target))
+  general = GeneralSettings(;name=_name, description = description(cont.targetSequence), targetScanner = targetScanner(cont.targetSequence), baseFrequency = baseFrequency(cont.targetSequence))
   acq = cont.targetSequence.acquisition
 
   _fields = MagneticField[]
@@ -530,7 +532,7 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
-  @info "Observed field deviation:\nabs:\t$(abs_deviation) T\nrel:\t$(rel_deviation*100) %\nφ:\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
+  @info "Observed field deviation:\nabs:\t$(abs_deviation*1000) mT\nrel:\t$(rel_deviation*100) %\nφ:\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy|>u"mT"), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
   phase_ok = abs.(phase_deviation) .< ustrip(u"rad", txCont.params.phaseAccuracy)
   amplitude_ok = (abs.(abs_deviation) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)) .| (abs.(rel_deviation) .< txCont.params.relativeAmplitudeAccuracy)
   @debug "Field deviation:" amplitude_ok phase_ok
@@ -627,6 +629,7 @@ function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   N = rxNumSamplingPoints(cont.currSequence)
   # do rfft channel wise and correct with the transfer function, return as (num control channels x len rfft x periods x frames) Matrix, the selection of [:,:,1,1] is done in controlTx
   spectrum = rfft(uRef, 1)/0.5N
+  spectrum[1,:,:,:] ./= 2
   sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   fb_calibration = reduce(vcat, [ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
