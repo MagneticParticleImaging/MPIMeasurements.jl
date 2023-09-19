@@ -511,6 +511,8 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
     
+  @debug "SetupTx: Outputting the following offsets" offsets=[offset(chan) for chan in periodicChannels]
+
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
     baseFreq = txBaseFrequency(sequence)
