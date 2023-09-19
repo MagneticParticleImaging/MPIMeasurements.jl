@@ -754,7 +754,7 @@ function calcDesiredField(cont::AWControlSequence)
   for (i, channel) in enumerate(getControlledChannels(cont.targetSequence))
     
     if cont.rfftIndices[i,end,1]
-      desiredField[1,i] = ustrip(u"T", offset(channel))
+      desiredField[i,1] = ustrip(u"T", offset(channel))
     end
 
     for (j, comp) in enumerate(components(channel))
