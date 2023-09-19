@@ -572,6 +572,12 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
     abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
     rel_deviation = rel_deviation[allComponentMask(cont)]'
     phase_deviation = phase_deviation[allComponentMask(cont)]'
+    Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
+    Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+
+    diff = (Ωt .- Γt)
+    @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff)
+    @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
@@ -580,6 +586,18 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   amplitude_ok = (abs.(abs_deviation) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)) .| (abs.(rel_deviation) .< txCont.params.relativeAmplitudeAccuracy)
   @debug "Field deviation:" amplitude_ok phase_ok
   return all(phase_ok) && all(amplitude_ok)
+end
+
+function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+  
+  Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
+  Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+
+  diff = (Ωt .- Γt)
+  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff)
+  @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
+  amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
+  return all(amplitude_ok)
 end
 
 
