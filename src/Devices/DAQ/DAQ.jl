@@ -58,6 +58,7 @@ end
 Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   channelIdx::Int64
   limitPeak::typeof(1.0u"V")
+  limitSlewRate::typeof(1.0u"V/s") = 1000.0u"V/µs" # default is basically no limit
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
@@ -72,6 +73,10 @@ function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
   splattingDict = Dict{Symbol, Any}()
   splattingDict[:channelIdx] = dict["channel"]
   splattingDict[:limitPeak] = uparse(dict["limitPeak"])
+
+  if haskey(dict, "limitSlewRate")
+    splattingDict[:limitSlewRate] = uparse(dict["limitSlewRate"])
+  end
 
   if haskey(dict, "sinkImpedance")
     splattingDict[:sinkImpedance] = dict["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH

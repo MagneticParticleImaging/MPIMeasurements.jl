@@ -898,17 +898,22 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
   validChannel = zeros(Bool, numControlledChannels(cont))
   N = rxNumSamplingPoints(cont.currSequence)
 
-  testSignalTime = irfft(newTx, N, 2)*0.5N
+  spectrum = copy(newTx)*0.5N
+  spectrum[:,1] .*= 2
+  testSignalTime = irfft(spectrum, N, 2)
 
   if return_time_signal
     return testSignalTime
   else
-    validChannel = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
+    slew_rate = (diff(testSignalTime, dims=2)*u"V"*rxSamplingRate(cont.currSequence)) .|> u"V/µs"
+    validSlew = maximum(abs.(slew_rate), dims=2) .< getproperty.(getControlledDAQChannels(cont),:limitSlewRate)
+    validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
   
-    valid = all(validChannel)
+    valid = all(validSlew) && all(validPeak)
+    @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime') maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
     if !valid
       @debug "Valid Tx Channel" validChannel
-      @warn "New control sequence exceeds voltage limits of tx channel"
+      @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
     end
     return valid
   end
