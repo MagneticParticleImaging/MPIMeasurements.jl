@@ -132,7 +132,7 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
     values = componentDict["values"]
   end
 
-  if abs(values[1]-values[end])>0.001 # is the jump limit of 0.1% too strict?
+  if abs(values[1]-values[end])>0.01 # is the jump limit of 0.1% too strict?, yes, probably 1% is fine
     throw(SequenceConfigurationError("The first and last value of a waveform should be close enough together to not produce a jump! Please check your waveform"))
   end
 
