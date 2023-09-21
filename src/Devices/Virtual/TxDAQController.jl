@@ -99,7 +99,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   elseif controlSequenceType == AWControlSequence # use the new controller
     
     # AW offset will get ignored -> should be zero
-    if any(x->any(mean.(scaledValues.(arbitraryElectricalComponents(x))).>1u"µT"), getControlledChannels(target))
+    if any(x->any(mean.(scaledValues.(arbitraryElectricalComponents(x))).>10u"µT"), getControlledChannels(target))
       error("The DC-component of arbitrary waveform components cannot be handled during control! Please remove any DC-offset from your waveform and use the offset parameter of the corresponding channel!")
     end
 
