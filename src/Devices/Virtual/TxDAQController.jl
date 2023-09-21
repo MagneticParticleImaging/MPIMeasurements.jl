@@ -322,6 +322,9 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   
   Ω = calcDesiredField(control)
   txCont.cont = control
+  if !checkVoltLimits(calcControlMatrix(control), control)
+    error("Initial guess for the controller already exceeds the possibilities of the DAQ!")
+  end
 
   # Start Tx
   su = nothing
@@ -895,7 +898,6 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
 end
 
 function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
-  validChannel = zeros(Bool, numControlledChannels(cont))
   N = rxNumSamplingPoints(cont.currSequence)
 
   spectrum = copy(newTx)*0.5N
@@ -912,7 +914,7 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
     valid = all(validSlew) && all(validPeak)
     @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime') maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
     if !valid
-      @debug "Valid Tx Channel" validChannel
+      @debug "Valid Tx Channel" validSlew validPeak
       @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
     end
     return valid
