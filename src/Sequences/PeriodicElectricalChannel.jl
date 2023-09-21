@@ -132,8 +132,8 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
     values = componentDict["values"]
   end
 
-  if abs(values[1]-values[end])>0.01 # is the jump limit of 0.1% too strict?, yes, probably 1% is fine
-    throw(SequenceConfigurationError("The first and last value of a waveform should be close enough together to not produce a jump! Please check your waveform"))
+  if abs(values[1]-values[end])>0.01 # more than 1% of max value in 1 of 2^14 samples -> slew > 160
+    @warn "The first and last value of your selected waveform are producing a jump of size $(abs(values[1]-values[end]))! Please check your waveform, if this is intended!"
   end
 
   return ArbitraryElectricalComponent(id=componentID, divider=divider,amplitude=amplitude, phase=phase, values=values)
