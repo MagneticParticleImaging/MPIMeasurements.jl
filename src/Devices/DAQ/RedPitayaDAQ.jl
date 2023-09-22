@@ -33,6 +33,7 @@ end
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
+  range::TxValueRange = BOTH
   hbridge::Union{DAQHBridge, Nothing} = nothing
 end
 
@@ -73,7 +74,7 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
     elseif value["type"] == "rx"
       channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
     elseif value["type"] == "txSlow"
-      calib = nothing
+      splattingDict[:channelIdx] = value["channel"]
       if haskey(value, "calibration")
         calib = uparse.(value["calibration"])
 
@@ -84,13 +85,17 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
         else
           error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
         end
+        splattingDict[:calibration] = calib
       end
 
-      hbridge = nothing
       if haskey(value, "hbridge")
-        hbridge = createDAQChannels(DAQHBridge, value["hbridge"])
+        splattingDict[:hbridge] = createDAQChannels(DAQHBridge, value["hbridge"])
       end
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib, hbridge = hbridge)
+
+      if haskey(value, "range")
+        splattingDict[:range] = value["range"]
+      end
+      channels[key] = RedPitayaLUTChannelParams(;splattingDict...)
     end
   end
 
@@ -454,34 +459,30 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   cpy = deepcopy(base)
 
   # Prepare offset sequences
-  offsetMap = Dict{MagneticField, Vector{ProtocolOffsetElectricalChannel}}()
+  offsetVector = ProtocolOffsetElectricalChannel[]
+  fieldMap = Dict{ProtocolOffsetElectricalChannel, MagneticField}()
   for field in cpy
     for channel in channels(field, ProtocolOffsetElectricalChannel)
-      temp = get(offsetMap, field, ProtocolOffsetElectricalChannel[])
-      push!(temp, channel)
-      offsetMap[field] = temp
+      push!(offsetVector, channel)
+      fieldMap[field] = channel
     end
   end
 
   numOffsets = 1
-  for (field, channels) in offsetMap
-    for offsetChannel in channels
-      numOffsets*=length(values(offsetChannel))
-    end
+  for offsetChannel in offsetVector
+    numOffsets*=length(values(offsetChannel))
   end
 
   divider = lcm(dfDivider(cpy)) * numOffsets
   
   inner = 1
-  for (field, channels) in offsetMap
-    for offsetChannel in channels
-      offsets = values(offsetChannel)
-      outer = div(numOffsets, inner * length(offsets))
-      steps = repeat(offsets, inner = inner, outer = outer)
-      inner*=length(offsets)
-      stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
-      field[id(stepwise)] = stepwise
-    end
+  for offsetChannel in offsetVector
+    offsets = values(offsetChannel)
+    outer = div(numOffsets, inner * length(offsets))
+    steps = repeat(offsets, inner = inner, outer = outer)
+    inner*=length(offsets)
+    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
+    fieldMap[offsetChannel][id(stepwise)] = stepwise
   end
 
   return cpy

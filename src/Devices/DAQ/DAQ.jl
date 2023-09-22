@@ -15,6 +15,13 @@ abstract type DAQParams <: DeviceParams end
   SINK_HIGH
 end
 
+@enum TxValueRange begin
+  #POSITIVE
+  #NEGATIVE
+  BOTH
+  HBRIDGE
+end
+
 struct DAQTxChannelSettings
   "Applied channel voltage. Dimensions are (components, channels, periods)."
   amplitudes::Array{typeof(1.0u"V"), 3}
@@ -63,6 +70,9 @@ Base.@kwdef struct DAQHBridge
 end
 negativeLevel(bridge::DAQHBridge) = bridge.level[1]
 positiveLevel(bridge::DAQHBridge) = bridge.level[2]
+manual(bridge::DAQHBridge) = bridge.manual
+deadTime(bridge::DAQHBridge) = bridge.deadTime
+id(bridge::DAQHBridge) = bridge.channelID
 
 function createDAQChannels(::Type{DAQHBridge}, dict::Dict{String, Any})
   splattingDict = Dict{Symbol, Any}()
