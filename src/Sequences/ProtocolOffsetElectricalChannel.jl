@@ -11,9 +11,6 @@ end
 channeltype(::Type{<:ProtocolOffsetElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetElectricalChannel}, channelDict::Dict{String, Any})
-  splattingDict = Dict{Symbol, Any}()
-  splattingDict[:id] = channelID
-
   offsetStart = uparse.(channelDict["offsetStart"])
   if eltype(offsetStart) <: Unitful.Current
     offsetStart = offsetStart .|> u"A"
@@ -36,9 +33,9 @@ function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetEl
     error("The value for an offsetStop has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
   end
 
-  numOffsets = uparse(channelDict["numOffsets"])
+  numOffsets = channelDict["numOffsets"]
 
-  return PeriodicElectricalChannel(;id = id, offsetStart = offsetStart, offsetStop = offsetStop, numOffsets = numOffsets)
+  return ProtocolOffsetElectricalChannel(;id = channelID, offsetStart = offsetStart, offsetStop = offsetStop, numOffsets = numOffsets)
 end
 
 values(channel::ProtocolOffsetElectricalChannel{T}) where T = collect(range(channel.offsetStart, channel.offsetStop, length = channel.numOffsets))

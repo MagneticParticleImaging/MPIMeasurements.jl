@@ -453,29 +453,28 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
     for channel in channels(field, ProtocolOffsetElectricalChannel)
       temp = get(offsetMap, field, ProtocolOffsetElectricalChannel[])
       push!(temp, channel)
+      offsetMap[field] = temp
     end
   end
 
   numOffsets = 1
-  for field in offsetMap
-    for offsetChannel in field
+  for (field, channels) in offsetMap
+    for offsetChannel in channels
       numOffsets*=length(values(offsetChannel))
     end
   end
 
-  divider = dfDivider(cpy)
+  divider = lcm(dfDivider(cpy)) * numOffsets
   
   inner = 1
-  for field in offsetMap
-    for offsetChannel in field
+  for (field, channels) in offsetMap
+    for offsetChannel in channels
       offsets = values(offsetChannel)
       outer = div(numOffsets, inner * length(offsets))
       steps = repeat(offsets, inner = inner, outer = outer)
       inner*=length(offsets)
       stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
-      
-      delete!(field, id(stepwise))
-      push!(field, stepwise)
+      field[id(stepwise)] = stepwise
     end
   end
 
