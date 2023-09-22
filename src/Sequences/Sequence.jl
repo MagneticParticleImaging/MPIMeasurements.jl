@@ -53,6 +53,13 @@ function getindex(seq::Sequence, index::String)
   throw(KeyError(index))
 end
 setindex!(seq::Sequence, field::MagneticField, i::Integer) = fields(seq)[i] = field
+function setindex!(seq::Sequence, field::MagneticField, i::String)
+  for (index, f) in enumerate(fields(seq))
+    if id(f) == i
+      return setindex!(seq, field, index)
+    end
+  end
+end
 firstindex(seq::Sequence) = start_(seq)
 lastindex(seq::Sequence) = length(seq)
 keys(seq::Sequence) = map(id, seq)
@@ -471,7 +478,7 @@ rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
-  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent]
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent, ProtocolOffsetElectricalChannel]
   @eval begin
     @generated function ==(x::$T, y::$T)
       fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]

@@ -50,6 +50,13 @@ function getindex(field::MagneticField, index::String)
   throw(KeyError(index))
 end
 setindex!(field::MagneticField, txChannel::TxChannel, i::Integer) = channels(field)[i] = txChannel
+function setindex!(field::MagneticField, txChannel::TxChannel, i::String)
+  for (index, channel) in enumerate(channels(field))
+    if isequal(id(channel), i)
+      return setindex!(field, txChannel, index)
+    end
+  end
+end
 firstindex(field::MagneticField) = start_(field)
 lastindex(field::MagneticField) = length(field)
 keys(field::MagneticField) = map(id, field)
