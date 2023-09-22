@@ -33,6 +33,7 @@ end
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
+  hbridge::Union{DAQHBridge, Nothing} = nothing
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -84,7 +85,12 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
           error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
         end
       end
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
+
+      hbridge = nothing
+      if haskey(value, "hbridge")
+        hbridge = createDAQChannels(DAQHBridge, value["hbridge"])
+      end
+      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib, hbridge = hbridge)
     end
   end
 
