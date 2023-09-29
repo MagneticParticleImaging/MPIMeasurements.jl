@@ -455,6 +455,7 @@ function getTiming(daq::RedPitayaDAQ)
   return sampleTiming
 end
 
+
 function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   cpy = deepcopy(base)
 
@@ -464,7 +465,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   for field in cpy
     for channel in channels(field, ProtocolOffsetElectricalChannel)
       push!(offsetVector, channel)
-      fieldMap[field] = channel
+      fieldMap[channel] = field
     end
   end
 
@@ -475,15 +476,56 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
 
   divider = lcm(dfDivider(cpy)) * numOffsets
   
-  inner = 1
-  for offsetChannel in offsetVector
-    offsets = values(offsetChannel)
-    outer = div(numOffsets, inner * length(offsets))
-    steps = repeat(offsets, inner = inner, outer = outer)
-    inner*=length(offsets)
-    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
+  offsets = [values(channel) for channel in offsetVector]
+  for (i,offsetChannel) in enumerate(offsetVector)
+    steps = Union{eltype(offsets[i]), Missing}[]
+    @info typeof(steps)
+    
+    # Consider H-Bridges before current channel
+    if i == 1
+      steps = offsets[i]
+    else
+      for offset in offsets[i]
+        temp = eltype(steps)[offset]
+        for (j, otherChannel) in enumerate(offsetVector[1:i-1])
+          hbridge = findfirst(ismissing, offsets[j])
+          if isnothing(hbridge)
+            temp = repeat(temp, length(offsets[j]))
+          else
+            temp = vcat(repeat(temp, length(1:hbridge)), [missing], length(hbridge+1:length(offsets[j])))
+          end
+        end
+        push!(steps, temp...)
+      end
+    end
+
+    # Consider H-Bridge after current channel
+    for (j,otherChannel) in enumerate(offsetVector[i+1:end])
+      hbridge = findfirst(ismissing, offsets[j])
+      if isnothing(hbridge)
+        temp = repeat(steps, length(offsets[j]))
+        @info typeof(temp)
+      else
+        temp = repeat(offset, length(1:hbridge))
+        push!(temp, missing)
+        cat(temp, repeat(offset, length(hbridge+1:length(offsets[j]))))
+      end
+      steps = temp
+    end
+  
+    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = identity.(steps))
     fieldMap[offsetChannel][id(stepwise)] = stepwise
   end
+  
+  #inner = 1
+  #for offsetChannel in offsetVector
+  #  offsets = values(offsetChannel)
+  #  outer = div(numOffsets, inner * length(offsets))
+  #  steps = repeat(offsets, inner = inner, outer = outer)
+  #  inner*=length(offsets)
+  #  stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
+  #  fieldMap[offsetChannel][id(stepwise)] = stepwise
+  #end
 
   return cpy
 end
