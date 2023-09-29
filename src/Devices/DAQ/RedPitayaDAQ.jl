@@ -468,31 +468,30 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
       fieldMap[channel] = field
     end
   end
-
-  numOffsets = 1
-  for offsetChannel in offsetVector
-    numOffsets*=length(values(offsetChannel))
-  end
-
-  divider = lcm(dfDivider(cpy)) * numOffsets
   
-  offsets = [values(channel) for channel in offsetVector]
+  allOffsets = [values(channel, daq) for channel in offsetVector]
+  allSteps = Vector{Vector{Any}}()
   for (i,offsetChannel) in enumerate(offsetVector)
-    steps = Union{eltype(offsets[i]), Missing}[]
-    @info typeof(steps)
+    steps = Union{eltype(allOffsets[i]), Missing}[]
     
     # Consider H-Bridges before current channel
     if i == 1
-      steps = offsets[i]
+      steps = allOffsets[i]
     else
-      for offset in offsets[i]
+      # Step size is the same for each RP in a cluster
+      # Therefore the 2:n offsets have to hold each of their values for a whole repetition of all previous channels
+      # If a previous channel inserted a missing due to an h-bridge, the current channel has to do too
+      for offset in allOffsets[i]
         temp = eltype(steps)[offset]
-        for (j, otherChannel) in enumerate(offsetVector[1:i-1])
-          hbridge = findfirst(ismissing, offsets[j])
-          if isnothing(hbridge)
-            temp = repeat(temp, length(offsets[j]))
-          else
-            temp = vcat(repeat(temp, length(1:hbridge)), [missing], length(hbridge+1:length(offsets[j])))
+        if !ismissing(offset)
+          for (j, otherChannel) in enumerate(offsetVector[1:i-1])
+            hbridge = findfirst(ismissing, allOffsets[j])
+            numOffsets = length(filter(!ismissing, allOffsets[j])) # Do not consider h-bridge switches for repeating offsets
+            if isnothing(hbridge)
+              temp = repeat(temp, numOffsets)
+            else
+              temp = vcat(repeat(temp, length(1:hbridge-1)), [missing], repeat(temp, length(hbridge+1:length(allOffsets[j]))))
+            end
           end
         end
         push!(steps, temp...)
@@ -501,34 +500,80 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
 
     # Consider H-Bridge after current channel
     for (j,otherChannel) in enumerate(offsetVector[i+1:end])
-      hbridge = findfirst(ismissing, offsets[j])
+      hbridge = findfirst(ismissing, allOffsets[j+i])
+      numOffsets = length(filter(!ismissing, allOffsets[j+i])) # Do not consider h-bridge switches for repeating offsets
       if isnothing(hbridge)
-        temp = repeat(steps, length(offsets[j]))
-        @info typeof(temp)
+        temp = repeat(steps, numOffsets)
       else
-        temp = repeat(offset, length(1:hbridge))
-        push!(temp, missing)
-        cat(temp, repeat(offset, length(hbridge+1:length(offsets[j]))))
+        temp = vcat(repeat(steps, length(1:hbridge-1)), [missing], repeat(steps, length(hbridge+1:length(allOffsets[j+i]))))
       end
       steps = temp
     end
-  
-    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = identity.(steps))
-    fieldMap[offsetChannel][id(stepwise)] = stepwise
+    
+    push!(allSteps, steps)
   end
-  
-  #inner = 1
-  #for offsetChannel in offsetVector
-  #  offsets = values(offsetChannel)
-  #  outer = div(numOffsets, inner * length(offsets))
-  #  steps = repeat(offsets, inner = inner, outer = outer)
-  #  inner*=length(offsets)
-  #  stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = steps)
-  #  fieldMap[offsetChannel][id(stepwise)] = stepwise
-  #end
+
+  # Prepare divider without h-bridge pauses
+  numOffsets = length(filter(!ismissing, allSteps[1]))
+  df = lcm(dfDivider(cpy))
+  divider = df * numOffsets
+
+  # H-Bridges are present
+  if numOffsets != length(allSteps[1])
+    #time = maxSwitchTime(offsetVector, daq)
+    #numSwitchPeriods = ceil(Int64, time/lcm(dfDivider(cpy)))
+
+    numSwitchPeriods = 100
+    divider = df * (numSwitchPeriods + numOffsets)
+    # Add numSwitchPeriods 0 for every missing value
+    for (i, steps) in enumerate(allSteps)
+      temp = []
+      foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
+      allSteps[i] = temp
+    end
+
+    numOffsets = length(allSteps[1])
+    df = lcm(dfDivider(cpy))
+    divider = df * numOffsets  
+  end
+
+  for (i,offsetChannel) in enumerate(offsetVector)
+    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = identity.(allSteps[i]), enable = fill(true, length(allSteps[i])))
+    fieldMap[offsetChannel][id(stepwise)] = stepwise  
+  end
 
   return cpy
 end
+
+function values(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
+  offsets = values(offsetChannel)
+  ch = channel(daq, id(offsetChannel))
+  if ch.range == BOTH
+    return offsets
+  elseif ch.range == HBRIDGE
+    # Assumption protocol offset channel can only produce one sign change
+    # Consider 0 to be "positive"
+    ispositive = map(x->x >= zero(T), offsets)
+    sign = first(ispositive)
+    idx = nothing
+    for (i, offset) in enumerate(ispositive)
+      if sign != offset
+        idx = i
+        break
+      end
+      sign = offset
+    end
+    
+    # Mark sign change
+    if !isnothing(idx)
+      offsets = vcat(offsets[1:idx], [missing], offsets[idx+1:end])
+    end
+    return map(abs, offsets)
+  else
+    error("Unexpected channel range")
+  end
+end
+
 
 #### Producer/Consumer ####
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
