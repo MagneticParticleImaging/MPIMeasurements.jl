@@ -56,6 +56,7 @@ function setindex!(field::MagneticField, txChannel::TxChannel, i::String)
       return setindex!(field, txChannel, index)
     end
   end
+  push!(field, txChannel)
 end
 firstindex(field::MagneticField) = start_(field)
 lastindex(field::MagneticField) = length(field)

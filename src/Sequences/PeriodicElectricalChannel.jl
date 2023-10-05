@@ -67,6 +67,7 @@ function setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::
       return setindex!(field, comp, index)
     end
   end
+  push!(ch, comp)
 end
 firstindex(ch::PeriodicElectricalChannel) = start_(ch)
 lastindex(ch::PeriodicElectricalChannel) = length(ch)

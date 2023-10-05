@@ -59,6 +59,7 @@ function setindex!(seq::Sequence, field::MagneticField, i::String)
       return setindex!(seq, field, index)
     end
   end
+  push!(seq, field)
 end
 firstindex(seq::Sequence) = start_(seq)
 lastindex(seq::Sequence) = length(seq)
@@ -330,13 +331,14 @@ export acqOffsetField
 function acqOffsetField(sequence::Sequence)
   # TODO: This is a hack for getting the required information for the MPSMeasurementProtocol. Can we find a generalized solution?
   if hasAcyclicElectricalTxChannels(sequence)
-    @warn "This is a hack for the MPSMeasurementProtocol. It might result in wrong MDF settings in other cases."
-    channels = acyclicElectricalTxChannels(sequence)
-    offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
-    values_ =  MPIMeasurements.values(offsetChannel)
-    values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
-    
-    return values3D
+    #@warn "This is a hack for the MPSMeasurementProtocol. It might result in wrong MDF settings in other cases."
+    #channels = acyclicElectricalTxChannels(sequence)
+    #offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
+    #values_ =  MPIMeasurements.values(offsetChannel)
+    #values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
+    #
+    #return values3D
+    return nothing
   else
     return nothing
   end
