@@ -456,6 +456,7 @@ function getTiming(daq::RedPitayaDAQ)
 end
 
 
+# TODO add deadPeriods
 function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   cpy = deepcopy(base)
 
@@ -469,103 +470,22 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
     end
   end
   
-
-  switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
-  switchingChannel = offsetVector[switchingIndices]
-  regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
-  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
-
-  # Prepare basic offsets without h-bridge switches
-  if !isempty(switchingChannel)
-    for comb in 0:2^length(switchingChannel)-1
-      quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
-  
-      offsets = Vector{Vector{Any}}()
-
-      for ch in regularChannel
-        push!(offsets, values(ch))
-      end
-      for (i, isPositive) in enumerate(quadrant)
-        push!(offsets, values(switchingChannel[i], isPositive))
-      end
-      quadrantSteps = prepareOffsets(offsets, daq)
-
-      for (i, channel) in enumerate(Iterators.flatten((regularChannel, switchingChannel)))
-        steps = get(allSteps, channel, [])
-        push!(steps, quadrantSteps[i]...)
-
-        # If not at the end then add missing
-        if comb != 2^length(switchingChannel)-1
-          push!(steps, missing)
-        end
-
-        allSteps[channel] = steps
-      end
-    end
+  allSteps = nothing
+  enables = nothing
+  hbridges = nothing
+  if any.(x -> requireHBridge(x, daq), offsetVector)
+    allSteps, enables, hbridges = prepareHSwitchedOffsets(offsetVector, daq, cpy)
   else
-    offsets = Vector{Vector{Any}}()
-    for ch in regularChannel
-      push!(offsets, values(ch))
-    end
-    offsets = prepareOffsets(offsets, daq)
-    for (i, channel) in enumerate(regularChannel)
-      allSteps[channel] = offsets[i]
-    end
+    allSteps, enables, hbridges = prepareOffsets(offsetVector, daq, cpy)
   end
 
-
-  # Add H-Bridge channel ignoring switches
-  hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
-  for (ch, steps) in allSteps
-    offsetChannel = channel(daq, id(ch))
-    if offsetChannel.range == HBRIDGE
-      hsteps = map(x-> ismissing(x) ? missing : level(offsetChannel.hbridge, x), steps)
-      hbridges[ch] = hsteps
-    end
-  end
-
-  # Prepare divider without h-bridge switch pauses
-  numSteps = length(first(allSteps)[2])
-  numOffsets = length(filter(!ismissing, first(allSteps)[2]))
+  numOffsets = length(first(allSteps)[2])
   df = lcm(dfDivider(cpy))
   divider = df * numOffsets
 
-  # H-Bridge switches are present
-  if numOffsets != length(numSteps)
-    #time = maxSwitchTime(offsetVector, daq)
-    #numSwitchPeriods = ceil(Int64, time/lcm(dfDivider(cpy)))
-
-    numSwitchPeriods = 100
-    divider = df * (numSwitchPeriods + numOffsets)
-    # Add numSwitchPeriods 0 for every missing value
-    for (ch, steps) in allSteps
-      temp = []
-      foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
-      allSteps[ch] = temp
-
-      # Add next hbridge level for each missing value
-      if haskey(hbridges, ch)
-        temp = []
-        for (i, x) in enumerate(hbridges[ch]) # Assumption no H-Bridge in last value
-          if ismissing(x)
-            # For the switch take the level for the value that comes after missing
-            push!(temp, fill(level(channel(daq, id(ch)).hbridge, hbridges[ch][i + 1]), numSwitchPeriods)...)
-          else
-            push!(temp, x)
-          end
-        end
-        hbridges[ch] = temp
-      end
-    end
-
-    numOffsets = length(first(allSteps)[2])
-    df = lcm(dfDivider(cpy))
-    divider = df * numOffsets  
-  end
-
   # Generate actual StepwiseElectricalChannel
   for (ch, steps) in allSteps
-    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps), enable = fill(true, length(steps)))
+    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps), enable = enables[ch])
     fieldMap[ch][id(stepwise)] = stepwise
     if haskey(hbridges, ch)
       offsetChannel = channel(daq, id(ch))
@@ -576,6 +496,106 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   end
 
   return cpy
+end
+
+function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
+  switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
+  switchingChannel = offsetVector[switchingIndices]
+  regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
+
+  # Prepare values with missing for h-bridge switch
+  # Permute patches by considering quadrants. Use lower bits of number to encode permutations
+  for comb in 0:2^length(switchingChannel)-1
+    quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
+
+    offsets = Vector{Vector{Any}}()
+
+    # Same order here as in Iterators.flatten below
+    for ch in regularChannel
+      push!(offsets, values(ch))
+    end
+    for (i, isPositive) in enumerate(quadrant)
+      push!(offsets, values(switchingChannel[i], isPositive))
+    end
+    quadrantSteps = prepareOffsets(offsets, daq)
+
+    for (i, channel) in enumerate(Iterators.flatten((regularChannel, switchingChannel)))
+      steps = get(allSteps, channel, [])
+      push!(steps, quadrantSteps[i]...)
+
+      # If not at the end then add missing
+      if comb != 2^length(switchingChannel)-1
+        push!(steps, missing)
+      end
+
+      allSteps[channel] = steps
+    end
+  end
+
+  hbridges = prepareHBridgeLevels(allSteps, daq)
+
+  numOffsets = length(filter(!ismissing, first(allSteps)[2]))
+
+  # TODO compute switching time
+  numSwitchPeriods = 100
+  divider = df * (numSwitchPeriods + numOffsets)
+  # Add numSwitchPeriods 0 for every missing value
+
+  # Set enable to false during hbridge switching
+  enableVec = Bool[]
+  foreach(x-> ismissing(x) ? push!(enableVec, fill(false, numSwitchPeriods)...) : push!(enableVec, true), first(allSteps)[2])
+
+  for (ch, steps) in allSteps
+    temp = []
+    foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
+    allSteps[ch] = temp
+    enables[ch] = enableVec
+
+    # Add next hbridge level for each missing value
+    if haskey(hbridges, ch)
+      temp = []
+      for (i, x) in enumerate(hbridges[ch]) # Assumption no H-Bridge in last value
+        if ismissing(x)
+          # For the switch take the level for the value that comes after missing
+          push!(temp, fill(level(channel(daq, id(ch)).hbridge, hbridges[ch][i + 1]), numSwitchPeriods)...)
+        else
+          push!(temp, x)
+        end
+      end
+      hbridges[ch] = temp
+    end
+  end
+
+  # TODO set hbridge channels to abs
+  return allSteps, enables, hbridges
+end
+
+function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
+  offsets = prepareOffsets(map(values, offsetVector), daq)
+  for (i, channel) in enumerate(offsetVector)
+    allSteps[channel] = offsets[i]
+    enables[channel] = fill(true, length(offsets[i]))
+  end
+  #patchPermutation = collect(1:length(first(offsets)))
+  hbridges = prepareHBridgeLevels(allSteps, daq)
+  # TODO set hbridge channels to abs
+  return allSteps, enables, hbridges
+end
+
+function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ)
+  hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  for (ch, steps) in allSteps
+    offsetChannel = channel(daq, id(ch))
+    if offsetChannel.range == HBRIDGE
+      hsteps = map(x-> ismissing(x) ? missing : level(offsetChannel.hbridge, x), steps)
+      hbridges[ch] = hsteps
+    end
+  end
+  return hbridges
 end
 
 function requireHBridge(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
