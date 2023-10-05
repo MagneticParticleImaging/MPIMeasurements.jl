@@ -475,6 +475,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
   allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
 
+  # Prepare basic offsets without h-bridge switches
   if !isempty(switchingChannel)
     for comb in 0:2^length(switchingChannel)-1
       quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
@@ -504,24 +505,48 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   end
 
 
-  # Prepare divider without h-bridge pauses
+  # Add H-Bridge channel ignoring switches
+  hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  for (ch, steps) in allSteps
+    offsetChannel = channel(daq, id(ch))
+    if offsetChannel.range == HBRIDGE
+      hsteps = map(x-> ismissing(x) ? missing : level(offsetChannel.hbridge, x), steps)
+      hbridges[ch] = hsteps
+    end
+  end
+
+  # Prepare divider without h-bridge switch pauses
   numSteps = length(first(allSteps)[2])
   numOffsets = length(filter(!ismissing, first(allSteps)[2]))
   df = lcm(dfDivider(cpy))
   divider = df * numOffsets
 
-  # H-Bridges are present
+  # H-Bridge switches are present
   if numOffsets != length(numSteps)
     #time = maxSwitchTime(offsetVector, daq)
     #numSwitchPeriods = ceil(Int64, time/lcm(dfDivider(cpy)))
 
-    numSwitchPeriods = 10
+    numSwitchPeriods = 100
     divider = df * (numSwitchPeriods + numOffsets)
     # Add numSwitchPeriods 0 for every missing value
-    for (channel, steps) in allSteps
+    for (ch, steps) in allSteps
       temp = []
       foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
-      allSteps[channel] = temp
+      allSteps[ch] = temp
+
+      # Add next hbridge level for each missing value
+      if haskey(hbridges, ch)
+        temp = []
+        for (i, x) in enumerate(hbridges[ch]) # Assumption no H-Bridge in last value
+          if ismissing(x)
+            # For the switch take the level for the value that comes after missing
+            push!(temp, fill(level(channel(daq, id(ch)).hbridge, hbridges[ch][i + 1]), numSwitchPeriods)...)
+          else
+            push!(temp, x)
+          end
+        end
+        hbridges[ch] = temp
+      end
     end
 
     numOffsets = length(first(allSteps)[2])
@@ -529,9 +554,16 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
     divider = df * numOffsets  
   end
 
-  for (channel, steps) in allSteps
-    stepwise = StepwiseElectricalChannel(id = id(channel), divider = divider, values = identity.(steps), enable = fill(true, length(steps)))
-    fieldMap[channel][id(stepwise)] = stepwise
+  # Generate actual StepwiseElectricalChannel
+  for (ch, steps) in allSteps
+    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps), enable = fill(true, length(steps)))
+    fieldMap[ch][id(stepwise)] = stepwise
+    if haskey(hbridges, ch)
+      offsetChannel = channel(daq, id(ch))
+      hbridgeChannel = offsetChannel.hbridge
+      hbridgeStepwise = StepwiseElectricalChannel(id = id(hbridgeChannel), divider = divider, values = identity.(hbridges[ch]), enable = fill(true, length(steps)))
+      fieldMap[ch][id(hbridgeChannel)] = hbridgeStepwise
+    end
   end
 
   return cpy
