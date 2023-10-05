@@ -70,6 +70,7 @@ Base.@kwdef struct DAQHBridge
 end
 negativeLevel(bridge::DAQHBridge) = bridge.level[1]
 positiveLevel(bridge::DAQHBridge) = bridge.level[2]
+level(bridge::DAQHBridge, x::Number) = signbit(x) ? negativeLevel(bridge) : positiveLevel(bridge)
 manual(bridge::DAQHBridge) = bridge.manual
 deadTime(bridge::DAQHBridge) = bridge.deadTime
 id(bridge::DAQHBridge) = bridge.channelID
