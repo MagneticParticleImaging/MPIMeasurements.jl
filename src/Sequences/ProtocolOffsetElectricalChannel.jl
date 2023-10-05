@@ -39,6 +39,7 @@ function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetEl
 end
 
 values(channel::ProtocolOffsetElectricalChannel{T}) where T = collect(range(channel.offsetStart, channel.offsetStop, length = channel.numOffsets))
+values(channel::ProtocolOffsetElectricalChannel, isPositive::Bool) = filter(x-> signbit(x) != isPositive, values(channel))
 
 function toDict!(dict, channel::ProtocolOffsetElectricalChannel)
   dict["type"] = string(typeof(channel))

@@ -469,109 +469,101 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
     end
   end
   
-  allOffsets = [values(channel, daq) for channel in offsetVector]
-  allSteps = Vector{Vector{Any}}()
-  for (i,offsetChannel) in enumerate(offsetVector)
-    steps = Union{eltype(allOffsets[i]), Missing}[]
-    
-    # Consider H-Bridges before current channel
-    if i == 1
-      steps = allOffsets[i]
-    else
-      # Step size is the same for each RP in a cluster
-      # Therefore the 2:n offsets have to hold each of their values for a whole repetition of all previous channels
-      # If a previous channel inserted a missing due to an h-bridge, the current channel has to do too
-      for offset in allOffsets[i]
-        temp = eltype(steps)[offset]
-        if !ismissing(offset)
-          for (j, otherChannel) in enumerate(offsetVector[1:i-1])
-            hbridge = findfirst(ismissing, allOffsets[j])
-            numOffsets = length(filter(!ismissing, allOffsets[j])) # Do not consider h-bridge switches for repeating offsets
-            if isnothing(hbridge)
-              temp = repeat(temp, numOffsets)
-            else
-              temp = vcat(repeat(temp, length(1:hbridge-1)), [missing], repeat(temp, length(hbridge+1:length(allOffsets[j]))))
-            end
-          end
-        end
-        push!(steps, temp...)
-      end
-    end
 
-    # Consider H-Bridge after current channel
-    for (j,otherChannel) in enumerate(offsetVector[i+1:end])
-      hbridge = findfirst(ismissing, allOffsets[j+i])
-      numOffsets = length(filter(!ismissing, allOffsets[j+i])) # Do not consider h-bridge switches for repeating offsets
-      if isnothing(hbridge)
-        temp = repeat(steps, numOffsets)
-      else
-        temp = vcat(repeat(steps, length(1:hbridge-1)), [missing], repeat(steps, length(hbridge+1:length(allOffsets[j+i]))))
+  switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
+  switchingChannel = offsetVector[switchingIndices]
+  regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+
+  if !isempty(switchingChannel)
+    for comb in 0:2^length(switchingChannel)-1
+      quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
+  
+      offsets = Vector{Vector{Any}}()
+
+      for ch in regularChannel
+        push!(offsets, values(ch))
       end
-      steps = temp
+      for (i, isPositive) in enumerate(quadrant)
+        push!(offsets, values(switchingChannel[i], isPositive))
+      end
+      quadrantSteps = prepareOffsets(offsets, daq)
+
+      for (i, channel) in enumerate(Iterators.flatten((regularChannel, switchingChannel)))
+        steps = get(allSteps, channel, [])
+        push!(steps, quadrantSteps[i]...)
+
+        # If not at the end then add missing
+        if comb != 2^length(switchingChannel)-1
+          push!(steps, missing)
+        end
+
+        allSteps[channel] = steps
+      end
     end
-    
-    push!(allSteps, steps)
   end
 
+
   # Prepare divider without h-bridge pauses
-  numOffsets = length(filter(!ismissing, allSteps[1]))
+  numSteps = length(first(allSteps)[2])
+  numOffsets = length(filter(!ismissing, first(allSteps)[2]))
   df = lcm(dfDivider(cpy))
   divider = df * numOffsets
 
   # H-Bridges are present
-  if numOffsets != length(allSteps[1])
+  if numOffsets != length(numSteps)
     #time = maxSwitchTime(offsetVector, daq)
     #numSwitchPeriods = ceil(Int64, time/lcm(dfDivider(cpy)))
 
-    numSwitchPeriods = 100
+    numSwitchPeriods = 10
     divider = df * (numSwitchPeriods + numOffsets)
     # Add numSwitchPeriods 0 for every missing value
-    for (i, steps) in enumerate(allSteps)
+    for (channel, steps) in allSteps
       temp = []
       foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
-      allSteps[i] = temp
+      allSteps[channel] = temp
     end
 
-    numOffsets = length(allSteps[1])
+    numOffsets = length(first(allSteps)[2])
     df = lcm(dfDivider(cpy))
     divider = df * numOffsets  
   end
 
-  for (i,offsetChannel) in enumerate(offsetVector)
-    stepwise = StepwiseElectricalChannel(id = id(offsetChannel), divider = divider, values = identity.(allSteps[i]), enable = fill(true, length(allSteps[i])))
-    fieldMap[offsetChannel][id(stepwise)] = stepwise  
+  for (channel, steps) in allSteps
+    stepwise = StepwiseElectricalChannel(id = id(channel), divider = divider, values = identity.(steps), enable = fill(true, length(steps)))
+    fieldMap[channel][id(stepwise)] = stepwise
   end
 
   return cpy
 end
 
-function values(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
+function requireHBridge(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
   offsets = values(offsetChannel)
   ch = channel(daq, id(offsetChannel))
   if ch.range == BOTH
-    return offsets
+    return false
   elseif ch.range == HBRIDGE
     # Assumption protocol offset channel can only produce one sign change
     # Consider 0 to be "positive"
-    ispositive = map(x->x >= zero(T), offsets)
-    sign = first(ispositive)
-    idx = nothing
-    for (i, offset) in enumerate(ispositive)
-      if sign != offset
-        idx = i
-        break
-      end
-      sign = offset
-    end
-    
-    # Mark sign change
-    if !isnothing(idx)
-      offsets = vcat(offsets[1:idx], [missing], offsets[idx+1:end])
-    end
-    return map(abs, offsets)
+    first = offsets[1]
+    last = offsets[end]
+    return signbit(first) != signbit(last) && (!iszero(first) && !iszero(last))
   else
     error("Unexpected channel range")
   end
+end
+
+function prepareOffsets(offsetVectors::Vector{Vector{T}}, daq::RedPitayaDAQ) where T
+  result = Vector{Vector{Any}}()
+  inner = 1
+  numOffsets = prod(length.(offsetVectors))
+  for offsets in offsetVectors
+    outer = div(numOffsets, inner * length(offsets))
+    steps = repeat(offsets, inner = inner, outer = outer)
+    inner*=length(offsets)
+    push!(result, steps)
+  end
+  return map(x -> identity.(x), result) # Improve typing from Vector{Vector{Any}}
 end
 
 
