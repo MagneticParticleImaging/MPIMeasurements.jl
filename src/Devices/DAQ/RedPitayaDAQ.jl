@@ -502,6 +502,15 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
         allSteps[channel] = steps
       end
     end
+  else
+    offsets = Vector{Vector{Any}}()
+    for ch in regularChannel
+      push!(offsets, values(ch))
+    end
+    offsets = prepareOffsets(offsets, daq)
+    for (i, channel) in enumerate(regularChannel)
+      allSteps[channel] = offsets[i]
+    end
   end
 
 
