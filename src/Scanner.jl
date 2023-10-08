@@ -48,7 +48,7 @@ device configuration struct.
 """
 function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false)
   devices = Dict{String, Device}()
-
+  println(DeviceParams)
   # Get implementations for all devices in the specified order
   for deviceID in devicesParams["initializationOrder"]
     params = nothing
@@ -108,6 +108,11 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
       end
     catch e
       if !robust
+        for (deviceId, device) in devices
+          if device.present
+            close(device)
+          end  
+        end
         rethrow()
       else
         @warn e
@@ -239,7 +244,7 @@ Close the devices when closing the scanner.
 """
 function Base.close(scanner::MPIScanner)
   for device in getDevices(scanner, Device)
-    close(device)
+      close(device)
   end
 end
 

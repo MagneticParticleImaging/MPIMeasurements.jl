@@ -40,7 +40,7 @@ coordinateSystem(rob::BrukerRobot) = ScannerCoordinateSystem(dof(rob))
 dof(rob::BrukerRobot) = 3
 axisRange(rob::BrukerRobot) = rob.params.axisRange
 defaultVelocity(rob::BrukerRobot) = nothing
-_getPosition(rob::BrukerRobot) = sendCommand(rob, BrukerCommand(pos))
+_getPosition(rob::BrukerRobot) = queryCommand(rob, BrukerCommand(pos))
 _isReferenced(rob::BrukerRobot) = true
 _enable(rob::BrukerRobot) = nothing
 _disable(rob::BrukerRobot) = nothing
@@ -51,12 +51,12 @@ _doReferenceDrive(rob::BrukerRobot) = nothing
 
 """ Move Bruker Robot to center"""
 function moveCenter(sd::BrukerRobot)
-    sendCommand(sd, BrukerCommand(center))
+    queryCommand(sd, BrukerCommand(center))
 end
 
 """ Move Bruker Robot to park"""
 function movePark(sd::BrukerRobot)
-    sendCommand(sd, BrukerCommand(park))
+    queryCommand(sd, BrukerCommand(park))
 end
 
 function _moveAbs(rob::BrukerRobot, pos::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
@@ -64,7 +64,7 @@ function _moveAbs(rob::BrukerRobot, pos::Vector{<:Unitful.Length}, speed::Union{
         @warn "BrukerRobot does not support setting velocities!"
     end
     cmd = BrukerCommand("goto $(ustrip(Float64, u"mm", pos[1])),$(ustrip(Float64, u"mm", pos[2])),$(ustrip(Float64, u"mm", pos[3]))\n")
-    res = sendCommand(rob, cmd)
+    res = queryCommand(rob, cmd)
 end
 
 """ Not Implemented """
@@ -74,7 +74,7 @@ end
 
 
 """ Send Command `sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)`"""
-function sendCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
+function queryCommand(sd::BrukerRobot, brukercmd::BrukerCommand)
 
     (result, startmovetime, endmovetime) = _sendCommand(sd, brukercmd)
     

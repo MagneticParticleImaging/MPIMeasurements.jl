@@ -1,4 +1,4 @@
-export Arduino, sendCommand
+export Arduino, queryCommand
 
 abstract type Arduino <: Device end
 
@@ -7,14 +7,35 @@ abstract type Arduino <: Device end
 @mustimplement cmdEnd(ard::Arduino)
 @mustimplement serialDevice(ard::Arduino)
 
-function sendCommand(ard::Arduino, cmdString::String)
+function sendCommand(ard::Arduino,cmdString::String)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
-  return query(serialDevice(ard), cmd)
+  sd = serialDevice(ard)
+  send(sd, cmd)
+  return nothing
 end
 
-function sendCommand(ard::Arduino, cmdString::String, data::AbstractArray)
+function receive(ard::Arduino)
+  sd = serialDevice(ard)
+  return receive(sd)
+end
+
+function queryCommand(ard::Arduino, cmdString::String)
+  cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
+  sd = serialDevice(ard)
+  return query(sd, cmd)
+end
+  
+function queryCommand(ard::Arduino, cmdString::String, data::AbstractArray)
   cmd = cmdStart(ard) * cmdString * cmdEnd(ard)
   return query!(serialDevice(ard), cmd, data, delimited = true)
+end
+
+function set_timeout(ard::Arduino,timeout_ms::Int)
+  set_timeout_ms(ard.sd,timeout_ms)
+end
+
+function get_timeout(ard::Arduino)
+  return get_timeout_ms(ard.sd)
 end
 
 Base.@kwdef struct SimpleArduino <: Arduino

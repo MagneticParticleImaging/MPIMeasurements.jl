@@ -117,7 +117,7 @@ end
 function retrieveTemps(controller::ArduinoTemperatureController, query::AbstractString = "GET:ALLTEMPS")
   TempDelim = "," 
   # TODO Retrieve temp properly
-  Temps = sendCommand(controller.ard, query)
+  Temps = queryCommand(controller.ard, query)
   result =  tryparse.(Float64,split(Temps,TempDelim))
   result = map(x -> isnothing(x) ? 0.0 : x, result)
   return result
@@ -127,7 +127,7 @@ export setMaximumTemps
 function setMaximumTemps(controller::ArduinoTemperatureController, maxTemps::Array)
   if length(maxTemps) == controller.params.numSensors
     maxTempString= join(maxTemps, ",")
-    ack = sendCommand(controller.ard, "SET:TMAX:<"*maxTempString*">")
+    ack = queryCommand(controller.ard, "SET:TMAX:<"*maxTempString*">")
     if parse(Bool, ack)
       @info "Set max temp for ArduinoTemperatureController $(deviceID(controller))."
       return true
@@ -160,7 +160,7 @@ export setTargetTemps
 function setTargetTemps(controller::ArduinoTemperatureController, targetTemps::Vector{Int64})
   if length(targetTemps) == controller.params.numSensors
     targetTempString= join(targetTemps, ",")
-    ack = sendCommand(controller.ard, "SET:TSET:<"*targetTempString*">")
+    ack = queryCommand(controller.ard, "SET:TSET:<"*targetTempString*">")
     if parse(Bool, ack)
       @info "Set target temp for ArduinoTemperatureController $(deviceID(controller))."
       return true
@@ -193,7 +193,7 @@ function setControlMode(controller::ArduinoTemperatureController, mode::Temperat
   else
     throw(ScannerConfigurationError("Temp Controller does not support mode $mode"))
   end
-  return sendCommand(controller.ard, cmd)
+  return queryCommand(controller.ard, cmd)
 end
 
 #function getControlMode(controller::ArduinoTemperatureController)
@@ -202,13 +202,13 @@ end
 
 export resetOvertemp
 function resetOvertemp(controller::ArduinoTemperatureController)
-  return parse(Bool, sendCommand(controller.ard, "RESET:OVERTEMP"))
+  return parse(Bool, queryCommand(controller.ard, "RESET:OVERTEMP"))
 end
 
 function enableControl(controller::ArduinoTemperatureController)
-  return sendCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
+  return queryCommand(controller.ard, "SET:ENABLE_HEATING:<1>")
 end
 
 function disableControl(controller::ArduinoTemperatureController)
-  return sendCommand(controller.ard, "SET:ENABLE_HEATING:<0>")
+  return queryCommand(controller.ard, "SET:ENABLE_HEATING:<0>")
 end

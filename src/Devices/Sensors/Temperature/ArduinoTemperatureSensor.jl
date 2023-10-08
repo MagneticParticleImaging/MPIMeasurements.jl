@@ -112,7 +112,7 @@ end
 function retrieveTemps(sensor::ArduinoTemperatureSensor)
   TempDelim = "," 
     
-  Temps = sendCommand(sensor.ard, "GET:ALLTEMPS")
+  Temps = queryCommand(sensor.ard, "GET:ALLTEMPS")
   Temps = Temps[7:end]  #filter out "TEMPS:" at beginning of answer
 
   result =  tryparse.(Float64,split(Temps,TempDelim))
@@ -123,7 +123,7 @@ end
 function setMaximumTemps(sensor::ArduinoTemperatureSensor, maxTemps::Array)
     if length(maxTemps) == sensor.params.numSensors
         maxTempString= join(maxTemps, ",")
-        ack = sendCommand(sensor.ard, "SET:MAXTEMPS:<"*maxTempString*">")
+        ack = queryCommand(sensor.ard, "SET:MAXTEMPS:<"*maxTempString*">")
         # TODO check ack?
         @info "acknowledge of MaxTemps from TempUnit."
     else
@@ -132,7 +132,7 @@ function setMaximumTemps(sensor::ArduinoTemperatureSensor, maxTemps::Array)
 end
 
 function getMaximumTemps(sensor::ArduinoTemperatureSensor)
-    println(sendCommand(sensor.ard, "GET:MAXTEMPS"))
+    println(queryCommand(sensor.ard, "GET:MAXTEMPS"))
 end
 
 close(sensor::ArduinoTemperatureSensor) = close(sensor.ard)

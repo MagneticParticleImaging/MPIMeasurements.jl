@@ -1,0 +1,9 @@
+name = "Du"
+type = "TDesignCubeProtocol"
+description = "protocol for measuring fields with the cube."
+targetScanner = "CalibCube"
+sequence = "DummySequence"
+
+controlTx = false
+fgFrames = 1
+bgFrames = 1

@@ -28,94 +28,94 @@ function parseBool(ard::ArduinoSurveillanceUnit, s::Char)
 end
 
 function arEnableWatchDog(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "ENABLE:WD")
+  ACQ = queryCommand(Arduino, "ENABLE:WD")
   checkACQ(Arduino, ACQ)
 end
 
 function arDisableWatchDog(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "DISABLE:WD")
+  ACQ = queryCommand(Arduino, "DISABLE:WD")
   checkACQ(Arduino, ACQ)
 end
 
 function getDigital(Arduino::ArduinoSurveillanceUnit, DIO::Int)
-  DIO = sendCommand(Arduino, "GET:DIGITAL:" * string(DIO))
+  DIO = queryCommand(Arduino, "GET:DIGITAL:" * string(DIO))
   return DIO;
 end
 function getAnalog(Arduino::ArduinoSurveillanceUnit, ADC::Int)
-  ADC = sendCommand(Arduino, "GET:ANALOG:A" * string(ADC))
+  ADC = queryCommand(Arduino, "GET:ANALOG:A" * string(ADC))
   return ADC;
 end
 
 function getErrorStatus(Arduino::ArduinoSurveillanceUnit)
-  Errorcode = sendCommand(Arduino, "GET:STATUS");
+  Errorcode = queryCommand(Arduino, "GET:STATUS");
   ErrorcodeBool = [parseBool(Arduino, x) for x in Errorcode]
   return ErrorcodeBool
 end
 
 function resetWatchDog(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "RESET:WD")
+  ACQ = queryCommand(Arduino, "RESET:WD")
   checkACQ(Arduino, ACQ)
 end
 
 function enableWatchDog(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "ENABLE:WD")
+  ACQ = queryCommand(Arduino, "ENABLE:WD")
   checkACQ(Arduino, ACQ)
 end
 
 function disableWatchDog(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "DISABLE:WD")
+  ACQ = queryCommand(Arduino, "DISABLE:WD")
   checkACQ(Arduino, ACQ)
 end
 
 function resetFail(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "RESET:FAIL")
+  ACQ = queryCommand(Arduino, "RESET:FAIL")
   checkACQ(Arduino, ACQ)
 end
 
 function disableSurveillance(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "DISABLE:SURVEILLANCE")
+  ACQ = queryCommand(Arduino, "DISABLE:SURVEILLANCE")
   checkACQ(Arduino, ACQ)
 end
 
 function enableSurveillance(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "ENABLE:SURVEILLANCE")
+  ACQ = queryCommand(Arduino, "ENABLE:SURVEILLANCE")
   checkACQ(Arduino, ACQ)
 end
 
 function getCycletime(Arduino::ArduinoSurveillanceUnit)
-  tcycle = sendCommand(Arduino, "GET:CYCLETIME")
+  tcycle = queryCommand(Arduino, "GET:CYCLETIME")
   return tcycle;
 end
 
 function resetArduino(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "RESET:ARDUINO")
+  ACQ = queryCommand(Arduino, "RESET:ARDUINO")
   checkACQ(Arduino, ACQ)
 end
 
 function enableACPower(Arduino::ArduinoSurveillanceUnit)
-  reply = sendCommand(Arduino, "ENABLE:AC");
+  reply = queryCommand(Arduino, "ENABLE:AC");
   if !parse(Bool, reply)
     error("AC could not be enabled. Check SU fail")
   end
 end
 
 function disableACPower(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "DISABLE:AC");
+  ACQ = queryCommand(Arduino, "DISABLE:AC");
   checkACQ(Arduino, ACQ)
 end
 
 function enableHeating(ard::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(ard, "ENABLE:HEATING");
+  ACQ = queryCommand(ard, "ENABLE:HEATING");
   checkACQ(Arduino, ACQ)
 end
 
 function disableHeating(ard::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(ard, "DISABLE:HEATING");
+  ACQ = queryCommand(ard, "DISABLE:HEATING");
   checkACQ(Arduino, ACQ)
 end
 
 # TODO this does not seem to be implemented in external client, check server code
 function NOTAUS(Arduino::ArduinoSurveillanceUnit)
-  ACQ = sendCommand(Arduino, "NOTAUS");
+  ACQ = queryCommand(Arduino, "NOTAUS");
   checkACQ(Arduino, ACQ)
 end

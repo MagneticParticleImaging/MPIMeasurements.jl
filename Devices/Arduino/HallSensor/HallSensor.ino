@@ -1,101 +1,121 @@
 #define ARDUINO_TYPE "HALLSENS"
-#define VERSION "1"
-#define POSITION 1
+#define VERSION "5.0"
 #define BAUDRATE 9600
-#include <Tlv493d.h>
+#define MEASDELAY 1
+#define INPUT_BUFFER_SIZE 3000
+#define MAX_SAMPLE_SIZE 10000
+
+#include <Tle493d_w2b6.h>
 
 // Tlv493d Opject
-Tlv493d Tlv493dMagnetic3DSensor = Tlv493d();
-
+Tle493d_w2b6 sensor = Tle493d_w2b6(Tle493d::MASTERCONTROLLEDMODE);
 
 // Communication
-#define INPUT_BUFFER_SIZE 256
 char input_buffer[INPUT_BUFFER_SIZE];
 unsigned int input_pos = 0;
 
-int getData(char*);
-int getPosition(char*);
-int getTemp(char*);
-int getVersion(char*);
-int getCommands(char*);
-//int setFoo(char*)
+int sample_size = 1000;
 
-typedef struct {
-  const char * id;
-  int (*handler)(char*);
+int getDelay(char *);
+int getData(char *);
+int getPosition(char *);
+int getTemp(char *);
+int getVersion(char *);
+int getCommands(char *);
+int setSampleSize(char *);
+
+typedef struct
+{
+  const char *id;
+  int (*handler)(char *);
 } commandHandler_t;
 
 commandHandler_t cmdHandler[] = {
-  {"DATA", getData},
-  {"POS", getPosition},
-  {"TEMP", getTemp},
-  {"VERSION", getVersion},
-  {"COMMANDS", getCommands},
-  //{"FOO", setFoo}
-};
+    {"DELAY", getDelay},
+    {"DATA", getData},
+    {"TEMP", getTemp},
+    {"VERSION", getVersion},
+    {"COMMANDS", getCommands},
+    {"SAMPLES", setSampleSize}};
 
-int getCommands(char*) {
-  Serial.println("Valid Commands (without quotes):");
-  Serial.println("'!DATA*#' ");
-  Serial.println("'!POS*#' ");
-  Serial.println("'!VERSION*#' ");
-  Serial.println("'!COMMANDS*#' ");
+int getCommands(char *)
+{
+  Serial.print("Valid Commands (without quotes):");
+  Serial.print("'!DATA*#' ");
+  Serial.print("'!DELAY*#' ");
+  Serial.print("'!VERSION*#' ");
+  Serial.print("'!TEMP*#' ");
+  Serial.print("'!COMMANDS*#' ");
+  Serial.print("'!SAMPLESx*# 1>=x>=10000' ");
   Serial.println("#");
 }
 
-bool updateBufferUntilDelim(char delim) {
+bool updateBufferUntilDelim(char delim)
+{
   char nextChar;
-  while (Serial.available() > 0) {
-      nextChar = Serial.read();
-      if (nextChar == delim) {
-        input_buffer[input_pos] = '\0';
-        input_pos = 0;
-        return true;
-      } else if (nextChar != '\n') {
-        input_buffer[input_pos % (INPUT_BUFFER_SIZE - 1)] = nextChar; // Size - 1 to always leave room for \0
-        input_pos++;
-      }
+  while (Serial.available() > 0)
+  {
+    nextChar = Serial.read();
+    if (nextChar == delim)
+    {
+      input_buffer[input_pos] = '\0';
+      input_pos = 0;
+      return true;
+    }
+    else if (nextChar != '\n')
+    {
+      input_buffer[input_pos % (INPUT_BUFFER_SIZE - 1)] = nextChar; // Size - 1 to always leave room for \0
+      input_pos++;
+    }
   }
   return false;
 }
 
-void serialCommand() {
-  int s=-1;
-  int e=-1;
-  char beginDelim='!';
+void serialCommand()
+{
+  int s = -1;
+  int e = -1;
+  char beginDelim = '!';
   char *beginCmd;
-  char endDelim='*';
+  char endDelim = '*';
   char *endCmd;
   char *command;
   bool done = false;
   bool unknown = false;
-  
+
   // determin substring
-  if(Serial.available()>0) {
-    done = updateBufferUntilDelim('#');   
+  if (Serial.available() > 0)
+  {
+    done = updateBufferUntilDelim('#');
   }
 
-  if (done) {
+  if (done)
+  {
     s = -1;
-    if ((beginCmd = strchr(input_buffer, beginDelim)) != NULL) {
+    if ((beginCmd = strchr(input_buffer, beginDelim)) != NULL)
+    {
       s = beginCmd - input_buffer;
     }
 
     e = -1;
-    if ((endCmd = strchr(input_buffer, endDelim)) != NULL) {
+    if ((endCmd = strchr(input_buffer, endDelim)) != NULL)
+    {
       e = endCmd - input_buffer;
-    }   
+    }
 
     unknown = true;
-    //check if valid command
-    if (e!=-1 && s!=-1) {
+    // check if valid command
+    if (e != -1 && s != -1)
+    {
       command = beginCmd + 1;
       *endCmd = '\0';
       Serial.flush();
 
-      //check for known commands
-      for (int i = 0; i < sizeof(cmdHandler)/sizeof(*cmdHandler); i++) {
-        if (strncmp(cmdHandler[i].id, command, strlen(cmdHandler[i].id)) == 0) {
+      // check for known commands
+      for (int i = 0; i < sizeof(cmdHandler) / sizeof(*cmdHandler); i++)
+      {
+        if (strncmp(cmdHandler[i].id, command, strlen(cmdHandler[i].id)) == 0)
+        {
           cmdHandler[i].handler(command);
           unknown = false;
           input_buffer[0] = '\0'; // "Empty" input buffer
@@ -103,73 +123,142 @@ void serialCommand() {
         }
       }
     }
-    
-    if (unknown) {
+
+    if (unknown)
+    {
       Serial.println("UNKNOWN");
       Serial.println("#");
-      Serial.flush();  
+      Serial.flush();
     }
-
   }
-
 }
 ////////////////////////////////////////////////////////////////////////////////
 
-void setup() {
+void setup()
+{
   Serial.begin(BAUDRATE);
-  while(!Serial);
-  
-  //For the Evalkit "TLV493D-A1B6 MS2GO" uncommend following 3 lines:
-  pinMode(LED2, OUTPUT);  //Sensor-VDD as output
-  digitalWrite(LED2, HIGH); //Power on the sensor
+  while (!Serial)
+    ;
+
+  // If using the MS2Go-Kit: Enable following lines to switch on the sensor
+  //  ***
+  pinMode(LED2, OUTPUT);
+  digitalWrite(LED2, HIGH);
   delay(50);
-  
-  Tlv493dMagnetic3DSensor.begin();
-  Tlv493dMagnetic3DSensor.setAccessMode(Tlv493dMagnetic3DSensor.MASTERCONTROLLEDMODE);
-  Tlv493dMagnetic3DSensor.disableTemp();
+  // ***
+
+  sensor.begin();
+  sensor.disableTemp();
 }
 
-
-int getData(char*) {
-  Tlv493dMagnetic3DSensor.updateData();
-  unsigned long measDelay = Tlv493dMagnetic3DSensor.getMeasurementDelay();
-  unsigned long start = millis();
-  
-  // TODO perform measurement
-  
-  Serial.write(Tlv493dMagnetic3DSensor.getRawX());
-  Serial.write(Tlv493dMagnetic3DSensor.getRawY());
-  Serial.write(Tlv493dMagnetic3DSensor.getRawZ());
+int getDelay(char *)
+{
+  Serial.print(MEASDELAY, 7);
   Serial.println("#");
   Serial.flush();
+}
 
-  unsigned long end = millis();
-  if (end - start < measDelay) {
-    delay(end - start);
+int getData(char *)
+{
+  unsigned long start;
+  int16_t x = 0, y = 0, z = 0;
+  int16_t x_1 = 0, y_1 = 0, z_1 = 0;
+  int32_t sumX = 0, sumY = 0, sumZ = 0;
+  int32_t sumXX = 0, sumYY = 0, sumZZ = 0;
+  float varX = 0, varY = 0, varZ = 0;
+  float meanX = 0, meanY = 0, meanZ = 0;
+
+  // updateData reads values from sensor and reading triggers next measurement
+  sensor.updateData();
+  delay(MEASDELAY);
+  sensor.updateData();
+  
+  //storing first measurement as approximation of mean value
+  x_1 = sensor.getRawX();
+  y_1 = sensor.getRawY();
+  z_1 = sensor.getRawZ();
+  
+  for (int i = 0; i < sample_size; i += 1)
+  {
+    sensor.updateData();
+    start = millis();
+
+    x = sensor.getRawX()-x_1;
+    y = sensor.getRawY()-y_1;
+    z = sensor.getRawZ()-z_1;
+
+    sumX += x;
+    sumY += y;
+    sumZ += z;
+
+    sumXX += x * x;
+    sumYY += y * y;
+    sumZZ += z * z;
+    //waiting until new data is ready in the sensor
+    while( millis()<MEASDELAY+start){};
   }
-}
+  
+  meanX = (float)sumX / sample_size + x_1;
+  meanY = (float)sumY / sample_size + y_1;
+  meanZ = (float)sumZ / sample_size + z_1;
 
-int getPosition(char*) {
-  Serial.print(POSITION);
+  varX = ((float)sumXX - (float)sumX * sumX / sample_size) / (sample_size - 1);
+  varY = ((float)sumYY - (float)sumY * sumY / sample_size) / (sample_size - 1);
+  varZ = ((float)sumZZ - (float)sumZ * sumZ / sample_size) / (sample_size - 1);
+
+  Serial.print(meanX, 7);
+  Serial.print(",");
+  Serial.print(meanY, 7);
+  Serial.print(",");
+  Serial.print(meanZ, 7);
+  Serial.print(",");
+  Serial.print(varX, 7);
+  Serial.print(",");
+  Serial.print(varY, 7);
+  Serial.print(",");
+  Serial.print(varZ, 7);
   Serial.println("#");
+  Serial.flush();
 }
 
-int getTemp(char*) {
-  // Enable Temp, measure, then disable again
+int getTemp(char *)
+{
+  sensor.enableTemp();
+  delay(10);
+  sensor.updateData();
+  delay(MEASDELAY);
+  sensor.updateData();
+  delay(MEASDELAY);
+  float temp = sensor.getTemp();
+  Serial.print(temp, 7);
+  Serial.println("#");
+  Serial.flush();
+  sensor.disableTemp();
+  delay(10);
 }
 
-int getVersion(char*) {
+int getVersion(char *)
+{
   Serial.print(ARDUINO_TYPE);
   Serial.print(":");
   Serial.print(VERSION);
-  Serial.print(":");
-  Serial.print(POSITION);
   Serial.print("#");
-  Serial.flush(); 
+  Serial.flush();
 }
 
+int setSampleSize(char *command)
+{
+  int value_int = atoi(command + 7);
+  if (value_int > 0 && value_int <= MAX_SAMPLE_SIZE)
+  {
+    sample_size = value_int;
+  }
+  Serial.print(sample_size);
+  Serial.println("#");
+  Serial.flush();
+}
 
-
-void loop() {
+void loop()
+{
   serialCommand();
 }

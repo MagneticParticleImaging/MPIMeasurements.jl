@@ -90,9 +90,6 @@ function setMeasurementMode(gauss::LakeShoreF71GaussMeter, mode::LakeShoreF71Gau
   end
 end
 
-getXValue(gauss::LakeShoreF71GaussMeter) = getXYZValues(gauss)[1]
-getYValue(gauss::LakeShoreF71GaussMeter) = getXYZValues(gauss)[2]
-getZValue(gauss::LakeShoreF71GaussMeter) = getXYZValues(gauss)[3]
 
 function getXYZValues(gauss::LakeShoreF71GaussMeter)
   if gauss.params.measurementMode == F71_MM_DC

@@ -67,6 +67,10 @@ function set_timeout_ms(sd::SerialDevice,timeout_ms::Int)
 	return nothing
 end
 
+function  get_timeout_ms(sd::SerialDevice)
+	return sd.timeout_ms
+end
+
 """
 Set character which terminates query.
 """
@@ -149,8 +153,10 @@ function receiveDelimited(sd::SerialDevice, array::AbstractArray)
 		done = false
 		while bytesavailable(sd.sp) > 0 || !done
 			c = read(sd.sp, 1)
+      
 			# TODO Implement delim check for multi-character delims
 			if c[1] == UInt8(sd.delim_read[1])
+
 				done = true
 				break
 			end
@@ -176,6 +182,7 @@ function query(sd::SerialDevice,cmd)
 		sp_flush(sd.sp, SP_BUF_INPUT)
 		return out
 	finally
+		sp_flush(sd.sp, SP_BUF_INPUT)
 		unlock(sd.sdLock)
 	end
 end

@@ -55,10 +55,10 @@ function _init(su::ArduinoSurveillanceUnitInternalTemp)
   #end
 end
 
-sendCommand(su::ArduinoSurveillanceUnitInternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 
+queryCommand(su::ArduinoSurveillanceUnitInternalTemp, cmdString::String) = queryCommand(su.ard, cmdString) 
 
 function getTemperatures(Arduino::ArduinoSurveillanceUnitInternalTemp) # toDo: deprecated
-  Temps = sendCommand(Arduino, "GET:TEMP")
+  Temps = queryCommand(Arduino, "GET:TEMP")
   TempDelim = "T"
 
   temp =  tryparse.(Float64, split(Temps, TempDelim))

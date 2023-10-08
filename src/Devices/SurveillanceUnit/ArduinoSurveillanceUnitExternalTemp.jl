@@ -26,7 +26,7 @@ end
 
 Base.close(su::ArduinoSurveillanceUnitExternalTemp) = close(su.ard)
 
-sendCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = sendCommand(su.ard, cmdString) 
+queryCommand(su::ArduinoSurveillanceUnitExternalTemp, cmdString::String) = queryCommand(su.ard, cmdString) 
 
 neededDependencies(::ArduinoSurveillanceUnitExternalTemp) = [ArduinoTemperatureSensor] # could in theory be generic temp sensor
 optionalDependencies(::ArduinoSurveillanceUnitExternalTemp) = [SerialPortPool]
@@ -73,12 +73,12 @@ function getTemperatures(su::ArduinoSurveillanceUnitExternalTemp; names::Bool=fa
 end
 
 function getStatus(su::ArduinoSurveillanceUnitExternalTemp)
-  status = sendCommand(su,"GET:STATS")
+  status = queryCommand(su,"GET:STATS")
   return status
 end
 
 function resetDAQ(su::ArduinoSurveillanceUnitExternalTemp)
-  ACQ = sendCommand(su,"RESET:RP")
+  ACQ = queryCommand(su,"RESET:RP")
   checkACQ(su, ACQ)
 end
 
