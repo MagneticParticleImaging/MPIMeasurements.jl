@@ -457,7 +457,7 @@ end
 
 
 # TODO add deadPeriods
-function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
+function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerPatch::Int64 = 1)
   cpy = deepcopy(base)
 
   # Prepare offset sequences
@@ -474,14 +474,24 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   enables = nothing
   hbridges = nothing
   if any(x -> requireHBridge(x, daq), offsetVector)
-    allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy)
+    allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy, numPeriodsPerPatch)
   else
     allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy)
   end
 
   numOffsets = length(first(allSteps)[2])
   df = lcm(dfDivider(cpy))
-  divider = df * numOffsets
+  # Increasing the divider instead of repeating values allows the user to tune offset length s.t. the RP can keep up
+  divider = df * numOffsets * numPeriodsPerPatch
+
+  if numPeriodsPerPatch > 1
+    updatedPermutation = Int64[]
+    for patch in permutation
+      start = numPeriodsPerPatch * (patch - 1) + 1
+      push!(updatedPermutation, map(x->start + x, 0:numPeriodsPerPatch-1)...)
+    end
+    permutation = updatedPermutation
+  end
 
   # Generate actual StepwiseElectricalChannel
   for (ch, steps) in allSteps
@@ -498,7 +508,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   return cpy, permutation
 end
 
-function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
+function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, numPeriodsPerPatch)
   switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
   switchingChannel = offsetVector[switchingIndices]
   regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
@@ -536,12 +546,11 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   hbridges = prepareHBridgeLevels(allSteps, daq)
 
-  numOffsets = length(filter(!ismissing, first(allSteps)[2]))
-
-  # TODO compute switching time
-  numSwitchPeriods = 100
-  #divider = df * (numSwitchPeriods + numOffsets)
-  # Add numSwitchPeriods 0 for every missing value
+  # Compute switch timing, assumption patch is held for df * numPeriodsPerPatch
+  df = lcm(dfDivider(seq)) * numPeriodsPerPatch
+  deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
+  maxTime = maximum(map(ustrip, deadTimes))
+  numSwitchPeriods = Int64(ceil(maxTime/(1/df)))
 
   # Set enable to false during hbridge switching
   enableVec = Bool[]
@@ -549,6 +558,7 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   for (ch, steps) in allSteps
     temp = []
+    # Add numSwitchPeriods 0 for every missing value
     foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
     allSteps[ch] = temp
     enables[ch] = enableVec

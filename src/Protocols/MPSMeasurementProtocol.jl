@@ -94,7 +94,7 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   try
-    seq, perm = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)))
+    seq, perm = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
     protocol.sequences = [seq]
     protocol.patchPermutation = perm
   catch e
@@ -301,21 +301,21 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
     data = data[:, :, protocol.patchPermutation, :]
   end
 
-  #=if protocol.params.deletedDfPeriodsPerOffset > 0
-    numSamples_ = size(data, 1)
-    numChannels_ = size(data, 2)
-    numPeriods_ = size(data, 3)
-    numFrames_ = size(data, 4)
-
-    numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
-
-    data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
-    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
-    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
-
-    # Reset sequence since the info is used for the MDF
-    setupSequence(protocol, deletedPeriodsPerOffset=0)
-  end=#
+  #if protocol.params.deletedDfPeriodsPerOffset > 0
+  #  numSamples_ = size(data, 1)
+  #  numChannels_ = size(data, 2)
+  #  numPeriods_ = size(data, 3)
+  #  numFrames_ = size(data, 4)
+#
+  #  numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
+#
+  #  data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
+  #  data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
+  #  data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
+#
+  #  # Reset sequence since the info is used for the MDF
+  #  setupSequence(protocol, deletedPeriodsPerOffset=0)
+  #end
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
