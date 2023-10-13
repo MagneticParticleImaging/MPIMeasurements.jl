@@ -473,10 +473,10 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
   allSteps = nothing
   enables = nothing
   hbridges = nothing
-  if any.(x -> requireHBridge(x, daq), offsetVector)
-    allSteps, enables, hbridges = prepareHSwitchedOffsets(offsetVector, daq, cpy)
+  if any(x -> requireHBridge(x, daq), offsetVector)
+    allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy)
   else
-    allSteps, enables, hbridges = prepareOffsets(offsetVector, daq, cpy)
+    allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy)
   end
 
   numOffsets = length(first(allSteps)[2])
@@ -495,7 +495,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ)
     end
   end
 
-  return cpy
+  return cpy, permutation
 end
 
 function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
@@ -540,7 +540,7 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   # TODO compute switching time
   numSwitchPeriods = 100
-  divider = df * (numSwitchPeriods + numOffsets)
+  #divider = df * (numSwitchPeriods + numOffsets)
   # Add numSwitchPeriods 0 for every missing value
 
   # Set enable to false during hbridge switching
@@ -568,8 +568,28 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     end
   end
 
+  # Construct permutation mask
+  # Generate offsets without permutation
+  offsets = Vector{Vector{Any}}()
+  for ch in offsetVector
+    push!(offsets, values(ch))
+  end
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  # Map each offset combination to its original index
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> enableVec[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Missing/switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, enableVec))]
+
+
   # TODO set hbridge channels to abs
-  return allSteps, enables, hbridges
+  return allSteps, enables, hbridges, patchPermutation
 end
 
 function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
@@ -583,7 +603,7 @@ function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, d
   #patchPermutation = collect(1:length(first(offsets)))
   hbridges = prepareHBridgeLevels(allSteps, daq)
   # TODO set hbridge channels to abs
-  return allSteps, enables, hbridges
+  return allSteps, enables, hbridges, 1:length(first(allSteps)[2])
 end
 
 function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ)

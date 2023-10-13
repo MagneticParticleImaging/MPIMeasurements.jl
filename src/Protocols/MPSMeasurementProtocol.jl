@@ -19,14 +19,10 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
+  "Sort patches"
+  sortPatches::Bool = true
 
   # TODO: This is only for 1D MPS systems for now
-  "Start value of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetStart::typeof(1.0u"T") = -0.012u"T"
-  "Stop value of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetStop::typeof(1.0u"T") = 0.012u"T"
-  "Number of values of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetNum::Integer = 101
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 100
   "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
@@ -63,6 +59,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
   sequences::Vector{Sequence} = Sequence[]
+  patchPermutation::Vector{Int64} = Int64[]
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -82,9 +79,9 @@ function requiredDevices(protocol::MPSMeasurementProtocol)
 end
 
 function _init(protocol::MPSMeasurementProtocol)
-  if isnothing(sequence(protocol))
-    throw(IllegalStateException("Protocol requires a sequence"))
-  end
+  #if isnothing(sequence(protocol))
+  #  throw(IllegalStateException("Protocol requires a sequence"))
+  #end
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
@@ -97,9 +94,11 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   try
-    protocol.sequences = prepareProtocolSequences(protocol.params.seqeuence, getDAQ(scanner(protocol)))
+    seq, perm = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)))
+    protocol.sequences = [seq]
+    protocol.patchPermutation = perm
   catch e
-    throw(ProtocolConfigurationError(e))
+    throw(e)
   end
 
   return nothing
@@ -126,68 +125,9 @@ function enterExecute(protocol::MPSMeasurementProtocol)
   protocol.finishAcknowledged = false
 end
 
-function getRelevantDfDivider(protocol::MPSMeasurementProtocol)
-  sequence_ = sequence(protocol)
-
-  divider = nothing
-  offsetFieldIdx = nothing
-  offsetChannelIdx = nothing
-  for (fieldIdx, field) in enumerate(fields(sequence_))
-    for (channelIdx, channel) in enumerate(channels(field))
-      if channel isa PeriodicElectricalChannel
-        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
-        divider = channel.components[1].divider
-      elseif channel isa ContinuousElectricalChannel
-        offsetFieldIdx = fieldIdx
-        offsetChannelIdx = channelIdx
-      end
-    end
-  end
-
-  if isnothing(divider)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
-  end
-
-  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
-  end
-
-  return divider, offsetFieldIdx, offsetChannelIdx
-end
-
-function createOffsetChannel(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
-  sequence_ = sequence(protocol)
-
-  divider, offsetFieldIdx, offsetChannelIdx = getRelevantDfDivider(protocol)
-
-  stepDivider = divider * (protocol.params.dfPeriodsPerOffset + deletedPeriodsPerOffset)
-  offsetDivider = stepDivider * protocol.params.offsetNum
-
-  chanOffset = (protocol.params.offsetStop + protocol.params.offsetStart) / 2
-  amplitude = abs(protocol.params.offsetStop - protocol.params.offsetStart) / 2
-  
-  oldChannel = sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx]
-  newChannel = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, offset=chanOffset, waveform=WAVEFORM_SAWTOOTH_RISING)
-
-  @info "Values used for the creation of the offset channel" divider stepDivider offsetDivider chanOffset amplitude
-
-  return newChannel, offsetFieldIdx, offsetChannelIdx
-end
-
-function setupSequence(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
-  sequence_ = sequence(protocol)
-  newChannel, offsetFieldIdx, offsetChannelIdx = createOffsetChannel(protocol, deletedPeriodsPerOffset=deletedPeriodsPerOffset)
-  
-  @info "Offset values used for the measurement" MPIMeasurements.values(newChannel)
-  
-  sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx] = newChannel
-  protocol.params.sequence = sequence_
-end
-
 function _execute(protocol::MPSMeasurementProtocol)
   @debug "Measurement protocol started"
 
-  setupSequence(protocol)
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
@@ -274,7 +214,7 @@ end
 
 function asyncMeasurement(protocol::MPSMeasurementProtocol)
   scanner_ = scanner(protocol)
-  sequence = protocol.params.sequence
+  sequence = protocol.sequences[1]
   daq = getDAQ(scanner_)
   deviceBuffer = DeviceBuffer[]
   if protocol.params.controlTx
@@ -357,7 +297,11 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
 
-  if protocol.params.deletedDfPeriodsPerOffset > 0
+  if protocol.params.sortPatches
+    data = data[:, :, protocol.patchPermutation, :]
+  end
+
+  #=if protocol.params.deletedDfPeriodsPerOffset > 0
     numSamples_ = size(data, 1)
     numChannels_ = size(data, 2)
     numPeriods_ = size(data, 3)
@@ -371,13 +315,13 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
     # Reset sequence since the info is used for the MDF
     setupSequence(protocol, deletedPeriodsPerOffset=0)
-  end
+  end=#
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+  filename = saveasMDF(store, scanner, protocol.sequences[1], data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
@@ -385,4 +329,4 @@ end
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
 protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
 
-sequence(protocol::MPSMeasurementProtocol) = protocol.params.sequence
+sequence(protocol::MPSMeasurementProtocol) = protocol.sequences[1]
