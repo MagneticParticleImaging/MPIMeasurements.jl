@@ -24,7 +24,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
 
   # TODO: This is only for 1D MPS systems for now
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
-  dfPeriodsPerOffset::Integer = 100
+  dfPeriodsPerOffset::Integer = 2
   "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
   deletedDfPeriodsPerOffset::Integer = 1
 end
@@ -301,21 +301,18 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
     data = data[:, :, protocol.patchPermutation, :]
   end
 
-  #if protocol.params.deletedDfPeriodsPerOffset > 0
-  #  numSamples_ = size(data, 1)
-  #  numChannels_ = size(data, 2)
-  #  numPeriods_ = size(data, 3)
-  #  numFrames_ = size(data, 4)
-#
-  #  numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
-#
-  #  data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
-  #  data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
-  #  data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
-#
-  #  # Reset sequence since the info is used for the MDF
-  #  setupSequence(protocol, deletedPeriodsPerOffset=0)
-  #end
+  if protocol.params.deletedDfPeriodsPerOffset > 0
+    numSamples_ = size(data, 1)
+    numChannels_ = size(data, 2)
+    numPeriods_ = size(data, 3)
+    numFrames_ = size(data, 4)
+
+    periodsPerOffset = protocol.params.dfPeriodsPerOffset
+
+    data = reshape(data, (numSamples_, numChannels_, periodsPerOffset, :, numFrames_))
+    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
+    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
+  end
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
