@@ -277,7 +277,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 
 	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
-	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
+	MPIFiles.acqNumPeriodsPerFrame(mdf, size(measData(mdf), 3)) # Hacky to support cases where periods of data != periods of sequence
 	offsetField_ = acqOffsetField(sequence)
 	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) || !all(x-> x isa Unitful.MagneticFlux, offsetField_) ? nothing : ustrip.(u"T", offsetField_))
 	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime) # TODO as parameter, start time from protocol
