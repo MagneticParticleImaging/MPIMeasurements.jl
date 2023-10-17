@@ -456,7 +456,6 @@ function getTiming(daq::RedPitayaDAQ)
 end
 
 
-# TODO add deadPeriods
 function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerPatch::Int64 = 1)
   cpy = deepcopy(base)
 
@@ -597,22 +596,30 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
   # Missing/switching patches are sorted to the end and need to be removed
   patchPermutation = patchPermutation[1:end-length(filter(!identity, enableVec))]
 
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
 
-  # TODO set hbridge channels to abs
   return allSteps, enables, hbridges, patchPermutation
 end
 
 function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence)
   allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
   enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
+  
   offsets = prepareOffsets(map(values, offsetVector), daq)
   for (i, channel) in enumerate(offsetVector)
     allSteps[channel] = offsets[i]
     enables[channel] = fill(true, length(offsets[i]))
   end
-  #patchPermutation = collect(1:length(first(offsets)))
+  
   hbridges = prepareHBridgeLevels(allSteps, daq)
-  # TODO set hbridge channels to abs
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
+  
   return allSteps, enables, hbridges, 1:length(first(allSteps)[2])
 end
 
