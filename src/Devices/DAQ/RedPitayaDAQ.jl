@@ -546,11 +546,11 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   hbridges = prepareHBridgeLevels(allSteps, daq)
 
-  # Compute switch timing, assumption patch is held for df * numPeriodsPerPatch
-  df = lcm(dfDivider(seq)) * numPeriodsPerPatch
+  # Compute switch timing, assumption step is held for df * numPeriodsPerPatch
+  stepfreq = 125e6/lcm(dfDivider(seq))/numPeriodsPerPatch
   deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
   maxTime = maximum(map(ustrip, deadTimes))
-  numSwitchPeriods = Int64(ceil(maxTime/(1/df)))
+  numSwitchPeriods = Int64(ceil(maxTime/(1/stepfreq)))
 
   # Set enable to false during hbridge switching
   enableVec = Bool[]
