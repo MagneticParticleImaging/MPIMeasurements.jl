@@ -163,6 +163,15 @@ function receiveDelimited(sd::SerialDevice, array::AbstractArray)
 	end
 end
 
+function discard(sd::SerialDevice, buffer::SPBuffer = SP_BUF_BOTH)
+	lock(sd.sdLock)
+	try
+		sp_flush(sd.sp, buffer)
+	finally
+		unlock(sd.sdLock)
+	end
+end
+
 """
 Send querry to serial device and receive device answer. Returns a String
 """
