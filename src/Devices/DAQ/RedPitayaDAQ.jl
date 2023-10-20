@@ -102,9 +102,10 @@ function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
         splattingDict[:switchTime] = uparse(value["switchTime"])
       end
 
-      if haskey(value, "switchStrategy")
-        splattingDict[:switchStrategy] = value["switchStrategy"]
+      if haskey(value, "switchEnable")
+        splattingDict[:switchEnable] = value["switchEnable"]
       end
+
       channels[key] = RedPitayaLUTChannelParams(;splattingDict...)
     end
   end
@@ -544,13 +545,16 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     end
 
     orderedChannel = collect(Iterators.flatten((regularChannel, switchingChannel)))
-    quadrantSteps, switchEnables, perm = prepareOffsetSwitches(offsets, orderedChannel, daq, stepduration)
+    quadrantSteps, othersPause, perm = prepareOffsetSwitches(offsets, orderedChannel, daq, stepduration)
 
-    for (i, channel) in enumerate(orderedChannel[perm])
-      steps = get(allSteps, channel, [])
-      enables = get(allEnables, channel, Union{Bool, Missing}[])
+    for (i, ch) in enumerate(orderedChannel[perm])
+      steps = get(allSteps, ch, [])
+      enables = get(allEnables, ch, Union{Bool, Missing}[])
       push!(steps, quadrantSteps[i]...)
-      push!(enables, switchEnables[i]...)
+      #@show channel(daq, id(ch))
+      #@show othersPause[i]
+      #@show map(x-> channel(daq, id(ch)).switchEnable ? true : !x, othersPause[i])
+      push!(enables, map(x-> channel(daq, id(ch)).switchEnable ? true : !x, othersPause[i])...)
 
       # If not at the end then add missing
       if comb != 2^length(switchingChannel)-1
@@ -558,10 +562,15 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
         push!(enables, missing)
       end
 
-      allSteps[channel] = steps
-      allEnables[channel] = enables
+      allSteps[ch] = steps
+      allEnables[ch] = enables
     end
   end
+
+  #foreach(x->println(length(x)), values(allSteps))
+  foreach(x->println(length(x)), values(allEnables))
+  foreach(x->println(length(filter(y -> ismissing(y) ? false : y, x))), values(allEnables))
+
 
   hbridges = prepareHBridgeLevels(allSteps, daq)
 
@@ -573,9 +582,13 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
   # Set enable to false during hbridge switching
   for (ch, enables) in allEnables
     temp = Bool[]
-    foreach(x-> ismissing(x) ? push!(temp, fill(false, numSwitchPeriods)...) : push!(temp, true), enables)
+    foreach(x-> ismissing(x) ? push!(temp, fill(false, numSwitchPeriods)...) : push!(temp, x), enables)
     allEnables[ch] = temp
   end
+
+  foreach(x->println(length(x)), values(allEnables))
+  foreach(x->println(length(filter(y -> ismissing(y) ? false : y, x))), values(allEnables))
+
 
   # Prepare H-Bridge pauses
   for (ch, steps) in allSteps
@@ -612,18 +625,25 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     offsetDict[row] = i
   end
 
+  # Permutation Mask
+  enableMatrix = hcat(values(allEnables)...)
+  @show enableMatrix
+  #@show enableMatrix
+  permutationMask = map(all, eachrow(enableMatrix))
+  @show length(permutationMask)
+  @show length(filter(!identity, permutationMask))
   # Sort patches according to their value in the index dictionary
   permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
-  #patchPermutation = sortperm(map(pair -> enableVec[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  patchPermutation = sortperm(map(pair -> permutationMask[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
   # Missing/switching patches are sorted to the end and need to be removed
-  #patchPermutation = patchPermutation[1:end-length(filter(!identity, enableVec))]
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, permutationMask))]
 
   # Remove (negative) sign from all channels with an h-bridge
   for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
     allSteps[ch] = abs.(steps)
   end
 
-  return allSteps, allEnables, hbridges, 1:length(first(allSteps)[2]) # patchPermutation
+  return allSteps, allEnables, hbridges, patchPermutation
 end
 
 function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
@@ -686,62 +706,61 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
     return prepareOffsets(offsets, daq), Dict(ch => fill(true, length(first(offsets))), channels), 1:length(channels)
   end
 
-  @show switchSteps
   perm = sortperm(map(x-> haskey(switchSteps, x) ? switchSteps[x] : 0, channels))
 
   sortedOffsets = offsets[perm]
   sortedChannels = channels[perm]
 
   sortedOffsetsWithPause = []
-  sortedEnable = []
+  sortedOthersPause = []
   for (i, ch) in enumerate(sortedChannels)
     #values = repeat(sortedOffsets[i], inner = 1 + get(switchSteps, ch, 0))
     values = [[value] for value in sortedOffsets[i]]
-    enables = fill([true], length(values))
+    othersPause = fill([false], length(values))
 
     # Repeat each step 
     for (j, other) in enumerate(sortedChannels[1:i-1])
       if !haskey(switchSteps, other)
         values = repeat.(values, inner = length(sortedOffsets[j]))
-        enables = repeat.(enables, inner = length(sortedOffsets[j]))
+        othersPause = repeat.(othersPause, inner = length(sortedOffsets[j]))
       end
     end
 
     tempValues = []
-    tempEnables = []
+    tempOthersPause = []
     if !haskey(switchSteps, ch)
       push!(tempValues, vcat(values...)...)
-      push!(tempEnables, vcat(enables...)...)
+      push!(tempOthersPause, vcat(othersPause...)...)
     else
       for (j, step) in enumerate(values)
         push!(tempValues, fill(first(step), switchSteps[ch])...)
         push!(tempValues, step...)
-        push!(tempEnables, fill(true, switchSteps[ch])...)
-        push!(tempEnables, enables[j]...)
+        push!(tempOthersPause, fill(false, switchSteps[ch])...)
+        push!(tempOthersPause, othersPause[j]...)
       end
     end
     values = tempValues
-    enables = tempEnables
-    
+    othersPause = tempOthersPause
     
     for (j, other) in enumerate(sortedChannels[i+1:end])
       j = j + i
       tempValues = values
-      tempEnables = enables
+      tempOthersPause = othersPause
       if haskey(switchSteps, other)
         numSwitchSteps = switchSteps[other]
+        @show numSwitchSteps
         tempValues = pushfirst!(values, fill(first(sortedOffsets[i]), numSwitchSteps)...)
-        tempEnables = pushfirst!(enables, fill(false, numSwitchSteps)...)
+        tempOthersPause = pushfirst!(othersPause, fill(true, numSwitchSteps)...)
       end
       values = repeat(tempValues, length(sortedOffsets[j]))
-      enables = repeat(tempEnables, length(sortedOffsets[j]))
+      othersPause = repeat(tempOthersPause, length(sortedOffsets[j]))
     end
 
     push!(sortedOffsetsWithPause, values)
-    push!(sortedEnable, enables)
+    push!(sortedOthersPause, othersPause)
   end
 
-  return sortedOffsetsWithPause, sortedEnable, perm
+  return sortedOffsetsWithPause, sortedOthersPause, perm
 end
 
 function prepareOffsets(offsetVectors::Vector{Vector{T}}, daq::RedPitayaDAQ) where T
