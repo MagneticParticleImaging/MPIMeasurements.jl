@@ -551,9 +551,6 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
       steps = get(allSteps, ch, [])
       enables = get(allEnables, ch, Union{Bool, Missing}[])
       push!(steps, quadrantSteps[i]...)
-      #@show channel(daq, id(ch))
-      #@show othersPause[i]
-      #@show map(x-> channel(daq, id(ch)).switchEnable ? true : !x, othersPause[i])
       push!(enables, map(x-> channel(daq, id(ch)).switchEnable ? true : !x, othersPause[i])...)
 
       # If not at the end then add missing
@@ -627,15 +624,12 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   # Permutation Mask
   enableMatrix = hcat(values(allEnables)...)
-  @show enableMatrix
   #@show enableMatrix
   permutationMask = map(all, eachrow(enableMatrix))
-  @show length(permutationMask)
-  @show length(filter(!identity, permutationMask))
   # Sort patches according to their value in the index dictionary
   permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
   patchPermutation = sortperm(map(pair -> permutationMask[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
-  # Missing/switching patches are sorted to the end and need to be removed
+  # Pause/switching patches are sorted to the end and need to be removed
   patchPermutation = patchPermutation[1:end-length(filter(!identity, permutationMask))]
 
   # Remove (negative) sign from all channels with an h-bridge
@@ -714,51 +708,42 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
   sortedOffsetsWithPause = []
   sortedOthersPause = []
   for (i, ch) in enumerate(sortedChannels)
-    #values = repeat(sortedOffsets[i], inner = 1 + get(switchSteps, ch, 0))
-    values = [[value] for value in sortedOffsets[i]]
-    othersPause = fill([false], length(values))
+    inner = isempty(sortedOffsetsWithPause) ? 1 : length(last(sortedOffsetsWithPause))
+    offs = [repeat([value], inner = inner) for value in sortedOffsets[i]]
+    othersPause = [push!(repeat([true], inner = inner - 1), false) for value in sortedOffsets[i]]
 
-    # Repeat each step 
-    for (j, other) in enumerate(sortedChannels[1:i-1])
-      if !haskey(switchSteps, other)
-        values = repeat.(values, inner = length(sortedOffsets[j]))
-        othersPause = repeat.(othersPause, inner = length(sortedOffsets[j]))
+    numSwitchSteps = get(switchSteps, ch, 0)
+    # Consider own pauses
+    if !iszero(numSwitchSteps)
+      for (k, level) in enumerate(offs[2:end])
+        push!(level, fill(first(level), numSwitchSteps)...)
+        push!(othersPause[k + 1], fill(false, numSwitchSteps)...)
       end
     end
+    offs = vcat(offs...)
+    othersPause = vcat(othersPause...)
 
-    tempValues = []
-    tempOthersPause = []
-    if !haskey(switchSteps, ch)
-      push!(tempValues, vcat(values...)...)
-      push!(tempOthersPause, vcat(othersPause...)...)
-    else
-      for (j, step) in enumerate(values)
-        push!(tempValues, fill(first(step), switchSteps[ch])...)
-        push!(tempValues, step...)
-        push!(tempOthersPause, fill(false, switchSteps[ch])...)
-        push!(tempOthersPause, othersPause[j]...)
+    # Update other channels with own repetition number
+    for (j, otherOffs) in enumerate(sortedOffsetsWithPause)
+      # Add one pause
+      tempOffs = deepcopy(otherOffs)
+      tempOthersPause = deepcopy(sortedOthersPause[j])
+      if !iszero(numSwitchSteps)
+        push!(tempOffs, fill(first(sortedOffsets[j]), numSwitchSteps)...)
+        push!(tempOthersPause, fill(true, numSwitchSteps)...)
       end
-    end
-    values = tempValues
-    othersPause = tempOthersPause
-    
-    for (j, other) in enumerate(sortedChannels[i+1:end])
-      j = j + i
-      tempValues = values
-      tempOthersPause = othersPause
-      if haskey(switchSteps, other)
-        numSwitchSteps = switchSteps[other]
-        @show numSwitchSteps
-        tempValues = pushfirst!(values, fill(first(sortedOffsets[i]), numSwitchSteps)...)
-        tempOthersPause = pushfirst!(othersPause, fill(true, numSwitchSteps)...)
-      end
-      values = repeat(tempValues, length(sortedOffsets[j]))
-      othersPause = repeat(tempOthersPause, length(sortedOffsets[j]))
+      # Repeat n-1 times
+      tempOffs = repeat(tempOffs, outer = length(sortedOffsets[i]) - 1)
+      tempOthersPause = repeat(tempOthersPause, outer = length(sortedOffsets[i]) - 1)
+      # Add last repetition without a following pause
+      sortedOffsetsWithPause[j] = vcat(tempOffs, otherOffs)
+      sortedOthersPause[j] = vcat(tempOthersPause, otherOthersPause)
     end
 
-    push!(sortedOffsetsWithPause, values)
-    push!(sortedOthersPause, othersPause)
+    push!(sortedOffsetsWithPause, offs)
   end
+
+  # Add first pause
 
   return sortedOffsetsWithPause, sortedOthersPause, perm
 end
