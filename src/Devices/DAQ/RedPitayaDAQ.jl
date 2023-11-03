@@ -564,11 +564,6 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     end
   end
 
-  #foreach(x->println(length(x)), values(allSteps))
-  foreach(x->println(length(x)), values(allEnables))
-  foreach(x->println(length(filter(y -> ismissing(y) ? false : y, x))), values(allEnables))
-
-
   hbridges = prepareHBridgeLevels(allSteps, daq)
 
   # Compute switch timing, assumption step is held for df * numPeriodsPerPatch
@@ -611,10 +606,7 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   # Construct permutation mask
   # Generate offsets without permutation
-  offsets = Vector{Vector{Any}}()
-  for ch in offsetVector
-    push!(offsets, values(ch))
-  end
+  offsets = map(values, offsetVector)
   offsets = hcat(prepareOffsets(offsets, daq)...)
   # Map each offset combination to its original index
   offsetDict = Dict{Vector, Int64}()
@@ -624,7 +616,6 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
 
   # Permutation Mask
   enableMatrix = hcat(values(allEnables)...)
-  #@show enableMatrix
   permutationMask = map(all, eachrow(enableMatrix))
   # Sort patches according to their value in the index dictionary
   permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
@@ -644,11 +635,29 @@ function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, d
   allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
   enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
   
-  offsets = prepareOffsets(map(values, offsetVector), daq)
-  for (i, channel) in enumerate(offsetVector)
-    allSteps[channel] = offsets[i]
-    enables[channel] = fill(true, length(offsets[i]))
+  offsets = map(values, offsetVector)
+  steps, othersPause, perm = prepareOffsetSwitches(offsets, offsetVector, daq, stepduration)
+  for (i, ch) in enumerate(offsetVector[perm])
+    allSteps[ch] = steps[i]
+    enables[ch] = map(x-> channel(daq, id(ch)).switchEnable ? true : !x, othersPause[i])
   end
+
+  # Construct permutation mask
+  # Map each offset combination to its original index
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Permutation Mask
+  enableMatrix = hcat(values(enables)...)
+  permutationMask = map(all, eachrow(enableMatrix))
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> permutationMask[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, permutationMask))]
   
   hbridges = prepareHBridgeLevels(allSteps, daq)
   # Remove (negative) sign from all channels with an h-bridge
@@ -656,7 +665,7 @@ function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, d
     allSteps[ch] = abs.(steps)
   end
   
-  return allSteps, enables, hbridges, 1:length(first(allSteps)[2])
+  return allSteps, enables, hbridges, patchPermutation
 end
 
 function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ)
@@ -700,6 +709,7 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
     return prepareOffsets(offsets, daq), Dict(ch => fill(true, length(first(offsets))), channels), 1:length(channels)
   end
 
+  # Sorting is not optimal, but allows us in the next step to consider pauses individually and not have to take max of all possible pauses at a point
   perm = sortperm(map(x-> haskey(switchSteps, x) ? switchSteps[x] : 0, channels))
 
   sortedOffsets = offsets[perm]
@@ -737,9 +747,10 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
       tempOthersPause = repeat(tempOthersPause, outer = length(sortedOffsets[i]) - 1)
       # Add last repetition without a following pause
       sortedOffsetsWithPause[j] = vcat(tempOffs, otherOffs)
-      sortedOthersPause[j] = vcat(tempOthersPause, otherOthersPause)
+      sortedOthersPause[j] = vcat(tempOthersPause, sortedOthersPause[j])
     end
 
+    push!(sortedOthersPause, othersPause)
     push!(sortedOffsetsWithPause, offs)
   end
 
