@@ -755,6 +755,12 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
   end
 
   # Add first pause
+  maxPause = maximum(values(switchSteps))
+  for (i, ch) in enumerate(sortedChannels)
+    numSwitchSteps = get(switchSteps, ch, 0)
+    pushfirst!(sortedOffsetsWithPause[i], fill(first(sortedOffsetsWithPause[i]), maxPause)...)
+    pushfirst!(sortedOthersPause[i], vcat(fill(false, numSwitchSteps), fill(true, maxPause - numSwitchSteps))...)
+  end
 
   return sortedOffsetsWithPause, sortedOthersPause, perm
 end
