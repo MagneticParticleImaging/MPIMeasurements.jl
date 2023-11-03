@@ -299,19 +299,10 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
   if protocol.params.sortPatches
     data = data[:, :, protocol.patchPermutation, :]
-  end
-
-  if protocol.params.deletedDfPeriodsPerOffset > 0
-    numSamples_ = size(data, 1)
-    numChannels_ = size(data, 2)
-    numPeriods_ = size(data, 3)
-    numFrames_ = size(data, 4)
-
-    periodsPerOffset = protocol.params.dfPeriodsPerOffset
-
-    data = reshape(data, (numSamples_, numChannels_, periodsPerOffset, :, numFrames_))
-    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
-    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
+  else
+    # Just remove "dead" patches
+    validPatches = filter(in(protocol.patchPermutation), collect(1:size(data, 3)))
+    data = data[:, :, validPatches, :]
   end
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
