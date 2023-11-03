@@ -21,6 +21,8 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   "Sort patches"
   sortPatches::Bool = true
+  "Flag if the measurement should be saved as a system matrix or not"
+  saveAsSystemMatrix::Bool = true
 
   # TODO: This is only for 1D MPS systems for now
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
@@ -58,7 +60,8 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
-  sequences::Vector{Sequence} = Sequence[]
+  sequence::Union{Sequence, Nothing} = nothing 
+  offsetfields::Union{Matrix{Float64}, Nothing} = nothing
   patchPermutation::Vector{Int64} = Int64[]
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
@@ -94,9 +97,10 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   try
-    seq, perm = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
-    protocol.sequences = [seq]
+    seq, perm, offsets = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
+    protocol.sequence = seq
     protocol.patchPermutation = perm
+    protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
   catch e
     throw(e)
   end
@@ -214,7 +218,7 @@ end
 
 function asyncMeasurement(protocol::MPSMeasurementProtocol)
   scanner_ = scanner(protocol)
-  sequence = protocol.sequences[1]
+  sequence = protocol.sequence
   daq = getDAQ(scanner_)
   deviceBuffer = DeviceBuffer[]
   if protocol.params.controlTx
@@ -296,20 +300,33 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   scanner = protocol.scanner
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
+  offsets = protocol.offsetfields
 
   if protocol.params.sortPatches
     data = data[:, :, protocol.patchPermutation, :]
+    offsets = offsets[protocol.patchPermutation, :]
   else
     # Just remove "dead" patches
     validPatches = filter(in(protocol.patchPermutation), collect(1:size(data, 3)))
     data = data[:, :, validPatches, :]
+    offsets = offsets[validPatches, :]
   end
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)
-  filename = saveasMDF(store, scanner, protocol.sequences[1], data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+
+
+  filename = nothing
+  if protocol.params.saveAsSystemMatrix
+    isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), protocol.params.dfPeriodsPerOffset))
+    data = reshape(data, size(data, 1), size(data, 2), protocol.params.dfPeriodsPerOffset, :)
+    offsets = reshape(offsets, protocol.params.dfPeriodsPerOffset, :, size(offsets, 2))[1, :, :] # All periods in one frame (should) have same offset
+    filename = saveasMDF(store, scanner, protocol.sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+  else
+    filename = saveasMDF(store, scanner, protocol.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+  end
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
@@ -317,4 +334,4 @@ end
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
 protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
 
-sequence(protocol::MPSMeasurementProtocol) = protocol.sequences[1]
+sequence(protocol::MPSMeasurementProtocol) = protocol.sequence

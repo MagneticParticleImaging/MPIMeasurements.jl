@@ -488,9 +488,9 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
   enables = nothing
   hbridges = nothing
   if any(x -> requireHBridge(x, daq), offsetVector)
-    allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy, stepduration)
+    offsets, allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy, stepduration)
   else
-    allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy, stepduration)
+    offsets, allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy, stepduration)
   end
 
   numOffsets = length(first(allSteps)[2])
@@ -505,6 +505,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
       push!(updatedPermutation, map(x->start + x, 0:numPeriodsPerPatch-1)...)
     end
     permutation = updatedPermutation
+    offsets = repeat(offsets, inner = Tuple([i == 1 ? numPeriodsPerPatch : 1 for i = 1:ndims(offsets)]))
   end
 
   # Generate actual StepwiseElectricalChannel
@@ -519,7 +520,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
     end
   end
 
-  return cpy, permutation
+  return cpy, permutation, offsets
 end
 
 function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
@@ -578,10 +579,6 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     allEnables[ch] = temp
   end
 
-  foreach(x->println(length(x)), values(allEnables))
-  foreach(x->println(length(filter(y -> ismissing(y) ? false : y, x))), values(allEnables))
-
-
   # Prepare H-Bridge pauses
   for (ch, steps) in allSteps
     temp = []
@@ -628,7 +625,7 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     allSteps[ch] = abs.(steps)
   end
 
-  return allSteps, allEnables, hbridges, patchPermutation
+  return permoffsets, allSteps, allEnables, hbridges, patchPermutation
 end
 
 function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
@@ -665,7 +662,7 @@ function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, d
     allSteps[ch] = abs.(steps)
   end
   
-  return allSteps, enables, hbridges, patchPermutation
+  return permoffsets, allSteps, enables, hbridges, patchPermutation
 end
 
 function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ)
@@ -706,7 +703,8 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
   end
 
   if isempty(switchSteps)
-    return prepareOffsets(offsets, daq), Dict(ch => fill(true, length(first(offsets))), channels), 1:length(channels)
+    offsets = prepareOffsets(offsets, daq)
+    return offsets, [fill(true, length(first(offsets))) for ch in channels], 1:length(channels)
   end
 
   # Sorting is not optimal, but allows us in the next step to consider pauses individually and not have to take max of all possible pauses at a point

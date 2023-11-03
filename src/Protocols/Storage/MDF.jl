@@ -58,7 +58,7 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+														positions::Union{Positions, Matrix}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -131,6 +131,26 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 		size = size,
 		snr = snr,
 		isMeanderingGrid = isMeanderingGrid
+	)
+
+	return
+end
+function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{Matrix, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+
+	# /calibration/ subgroup
+
+	if !isnothing(deltaSampleSize)
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+	end
+
+	method = "hybrid"
+	order = "xyz"
+
+	mdf.calibration = MDFv2Calibration(;
+		deltaSampleSize = deltaSampleSize,
+		method = method,
+		offsetFields = offsetFields,
+		order = order,
 	)
 
 	return
