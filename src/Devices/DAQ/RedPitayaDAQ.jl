@@ -128,7 +128,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   for channel in txChannels
     m = nothing
     idx = channel[2].channelIdx
-    if channel[2] isa TxChannelParams
+    if channel[2] isa DAQTxChannelParams
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC

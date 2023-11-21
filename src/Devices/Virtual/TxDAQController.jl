@@ -118,11 +118,11 @@ function decideControlSequenceType(target::Sequence, findZeroDC::Bool=false)
   needsDecoupling_ = needsDecoupling(target)
   @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ findZeroDC
 
-  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && findZeroDC
+  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
       return CrossCouplingControlSequence
   elseif needsDecoupling_
     throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($findZeroDC) is also not possible"))
-  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && findZeroDC
+  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
     return CrossCouplingControlSequence
   else 
     return AWControlSequence 
@@ -395,7 +395,8 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       # Prepare control measurement
       setup(daq, control.currSequence)
 
-      if "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
+
+      if haskey(ENV, "JULIA_DEBUG") && "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
         menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
         choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
         if choice == 1
@@ -584,7 +585,7 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
-  @info "Observed field deviation:\nabs:\t$(abs_deviation*1000) mT\nrel:\t$(rel_deviation*100) %\nφ:\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy|>u"mT"), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
+  @info "Observed field deviation:\nabs:\t$(abs_deviation*1000) mT\nrel:\t$(rel_deviation*100) %\nphi:\t$(phase_deviation/pi*180)°\n allowed: $(txCont.params.absoluteAmplitudeAccuracy|>u"mT"), $(txCont.params.relativeAmplitudeAccuracy*100) %, $(uconvert(u"°",txCont.params.phaseAccuracy))"
   phase_ok = abs.(phase_deviation) .< ustrip(u"rad", txCont.params.phaseAccuracy)
   amplitude_ok = (abs.(abs_deviation) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)) .| (abs.(rel_deviation) .< txCont.params.relativeAmplitudeAccuracy)
   @debug "Field deviation:" amplitude_ok phase_ok

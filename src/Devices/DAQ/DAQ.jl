@@ -119,7 +119,7 @@ function createDAQChannels(dict::Dict{String, Any})
       channels[key] = createDAQChannel(DAQTxChannelParams, value)
     elseif value["type"] == "rx"
       channels[key] = createDAQChannel(DAQRxChannelParams, value)
-    elseif value["type"] == "tx_slow"
+    elseif value["type"] == "txSlow"
       channels[key] = createDAQChannel(RedPitayaLUTChannelParams, value)
     end
   end
@@ -216,10 +216,14 @@ isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Wavefor
 feedback(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).feedback
 feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).channelID
 function feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString)
-  if isa(feedback(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
+  if !isnothing(feedback(daq, channelID)) && isa(feedback(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
     feedback(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",feedback(daq, channelID).calibration))
   else
-    return feedback(daq, channelID).calibration
+    if !isnothing(feedback(daq, channelID))
+      return feedback(daq, channelID).calibration
+    else 
+      return nothing
+    end
   end
 end
 function calibration(daq::AbstractDAQ, channelID::AbstractString)
@@ -265,7 +269,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
       end
     end
   end
-
+  
   for lutChannel in acyclicElectricalTxChannels(seq)
     if lutChannel isa StepwiseElectricalChannel
       values = lutChannel.values
