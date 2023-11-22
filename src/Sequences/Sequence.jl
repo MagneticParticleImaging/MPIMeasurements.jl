@@ -249,7 +249,7 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
 end
 
 export divider!
-function divider!(channel::PeriodicElectricalChannel, componentId::AbstractString, value::Integer)
+function divider!(channel::PeriodicElectricalChannel, componentId::AbstractString, value::Rational)
   index = findfirst(x -> id(x) == componentId, channel.components)
   if !isnothing(index)
     divider!(channel.components[index], value)
@@ -324,7 +324,7 @@ export txBaseFrequency
 txBaseFrequency(sequence::Sequence) = dfBaseFrequency(sequence) # Alias, since this might not only concern the drivefield
 
 export dfSamplesPerCycle
-dfSamplesPerCycle(sequence::Sequence) = lcm(dfDivider(sequence))
+dfSamplesPerCycle(sequence::Sequence) = lcm(numerator.(dfDivider(sequence)))
 
 export dfCycle
 dfCycle(sequence::Sequence) = dfSamplesPerCycle(sequence)/dfBaseFrequency(sequence) |> u"s"
@@ -336,7 +336,7 @@ export dfDivider
 function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  result = ones(Int64, (dfNumChannels(sequence), maxComponents)) # Otherwise the dfCycle is miscalculated in the case of a different amount of components
+  result = ones(Rational, (dfNumChannels(sequence), maxComponents)) # Otherwise the dfCycle is miscalculated in the case of a different amount of components
   
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
@@ -380,7 +380,7 @@ function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanic
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
       for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
-        result[periodIdx, channelIdx, componentIdx] = strength
+        result[periodIdx, channelIdx, componentIdx] = strength #* 1u"T/V"
       end
     end
   end

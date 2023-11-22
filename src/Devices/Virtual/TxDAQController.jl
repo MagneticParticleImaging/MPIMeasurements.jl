@@ -641,6 +641,11 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
 
+  # @debug "Last TX matrix [V]:" κ
+  # @debug "Ref matrix [T]:" Γ
+  # @debug "Desired matrix [T]:" Ω
+  # @debug "New TX matrix [V]:" newTx 
+
   #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
   #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
   #@debug "Desired matrix [V]:" Ω=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Ω,cont,return_time_signal=true)')
@@ -703,7 +708,7 @@ end
 function calcFieldFromRef(cont::CrossCouplingControlSequence, uRef, ::SortedRef)
   len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
-  dividers = Int64[divider.(getPrimaryComponents(cont))]
+  dividers = [divider.(getPrimaryComponents(cont))]
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence)) ./ dividers
   Γ = zeros(ComplexF64, len, len)
   calcFieldFromRef!(Γ, cont, uRef, SortedRef())

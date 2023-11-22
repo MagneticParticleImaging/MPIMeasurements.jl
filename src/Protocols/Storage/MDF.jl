@@ -283,7 +283,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	# /acquisition/drivefield/ subgroup
 	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
 	MPIFiles.dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
-	MPIFiles.dfDivider(mdf, dfDivider(sequence))
+	MPIFiles.dfDivider(mdf, Float64.(dfDivider(sequence)))
 	MPIFiles.dfNumChannels(mdf, dfNumChannels(sequence))
 	MPIFiles.dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
 	MPIFiles.dfStrength(mdf, ustrip.(u"T", dfStrength(sequence)))
