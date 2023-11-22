@@ -8,6 +8,7 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
   findZeroDC::Bool = false
+  minimumStepDuration::Float64 = 0.002
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -63,6 +64,10 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   end
 
   currSeq = prepareSequenceForControl(target)
+
+  duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
+  acqNumFrames(currSeq, max(duration, 1))
+
   applyForwardCalibration!(currSeq, daq) # uses the forward calibration to convert the values for the field from T to V
 
   seqControlledChannels = getControlledChannels(currSeq)
@@ -407,11 +412,11 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       end
 
       channel = Channel{channelType(daq)}(32)
-      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(control)..., 1, 1), control)]), daq)
+      buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(control)..., 1, acqNumFrames(control.currSequence)), control)]), daq)
       @info "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
-        endSample = asyncProducer(channel, daq, control.currSequence)
+        endSample = asyncProducer(channel, daq, control.currSequence, isControlStep=true)
         endSequence(daq, endSample)
       end
       bind(channel, producer)
@@ -428,7 +433,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "Control measurement finished"
 
       @info "Evaluating control step"
-      Γ = read(sink(buffer, DriveFieldBuffer))[:, :, 1, 1] # calcFieldsFromRef happened here already
+      Γ = read(sink(buffer, DriveFieldBuffer))[:, :, 1, end] # calcFieldsFromRef happened here already
       if !isnothing(Γ)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone

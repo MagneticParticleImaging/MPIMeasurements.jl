@@ -52,6 +52,42 @@ Base.@kwdef mutable struct PeriodicElectricalChannel <: ElectricalTxChannel
   dcEnabled::Bool = true
 end
 
+# Indexing Interface
+length(ch::PeriodicElectricalChannel) = length(components(ch))
+function getindex(ch::PeriodicElectricalChannel, index::Integer)
+  1 <= index <= length(ch) || throw(BoundsError(components(ch), index))
+  return components(ch)[index]
+end
+function getindex(ch::PeriodicElectricalChannel, index::String)
+  for channel in ch
+    if id(channel) == index
+      return channel
+    end
+  end
+  throw(KeyError(index))
+end
+setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::Integer) = components(ch)[i] = comp
+firstindex(ch::PeriodicElectricalChannel) = start_(ch)
+lastindex(ch::PeriodicElectricalChannel) = length(ch)
+keys(ch::PeriodicElectricalChannel) = map(id, ch)
+haskey(ch::PeriodicElectricalChannel, key) = in(key, keys(ch))
+
+# Iterable Interface
+start_(ch::PeriodicElectricalChannel) = 1
+next_(ch::PeriodicElectricalChannel,state) = (ch[state],state+1)
+done_(ch::PeriodicElectricalChannel,state) = state > length(ch)
+iterate(ch::PeriodicElectricalChannel, s=start_(ch)) = done_(ch, s) ? nothing : next_(ch, s)
+
+push!(ch::PeriodicElectricalChannel, comp::ElectricalComponent) = push!(components(ch), comp)
+pop!(ch::PeriodicElectricalChannel) = pop!(components(ch))
+empty!(ch::PeriodicElectricalChannel) = empty!(components(ch))
+deleteat!(ch::PeriodicElectricalChannel, i) = deleteat!(components(ch), i)
+function delete!(ch::PeriodicElectricalChannel, index::String)
+  idx = findfirst(isequal(index), map(id, ch))
+  isnothing(idx) ? throw(KeyError(index)) : deleteat!(ch, idx)
+end
+
+
 channeltype(::Type{<:PeriodicElectricalChannel}) = ContinuousTxChannel()
 
 function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectricalChannel}, channelDict::Dict{String, Any})
@@ -233,8 +269,6 @@ waveform!(::ArbitraryElectricalComponent, value) = error("Can not change the wav
 export id
 id(component::PeriodicElectricalComponent) = component.id
 id(component::ArbitraryElectricalComponent) = component.id
-
-push!(channel::PeriodicElectricalChannel, comp::ElectricalComponent) = push!(channel.components, comp)
 
 function toDict!(dict, component::ElectricalComponent)
   dict["type"] = string(typeof(component))

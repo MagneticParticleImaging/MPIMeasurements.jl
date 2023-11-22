@@ -35,6 +35,42 @@ Base.@kwdef struct MagneticField
   decouple::Bool = true
 end
 
+# Indexing Interface
+length(field::MagneticField) = length(channels(field))
+function getindex(field::MagneticField, index::Integer)
+  1 <= index <= length(field) || throw(BoundsError(channels(field), index))
+  return channels(field)[index]
+end
+function getindex(field::MagneticField, index::String)
+  for channel in field
+    if id(channel) == index
+      return channel
+    end
+  end
+  throw(KeyError(index))
+end
+setindex!(field::MagneticField, txChannel::TxChannel, i::Integer) = channels(field)[i] = txChannel
+firstindex(field::MagneticField) = start_(field)
+lastindex(field::MagneticField) = length(field)
+keys(field::MagneticField) = map(id, field)
+haskey(field::MagneticField, key) = in(key, keys(field))
+
+# Iterable Interface
+start_(field::MagneticField) = 1
+next_(field::MagneticField,state) = (field[state],state+1)
+done_(field::MagneticField,state) = state > length(field)
+iterate(field::MagneticField, s=start_(field)) = done_(field, s) ? nothing : next_(field, s)
+
+push!(field::MagneticField, txChannel::TxChannel) = push!(channels(field), txChannel)
+pop!(field::MagneticField) = pop!(channels(field))
+empty!(field::MagneticField) = empty!(channels(field))
+deleteat!(field::MagneticField, i) = deleteat!(channels(field), i)
+function delete!(field::MagneticField, index::String)
+  idx = findfirst(isequal(index), map(id, field))
+  isnothing(idx) ? throw(KeyError(index)) : deleteat!(field, idx)
+end
+
+
 id(field::MagneticField) = field.id
 
 export channels

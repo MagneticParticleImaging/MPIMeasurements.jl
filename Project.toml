@@ -1,7 +1,7 @@
 name = "MPIMeasurements"
 uuid = "a874a27a-e9a7-503d-98b6-bf61df4bb725"
 authors = ["Tobias Knopp <tobias@knoppweb.de>"]
-version = "0.4.0"
+version = "0.4.2"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -29,10 +29,10 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 DataStructures = "0.18"
-DocStringExtensions = "0.8.5"
-HDF5 = "0.10,0.11,0.12,0.13,0.14,0.15,0.16"
+DocStringExtensions = "0.8, 0.9"
+HDF5 = "0.16"
 LibSerialPort = "0.5.2"
-MPIFiles = "0.12.6"
+MPIFiles = "0.12, 0.13, 0.14"
 MacroTools = "0.5.6"
 ProgressMeter = "1.5"
 RedPitayaDAQServer = "0.6.0"
@@ -41,7 +41,7 @@ ReplMaker = "0.2.7"
 Scratch = "1.1.0"
 StringEncodings = "0.3.5"
 ThreadPools = "2.1.1"
-Unitful = "1.6"
+Unitful = "1.13, 1.14, 1.15, 1.16, 1.17"
 julia = "1.7"
 
 [extras]
