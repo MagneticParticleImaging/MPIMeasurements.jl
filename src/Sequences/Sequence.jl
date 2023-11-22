@@ -267,7 +267,7 @@ function acqNumPeriodsPerFrame(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     numPeriods = [div(c.divider, samplesPerCycle) for c in channels ]
 
     if minimum(numPeriods) != maximum(numPeriods)
@@ -285,7 +285,7 @@ function acqNumPeriodsPerPatch(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     stepsPerCycle = [ typeof(c) <: StepwiseElectricalChannel ?
                               div(c.divider,length(c.values)*samplesPerCycle) :
                               div(c.dividerSteps,samplesPerCycle) for c in channels ]
@@ -323,8 +323,11 @@ dfBaseFrequency(sequence::Sequence) = baseFrequency(sequence)
 export txBaseFrequency
 txBaseFrequency(sequence::Sequence) = dfBaseFrequency(sequence) # Alias, since this might not only concern the drivefield
 
+export dfSamplesPerCycle
+dfSamplesPerCycle(sequence::Sequence) = lcm(dfDivider(sequence))
+
 export dfCycle
-dfCycle(sequence::Sequence) = lcm(dfDivider(sequence))/dfBaseFrequency(sequence) |> u"s"
+dfCycle(sequence::Sequence) = dfSamplesPerCycle(sequence)/dfBaseFrequency(sequence) |> u"s"
 
 export txCycle
 txCycle(sequence::Sequence) = dfCycle(sequence) # Alias, since this might not only concern the drivefield

@@ -145,7 +145,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
 
   for (i, channel) in enumerate(keys(controlledChannelsDict))
     for (j, comp) in enumerate(components(channel))
-      dfCyclesPerPeriod = Int(lcm(dfDivider(seq))/divider(comp))
+      dfCyclesPerPeriod = Int(dfSamplesPerCycle(seq)/divider(comp))
       if isa(comp, PeriodicElectricalComponent)
         index_mask[i,j,dfCyclesPerPeriod+1] = true
       elseif isa(comp, ArbitraryElectricalComponent)
@@ -188,7 +188,7 @@ function createLUTs(seqChannel::Vector{PeriodicElectricalChannel}, seq::Sequence
   N = rxNumSamplingPoints(seq)
   D = length(seqChannel)
 
-  dfCyclesPerPeriod = Int[lcm(dfDivider(seq))/divider(components(chan)[i]) for (i,chan) in enumerate(seqChannel)]
+  dfCyclesPerPeriod = Int[dfSamplesPerCycle(seq)/divider(components(chan)[i]) for (i,chan) in enumerate(seqChannel)]
 
   sinLUT = zeros(D,N)
   cosLUT = zeros(D,N)
@@ -383,10 +383,10 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
 
       dc_correction = -ref_offsets_0./((ref_offsets_δ.-ref_offsets_0)./δ)
 
+      @info "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
       if any(abs.(dc_correction).>maximum(δ)) # We do not accept any change that is larger than what we would expect for 1mT
-        error("DC correction too large!")
+        error("DC correction too large! Wanted to set $(dc_correction)")
       end
-      @debug "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
       control.dcCorrection = dc_correction
     end
 
@@ -394,7 +394,6 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "CONTROL STEP $i"
       # Prepare control measurement
       setup(daq, control.currSequence)
-
 
       if haskey(ENV, "JULIA_DEBUG") && "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
         menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
@@ -876,7 +875,7 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[mask]) V/T and got $(calibFieldToVoltMeasured[mask]) V/T, deviation: $abs_deviation"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
   if !valid
-    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
+    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
