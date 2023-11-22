@@ -586,9 +586,9 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
-  # The decimation can only be a power of 2 beginning with 8
+  # The decimation has to be divisible by 2 and must be 8 or larger
   decimation_ = upreferred(txBaseFrequency(sequence)/rxSamplingRate(sequence))
-  if decimation_ in [2^n for n in 3:8]
+  if iseven(decimation_) &&  decimation_ >= 8
     daq.decimation = decimation_
   else
     throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
