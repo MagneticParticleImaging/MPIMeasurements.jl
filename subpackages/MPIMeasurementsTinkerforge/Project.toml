@@ -13,7 +13,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [compat]
 Aqua = "0.8"
 DocStringExtensions = "0.8.5"
-MPIMeasurements = "0.3, 0.4, "
+MPIMeasurements = "0.3, 0.4"
 PyTinkerforge = "2.1.29"
 Sockets = "1"
 Unitful = "1.6"
