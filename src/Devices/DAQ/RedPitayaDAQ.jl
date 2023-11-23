@@ -21,74 +21,30 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
-Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
-  channelIdx::Int64
-  limitPeak::typeof(1.0u"V")
-  sinkImpedance::SinkImpedance = SINK_HIGH
-  allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
-  feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
-end
-
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
 end
 
+function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
+  calib = nothing
+  if haskey(dict, "calibration")
+    calib = uparse.(dict["calibration"])
+
+    if unit(upreferred(calib)) == upreferred(u"V/T")
+      calib = calib .|> u"V/T"
+    elseif unit(upreferred(calib)) == upreferred(u"V/A")
+      calib = calib .|> u"V/A"
+    else
+      error("The values have to be either given as a V/T or in V/A. You supplied the type `$(eltype(calib))`.")
+    end
+  end
+  return RedPitayaLUTChannelParams(channelIdx=dict["channel"], calibration = calib)
+end
+
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function RedPitayaDAQParams(dict::Dict{String, Any})
   return createDAQParams(RedPitayaDAQParams, dict)
-end
-
-function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
-  # TODO This is mostly copied from createDAQChannels, maybe manage to get rid of the duplication
-  channels = Dict{String, DAQChannelParams}()
-  for (key, value) in dict
-    splattingDict = Dict{Symbol, Any}()
-    if value["type"] == "tx"
-      splattingDict[:channelIdx] = value["channel"]
-      splattingDict[:limitPeak] = uparse(value["limitPeak"])
-
-      if haskey(value, "sinkImpedance")
-        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
-
-      if haskey(value, "allowedWaveforms")
-        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-      end
-
-      if haskey(value, "feedback")
-        channelID=value["feedback"]["channelID"]
-        calibration=uparse(value["feedback"]["calibration"])
-
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
-
-      if haskey(value, "calibration")
-        splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      channels[key] = RedPitayaTxChannelParams(;splattingDict...)
-    elseif value["type"] == "rx"
-      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
-    elseif value["type"] == "txSlow"
-      calib = nothing
-      if haskey(value, "calibration")
-        calib = uparse.(value["calibration"])
-
-        if unit(upreferred(calib)) == upreferred(u"V/T")
-          calib = calib .|> u"V/T"
-        elseif unit(upreferred(calib)) == upreferred(u"V/A")
-          calib = calib .|> u"V/A"
-        else
-          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
-        end
-      end
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
-    end
-  end
-
-  return channels
 end
 
 export RedPitayaDAQ
@@ -120,6 +76,14 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 end
 
 function _init(daq::RedPitayaDAQ)
+  # force all calibration transfer functions to be read from disk
+  for channelID in keys(daq.params.channels)
+    if isa(channel(daq, channelID), DAQTxChannelParams)
+      calibration(daq, channelID)
+      feedbackCalibration(daq, channelID)
+    end
+  end
+
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
@@ -200,7 +164,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   for channel in txChannels
     m = nothing
     idx = channel[2].channelIdx
-    if channel[2] isa RedPitayaTxChannelParams
+    if channel[2] isa DAQTxChannelParams
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
@@ -380,12 +344,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
   lutValues = []
   lutIdx = []
   for (lutChannel, seqChannel) in channelMapping
-    tempValues = values(seqChannel)
-    if !isnothing(lutChannel.calibration)
-      tempValues = tempValues.*lutChannel.calibration
-    end
-    tempValues = ustrip.(u"V", tempValues)
-    push!(lutValues, tempValues)
+    push!(lutValues, ustrip.(u"V", values(seqChannel)))
     push!(lutIdx, lutChannel.channelIdx)
   end
 
@@ -506,7 +465,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControl
   # Start pipeline
   @debug "Pipeline started"
   try
-    @debug currentWP(daq.rpc)
+    @debug "Producer:" currentWP(daq.rpc)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
@@ -573,18 +532,22 @@ end
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
   setupRx(daq, sequence)
-  setupTx(daq, sequence)
-  prepareTx(daq, sequence)
-  setSequenceParams(daq, sequence)
+  sequenceVolt = applyForwardCalibration(sequence, daq)
+  setupTx(daq, sequenceVolt)
+  prepareTx(daq, sequenceVolt)
+  setSequenceParams(daq, sequenceVolt)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
+  
   periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
+    
+  @debug "SetupTx: Outputting the following offsets" offsets=[offset(chan) for chan in periodicChannels]
 
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
@@ -601,11 +564,19 @@ function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, b
 end
 function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-  offsetVolts = offset(channel)*calibration(daq, id(channel))
-  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-  for (idx, component) in enumerate(components(channel))
+  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offset(channel)))
+
+  for (idx, component) in enumerate(periodicElectricalComponents(channel)) # in the future add the SweepElectricalComponents as well
     setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
   end
+  
+  awgComps = arbitraryElectricalComponents(channel) 
+  if length(awgComps) > 1
+    throw(SequenceConfigurationError("The channel with the ID $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
+  elseif length(awgComps) == 1
+    setupTxComponent!(batch, daq, channel, awgComps[1], 0, baseFreq)
+  end
+
 end
 
 function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component, componentIdx, baseFreq)
@@ -615,7 +586,7 @@ function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel,
 end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
-    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform if a fourth is necessary."))
   end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
@@ -623,7 +594,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, componentIdx, waveform_)
 end
@@ -635,7 +606,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   # Waveform is set together with amplitudes for arbitrary waveforms
 end
@@ -651,9 +622,9 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
-  # The decimation can only be a power of 2 beginning with 8
+  # The decimation has to be divisible by 2 and must be 8 or larger
   decimation_ = upreferred(txBaseFrequency(sequence)/rxSamplingRate(sequence))
-  if decimation_ in [2^n for n in 3:8]
+  if iseven(decimation_) &&  decimation_ >= 8
     daq.decimation = decimation_
   else
     throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
@@ -672,14 +643,14 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
-  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
   daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
 
   # Construct view to save bandwidth
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
   for i in map(x->div(x -1, 2) + 1, rxIDs)
-    @debug i
+    @debug "setupRx: Adding RP id $i to cluster view"
     selection[i] = true
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
@@ -749,38 +720,31 @@ end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
-  @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
-  for channel in periodicElectricalTxChannels(sequence)
+    for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
-    amps = []
-    phases = []
-    wave = nothing
-    for comp in periodicElectricalComponents(channel)
-      # Lengths check == 1 happens in setupTx already
-      amp = amplitude(comp)
-      if dimension(amp) == dimension(1.0u"T")
-        amp = (amp * calibration(daq, name))
-      end
-      push!(amps, amp)
-      push!(phases, phase(comp))
+    # This should set all unused components to zero, but what about unused channels?
+    amps = zeros(typeof(1.0u"V"), 3)
+    phases = zeros(typeof(1.0u"rad"), 3)
+    wave = zeros(typeof(1.0u"V"), 2^14)
+    for (i,comp) in enumerate(periodicElectricalComponents(channel))
+      # Length check < 3 happens in setupTx already
+      amps[i] = amplitude(comp)
+      phases[i] = phase(comp)
     end
+    # Length check < 1 happens in setupTx already
     comps = arbitraryElectricalComponents(channel)
-    if length(comps) > 2
-      throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
-    elseif length(comps) == 1
-      wave = values(comps[1])
-      if dimension(wave[1]) != dimension(1.0u"V")
-        wave = wave.*calibration(daq, name)
-      end
-      allAwg[name] = wave
+    if length(comps)==1
+      wave = scaledValues(comps[1])
     end
 
+    allAwg[name] = wave
     allAmps[name] = amps
     allPhases[name] = phases
   end
+  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases awg=lineplot(1:2^14,ustrip.(u"V",hcat(collect(Base.values(allAwg))...)),ylabel="AWG / V", name=collect(Base.keys(allAwg)), canvas=DotCanvas, border=:ascii, height=10, xlim=(1,2^14))
 
   setTxParams(daq, allAmps, allPhases, allAwg)
 end
@@ -909,7 +873,7 @@ numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all 
 numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
 numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
 numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
-numComponentsMax(daq::RedPitayaDAQ) = 3
+numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 

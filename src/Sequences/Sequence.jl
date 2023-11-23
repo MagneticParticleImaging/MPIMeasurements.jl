@@ -161,6 +161,12 @@ function fieldDictToFields(fieldsDict::Dict{String, Any})
     if haskey(fieldDict, "safeErrorInterval")
       splattingDict[:safeErrorInterval] = uparse(fieldDict["safeErrorInterval"])
     end
+    if haskey(splattingDict, :decouple) && splattingDict[:decouple]
+      if haskey(splattingDict, :control) && !splattingDict[:control]
+        throw(SequenceConfigurationError("A field that should be decoupled always needs to be controlled, please fix field \"$(fieldID)\""))
+      end
+      splattingDict[:control] = true
+    end
 
     field = MagneticField(;splattingDict...)
     push!(fields, field)
@@ -277,6 +283,17 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
   end
 end
 
+export divider!
+function divider!(channel::PeriodicElectricalChannel, componentId::AbstractString, value::Integer)
+  index = findfirst(x -> id(x) == componentId, channel.components)
+  if !isnothing(index)
+    divider!(channel.components[index], value)
+  else
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+  end
+end
+
+
 export acqGradient
 acqGradient(sequence::Sequence) = nothing # TODO: Implement
 
@@ -285,7 +302,7 @@ function acqNumPeriodsPerFrame(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     numPeriods = [div(c.divider, samplesPerCycle) for c in channels ]
 
     if minimum(numPeriods) != maximum(numPeriods)
@@ -303,7 +320,7 @@ function acqNumPeriodsPerPatch(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     stepsPerCycle = [ typeof(c) <: StepwiseElectricalChannel ?
                               div(c.divider,length(c.values)*samplesPerCycle) :
                               div(c.dividerSteps,samplesPerCycle) for c in channels ]
@@ -341,8 +358,11 @@ dfBaseFrequency(sequence::Sequence) = baseFrequency(sequence)
 export txBaseFrequency
 txBaseFrequency(sequence::Sequence) = dfBaseFrequency(sequence) # Alias, since this might not only concern the drivefield
 
+export dfSamplesPerCycle
+dfSamplesPerCycle(sequence::Sequence) = lcm(dfDivider(sequence))
+
 export dfCycle
-dfCycle(sequence::Sequence) = lcm(dfDivider(sequence))/dfBaseFrequency(sequence) |> u"s"
+dfCycle(sequence::Sequence) = dfSamplesPerCycle(sequence)/dfBaseFrequency(sequence) |> u"s"
 
 export txCycle
 txCycle(sequence::Sequence) = dfCycle(sequence) # Alias, since this might not only concern the drivefield
@@ -351,7 +371,7 @@ export dfDivider
 function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  result = zeros(Int64, (dfNumChannels(sequence), maxComponents))
+  result = ones(Int64, (dfNumChannels(sequence), maxComponents)) # Otherwise the dfCycle is miscalculated in the case of a different amount of components
   
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)

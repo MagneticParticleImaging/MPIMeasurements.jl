@@ -50,55 +50,77 @@ abstract type DAQChannelParams end
 abstract type TxChannelParams <: DAQChannelParams end
 abstract type RxChannelParams <: DAQChannelParams end
 
-Base.@kwdef struct DAQFeedback
+Base.@kwdef mutable struct DAQFeedback
   channelID::AbstractString
-  calibration::Union{typeof(1.0u"T/V"), Nothing} = nothing
+  calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
-Base.@kwdef struct DAQTxChannelParams <: TxChannelParams
+Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   channelIdx::Int64
   limitPeak::typeof(1.0u"V")
+  limitSlewRate::typeof(1.0u"V/s") = 1000.0u"V/µs" # default is basically no limit
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), Nothing} = nothing
+  calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
 Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
   channelIdx::Int64
 end
 
+function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
+  splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelIdx] = dict["channel"]
+  splattingDict[:limitPeak] = uparse(dict["limitPeak"])
+
+  if haskey(dict, "limitSlewRate")
+    splattingDict[:limitSlewRate] = uparse(dict["limitSlewRate"])
+  end
+
+  if haskey(dict, "sinkImpedance")
+    splattingDict[:sinkImpedance] = dict["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
+  end
+
+  if haskey(dict, "allowedWaveforms")
+    splattingDict[:allowedWaveforms] = toWaveform.(dict["allowedWaveforms"])
+  end
+
+  if haskey(dict, "feedback")
+    channelID = dict["feedback"]["channelID"]
+    calibration_tf = parse_into_tf(dict["feedback"]["calibration"])
+    splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration_tf)
+  end
+
+  if haskey(dict, "calibration")
+    splattingDict[:calibration] = parse_into_tf(dict["calibration"])
+  end
+
+  return DAQTxChannelParams(;splattingDict...)
+end
+
+function parse_into_tf(value::String)
+  if occursin(".h5", value) # case 1: filename to transfer function, the TF will be read the first time calibration() is called, (done in _init(), to prevent delays while using the device)
+    calibration_tf = value
+  else # case 2: single value, extended into transfer function with no frequency dependency
+    calibration_value = uparse(value)
+    calibration_tf = TransferFunction([0,10e6],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
+  end
+  return calibration_tf
+end
+
+createDAQChannel(::Type{DAQRxChannelParams}, value) = DAQRxChannelParams(channelIdx=value["channel"])
+
 "Create DAQ channel description from device dict part."
 function createDAQChannels(dict::Dict{String, Any})
   channels = Dict{String, DAQChannelParams}()
   for (key, value) in dict
-    splattingDict = Dict{Symbol, Any}()
     if value["type"] == "tx"
-      splattingDict[:channelIdx] = value["channel"]
-      splattingDict[:limitPeak] = uparse(value["limitPeak"])
-
-      if haskey(value, "sinkImpedance")
-        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
-
-      if haskey(value, "allowedWaveforms")
-        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-      end
-
-      if haskey(value, "feedback")
-        channelID=value["feedback"]["channelID"]
-        calibration=uparse(value["feedback"]["calibration"])
-
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
-
-      if haskey(value, "calibration")
-        splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      channels[key] = DAQTxChannelParams(;splattingDict...)
+      channels[key] = createDAQChannel(DAQTxChannelParams, value)
     elseif value["type"] == "rx"
-      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
+      channels[key] = createDAQChannel(DAQRxChannelParams, value)
+    elseif value["type"] == "txSlow"
+      channels[key] = createDAQChannel(RedPitayaLUTChannelParams, value)
     end
   end
 
@@ -128,7 +150,7 @@ function createDAQParams(DAQType::Type{T}, dict::Dict{String, Any}) where {T <: 
 
   splattingDict = dict_to_splatting(mainDict)
   splattingDict[:channels] = createDAQChannels(DAQType, channelDict)
-
+  # TODO: check if DAQ type can actually support all types of channels
   try
     return DAQType(;splattingDict...)
   catch e
@@ -193,8 +215,84 @@ allowedWaveforms(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, cha
 isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Waveform) = waveform in allowedWaveforms(daq, channelID)
 feedback(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).feedback
 feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).channelID
-feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).calibration
-calibration(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).calibration
+function feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString)
+  if !isnothing(feedback(daq, channelID)) && isa(feedback(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
+    feedback(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",feedback(daq, channelID).calibration))
+  else
+    if !isnothing(feedback(daq, channelID))
+      return feedback(daq, channelID).calibration
+    else 
+      return nothing
+    end
+  end
+end
+function calibration(daq::AbstractDAQ, channelID::AbstractString)
+  if isa(channel(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
+    channel(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",channel(daq, channelID).calibration))
+  else
+    return channel(daq, channelID).calibration 
+  end
+end
+  
+
+export applyForwardCalibration!, applyForwardCalibration
+
+function applyForwardCalibration(seq::Sequence, daq::AbstractDAQ)
+  seqCopy = deepcopy(seq)
+  applyForwardCalibration!(seqCopy, daq)
+  return seqCopy
+end
+
+function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
+
+  for channel in periodicElectricalTxChannels(seq) 
+    off = offset(channel)
+    if dimension(off) != dimension(1.0u"V")
+      offsetVolts = off*abs(calibration(daq, id(channel))(0)) # use DC value for offsets
+      offset!(channel, uconvert(u"V",offsetVolts))
+    end
+
+    for comp in components(channel)
+      amp = amplitude(comp)
+      pha = phase(comp)
+      if dimension(amp) != dimension(1.0u"V")
+        f_comp = ustrip(u"Hz", txBaseFrequency(seq)) / divider(comp)
+        complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
+        amplitude!(comp, uconvert(u"V",abs(complex_comp)))
+        phase!(comp, angle(complex_comp)u"rad")
+        if comp isa ArbitraryElectricalComponent
+          N = length(values(comp))
+          f_awg = rfftfreq(N, f_comp*N)
+          calib = calibration(daq, id(channel))(f_awg) ./ (abs.(calibration(daq, id(channel))(f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(daq, id(channel))(f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          values!(comp, irfft(rfft(values(comp)).*calib, N))
+        end
+      end
+    end
+  end
+  
+  for lutChannel in acyclicElectricalTxChannels(seq)
+    if lutChannel isa StepwiseElectricalChannel
+      values = lutChannel.values
+      if dimension(values[1]) != dimension(1.0u"V")
+        values = values.*calibration(daq, id(lutChannel))
+        lutChannel.values = values
+      end
+    elseif lutChannel isa ContinuousElectricalChannel
+      amp = lutChannel.amplitude
+      off = lutChannel.offset
+      if dimension(amp) != dimension(1.0u"V")
+        amp = amp*calibration(daq, id(lutChannel))
+        lutChannel.amplitude = amp
+      end
+      if dimension(off) != dimension(1.0u"V")
+        off = off*calibration(daq, id(lutChannel))
+        lutChannel.offset = off
+      end
+    end
+  end
+  
+  nothing
+end
 
 
 

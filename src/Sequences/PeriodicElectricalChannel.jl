@@ -31,19 +31,25 @@ Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
   divider::Integer
-  values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+  "Amplitude scale of the base waveform for each period of the field"
+  amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
+  "Phase of the component for each period of the field."
+  phase::Vector{typeof(1.0u"rad")}
+  "Values for the base waveform of the component, will be multiplied by `amplitude`"
+  values::Vector{Float64}
 end
 
 """Electrical channel based on based on periodic base functions. Only the
 PeriodicElectricalChannel counts for the cycle length calculation"""
-Base.@kwdef struct PeriodicElectricalChannel <: ElectricalTxChannel
+Base.@kwdef mutable struct PeriodicElectricalChannel <: ElectricalTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   "Components added for this channel."
   components::Vector{ElectricalComponent}
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
-  offset::Union{typeof(1.0u"T"), typeof(1.0u"V")} = 0.0u"T"
+  offset::Union{typeof(1.0u"T"), typeof(1.0u"A"), typeof(1.0u"V")} = 0.0u"T"
   isDfChannel::Bool = true
+  dcEnabled::Bool = true
 end
 
 # Indexing Interface
@@ -92,16 +98,21 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
     tmp = uparse.(channelDict["offset"])
     if eltype(tmp) <: Unitful.Current
       tmp = tmp .|> u"A"
+    elseif eltype(tmp) <: Unitful.Voltage
+      tmp = tmp .|> u"V"
     elseif eltype(tmp) <: Unitful.BField
       tmp = tmp .|> u"T"
     else
-      error("The value for an offset has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+      error("The value for an offset has to be either given as a voltage, current or in tesla. You supplied the type `$(eltype(tmp))`.")
     end
     splattingDict[:offset] = tmp
   end
 
   if haskey(channelDict, "isDfChannel")
     splattingDict[:isDfChannel] = channelDict["isDfChannel"]
+  end
+  if haskey(channelDict, "dcEnabled")
+    splattingDict[:isDfChannel] = channelDict["dcEnabled"]
   end
 
   components = Vector{ElectricalComponent}()
@@ -130,8 +141,42 @@ function createChannelComponent(componentID::AbstractString, componentDict::Dict
 end
 
 function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
-  divider = componentDict["divider"]
+
+  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+
+  if haskey(componentDict, "waveform")
+    waveform = toWaveform(componentDict["waveform"])
+  else
+    waveform = WAVEFORM_SINE # Default to sine
+  end
+
+  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+end
+
+function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
   
+  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+
+  if componentDict["values"] isa AbstractString # case 1: filename to waveform
+    filename = joinpath(homedir(), ".mpi", "Waveforms", componentDict["values"])
+    try
+      values = h5read(filename, "/values")
+    catch 
+      throw(SequenceConfigurationError("Could not load the waveform $(componentDict["values"]), either the file does not exist at $filename or the file structure is wrong"))
+    end
+  else # case 2: vector of real numbers
+    values = componentDict["values"]
+  end
+
+  if abs(values[1]-values[end])>0.01 # more than 1% of max value in 1 of 2^14 samples -> slew > 160
+    @warn "The first and last value of your selected waveform are producing a jump of size $(abs(values[1]-values[end]))! Please check your waveform, if this is intended!"
+  end
+
+  return ArbitraryElectricalComponent(id=componentID, divider=divider,amplitude=amplitude, phase=phase, values=values)
+end
+
+function extractBasicComponentProperties(componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
@@ -144,36 +189,28 @@ function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElec
   end
 
   if haskey(componentDict, "phase")
-    phase = uparse.(componentDict["phase"])
+    phaseDict = Dict("sine"=>0.0u"rad", "sin"=>0.0u"rad","cosine"=>pi/2u"rad", "cos"=>pi/2u"rad","-sine"=>pi*u"rad", "-sin"=>pi*u"rad","-cosine"=>-pi/2u"rad", "-cos"=>-pi/2u"rad")
+    phase = []
+    for x in componentDict["phase"]
+      try
+        push!(phase, uparse.(x))
+      catch
+        if haskey(phaseDict, x)
+          push!(phase, phaseDict[x])
+        else
+          error("The value $x for the phase could not be parsed. Use either a unitful value, or one of the predefined keywords ($(keys(phaseDict)))")
+        end
+      end
+    end
   else
     phase = fill(0.0u"rad", length(divider)) # Default phase
   end
-
-  if haskey(componentDict, "waveform")
-    waveform = toWaveform(componentDict["waveform"])
-  else
-    waveform = WAVEFORM_SINE # Default to sine
-  end
-  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+  return divider, amplitude, phase
 end
 
-function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
-  divider = componentDict["divider"]
-  values = uparse.(componentDict["values"])
-  if eltype(values) <: Unitful.Current
-    values = values .|> u"A"
-  elseif eltype(values) <: Unitful.Voltage
-    values = values .|> u"V"
-  elseif eltype(values) <: Unitful.BField
-    values = values .|> u"T"
-  else
-    error("The values have to be either given as a current or in tesla. You supplied the type `$(eltype(values))`.")
-  end    
-  return ArbitraryElectricalComponent(id=componentID, divider=divider, values=values)
-end
-
-export offset
+export offset, offset!
 offset(channel::PeriodicElectricalChannel) = channel.offset
+offset!(channel::PeriodicElectricalChannel, offset::Union{typeof(1.0u"T"),typeof(1.0u"V")}) = channel.offset = offset
 
 export components
 components(channel::PeriodicElectricalChannel) = channel.components
@@ -187,36 +224,7 @@ cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz"
 
 isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
 
-export divider
-divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
-
-export amplitude, amplitude!
-amplitude(component::PeriodicElectricalComponent; period::Integer=1) = component.amplitude[period]
-function amplitude!(component::PeriodicElectricalComponent, value::Union{typeof(1.0u"T"),typeof(1.0u"V")}; period::Integer=1)
-  if eltype(component.amplitude) != typeof(value) && length(component.amplitude) == 1
-      component.amplitude = typeof(value)[value]
-  else
-    component.amplitude[period] = value
-  end
-end
-amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
-amplitude(component::ArbitraryElectricalComponent) = maximum(abs.(component.values))
-
-export phase, phase!
-phase(component::PeriodicElectricalComponent, trigger::Integer=1) = component.phase[trigger]
-phase!(component::PeriodicElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
-phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
-phase!(component::ArbitraryElectricalComponent, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
-phase(component::ArbitraryElectricalComponent, trigger::Integer=1) = 0.0u"rad" #component.phase[period]
-
-
-export waveform, waveform!
-waveform(component::ElectricalComponent) = component.waveform
-waveform!(component::ElectricalComponent, value) = component.waveform = value
-waveform(::ArbitraryElectricalComponent) = WAVEFORM_ARBITRARY
-
-values(component::ArbitraryElectricalComponent) = component.values
-
+# TODO/JA: check if this can automatically be implemented for all setters (and getters)
 function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractString, value)
   index = findfirst(x -> id(x) == componentId, channel.components)
   if !isnothing(index)
@@ -225,6 +233,38 @@ function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractStri
     throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
   end
 end
+
+export divider, divider!
+divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
+divider!(component::PeriodicElectricalComponent,value::Integer) = component.divider = value
+
+export amplitude, amplitude!
+amplitude(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}; period::Integer=1) = component.amplitude[period]
+function amplitude!(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, value::Union{typeof(1.0u"T"),typeof(1.0u"V"),typeof(1.0u"A")}; period::Integer=1)
+  if eltype(component.amplitude) != typeof(value) && length(component.amplitude) == 1
+      component.amplitude = typeof(value)[value]
+  else
+    component.amplitude[period] = value
+  end
+end
+amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
+
+export phase, phase!
+phase(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, trigger::Integer=1) = component.phase[trigger]
+phase!(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, value::typeof(1.0u"rad"); period::Integer=1) = component.phase[period] = value
+phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
+
+export values, values!
+values(component::ArbitraryElectricalComponent) = component.values
+values!(component::ArbitraryElectricalComponent, values::Vector{Float64}) = component.values = values
+scaledValues(component::ArbitraryElectricalComponent) = amplitude(component) .* circshift(values(component), round(Int,phase(component)/(2π*u"rad")*length(values(component))))
+
+
+export waveform, waveform!
+waveform(component::ElectricalComponent) = component.waveform
+waveform!(component::ElectricalComponent, value) = component.waveform = value
+waveform(::ArbitraryElectricalComponent) = WAVEFORM_ARBITRARY
+waveform!(::ArbitraryElectricalComponent, value) = error("Can not change the waveform type of an ArbitraryElectricalComponent. Use values!() to change the waveform.")
 
 export id
 id(component::PeriodicElectricalComponent) = component.id
