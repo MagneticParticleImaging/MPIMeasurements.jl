@@ -15,6 +15,7 @@ using InteractiveUtils
 using Mmap
 using Scratch
 using StringEncodings
+using Statistics
 using DocStringExtensions
 using MacroTools
 using LibSerialPort
