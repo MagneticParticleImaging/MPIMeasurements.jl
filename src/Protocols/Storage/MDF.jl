@@ -58,7 +58,7 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Union{Positions, Matrix}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+														positions::Union{Positions, AbstractArray}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -135,7 +135,7 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 
 	return
 end
-function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{Matrix, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArray, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
 	# /calibration/ subgroup
 
@@ -146,11 +146,15 @@ function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{Matrix, Noth
 	method = "hybrid"
 	order = "xyz"
 
+	calibsize = size(offsetFields)[1:end-1]
+	offsetFields = reshape(offsetFields, prod(calibsize), :)
+
 	mdf.calibration = MDFv2Calibration(;
 		deltaSampleSize = deltaSampleSize,
 		method = method,
 		offsetFields = offsetFields,
 		order = order,
+		size = collect(calibsize)
 	)
 
 	return

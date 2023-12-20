@@ -473,10 +473,12 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
   # Prepare offset sequences
   offsetVector = ProtocolOffsetElectricalChannel[]
   fieldMap = Dict{ProtocolOffsetElectricalChannel, MagneticField}()
+  calibsize = Int64[]
   for field in cpy
     for channel in channels(field, ProtocolOffsetElectricalChannel)
       push!(offsetVector, channel)
       fieldMap[channel] = field
+      push!(calibsize, length(values(channel)))
     end
   end
 
@@ -520,7 +522,7 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
     end
   end
 
-  return cpy, permutation, offsets
+  return cpy, permutation, offsets, calibsize
 end
 
 function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
@@ -757,7 +759,7 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
   for (i, ch) in enumerate(sortedChannels)
     numSwitchSteps = get(switchSteps, ch, 0)
     pushfirst!(sortedOffsetsWithPause[i], fill(first(sortedOffsetsWithPause[i]), maxPause)...)
-    pushfirst!(sortedOthersPause[i], vcat(fill(true, maxPause - numSwitchSteps))..., fill(false, numSwitchSteps))
+    pushfirst!(sortedOthersPause[i], vcat(fill(true, maxPause - numSwitchSteps))..., fill(false, numSwitchSteps)...)
   end
 
   return sortedOffsetsWithPause, sortedOthersPause, perm

@@ -63,6 +63,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   sequence::Union{Sequence, Nothing} = nothing 
   offsetfields::Union{Matrix{Float64}, Nothing} = nothing
   patchPermutation::Vector{Int64} = Int64[]
+  calibsize::Vector{Int64} = Int64[]
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -97,10 +98,11 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   try
-    seq, perm, offsets = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
+    seq, perm, offsets, calibsize = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
     protocol.sequence = seq
     protocol.patchPermutation = perm
     protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
+    protocol.calibsize = calibsize
   catch e
     throw(e)
   end
@@ -322,7 +324,9 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   if protocol.params.saveAsSystemMatrix
     isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), protocol.params.dfPeriodsPerOffset))
     data = reshape(data, size(data, 1), size(data, 2), protocol.params.dfPeriodsPerOffset, :)
-    offsets = reshape(offsets, protocol.params.dfPeriodsPerOffset, :, size(offsets, 2))[1, :, :] # All periods in one frame (should) have same offset
+    # All periods in one frame (should) have same offset
+    offsets = reshape(offsets, protocol.params.dfPeriodsPerOffset, :, size(offsets, 2))[1, :, :]
+    offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
     filename = saveasMDF(store, scanner, protocol.sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   else
     filename = saveasMDF(store, scanner, protocol.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
