@@ -19,6 +19,7 @@ using DocStringExtensions
 using MacroTools
 using LibSerialPort
 using UnicodePlots
+using LinearAlgebra
 
 using ReplMaker
 import REPL
