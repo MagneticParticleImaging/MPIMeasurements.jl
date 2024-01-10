@@ -305,7 +305,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 		numFreq = div(numSamplingPoints_,2)+1
 		freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
 		tf_ =  TransferFunction(scanner)
-		tf = tf_[freq,1:numRxChannels_]
+		tf = tf_(freq,1:numRxChannels_)
 		MPIFiles.rxTransferFunction(mdf, tf)
 		MPIFiles.rxInductionFactor(mdf, tf_.inductionFactor)
 	end
