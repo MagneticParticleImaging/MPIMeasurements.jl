@@ -27,8 +27,6 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   # TODO: This is only for 1D MPS systems for now
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 2
-  "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
-  deletedDfPeriodsPerOffset::Integer = 1
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence_ = nothing
