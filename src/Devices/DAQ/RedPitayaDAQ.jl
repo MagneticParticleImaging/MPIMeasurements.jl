@@ -517,11 +517,17 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
   for (ch, steps) in allSteps
     stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps), enable = enables[ch])
     fieldMap[ch][id(stepwise)] = stepwise
+
+    # Generate H-Bridge channels
     if haskey(hbridges, ch)
       offsetChannel = channel(daq, id(ch))
-      hbridgeChannel = offsetChannel.hbridge
-      hbridgeStepwise = StepwiseElectricalChannel(id = id(hbridgeChannel), divider = divider, values = identity.(hbridges[ch]), enable = fill(true, length(steps)))
-      fieldMap[ch][id(hbridgeChannel)] = hbridgeStepwise
+      hbridgeChannels = id(offsetChannel.hbridge)
+      hbridgeValues = hbridges[ch]
+      for (i, hbridgeChannel) in enumerate(hbridgeChannels)
+        hsteps = map(x -> x[i], hbridgeValues)
+        hbridgeStepwise = StepwiseElectricalChannel(id = hbridgeChannel, divider = divider, values = hsteps, enable = fill(true, length(steps)))
+        fieldMap[ch][hbridgeChannel] = hbridgeStepwise
+      end
     end
   end
 
@@ -580,12 +586,12 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     end
   end
 
-  hbridges = prepareHBridgeLevels(allSteps, daq)
-
   # Compute switch timing, assumption step is held for df * numPeriodsPerPatch
   deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
   maxTime = maximum(map(ustrip, deadTimes))
   numSwitchPeriods = Int64(ceil(maxTime/stepduration))
+
+  hbridges = prepareHBridgeLevels(allSteps, daq, numSwitchPeriods)
 
   # Set enable to false during hbridge switching
   for (ch, enables) in allEnables
@@ -605,20 +611,6 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     # Add numSwitchPeriods 0 for every missing value
     foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
     allSteps[ch] = temp
-
-    # Add next hbridge level for each missing value
-    if haskey(hbridges, ch)
-      temp = []
-      for (i, x) in enumerate(hbridges[ch]) # Assumption no H-Bridge in last value
-        if ismissing(x)
-          # For the switch take the level for the value that comes after missing
-          push!(temp, fill(level(channel(daq, id(ch)).hbridge, hbridges[ch][i + 1]), numSwitchPeriods)...)
-        else
-          push!(temp, x)
-        end
-      end
-      hbridges[ch] = temp
-    end
   end
 
   # Generate offsets without permutation
@@ -680,14 +672,20 @@ function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, d
   return permoffsets, allSteps, enables, hbridges, patchPermutation
 end
 
-function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ)
+function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ, switchSteps::Int64 = 0)
   hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
-  for (ch, steps) in allSteps
+  for ch in filter(ch -> channel(daq, id(ch)).range == HBRIDGE , keys(allSteps))
     offsetChannel = channel(daq, id(ch))
-    if offsetChannel.range == HBRIDGE
-      hsteps = map(x-> ismissing(x) ? missing : level(offsetChannel.hbridge, x), steps)
-      hbridges[ch] = hsteps
+    steps = allSteps[ch]
+    hsteps = []
+    for (i, step) in enumerate(steps)
+      if ismissing(step) # Assumes only one missing per switch and no missing at last index
+        push!(hsteps, fill(level(offsetChannel.hbridge, steps[i + 1]), switchSteps)...)
+      else
+        push!(hsteps, level(offsetChannel.hbridge, step))
+      end
     end
+    hbridges[ch] = hsteps
   end
   return hbridges
 end
