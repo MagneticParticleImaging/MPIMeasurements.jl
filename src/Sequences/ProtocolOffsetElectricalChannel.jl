@@ -1,6 +1,6 @@
 export ProtocolOffsetElectricalChannel
 
-Base.@kwdef struct ProtocolOffsetElectricalChannel{T<:Union{typeof(1.0u"T"),typeof(1.0u"A"),typeof(1.0u"V")}} <: ProtocolTxChannel
+Base.@kwdef mutable struct ProtocolOffsetElectricalChannel{T<:Union{typeof(1.0u"T"),typeof(1.0u"A"),typeof(1.0u"V")}} <: ProtocolTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   offsetStart::T
