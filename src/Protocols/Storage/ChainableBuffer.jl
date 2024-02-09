@@ -75,6 +75,36 @@ end
 read(buffer::SimpleFrameBuffer) = buffer.data
 index(buffer::SimpleFrameBuffer) = buffer.nextFrame
 
+mutable struct MmapFrameBuffer{A::AbstractArray{T, 4}} <: MeasurementBuffer
+  nextFrame::Int64
+  data::A
+end
+function MmapFrameBuffer(protocol::Protocol, file::String, sequence::Sequence)
+  numFrames = acqNumFrames(sequence)
+  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence)
+  numChannel = length(rxChannels(sequence))
+  return MmapFrameBuffer(protocol, file, Float32, (rxNumSamplingPoints, numChannel, numPeriods, numFrames))
+end
+function MmapFrameBuffer(protocol::Protocol, file::String, args...)
+  mapped = mmap!(protocol, file, args...)
+  return MmapFrameBuffer(1, mapped)
+end
+function insert!(buffer::MmapFrameBuffer, from::Integer, frames::Array{Float32,4})
+  to = from + size(frames, 4) - 1
+  buffer.data[:, :, :, from:to] = frames
+  Mmap.sync!(buffer.data)
+  return to
+end
+function push!(buffer::MmapFrameBuffer, frames::Array{Float32,4})
+  from = buffer.nextFrame
+  to = insert!(buffer, from, frames)
+  buffer.nextFrame = to + 1
+  return (start = from, stop = to)
+end
+read(buffer::MmapFrameBuffer) = buffer.data
+index(buffer::MmapFrameBuffer) = buffer.nextFrame
+
 abstract type FieldBuffer <: SequenceBuffer end
 mutable struct DriveFieldBuffer{A <: AbstractArray{ComplexF64, 4}} <: FieldBuffer
   nextFrame::Integer
