@@ -253,12 +253,12 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, numFrames)
+  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, length(protocol.patchPermutation))
   buffer = MmapFrameBuffer(protocol, "meas.bin", Float32, bufferSize)
   channel = Channel{channelType(daq)}(32)
-  
-  buffer = FrameSplitterBuffer(daq, [buffer])
 
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, 1, length(protocol.patchPermutation))
+  
   deviceBuffer = DeviceBuffer[]
    if protocol.params.controlTx
     sequence = controlTx(protocol.txCont, sequence)
@@ -270,6 +270,32 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
 
   return SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), deviceBuffer, asyncMeasType(sequence))
 end
+
+mutable struct MPSBuffer <: IntermediateBuffer
+  target::StorageBuffer
+  permutation::Vector{Int64}
+  counter::Int64
+  total::Int64
+end
+function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
+  from = nothing
+  to = nothing
+  for i = 1:size(frames, 4)
+    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.total) + 1
+    patchCounter = mod1(mpsBuffer.counter, mpsBuffer.total)
+    patchIdx = findfirst(x-> x == patchCounter, mpsBuffer.permutation)
+    if !isnothing(from)
+      to = insert!(target, frameIdx * mpsBuffer.total + patchIdx, frames[:, :, :, i])
+      mpsBuffer.counter += 1
+    end
+  end
+  if !isnothing(from) && !isnothing(to)
+    return (start = from, stop = to)
+  else
+    return nothing
+  end
+end
+sinks!(buffer::MPSBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
 
 function cleanup(protocol::MPSMeasurementProtocol)
@@ -341,15 +367,15 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   
   offsets = protocol.offsetfields
 
-  if protocol.params.sortPatches
-    data = data[:, :, protocol.patchPermutation, :]
-    offsets = offsets[protocol.patchPermutation, :]
-  else
-    # Just remove "dead" patches
-    validPatches = filter(in(protocol.patchPermutation), collect(1:size(data, 3)))
-    data = data[:, :, validPatches, :]
-    offsets = offsets[validPatches, :]
-  end
+  #if protocol.params.sortPatches
+  #  data = data[:, :, protocol.patchPermutation, :]
+  #  offsets = offsets[protocol.patchPermutation, :]
+  #else
+  #  # Just remove "dead" patches
+  #  validPatches = filter(in(protocol.patchPermutation), collect(1:size(data, 3)))
+  #  data = data[:, :, validPatches, :]
+  #  offsets = offsets[validPatches, :]
+  #end
 
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
