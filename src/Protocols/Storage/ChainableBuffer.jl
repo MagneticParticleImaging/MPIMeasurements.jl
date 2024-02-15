@@ -5,7 +5,7 @@ mutable struct AverageBuffer{T} <: IntermediateBuffer where {T<:Number}
 end
 AverageBuffer(buffer::StorageBuffer, samples, channels, periods, avgFrames) = AverageBuffer{Float32}(buffer, zeros(Float32, samples, channels, periods, avgFrames), 1)
 AverageBuffer(buffer::StorageBuffer, sequence::Sequence) = AverageBuffer(buffer, rxNumSamplesPerPeriod(sequence), length(rxChannels(sequence)), acqNumPeriodsPerFrame(sequence), acqNumFrameAverages(sequence))
-function push!(avgBuffer::AverageBuffer{T}, frames::Array{T,4}) where {T<:Number}
+function push!(avgBuffer::AverageBuffer{T}, frames::AbstractArray{T,4}) where {T<:Number}
   #setIndex - 1 = how many frames were written to the buffer
 
   # Compute how many frames there will be
@@ -49,61 +49,43 @@ sinks!(buffer::AverageBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target,
 
 abstract type MeasurementBuffer <: SequenceBuffer end
 # TODO Error handling? Throw own error or crash with index error
-mutable struct SimpleFrameBuffer{A<: AbstractArray{Float32, 4}} <: MeasurementBuffer
+mutable struct FrameBuffer{A<: AbstractArray{Float32, 4}} <: MeasurementBuffer
   nextFrame::Integer
   data::A
 end
-function SimpleFrameBuffer(sequence::Sequence)
+function FrameBuffer(sequence::Sequence)
   numFrames = acqNumFrames(sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
   numChannel = length(rxChannels(sequence))
   buffer = zeros(Float32, rxNumSamplingPoints, numChannel, numPeriods, numFrames)
-  return SimpleFrameBuffer(1, buffer)
+  return FrameBuffer(1, buffer)
 end
-function insert!(buffer::SimpleFrameBuffer, from::Integer, frames::Array{Float32,4})
-  to = from + size(frames, 4) - 1
-  buffer.data[:, :, :, from:to] = frames
-  return to
-end
-function push!(buffer::SimpleFrameBuffer, frames::Array{Float32,4})
-  from = buffer.nextFrame
-  to = insert!(buffer, from, frames)
-  buffer.nextFrame = to + 1
-  return (start = from, stop = to)
-end
-read(buffer::SimpleFrameBuffer) = buffer.data
-index(buffer::SimpleFrameBuffer) = buffer.nextFrame
-
-mutable struct MmapFrameBuffer{T, A<:AbstractArray{T, 4}} <: MeasurementBuffer
-  nextFrame::Int64
-  data::A
-end
-function MmapFrameBuffer(protocol::Protocol, file::String, sequence::Sequence)
+function FrameBuffer(protocol::Protocol, file::String, sequence::Sequence)
   numFrames = acqNumFrames(sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
   numChannel = length(rxChannels(sequence))
-  return MmapFrameBuffer(protocol, file, Float32, (rxNumSamplingPoints, numChannel, numPeriods, numFrames))
+  return FrameBuffer(protocol, file, Float32, (rxNumSamplingPoints, numChannel, numPeriods, numFrames))
 end
-function MmapFrameBuffer(protocol::Protocol, file::String, args...)
+function FrameBuffer(protocol::Protocol, file::String, args...)
   mapped = mmap!(protocol, file, args...)
-  return MmapFrameBuffer(1, mapped)
+  return FrameBuffer(1, mapped)
 end
-function insert!(buffer::MmapFrameBuffer, from::Integer, frames::Array{Float32,4})
+
+function insert!(buffer::FrameBuffer, from::Integer, frames::AbstractArray{Float32,4})
   to = from + size(frames, 4) - 1
   buffer.data[:, :, :, from:to] = frames
-  Mmap.sync!(buffer.data)
   return to
 end
-function push!(buffer::MmapFrameBuffer, frames::Array{Float32,4})
+function push!(buffer::FrameBuffer, frames::AbstractArray{Float32,4})
   from = buffer.nextFrame
   to = insert!(buffer, from, frames)
   buffer.nextFrame = to + 1
   return (start = from, stop = to)
 end
-read(buffer::MmapFrameBuffer) = buffer.data
-index(buffer::MmapFrameBuffer) = buffer.nextFrame
+read(buffer::FrameBuffer) = buffer.data
+index(buffer::FrameBuffer) = buffer.nextFrame
 
 abstract type FieldBuffer <: SequenceBuffer end
 mutable struct DriveFieldBuffer{A <: AbstractArray{ComplexF64, 4}} <: FieldBuffer
@@ -112,7 +94,7 @@ mutable struct DriveFieldBuffer{A <: AbstractArray{ComplexF64, 4}} <: FieldBuffe
   cont::ControlSequence
 end
 function insert!(buffer::DriveFieldBuffer, from::Integer, frames::Array{ComplexF64,4})
-  # TODO duplicate to SimpleFrameBuffer
+  # TODO duplicate to FrameBuffer
   to = from + size(frames, 4) - 1
   buffer.data[:, :, :, from:to] = frames
   return to
