@@ -221,20 +221,54 @@ function asyncMeasurement(protocol::MPSMeasurementProtocol)
   sequence = protocol.sequence
   daq = getDAQ(scanner_)
   deviceBuffer = DeviceBuffer[]
-  if protocol.params.controlTx
-    sequence = controlTx(protocol.txCont, sequence)
-    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
-  end
+
+  # Setup everything as defined per sequence
   setup(daq, sequence)
-  protocol.seqMeasState = SequenceMeasState(daq, sequence)
-  if protocol.params.saveTemperatureData
-    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
-  end
-  protocol.seqMeasState.deviceBuffers = deviceBuffer
+  # Now for the buffer chain we want to reinterpret periods to frames
+  # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
+  acqNumFrames(sequence, acqNumFrames(sequence) * periodsPerFrame(daq.rpc))
+  setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
+
+  #if protocol.params.controlTx
+  #  sequence = controlTx(protocol.txCont, sequence)
+  #  push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  #end
+    
+  protocol.seqMeasState = SequenceMeasState(protocol)
+  #if protocol.params.saveTemperatureData
+  #  push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  #end
+  #protocol.seqMeasState.deviceBuffers = deviceBuffer
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
+end
+
+function SequenceMeasState(protocol::MPSMeasurementProtocol)
+  sequence = protocol.sequence
+  daq = getDAQ(scanner(protocol))
+
+  numFrames = acqNumFrames(sequence)
+
+  # Prepare buffering structures
+  @debug "Allocating buffer for $numFrames frames"
+  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, numFrames)
+  buffer = MmapFrameBuffer(protocol, "meas.bin", Float32, bufferSize)
+  channel = Channel{channelType(daq)}(32)
+  
+  buffer = FrameSplitterBuffer(daq, [buffer])
+
+  deviceBuffer = DeviceBuffer[]
+   if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  #if protocol.params.saveTemperatureData
+  #  push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  #end
+
+  return SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), deviceBuffer, asyncMeasType(sequence))
 end
 
 
@@ -298,8 +332,13 @@ handleEvent(protocol::MPSMeasurementProtocol, event::FinishedAckEvent) = protoco
 function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
+  sequence = protocol.sequence
   mdf = event.mdf
+
   data = read(protocol.protocolMeasState, MeasurementBuffer)
+  data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
+  acqNumFrames(sequence, size(data, 4))
+  
   offsets = protocol.offsetfields
 
   if protocol.params.sortPatches
@@ -325,9 +364,9 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
     # All periods in one frame (should) have same offset
     offsets = reshape(offsets, protocol.params.dfPeriodsPerOffset, :, size(offsets, 2))[1, :, :]
     offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
-    filename = saveasMDF(store, scanner, protocol.sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+    filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   else
-    filename = saveasMDF(store, scanner, protocol.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+    filename = saveasMDF(store, scanner, sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   end
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
