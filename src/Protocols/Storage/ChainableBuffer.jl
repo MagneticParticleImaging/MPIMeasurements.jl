@@ -75,7 +75,7 @@ end
 read(buffer::SimpleFrameBuffer) = buffer.data
 index(buffer::SimpleFrameBuffer) = buffer.nextFrame
 
-mutable struct MmapFrameBuffer{A::AbstractArray{T, 4}} <: MeasurementBuffer
+mutable struct MmapFrameBuffer{T, A<:AbstractArray{T, 4}} <: MeasurementBuffer
   nextFrame::Int64
   data::A
 end

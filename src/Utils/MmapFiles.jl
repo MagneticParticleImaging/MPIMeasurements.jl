@@ -14,7 +14,7 @@ function mmap!(protocol::Protocol, f::String, array::Array{T,N}) where {T,N}
   return mmap(protocol, f, T)
 end
 
-function mmap!(protocol::Protocolm, f::String, eltype::DataType, size::Union{NTuple{N, Int64}, Vector{Int64}})
+function mmap!(protocol::Protocol, f::String, eltype::DataType, size::Union{NTuple{N, Int64}, Vector{Int64}}) where N
   open(file(protocol, f), "w+") do io
     write(io, length(size))
     for s in size
