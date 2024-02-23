@@ -230,28 +230,8 @@ function measurement(protocol::MPSMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::MPSMeasurementProtocol)
-  scanner_ = scanner(protocol)
-  sequence = protocol.sequence
-  daq = getDAQ(scanner_)
-  deviceBuffer = DeviceBuffer[]
-
-  # Setup everything as defined per sequence
-  setup(daq, sequence)
-  # Now for the buffer chain we want to reinterpret periods to frames
-  # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
-  acqNumFrames(sequence, acqNumFrames(sequence) * periodsPerFrame(daq.rpc))
-  setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
-
-  #if protocol.params.controlTx
-  #  sequence = controlTx(protocol.txCont, sequence)
-  #  push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
-  #end
-    
-  protocol.seqMeasState = SequenceMeasState(protocol)
-  #if protocol.params.saveTemperatureData
-  #  push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
-  #end
-  #protocol.seqMeasState.deviceBuffers = deviceBuffer
+  scanner_ = scanner(protocol)    
+  sequence, protocol.seqMeasState = SequenceMeasState(protocol)
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
@@ -261,33 +241,50 @@ end
 function SequenceMeasState(protocol::MPSMeasurementProtocol)
   sequence = protocol.sequence
   daq = getDAQ(scanner(protocol))
+  deviceBuffer = DeviceBuffer[]
 
-  numFrames = acqNumFrames(sequence)
 
-  # Prepare buffering structures
+  # Setup everything as defined per sequence
+  if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  setup(daq, sequence)
+  
+  # Now for the buffer chain we want to reinterpret periods to frames
+  # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
+  acqNumFrames(protocol.sequence, acqNumFrames(protocol.sequence) * periodsPerFrame(daq.rpc))
+  setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
+
+  numFrames = acqNumFrames(protocol.sequence)
+
+  # Prepare buffering structures:
+  # RedPitaya-> MPSBuffer -> Splitter --> FrameBuffer{Mmap}
+  #                                   |-> DriveFieldBuffer 
   @debug "Allocating buffer for $numFrames frames"
   numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
   averages = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
   numFrames = div(numValidPatches, averages)
-  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, numFrames)
+  bufferSize = (rxNumSamplingPoints(protocol.sequence), length(rxChannels(protocol.sequence)), 1, numFrames)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
-  channel = Channel{channelType(daq)}(32)
 
-  buffer = MPSBuffer(buffer, protocol.patchPermutation, numFrames, 1, acqNumPeriodsPerFrame(sequence))
+  buffers = StorageBuffer[buffer]
 
-  # TODO DriveFieldBuffer
-  buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
-  
-  deviceBuffer = DeviceBuffer[]
-   if protocol.params.controlTx
-    sequence = controlTx(protocol.txCont, sequence)
-    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  if protocol.params.controlTx
+    len = length(keys(sequence.simpleChannel))
+    push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, len, len, 1, numFrames), sequence))
   end
-  #if protocol.params.saveTemperatureData
-  #  push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
-  #end
 
-  return SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), deviceBuffer, asyncMeasType(sequence))
+  buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, numFrames, 1, acqNumPeriodsPerFrame(protocol.sequence))
+
+  channel = Channel{channelType(daq)}(32)
+  deviceBuffer = DeviceBuffer[]
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner(protocol)), numFrames))
+  end
+
+  return sequence, SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), deviceBuffer, asyncMeasType(protocol.sequence))
 end
 
 mutable struct MPSBuffer <: IntermediateBuffer

@@ -99,10 +99,16 @@ mutable struct DriveFieldBuffer{A <: AbstractArray{ComplexF64, 4}} <: FieldBuffe
   data::A
   cont::ControlSequence
 end
+function insert!(op, buffer::DriveFieldBuffer, from::Integer, frames::AbstractArray{ComplexF64, 4})
+  to = from + size(frames, 4) - 1
+  frames = op(frames, view(buffer.data, :, :, :, from:to))
+  insert!(buffer, from, frames)
+end
 function insert!(buffer::DriveFieldBuffer, from::Integer, frames::Array{ComplexF64,4})
   # TODO duplicate to FrameBuffer
   to = from + size(frames, 4) - 1
   buffer.data[:, :, :, from:to] = frames
+  buffer.nextFrame = to
   return to
 end
 function push!(buffer::DriveFieldBuffer, frames::Array{ComplexF64,4})
@@ -111,6 +117,8 @@ function push!(buffer::DriveFieldBuffer, frames::Array{ComplexF64,4})
   buffer.nextFrame = to + 1
   return (start = from, stop = to)
 end
+insert!(op, buffer::DriveFieldBuffer, from::Integer, frames::Array{Float32,4}) = insert!(op, buffer, from, calcFieldsFromRef(buffer.cont, frames))
+insert!(buffer::DriveFieldBuffer, from::Integer, frames::Array{Float32,4}) = insert!(buffer, from, calcFieldsFromRef(buffer.cont, frames))
 push!(buffer::DriveFieldBuffer, frames::Array{Float32,4}) = push!(buffer, calcFieldsFromRef(buffer.cont, frames))
 read(buffer::DriveFieldBuffer) = buffer.data
 index(buffer::DriveFieldBuffer) = buffer.nextFrame
@@ -131,6 +139,44 @@ function push!(buffer::FrameSplitterBuffer, frames)
         result = push!(buf, uMeas)
       elseif measSinks == 0 && fieldSinks > 0
         push!(buf, uRef)
+      else
+        @warn "Unexpected sink combination $(typeof.(sinks(buf)))"
+      end
+    end
+  end
+  return result
+end
+function insert!(buffer::FrameSplitterBuffer, from, frames)
+  uMeas, uRef = retrieveMeasAndRef!(frames, buffer.daq)
+  result = nothing
+  if !isnothing(uMeas)
+    for buf in buffer.targets
+      measSinks = length(sinks(buf, MeasurementBuffer))
+      fieldSinks = length(sinks(buf, DriveFieldBuffer))
+      if measSinks > 0 && fieldSinks == 0
+        # Return latest measurement result
+        result = insert!(buf, from, uMeas)
+      elseif measSinks == 0 && fieldSinks > 0
+        insert!(buf, from, uRef)
+      else
+        @warn "Unexpected sink combination $(typeof.(sinks(buf)))"
+      end
+    end
+  end
+  return result
+end
+function insert!(op, buffer::FrameSplitterBuffer, from, frames)
+  uMeas, uRef = retrieveMeasAndRef!(frames, buffer.daq)
+  result = nothing
+  if !isnothing(uMeas)
+    for buf in buffer.targets
+      measSinks = length(sinks(buf, MeasurementBuffer))
+      fieldSinks = length(sinks(buf, DriveFieldBuffer))
+      if measSinks > 0 && fieldSinks == 0
+        # Return latest measurement result
+        result = insert!(op, buf, from, uMeas)
+      elseif measSinks == 0 && fieldSinks > 0
+        insert!(op, buf, from, uRef)
       else
         @warn "Unexpected sink combination $(typeof.(sinks(buf)))"
       end
