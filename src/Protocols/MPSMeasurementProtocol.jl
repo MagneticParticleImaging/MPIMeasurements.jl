@@ -24,9 +24,9 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Flag if the measurement should be saved as a system matrix or not"
   saveAsSystemMatrix::Bool = true
 
-  # TODO: This is only for 1D MPS systems for now
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 2
+  "If true all periods per offset are averaged"
   averagePeriodsPerOffset::Bool = true
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
@@ -273,7 +273,7 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
   channel = Channel{channelType(daq)}(32)
 
-  buffer = MPSBuffer(buffer, protocol.patchPermutation, protocol.params.sortPatches, numFrames, 1, acqNumPeriodsPerFrame(sequence))
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, numFrames, 1, acqNumPeriodsPerFrame(sequence))
 
   # TODO DriveFieldBuffer
   buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
@@ -293,7 +293,6 @@ end
 mutable struct MPSBuffer <: IntermediateBuffer
   target::StorageBuffer
   permutation::Vector{Union{Int64, Nothing}}
-  sort::Bool
   average::Int64
   counter::Int64
   total::Int64
@@ -390,17 +389,14 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
   acqNumFrames(sequence, size(data, 4))
   
-  offsets = protocol.offsetfields
+  offsetPerm = zeros(Int64, size(data, 3))
+  for (index, patch) in enumerate(protocol.patchPermutation)
+    if !isnothing(patch)
+      offsetPerm[patch] = index 
+    end
+  end
+  offsets = protocol.offsetfields[offsetPerm, :]
 
-  #if protocol.params.sortPatches
-  #  data = data[:, :, protocol.patchPermutation, :]
-  #  offsets = offsets[protocol.patchPermutation, :]
-  #else
-  #  # Just remove "dead" patches
-  #  validPatches = filter(in(protocol.patchPermutation), collect(1:size(data, 3)))
-  #  data = data[:, :, validPatches, :]
-  #  offsets = offsets[validPatches, :]
-  #end
 
   isBGFrame = reduce(&, reshape(measIsBGFrame(protocol.protocolMeasState), size(data, 3), :), dims = 1)[1, :]
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
@@ -410,10 +406,11 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
   filename = nothing
   if protocol.params.saveAsSystemMatrix
-    isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), protocol.params.dfPeriodsPerOffset))
-    data = reshape(data, size(data, 1), size(data, 2), protocol.params.dfPeriodsPerOffset, :)
+    periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
+    isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
+    data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
     # All periods in one frame (should) have same offset
-    offsets = reshape(offsets, protocol.params.dfPeriodsPerOffset, :, size(offsets, 2))[1, :, :]
+    offsets = reshape(offsets, periodsPerOffset, :, size(offsets, 2))[1, :, :]
     offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
     filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
   else
