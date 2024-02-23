@@ -101,11 +101,13 @@ function _init(protocol::MPSMeasurementProtocol)
 
     # For each patch assign nothing if invalid or otherwise index in "proper" frame
     temp = Vector{Union{Int64, Nothing}}(nothing, acqNumPeriodsPerFrame(seq))
-    if protocol.params.sortPatches
-      part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
-      for (i, patches) in enumerate(Iterators.partition(perm, part))
-        temp[patches] .= i
-      end
+    if !protocol.params.sortPatches
+      perm = filter(in(perm), 1:acqNumPeriodsPerFrame(seq))
+    end
+    # Same target for all frames to be averaged
+    part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+    for (i, patches) in enumerate(Iterators.partition(perm, part))
+      temp[patches] .= i
     end
 
     protocol.sequence = seq
@@ -272,6 +274,9 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   channel = Channel{channelType(daq)}(32)
 
   buffer = MPSBuffer(buffer, protocol.patchPermutation, protocol.params.sortPatches, numFrames, 1, acqNumPeriodsPerFrame(sequence))
+
+  # TODO DriveFieldBuffer
+  buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
   
   deviceBuffer = DeviceBuffer[]
    if protocol.params.controlTx
