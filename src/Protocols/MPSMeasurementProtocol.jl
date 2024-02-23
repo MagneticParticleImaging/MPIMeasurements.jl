@@ -10,7 +10,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"
   controlTx::Bool = false
   "If unset no background measurement will be taken"
-  measureBackground::Bool = true
+  measureBackground::Bool = false
   "Remember background measurement"
   rememberBGMeas::Bool = false
   "Tracer that is being used for the measurement"
@@ -27,6 +27,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   # TODO: This is only for 1D MPS systems for now
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 2
+  averagePeriodsPerOffset::Bool = true
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence_ = nothing
@@ -60,7 +61,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
 
   sequence::Union{Sequence, Nothing} = nothing 
   offsetfields::Union{Matrix{Float64}, Nothing} = nothing
-  patchPermutation::Vector{Int64} = Int64[]
+  patchPermutation::Vector{Union{Int64, Nothing}} = Union{Int64, Nothing}[]
   calibsize::Vector{Int64} = Int64[]
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
@@ -97,8 +98,18 @@ function _init(protocol::MPSMeasurementProtocol)
 
   try
     seq, perm, offsets, calibsize = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
+
+    # For each patch assign nothing if invalid or otherwise index in "proper" frame
+    temp = Vector{Union{Int64, Nothing}}(nothing, acqNumPeriodsPerFrame(seq))
+    if protocol.params.sortPatches
+      part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+      for (i, patches) in enumerate(Iterators.partition(perm, part))
+        temp[patches] .= i
+      end
+    end
+
     protocol.sequence = seq
-    protocol.patchPermutation = perm
+    protocol.patchPermutation = temp
     protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
     protocol.calibsize = calibsize
   catch e
@@ -253,11 +264,14 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, length(protocol.patchPermutation))
-  buffer = MmapFrameBuffer(protocol, "meas.bin", Float32, bufferSize)
+  numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
+  averages = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+  numFrames = div(numValidPatches, averages)
+  bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, numFrames)
+  buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
   channel = Channel{channelType(daq)}(32)
 
-  buffer = MPSBuffer(buffer, protocol.patchPermutation, 1, length(protocol.patchPermutation))
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, protocol.params.sortPatches, numFrames, 1, acqNumPeriodsPerFrame(sequence))
   
   deviceBuffer = DeviceBuffer[]
    if protocol.params.controlTx
@@ -273,7 +287,9 @@ end
 
 mutable struct MPSBuffer <: IntermediateBuffer
   target::StorageBuffer
-  permutation::Vector{Int64}
+  permutation::Vector{Union{Int64, Nothing}}
+  sort::Bool
+  average::Int64
   counter::Int64
   total::Int64
 end
@@ -281,13 +297,17 @@ function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
   from = nothing
   to = nothing
   for i = 1:size(frames, 4)
-    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.total) + 1
+    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.total)
     patchCounter = mod1(mpsBuffer.counter, mpsBuffer.total)
-    patchIdx = findfirst(x-> x == patchCounter, mpsBuffer.permutation)
-    if !isnothing(from)
-      to = insert!(target, frameIdx * mpsBuffer.total + patchIdx, frames[:, :, :, i])
-      mpsBuffer.counter += 1
+    patchIdx = mpsBuffer.permutation[patchCounter]
+    if !isnothing(patchIdx)
+      if mpsBuffer.average > 1
+        to = insert!(+, mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i)./mpsBuffer.average)
+      else
+        to = insert!(mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i))
+      end
     end
+    mpsBuffer.counter += 1
   end
   if !isnothing(from) && !isnothing(to)
     return (start = from, stop = to)
@@ -377,7 +397,7 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   #  offsets = offsets[validPatches, :]
   #end
 
-  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+  isBGFrame = reduce(&, reshape(measIsBGFrame(protocol.protocolMeasState), size(data, 3), :), dims = 1)[1, :]
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)

@@ -73,9 +73,15 @@ function FrameBuffer(protocol::Protocol, file::String, args...)
   return FrameBuffer(1, mapped)
 end
 
+function insert!(op, buffer::FrameBuffer, from::Integer, frames::AbstractArray{Float32, 4})
+  to = from + size(frames, 4) - 1
+  frames = op(frames, view(buffer.data, :, :, :, from:to))
+  insert!(buffer, from, frames)
+end
 function insert!(buffer::FrameBuffer, from::Integer, frames::AbstractArray{Float32,4})
   to = from + size(frames, 4) - 1
   buffer.data[:, :, :, from:to] = frames
+  buffer.nextFrame = to
   return to
 end
 function push!(buffer::FrameBuffer, frames::AbstractArray{Float32,4})
