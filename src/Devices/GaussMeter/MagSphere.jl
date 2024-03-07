@@ -1,4 +1,4 @@
-export MagSphere, MagSphereParams, MagSphereDirectParams, MagSpherePoolParams, MagSphereDescriptionParams
+export MagSphere, MagSphereParams, MagSphereDirectParams, MagSphereDescriptionParams
 abstract type MagSphereParams <: DeviceParams end
 
 Base.@kwdef struct MagSphereDirectParams <: MagSphereParams

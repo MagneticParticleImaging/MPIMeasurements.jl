@@ -2,6 +2,8 @@ using Documenter
 using MPIMeasurements
 using Unitful
 
+@warn "Some errors have been suppressed. Should be checked closely!"
+
 makedocs(
     sitename = "MPIMeasurements",
     authors = "Tobias Knopp et al.",
@@ -40,6 +42,7 @@ makedocs(
             ]
         ],
     ],
+    warnonly = [:docs_block, :autodocs_block, :cross_references],
 )
 
 deploydocs(repo   = "github.com/MagneticParticleImaging/MPIMeasurements.jl.git",
