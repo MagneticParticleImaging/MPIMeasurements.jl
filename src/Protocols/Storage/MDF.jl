@@ -58,7 +58,7 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+														positions::Union{Positions, AbstractArray}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -131,6 +131,30 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 		size = size,
 		snr = snr,
 		isMeanderingGrid = isMeanderingGrid
+	)
+
+	return
+end
+function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArray, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+
+	# /calibration/ subgroup
+
+	if !isnothing(deltaSampleSize)
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+	end
+
+	method = "hybrid"
+	order = "xyz"
+
+	calibsize = size(offsetFields)[1:end-1]
+	offsetFields = reshape(offsetFields, prod(calibsize), :)
+
+	mdf.calibration = MDFv2Calibration(;
+		deltaSampleSize = deltaSampleSize,
+		method = method,
+		offsetFields = offsetFields,
+		order = order,
+		size = collect(calibsize)
 	)
 
 	return
@@ -277,7 +301,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 
 	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
-	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
+	MPIFiles.acqNumPeriodsPerFrame(mdf, size(measData(mdf), 3)) # Hacky to support cases where periods of data != periods of sequence
 	offsetField_ = acqOffsetField(sequence)
 	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) || !all(x-> x isa Unitful.MagneticFlux, offsetField_) ? nothing : ustrip.(u"T", offsetField_))
 	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime) # TODO as parameter, start time from protocol
