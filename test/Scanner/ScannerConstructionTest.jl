@@ -2,7 +2,7 @@
   # Mandatory fields missing from device struct
   @testset "Incomplete Device Struct" begin
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingID")
-    @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingDepdendencies")
+    @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingDependencies")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingOptional")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingPresent")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingParams")
@@ -87,6 +87,53 @@
       @test_throws MPIMeasurements.ProtocolConfigurationError Protocol("DoesNotExist", mpiScanner)
       @test MPIMeasurements.name(Protocol(listProto[1], mpiScanner)) == listProto[1]
     end
+    @testset "Device (Re-)Loading" begin
+      dependencyDevice = getDevice(mpiScanner, "testDependency")
+      dependencyDevice.present = false
+      testDevice = getDevice(mpiScanner, "testDevice")
+      testDevice.present = false
+
+      init(mpiScanner, [dependencyDevice])
+      dependencyDevice = getDevice(mpiScanner, "testDependency")
+      testDevice = getDevice(mpiScanner, "testDevice")
+
+      @test MPIMeasurements.isPresent(testDevice) == true
+      @test MPIMeasurements.isPresent(dependencyDevice) == true
+
+      dependencyDevice.present = false
+      testDevice.present = false
+
+      init(mpiScanner, ["testDependency"])
+      dependencyDevice = getDevice(mpiScanner, "testDependency")
+      testDevice = getDevice(mpiScanner, "testDevice")
+
+      @test MPIMeasurements.isPresent(testDevice) == true
+      @test MPIMeasurements.isPresent(dependencyDevice) == true
+    end
+
   end
+
+  @testset "Load Device from TOML" begin
+    devices = Devices("TestDeviceWorkingScanner", ["testDevice", "testDependency"])
+    # Dependencies are set correctly
+    dependencyDevice = devices[2]
+    testDevice = devices[1]
+    @test hasDependency(dependencyDevice, TestDevice)
+    @test length(dependencies(dependencyDevice)) == 1
+    @test dependency(dependencyDevice, TestDevice) == testDevice
+
+    # Parameter are set correctly
+    _params = MPIMeasurements.params(testDevice)
+    @test _params.stringValue == "BAR"
+    @test _params.stringArray == ["MPI", "Measurements", "Test", "String"]
+    @test _params.enumValue == BAR
+    @test _params.enumArray == [FOO, FOO, BAR]
+    @test _params.unitValue == 11.0u"V"
+    @test _params.unitArray == [0.5u"V", 0.4u"V", 1.0u"V"]
+    @test _params.primitiveValue == 2
+    @test _params.primitveArray == [1, 2, 3, 4, 5, 6]
+    @test _params.arrayArray == [[10, 20]u"mm", [30, 40]u"mm", [50, 60]u"mm"]
+  end
+
 
 end
