@@ -393,7 +393,7 @@ function getDevices(f::Function, scanner::MPIScanner, arg)
 end
 
 
-init(scanner::MPIScanner, devices::Vector{Devices}) = init(scanner, map(deviceID, devices))
+init(scanner::MPIScanner, devices::Vector{Devices}; kwargs...) = init(scanner, map(deviceID, devices); kwargs...)
 """
     $SIGNATURES
 
