@@ -146,6 +146,22 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
   end
 end
 
+function dependenciesDFS(deviceIDs::Vector{String}, params::Dict{String, Any})
+  stack = String[deviceIDs...]
+  devices = String[]
+  
+  # Find all dependencies
+  while !isempty(stack)
+    device = pop!(stack)
+    if !in(device, devices)
+      push!(devices, device)
+      push!(stack, get(params[device], "dependencies", String[])...)
+    end
+  end
+
+  return devices
+end
+
 """
     $(SIGNATURES)
 
@@ -300,6 +316,15 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
 end
+function getDevices(scanner::MPIScanner, deviceIDs::Vector{String})
+  matchingDevices = Vector{Device}()
+  for (deviceID, device) in scanner.devices
+    if in(deviceID, deviceIDs) && isPresent(device)
+      push!(matchingDevices, device)
+    end
+  end
+  return matchingDevices
+end
 
 """
     $(SIGNATURES)
@@ -310,17 +335,7 @@ function Devices(scannerName::String, deviceIDs::Vector{String}; kwargs...)
   configDir = findConfigDir(scannerName)
   params = getScannerParams(configDir)["Devices"]
 
-  stack = String[deviceIDs...]
-  devices = String[]
-  
-  # Find all dependencies
-  while !isempty(stack)
-    device = pop!(stack)
-    if !in(device, devices)
-      push!(devices, device)
-      push!(stack, get(params[device], "dependencies", String[])...)
-    end
-  end
+  devices = dependenciesDFS(deviceIDs, params)
 
   order = filter(x -> in(x, devices), params["initializationOrder"])
   
@@ -356,7 +371,7 @@ end
 
 function getDevices(f::Function, scanner::MPIScanner, arg)
   c_ex = nothing
-  devices = getDevice(scanner, arg)
+  devices = getDevices(scanner, arg)
   if !isnothing(devices) && !isempty(devices)
     for device in devices
       try
@@ -375,6 +390,32 @@ function getDevices(f::Function, scanner::MPIScanner, arg)
     throw(c_ex)
   end
   nothing
+end
+
+
+init(scanner::MPIScanner, devices::Vector{Devices}) = init(scanner, map(deviceID, devices))
+"""
+    $SIGNATURES
+
+(Re-)initializes the given devices of a Scanner according to the current configuration file. This also initializes all dependencies of the given devices.
+This does not initialize devices that themselves depend on the given devices.
+"""
+function init(scanner::MPIScanner, deviceIDs::Vector{String} = getDeviceIDs(scanner); kwargs...)
+  configDir = scanner.configDir
+  params = getScannerParams(configDir)["Devices"]
+
+  devices = dependenciesDFS(deviceIDs, params)
+  order = filter(x -> in(x, devices), params["initializationOrder"])
+  
+  getDevices(close, scanner, order)
+
+  deviceDict = initiateDevices(configDir, params; kwargs..., order = order)
+
+  for (id, device) in deviceDict
+    scanner.devices[id] = device
+  end
+
+  return scanner
 end
 
 "Bore size of the scanner."
@@ -410,7 +451,7 @@ defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol
 Retrieve a list of all device IDs available for the scanner.
 """
 function getDeviceIDs(scanner::MPIScanner)
-  return keys(scanner.devices)
+  return map(String, collect(keys(scanner.devices)))
 end
 
 """
