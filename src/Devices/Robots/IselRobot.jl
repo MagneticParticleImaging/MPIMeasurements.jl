@@ -111,7 +111,7 @@ function _getPosition(robot::IselRobot)
   ret = queryIsel(robot, "@0P", 19)
   checkIselError(string(ret[1]))
   pos = _parseIselPos(ret[2:19])
-  return steps2mm.(pos, robot.params.stepsPermm)
+  return steps2mm(robot, pos)
 end
 
 function initSerialDevice(rob::IselRobot, params::IselRobotPortParams)
@@ -257,7 +257,7 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
     ret = queryIsel(rob, cmd)
     checkIselError(ret)
   else
-    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+    error("Velocities set not in the range of $(steps2mm(rob, rob.params.minMaxVel)/u"s"), you are trying to set: $speed")
   end
   rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
@@ -283,7 +283,7 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
     ret = queryIsel(rob, cmd)
     checkIselError(ret)
   else
-    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+    error("Velocities set not in the range of $(steps2mm(rob, rob.params.minMaxVel)/u"s"), you are trying to set: $speed")
   end
   rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
@@ -327,7 +327,8 @@ function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Velocity})
   return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-steps2mm(steps::Integer, stepsPermm::Real) = Int64(steps) / stepsPermm * u"mm"
+steps2mm(rob, steps::Vector{Integer}) = steps2mm(rob, Int64.(steps))
+steps2mm(rob::IselRobot, steps::Vector{Int64}) = steps ./ rob.params.stepsPermm * u"mm"
 
 
 """ Sets the Reference velocities of the axes x,y,z """
