@@ -40,7 +40,8 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
-  stepsPermm::Float64 = 100
+  stepsPermm::Union{Vector{Int64}, Int64} = 100
+  roundmmDigits::Int64 = 1 
 
   serial_port::String
   @add_serial_device_fields "\r"
@@ -62,7 +63,8 @@ Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
-  stepsPermm::Float64 = 100
+  stepsPermm::Union{Vector{Int64}, Int64} = 100
+  roundmmDigits::Int64 = 1
 
   description::String
   @add_serial_device_fields "\r"
@@ -236,11 +238,11 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
   waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
-  steps = mm2steps.(pos, rob.params.stepsPermm)
+  steps = mm2steps(rob, pos)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
-  vel = mm2steps.(speed, rob.params.stepsPermm)
+  vel = mm2steps(rob, speed)
 
   tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
   # calclulate the timeout needed to do the full movement
@@ -264,11 +266,11 @@ function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{V
   waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
-  steps = mm2steps.(dist, rob.params.stepsPermm)
+  steps = mm2steps(rob, dist)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
-  vel = mm2steps.(speed, rob.params.stepsPermm)
+  vel = mm2steps(rob, speed)
 
   tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
   # calclulate the timeout needed to do the full movement
@@ -315,14 +317,14 @@ function _parseIselPos(ret::AbstractString)
   return [xPos,yPos,zPos]
 end
 
-function mm2steps(len::Unitful.Length, stepsPermm::Real)
-  temp = round(ustrip(u"mm", len), digits=1) # round to 100um due to step error after setting powerless
-  return round(Int64, temp * stepsPermm)
+function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Length})
+  temp = round.(ustrip.(u"mm", len), digits=rob.params.roundmmDigits) # round to 100um due to step error after setting powerless
+  return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-function mm2steps(len::Unitful.Velocity, stepsPermm::Real)
-  temp = round(ustrip(u"mm/s", len), digits=1) # round to 100um due to step error after setting powerless
-  return round(Int64, temp * stepsPermm)
+function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Velocity})
+  temp = round.(ustrip.(u"mm/s", len), digits=rob.params.roundmmDigits) # round to 100um due to step error after setting powerless
+  return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
 steps2mm(steps::Integer, stepsPermm::Real) = Int64(steps) / stepsPermm * u"mm"
@@ -330,7 +332,7 @@ steps2mm(steps::Integer, stepsPermm::Real) = Int64(steps) / stepsPermm * u"mm"
 
 """ Sets the Reference velocities of the axes x,y,z """
 function setRefVelocity(rob::IselRobot, vel::Vector{<:Unitful.Velocity})
-  vel = mm2steps.(vel, rob.params.stepsPermm)
+  vel = mm2steps(rob, vel)
   minVel = rob.params.minMaxVel[1]
   maxVel = rob.params.minMaxVel[2]
 
