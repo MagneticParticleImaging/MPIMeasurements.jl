@@ -46,7 +46,7 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false, order::Vector{String} = get(deviceParams, "initializationOrder", String[]))
+function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false, order::Vector{String} = get(devicesParams, "initializationOrder", String[]))
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
