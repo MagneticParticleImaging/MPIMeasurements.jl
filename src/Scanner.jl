@@ -59,63 +59,65 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
     end
 
     if !isnothing(params)
-      deviceType = pop!(params, "deviceType")
-
-      dependencies_ = Dict{String, Union{Device, Missing}}()
-      if haskey(params, "dependencies")
-        deviceDepencencies = pop!(params, "dependencies")
-        for dependencyID in deviceDepencencies
-          dependencies_[dependencyID] = missing
-        end
-      end
-
-      DeviceImpl = getConcreteType(Device, deviceType)
-      if isnothing(DeviceImpl)
-        error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
-      end
-      validateDeviceStruct(DeviceImpl)
-
-      paramsInst = getFittingDeviceParamsType(params, deviceType)
-      if isnothing(paramsInst)
-        error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
-      end
-
-      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
-    else
-      throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
-    end
-  end
-
-  # Set dependencies for all devices
-  for device in Base.values(devices)
-    for dependencyID in keys(dependencies(device))
-      device.dependencies[dependencyID] = devices[dependencyID]
-    end
-
-    if !checkDependencies(device)
-      throw(ScannerConfigurationError("Unspecified dependency error in device with "
-                                     *"ID `$(deviceID(device))`. The device depends "
-                                     *"on the following device IDs: $(keys(device.dependencies))"))
-    end
-  end
-
-  # Initiate all devices in the specified order
-  for deviceID in devicesParams["initializationOrder"]
-    try
-      init(devices[deviceID])
-      if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+      dependencies = filter(kv -> in(kv[1], get(params, "dependencies", String[])), devices)
+      device = Device(deviceID, params; dependencies = dependencies, robust = robust)
+ 
+      if !isOptional(device) && !isPresent(device)
         @error "The device with ID `$deviceID` should be present but isn't."
       end
-    catch e
-      if !robust
-        rethrow()
-      else
-        @warn e
-      end
+
+      devices[deviceID] = device
     end
+
   end
 
   return devices
+end
+
+function Device(deviceID::String, deviceParams::Dict{String, Any}; dependencies::Dict{String, Device}, robust::Bool = false)
+  device = nothing
+  params = copy(deviceParams)
+
+  # Remove meta-data keys from dict
+  deviceType = pop!(params, "deviceType")
+  deviceDepencencies = pop!(params, "dependencies", String[])
+
+  try 
+    # Set dependencies
+    dependencies_ = Dict{String, Union{Device, Missing}}()
+    for dependencyID in deviceDepencencies
+      dependencies_[dependencyID] = get(dependencies, dependencyID, missing)
+    end
+
+    # Find valid device struct
+    DeviceImpl = getConcreteType(Device, deviceType)
+    if isnothing(DeviceImpl)
+      error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
+    end
+    validateDeviceStruct(DeviceImpl)
+
+    # Find fitting parameter struct
+    paramsInst = getFittingDeviceParamsType(params, deviceType)
+    if isnothing(paramsInst)
+      error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
+    end
+
+    # Construct device
+    device = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
+    
+    # Initialize device
+    checkDependencies(device)
+    init(device)
+
+  catch e
+    if !robust
+      rethrow()
+    else
+      @warn e
+    end
+  end
+
+  return device
 end
 
 function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
