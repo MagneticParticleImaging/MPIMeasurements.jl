@@ -2,7 +2,7 @@ import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient, scannerDatasetStore,
-       name, configDir, generalParams, getDevice, getDevices, getSequenceList,
+       name, configDir, generalParams, getDevice, getDevices, Device, Devices, getSequenceList,
        asyncMeasurement, SequenceMeasState, asyncProducer,
        getProtocolList, getTransferFunctionList
 
@@ -46,11 +46,11 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false)
+function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false, order::Vector{String} = get(deviceParams, "initializationOrder", String[]))
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
-  for deviceID in devicesParams["initializationOrder"]
+  for deviceID in order
     params = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
@@ -207,23 +207,10 @@ mutable struct MPIScanner
   function MPIScanner(name::AbstractString; robust=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
-    filename = nothing
-    configDir = nothing
-    for path in scannerConfigurationPath
-      configDir = joinpath(path, name)
-      if isdir(configDir)
-        filename = joinpath(configDir, "Scanner.toml")
-        break
-      end
-    end
-
-    if isnothing(filename)
-      throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
-    end
-
+    configDir = findConfigDir(name)
+    params = getScannerParams(configDir)
+    
     @debug "Instantiating scanner `$name` from configuration file at `$filename`."
-
-    params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(configDir, params["Devices"], robust = robust)
@@ -234,6 +221,23 @@ mutable struct MPIScanner
   end
 end
 
+function findConfigDir(name::AbstractString)
+  for path in scannerConfigurationPath
+    configDir = joinpath(path, name)
+    if isdir(configDir)
+      return configDir
+    end
+  end
+  return nothing
+end
+
+function getScannerParams(configDir::String)
+  filename = isnothing(configDir) ? nothing : joinpath(configDir, "Scanner.toml")
+  if isnothing(filename)
+    throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
+  end
+  return TOML.parsefile(filename)
+end
 """
     $(SIGNATURES)
 
@@ -270,6 +274,15 @@ getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 """
     $(SIGNATURES)
 
+Initialize and retrieve a device by its `deviceID` from a scanners configuration file. Also initializes the devices dependency tree according to the initialization order defined in the configuration file.
+"""
+function Device(scannerName::String, deviceID::String; kwargs...) 
+  devices = Devices(scannerName, [deviceID]; kwargs...)
+  return isempty(devices) ? nothing : first(devices)
+end
+"""
+    $(SIGNATURES)
+
 Retrieve all devices of a specific `deviceType`. Returns an empty vector if none are found
 """
 function getDevices(scanner::MPIScanner, deviceType::Type{T}) where {T<:Device}
@@ -286,6 +299,34 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   push!(knownDeviceTypes, Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
+end
+
+"""
+    $(SIGNATURES)
+
+Initialize and retrieve devices by their`deviceID` from a scanners configuration file. Also initializes the devices dependency trees according to the initialization order defined in the configuration file..
+"""
+function Devices(scannerName::String, deviceIDs::Vector{String}; kwargs...)
+  configDir = findConfigDir(scannerName)
+  params = getScannerParams(configDir)["Devices"]
+
+  stack = String[deviceIDs...]
+  devices = String[]
+  
+  # Find all dependencies
+  while !isempty(stack)
+    device = pop!(stack)
+    if !in(device, devices)
+      push!(devices, device)
+      push!(stack, get(params[device], "dependencies", String[])...)
+    end
+  end
+
+  order = filter(x -> in(x, devices), params["initializationOrder"])
+  
+  deviceDict = initiateDevices(configDir, params; kwargs..., order = order)
+
+  return [deviceDict[id] for id in deviceIDs]
 end
 
 """
