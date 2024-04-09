@@ -97,23 +97,28 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   try
-    seq, perm, offsets, calibsize = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerPatch = protocol.params.dfPeriodsPerOffset)
+    seq, perm, offsets, calibsize, numPeriodsPerFrame = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerOffset = protocol.params.dfPeriodsPerOffset)
 
     # For each patch assign nothing if invalid or otherwise index in "proper" frame
-    temp = Vector{Union{Int64, Nothing}}(nothing, acqNumPeriodsPerFrame(seq))
+    patchPerm = Vector{Union{Int64, Nothing}}(nothing, numPeriodsPerFrame)
     if !protocol.params.sortPatches
-      perm = filter(in(perm), 1:acqNumPeriodsPerFrame(seq))
+      # perm is arranged in a way that the first offset dimension switches the fastest
+      # if the patches should be saved in the order they were measured, we need to sort perm
+      perm = sort(perm)
     end
+     
+    # patchPerm contains the "target" for every patch that is measured, nothing for discarded patches, different indizes for non-averaged patches, identical indizes for averaged-patches
     # Same target for all frames to be averaged
     part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
     for (i, patches) in enumerate(Iterators.partition(perm, part))
-      temp[patches] .= i
+      patchPerm[patches] .= i
     end
 
     protocol.sequence = seq
-    protocol.patchPermutation = temp
+    protocol.patchPermutation = patchPerm
     protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
     protocol.calibsize = calibsize
+    @debug "Prepared Protocol Sequence: $(length(patchPerm)) measured and $(length(perm)) valid patches in Permutation"
   catch e
     throw(e)
   end
@@ -279,7 +284,6 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   # Prepare buffering structures:
   # RedPitaya-> MPSBuffer -> Splitter --> FrameBuffer{Mmap}
   #                                   |-> DriveFieldBuffer 
-  @debug "Allocating buffer for $numFrames frames"
   numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
   averages = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
   numFrames = div(numValidPatches, averages)
@@ -405,10 +409,12 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
   acqNumFrames(sequence, size(data, 4))
   
+  periodsPerOffset = size(protocol.patchPermutation,1)÷size(protocol.offsetfields,1)
+
   offsetPerm = zeros(Int64, size(data, 3))
   for (index, patch) in enumerate(protocol.patchPermutation)
     if !isnothing(patch)
-      offsetPerm[patch] = index 
+      offsetPerm[patch] = index÷periodsPerOffset 
     end
   end
   offsets = protocol.offsetfields[offsetPerm, :]

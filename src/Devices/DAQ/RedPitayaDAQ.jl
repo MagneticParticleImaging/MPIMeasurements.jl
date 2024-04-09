@@ -339,7 +339,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     @add_batch batch samplesPerStep(daq.rpc)
   end
   daq.samplesPerStep = result[3][1]
-
+  
   rampingSteps = 0
   fractionSteps = 0
   if !isempty(daq.rampingChannel)
@@ -467,7 +467,7 @@ function getTiming(daq::RedPitayaDAQ)
 end
 
 
-function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerPatch::Int64 = 1)
+function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerOffset::Int64 = 1)
   cpy = deepcopy(base)
 
   # Prepare offset sequences
@@ -482,10 +482,31 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
     end
   end
 
-  # Compute step duration, assumption step is held for df * numPeriodsPerPatch
-  stepfreq = 125e6/lcm(dfDivider(cpy))/numPeriodsPerPatch
+  stepfreq = 125e6/lcm(dfDivider(cpy))
+  if stepfreq > 10e3
+    if stepfreq/numPeriodsPerOffset > 10e3
+      error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50 and at least $(ceil(stepfreq/10e3/50)*50)!")
+    else
+      if (numPeriodsPerOffset/50 != numPeriodsPerOffset÷50)
+        error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50!")
+      else
+        # if the DF period is shorter than 0.1ms (10kHz) we use 50 DF periods for every step, this allows us to use DF periods of up to 10kHz*50=500kHz and results in a worst case wait time inefficiency of 0.1ms*50 = 5ms
+        # it would be poossible to use other numbers for periodsPerStep, but this will probably work best for both extremes
+        periodsPerStep = 50
+        stepfreq = stepfreq/periodsPerStep
+      end
+    end
+  else
+    # if a DF period is longer than 0.1ms we can just use a single step for every period, ensuring most efficient use of waittimes
+    periodsPerStep = 1
+  end
+
+  stepsPerOffset = numPeriodsPerOffset÷periodsPerStep
+
+  # Compute step duration
   stepduration = (1/stepfreq)
-  
+
+  @debug "prepareProtocolSequences: Stepduration: $stepduration, Stepfreq: $stepfreq"
   allSteps = nothing
   enables = nothing
   hbridges = nothing
@@ -494,28 +515,55 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
   else
     offsets, allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy, stepduration)
   end
-
+  
   numOffsets = length(first(allSteps)[2])
   df = lcm(dfDivider(cpy))
-  # Increasing the divider instead of repeating values allows the user to tune offset length s.t. the RP can keep up
-  divider = df * numOffsets * numPeriodsPerPatch
+  
+  numMeasOffsets = length(permutation)
+  numWaitOffsets = numOffsets-numMeasOffsets
+  numPeriodsPerFrame = (numMeasOffsets * stepsPerOffset + numWaitOffsets) * periodsPerStep
 
-  # offsets and permutation refer to offsets without multiple df per period
-  # As the signals are held longer, we have to extend each offset and permutation for numPeriodsPerPatch
-  # s.t. the correct patches can be cut out later
-  if numPeriodsPerPatch > 1
-    updatedPermutation = Int64[]
-    for patch in permutation
-      start = numPeriodsPerPatch * (patch - 1) + 1
-      push!(updatedPermutation, map(x->start + x, 0:numPeriodsPerPatch-1)...)
+  divider = df * numPeriodsPerFrame
+
+  # offsets and permutation refer to offsets without multiple df per period and include every offset only once
+  # We need to perform two operations:
+  # 1. build an index mask that handles the repetition of offsets, such that offsets[mask] contains the desired repetitions of offsets (not the wait times)
+  stepRepetition = collect(1:numOffsets)
+  if numPeriodsPerOffset > 1
+
+    stepRepetition = Int[]
+    for i in 1:numOffsets
+      if i in permutation # if offset i is a offset that should be saved
+        append!(stepRepetition, repeat([i],stepsPerOffset)) # we have to repeat it by the amount of steps per Offset
+      else
+        push!(stepRepetition, i) # otherwise we just output it once
+      end
     end
-    permutation = updatedPermutation
-    offsets = repeat(offsets, inner = Tuple([i == 1 ? numPeriodsPerPatch : 1 for i = 1:ndims(offsets)]))
+
+    # apply step repetition to permutation, every valid step is repeated stepsPerOffset times
+    updatedPermutation = repeat(permutation, inner=stepsPerOffset)
+    # to remove the repeated values, add 1 to all indizes starting from each value that is identical to its previous neighbor
+    sortedIdx = sortperm(updatedPermutation)
+    for i=2:length(updatedPermutation)
+      if updatedPermutation[sortedIdx[i]] == updatedPermutation[sortedIdx[i-1]]
+        updatedPermutation[sortedIdx[i:end]] .+= 1 
+      end
+    end
+   
+    offsets = offsets[stepRepetition,:]
+
+    permutation = Int64[]
+    for patch in updatedPermutation
+      idx = (patch-1)*periodsPerStep+1:patch*periodsPerStep
+      append!(permutation, idx)
+    end
+
   end
+  @debug "prepareProtocolSequences: Permutation after update" permutation offsets
 
   # Generate actual StepwiseElectricalChannel
   for (ch, steps) in allSteps
-    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps), enable = enables[ch])
+    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps)[stepRepetition], enable = enables[ch][stepRepetition])
     fieldMap[ch][id(stepwise)] = stepwise
 
     # Generate H-Bridge channels
@@ -525,13 +573,13 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
       hbridgeValues = hbridges[ch]
       for (i, hbridgeChannel) in enumerate(hbridgeChannels)
         hsteps = map(x -> x[i], hbridgeValues)
-        hbridgeStepwise = StepwiseElectricalChannel(id = hbridgeChannel, divider = divider, values = hsteps, enable = fill(true, length(steps)))
+        hbridgeStepwise = StepwiseElectricalChannel(id = hbridgeChannel, divider = divider, values = hsteps[stepRepetition], enable = fill(true, length(stepRepetition)))
         fieldMap[ch][hbridgeChannel] = hbridgeStepwise
       end
     end
   end
 
-  return cpy, permutation, offsets, calibsize
+  return cpy, permutation, offsets, calibsize, numPeriodsPerFrame
 end
 
 function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
@@ -586,7 +634,7 @@ function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalCh
     end
   end
 
-  # Compute switch timing, assumption step is held for df * numPeriodsPerPatch
+  # Compute switch timing
   deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
   maxTime = maximum(map(ustrip, deadTimes))
   numSwitchPeriods = Int64(ceil(maxTime/stepduration))

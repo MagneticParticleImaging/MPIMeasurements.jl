@@ -58,6 +58,7 @@ function FrameBuffer(sequence::Sequence)
   rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
   numPeriods = acqNumPeriodsPerFrame(sequence)
   numChannel = length(rxChannels(sequence))
+  @debug "Creating FrameBuffer with size $rxNumSamplingPoints x $numChannel x $numPeriods x $numFrames"
   buffer = zeros(Float32, rxNumSamplingPoints, numChannel, numPeriods, numFrames)
   return FrameBuffer(1, buffer)
 end
@@ -69,6 +70,7 @@ function FrameBuffer(protocol::Protocol, file::String, sequence::Sequence)
   return FrameBuffer(protocol, file, Float32, (rxNumSamplingPoints, numChannel, numPeriods, numFrames))
 end
 function FrameBuffer(protocol::Protocol, file::String, args...)
+  @debug "Creating memory-mapped FrameBuffer with size $(args[2])"
   mapped = mmap!(protocol, file, args...)
   return FrameBuffer(1, mapped)
 end
