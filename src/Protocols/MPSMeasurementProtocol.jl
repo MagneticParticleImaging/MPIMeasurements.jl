@@ -125,13 +125,31 @@ function timeEstimate(protocol::MPSMeasurementProtocol)
   est = "Unknown"
   if !isnothing(sequence(protocol))
     params = protocol.params
-    seq = params.sequence
-    totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
-    samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
-    time = totalTime * 1u"s"
-    est = string(time)
-    @info "The estimated duration is $est s."
+    seq = sequence(protocol)
+    fgFrames = params.fgFrames * acqNumFrameAverages(seq)
+    bgFrames = params.measureBackground*params.bgFrames * acqNumFrameAverages(seq)
+    txSamplesPerFrame = lcm(dfDivider(seq)) * size(protocol.patchPermutation, 1)
+    fgTime = (txSamplesPerFrame * fgFrames) / txBaseFrequency(seq) |> u"s"
+    bgTime = (txSamplesPerFrame * bgFrames) / txBaseFrequency(seq) |> u"s"
+    function timeFormat(t)
+      v = ustrip(u"s",t)
+      if v>3600  
+        x = Int((v%3600)÷60)
+        return "$(Int(v÷3600)):$(if x<10; " " else "" end)$(x) h"
+      elseif v>60
+        x = round(v%60,digits=1)
+        return "$(Int(v÷60)):$(if x<10; " " else "" end)$(x) min"
+      elseif v>0.5
+        return "$(round(v,digits=2)) s"
+      elseif v>0.5e-3
+        return "$(round(v*1e3,digits=2)) ms"
+      else
+        return "$(round(v*1e6,digits=2)) µs"
+      end
+    end 
+    perc_wait = round(Int,sum(isnothing.(protocol.patchPermutation))/size(protocol.patchPermutation,1)*100)
+    est = "FG: $(timeFormat(fgTime)) ($(perc_wait)% waiting), BG: $(timeFormat(bgTime))"
+    @info "The estimated duration is FG: $fgTime ($(perc_wait)% waiting), BG: $bgTime."
   end
   return est
 end
@@ -180,7 +198,7 @@ function performMeasurement(protocol::MPSMeasurementProtocol)
   acqNumFrames(sequence(protocol), protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
-  protocol.unit = "Frames"
+  protocol.unit = "Offsets"
   measurement(protocol)
   deviceBuffers = protocol.seqMeasState.deviceBuffers
   push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
@@ -366,7 +384,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    measFramesDone = protocol.seqMeasState.sequenceBuffer.target.counter-1
+    framesDone = length(unique(protocol.patchPermutation[1:measFramesDone]))-1
     reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
