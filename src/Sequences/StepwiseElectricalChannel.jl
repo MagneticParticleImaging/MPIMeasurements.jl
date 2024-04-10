@@ -9,14 +9,14 @@ Base.@kwdef mutable struct StepwiseElectricalChannel <: AcyclicElectricalTxChann
   "Values corresponding to the individual steps."
   values::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
   "TBD"
-  enable::Vector{Bool}
+  enable::Vector{Bool} = Bool[]
 end
 
 channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseElectricalChannel}, channelDict::Dict{String, Any})
   divider = channelDict["divider"]
-  enable = haskey(channelDict, "enable") ? parsePossibleURange(channelDict["enable"]) : Bool[]
+  enable = haskey(channelDict, "enable") ? channelDict["enable"] : Bool[]
   values = parsePossibleURange(channelDict["values"])
   if eltype(values) <: Unitful.Current
     values = values .|> u"A"

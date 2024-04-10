@@ -67,6 +67,14 @@ function getindex(ch::PeriodicElectricalChannel, index::String)
   throw(KeyError(index))
 end
 setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::Integer) = components(ch)[i] = comp
+function setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::String)
+  for (index, cmp) in enumerate(components(ch))
+    if isequal(id(cmp), i)
+      return setindex!(field, comp, index)
+    end
+  end
+  push!(ch, comp)
+end
 firstindex(ch::PeriodicElectricalChannel) = start_(ch)
 lastindex(ch::PeriodicElectricalChannel) = length(ch)
 keys(ch::PeriodicElectricalChannel) = map(id, ch)

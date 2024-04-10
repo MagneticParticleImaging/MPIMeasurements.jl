@@ -24,10 +24,15 @@ end
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
+  range::TxValueRange = BOTH
+  hbridge::Union{DAQHBridge, Nothing} = nothing
+  switchTime::typeof(1.0u"s") = 0.0u"s"
+  switchEnable::Bool = true
 end
 
 function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
-  calib = nothing
+  splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelIdx] = value["channel"]
   if haskey(dict, "calibration")
     calib = uparse.(dict["calibration"])
 
@@ -38,8 +43,25 @@ function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, 
     else
       error("The values have to be either given as a V/T or in V/A. You supplied the type `$(eltype(calib))`.")
     end
+    splattingDict[:calibration] = calib
   end
-  return RedPitayaLUTChannelParams(channelIdx=dict["channel"], calibration = calib)
+
+  if haskey(value, "hbridge")
+    splattingDict[:hbridge] = createDAQChannels(DAQHBridge, value["hbridge"])
+  end
+
+  if haskey(value, "range")
+    splattingDict[:range] = value["range"]
+  end
+
+  if haskey(value, "switchTime")
+    splattingDict[:switchTime] = uparse(value["switchTime"])
+  end
+
+  if haskey(value, "switchEnable")
+    splattingDict[:switchEnable] = value["switchEnable"]
+  end
+  return RedPitayaLUTChannelParams(; splattingDict...)
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
@@ -403,6 +425,408 @@ function getTiming(daq::RedPitayaDAQ)
   sampleTiming = (start=timing.start * daq.samplesPerStep, down=timing.down * daq.samplesPerStep, finish=timing.finish * daq.samplesPerStep)
   return sampleTiming
 end
+
+
+function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerOffset::Int64 = 1)
+  cpy = deepcopy(base)
+
+  # Prepare offset sequences
+  offsetVector = ProtocolOffsetElectricalChannel[]
+  fieldMap = Dict{ProtocolOffsetElectricalChannel, MagneticField}()
+  calibsize = Int64[]
+  for field in cpy
+    for channel in channels(field, ProtocolOffsetElectricalChannel)
+      push!(offsetVector, channel)
+      fieldMap[channel] = field
+      push!(calibsize, length(values(channel)))
+    end
+  end
+
+  stepfreq = 125e6/lcm(dfDivider(cpy))
+  if stepfreq > 10e3
+    if stepfreq/numPeriodsPerOffset > 10e3
+      error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50 and at least $(ceil(stepfreq/10e3/50)*50)!")
+    else
+      if (numPeriodsPerOffset/50 != numPeriodsPerOffset÷50)
+        error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50!")
+      else
+        # if the DF period is shorter than 0.1ms (10kHz) we use 50 DF periods for every step, this allows us to use DF periods of up to 10kHz*50=500kHz and results in a worst case wait time inefficiency of 0.1ms*50 = 5ms
+        # it would be poossible to use other numbers for periodsPerStep, but this will probably work best for both extremes
+        periodsPerStep = 50
+        stepfreq = stepfreq/periodsPerStep
+      end
+    end
+  else
+    # if a DF period is longer than 0.1ms we can just use a single step for every period, ensuring most efficient use of waittimes
+    periodsPerStep = 1
+  end
+
+  stepsPerOffset = numPeriodsPerOffset÷periodsPerStep
+
+  # Compute step duration
+  stepduration = (1/stepfreq)
+
+  @debug "prepareProtocolSequences: Stepduration: $stepduration, Stepfreq: $stepfreq"
+  allSteps = nothing
+  enables = nothing
+  hbridges = nothing
+  if any(x -> requireHBridge(x, daq), offsetVector)
+    offsets, allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy, stepduration)
+  else
+    offsets, allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy, stepduration)
+  end
+  
+  numOffsets = length(first(allSteps)[2])
+  df = lcm(dfDivider(cpy))
+  
+  numMeasOffsets = length(permutation)
+  numWaitOffsets = numOffsets-numMeasOffsets
+  numPeriodsPerFrame = (numMeasOffsets * stepsPerOffset + numWaitOffsets) * periodsPerStep
+
+  divider = df * numPeriodsPerFrame
+
+  # offsets and permutation refer to offsets without multiple df per period and include every offset only once
+  # We need to perform two operations:
+  # 1. build an index mask that handles the repetition of offsets, such that offsets[mask] contains the desired repetitions of offsets (not the wait times)
+  stepRepetition = collect(1:numOffsets)
+  if numPeriodsPerOffset > 1
+
+    stepRepetition = Int[]
+    for i in 1:numOffsets
+      if i in permutation # if offset i is a offset that should be saved
+        append!(stepRepetition, repeat([i],stepsPerOffset)) # we have to repeat it by the amount of steps per Offset
+      else
+        push!(stepRepetition, i) # otherwise we just output it once
+      end
+    end
+
+    # apply step repetition to permutation, every valid step is repeated stepsPerOffset times
+    updatedPermutation = repeat(permutation, inner=stepsPerOffset)
+    # to remove the repeated values, add 1 to all indizes starting from each value that is identical to its previous neighbor
+    sortedIdx = sortperm(updatedPermutation)
+    for i=2:length(updatedPermutation)
+      if updatedPermutation[sortedIdx[i]] == updatedPermutation[sortedIdx[i-1]]
+        updatedPermutation[sortedIdx[i:end]] .+= 1 
+      end
+    end
+   
+    offsets = offsets[stepRepetition,:]
+
+    permutation = Int64[]
+    for patch in updatedPermutation
+      idx = (patch-1)*periodsPerStep+1:patch*periodsPerStep
+      append!(permutation, idx)
+    end
+
+  end
+  @debug "prepareProtocolSequences: Permutation after update" permutation offsets
+
+  # Generate actual StepwiseElectricalChannel
+  for (ch, steps) in allSteps
+    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps)[stepRepetition], enable = enables[ch][stepRepetition])
+    fieldMap[ch][id(stepwise)] = stepwise
+
+    # Generate H-Bridge channels
+    if haskey(hbridges, ch)
+      offsetChannel = channel(daq, id(ch))
+      hbridgeChannels = id(offsetChannel.hbridge)
+      hbridgeValues = hbridges[ch]
+      for (i, hbridgeChannel) in enumerate(hbridgeChannels)
+        hsteps = map(x -> x[i], hbridgeValues)
+        hbridgeStepwise = StepwiseElectricalChannel(id = hbridgeChannel, divider = divider, values = hsteps[stepRepetition], enable = fill(true, length(stepRepetition)))
+        fieldMap[ch][hbridgeChannel] = hbridgeStepwise
+      end
+    end
+  end
+
+  return cpy, permutation, offsets, calibsize, numPeriodsPerFrame
+end
+
+function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
+  switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
+  switchingChannel = offsetVector[switchingIndices]
+  regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  allEnables = Dict{ProtocolOffsetElectricalChannel, Vector{Union{Bool, Missing}}}()
+  validSteps = Union{Bool, Missing}[]
+
+  # Prepare values with missing for h-bridge switch
+  # Permute patches by considering quadrants. Use lower bits of number to encode permutations
+  # for example 011 means channel 1 is disabled, channel 2 and 3 h-bridge is enabled
+  for comb in 0:2^length(switchingChannel)-1
+    quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
+
+    offsets = Vector{Vector{Any}}()
+
+    # Same order here as in Iterators.flatten below
+    for ch in regularChannel
+      push!(offsets, values(ch))
+    end
+    for (i, isPositive) in enumerate(quadrant)
+      push!(offsets, values(switchingChannel[i], isPositive))
+    end
+
+    orderedChannel = collect(Iterators.flatten((regularChannel, switchingChannel)))
+
+    # For each quadrant we can generate the offsets individually
+    quadrantSteps, couldPause, anySwitching, perm = prepareOffsetSwitches(offsets, orderedChannel, daq, stepduration)
+
+    for (i, ch) in enumerate(orderedChannel[perm])
+      steps = get(allSteps, ch, [])
+      enables = get(allEnables, ch, Union{Bool, Missing}[])
+      push!(steps, quadrantSteps[i]...)
+      push!(enables, map(x-> channel(daq, id(ch)).switchEnable ? true : !x, couldPause[i])...)
+
+      # If not at the end then add missing, here H-bridge switches will be inserted later
+      if comb != 2^length(switchingChannel)-1
+        push!(steps, missing)
+        push!(enables, missing)
+      end
+
+      allSteps[ch] = steps
+      allEnables[ch] = enables
+    end
+
+    # Steps are valid if no channel has a switch pause
+    push!(validSteps, map(!, anySwitching)...)
+    if comb != 2^length(switchingChannel)-1
+      push!(validSteps, missing)
+    end
+  end
+
+  # Compute switch timing
+  deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
+  maxTime = maximum(map(ustrip, deadTimes))
+  numSwitchPeriods = Int64(ceil(maxTime/stepduration))
+
+  hbridges = prepareHBridgeLevels(allSteps, daq, numSwitchPeriods)
+
+  # Set enable to false during hbridge switching
+  for (ch, enables) in allEnables
+    temp = Bool[]
+    foreach(x-> ismissing(x) ? push!(temp, fill(false, numSwitchPeriods)...) : push!(temp, x), enables)
+    allEnables[ch] = temp
+  end
+
+  # Likewise set valid to false during hbridge switching
+  tempValid = Bool[]
+  foreach(x-> ismissing(x) ? push!(tempValid, fill(false, numSwitchPeriods)...) : push!(tempValid, x), validSteps)
+  validSteps = tempValid
+
+  # Prepare H-Bridge pauses
+  for (ch, steps) in allSteps
+    temp = []
+    # Add numSwitchPeriods 0 for every missing value
+    foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
+    allSteps[ch] = temp
+  end
+
+  # Generate offsets without permutation
+  offsets = map(values, offsetVector)
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  # Map each offset combination to its original index
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Permute offsets
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> validSteps[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Pause/switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, validSteps))]
+
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
+
+  return permoffsets, allSteps, allEnables, hbridges, patchPermutation
+end
+
+function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
+  
+  offsets = map(values, offsetVector)
+  steps, couldPause, anySwitching, perm = prepareOffsetSwitches(offsets, offsetVector, daq, stepduration)
+  validSteps = map(!, anySwitching)
+  for (i, ch) in enumerate(offsetVector[perm])
+    allSteps[ch] = steps[i]
+    enables[ch] = map(x-> channel(daq, id(ch)).switchEnable ? true : !x, couldPause[i])
+  end
+
+  # Map each offset combination to its original index
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Permute offsets
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> validSteps[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, validSteps))]
+  
+  hbridges = prepareHBridgeLevels(allSteps, daq)
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
+  
+  return permoffsets, allSteps, enables, hbridges, patchPermutation
+end
+
+function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ, switchSteps::Int64 = 0)
+  hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  for ch in filter(ch -> channel(daq, id(ch)).range == HBRIDGE , keys(allSteps))
+    offsetChannel = channel(daq, id(ch))
+    steps = allSteps[ch]
+    hsteps = []
+    for (i, step) in enumerate(steps)
+      if ismissing(step) # Assumes only one missing per switch and no missing at last index
+        push!(hsteps, fill(level(offsetChannel.hbridge, steps[i + 1]), switchSteps)...)
+      else
+        push!(hsteps, level(offsetChannel.hbridge, step))
+      end
+    end
+    hbridges[ch] = hsteps
+  end
+  return hbridges
+end
+
+function requireHBridge(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
+  offsets = values(offsetChannel)
+  ch = channel(daq, id(offsetChannel))
+  if ch.range == BOTH
+    return false
+  elseif ch.range == HBRIDGE
+    # Assumption protocol offset channel can only produce one sign change
+    # Consider 0 to be "positive"
+    first = offsets[1]
+    last = offsets[end]
+    return signbit(first) != signbit(last) && (!iszero(first) && !iszero(last))
+  else
+    error("Unexpected channel range")
+  end
+end
+
+function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, stepduration::Float64) where T
+  switchSteps = Dict{ProtocolOffsetElectricalChannel, Int64}()
+  for ch in channels
+    daqChannel = channel(daq, id(ch))
+    if !iszero(daqChannel.switchTime)
+      switchSteps[ch] = Int64(ceil(ustrip(u"s", daqChannel.switchTime/stepduration)))
+    end
+  end
+
+  if isempty(switchSteps)
+    offsets = prepareOffsets(offsets, daq)
+    return offsets, [fill(false, length(first(offsets))) for ch in channels], fill(false, length(first(offsets))), 1:length(channels)
+  end
+
+  # Sorting is not optimal, but allows us in the next step to consider pauses individually and not have to take max of all possible pauses at a point
+  perm = sortperm(map(x-> haskey(switchSteps, x) ? switchSteps[x] : 0, channels))
+
+
+  # The idea is to realize the following pattern for n-channel (shown with three: x, y, z)
+  # A switch S_x means the next "proper" offset value is to be repeated S_x times, the amount of switch steps x requires
+  # x_i means the i'th value of the x offsets
+  # ()_i means loop the pattern in the bracket i times 
+
+  # i = number of x offsets, j = # y offsets , k = # z offsets
+  # x: (S_z - S_y (S_y - S_ x (S_x, x_i)_i)_j)_k 
+  # x: (S_z - S_y (S_y - S_ x (S_x, y_j)_i)_j)_k
+  # x: (S_z - S_y (S_y - S_ x (S_x, z_k)_i)_j)_k
+
+  sortedOffsets = offsets[perm]
+  sortedChannels = channels[perm]
+  sortedSwitchSteps = map(ch -> get(switchSteps, ch, 0), sortedChannels)
+
+  sortedOffsetsWithSwitches = []
+  sortedCouldPause = []
+  anyChannelSwitching = Bool[]
+
+  # Each channel will add the same switch "pauses"
+  # This array contains the precomputed S_x, S_y - S_x, ...,
+  sortedLoopSteps = zeros(Int64, size(sortedSwitchSteps))
+  previous = 0
+  for (i, pause) in enumerate(sortedSwitchSteps)
+    sortedLoopSteps[i] = pause - previous
+    previous = pause
+  end
+
+  # The pattern will be constructed with a "nested" for loop.
+  # However, the nesting depth depends on the number of channels. To make this generic to n-channel we will use CartesianIndices
+  iterations = map(length, sortedOffsets)
+  loop = CartesianIndices(Tuple(iterations))
+
+  # Here we want to have a loop as follows (but generic for n-channels):
+  # for ch in channels
+  #   for k = 1:length(z)
+  #     for j = 1:length(y)
+  #       for i = 1:length(x)
+  #         # ... create pattern
+  for (channelIdx, channel) in enumerate(sortedChannels)
+    offsetVec = sortedOffsets[channelIdx]
+    resultOffsets = eltype(offsetVec)[] # Store the offsets of the current channel
+    resultCouldPause = Bool[] # Store when the current channel doesn't need to send (i.e others switch and he doesn't yet)
+    resultAnySwitching = Bool[] # Store when any channel is switching
+
+    previous = CartesianIndex(Tuple(fill(-1, length(iterations)))) # This will be used to detect which index is currently "running"/changing
+    for indices in eachindex(loop)
+      value = offsetVec[indices[channelIdx]]
+
+      # Apply (loop) switch steps for each changing index, i.e. an index that is not equal to its previous iteration value
+      requiredSwitches = map(!, iszero.(Tuple(indices - previous)))
+
+      # Compute how many switching "pauses" are to be inserted
+      switches = 0
+      switchIndices = findall(requiredSwitches)
+      if !isempty(switchIndices)
+        switches = sum(sortedLoopSteps[findall(requiredSwitches)])
+      end
+      # If the current channel is switching, we need to subtract that from couldPause
+      ownSwitches = in(channelIdx, switchIndices) ? sortedSwitchSteps[channelIdx] : 0
+
+      # + 1 is for the actual offset
+      push!(resultOffsets, fill(value, 1 + switches)...)
+      push!(resultCouldPause, vcat(fill(true, switches - ownSwitches), fill(false, 1 + ownSwitches))...)
+
+      # anySwitching only needs to be computed once
+      if isempty(anyChannelSwitching)
+        push!(resultAnySwitching, push!(fill(true, switches), false)...)
+      end
+
+      previous = indices
+    end
+    
+    push!(sortedOffsetsWithSwitches, resultOffsets)
+    push!(sortedCouldPause, resultCouldPause)
+    if isempty(anyChannelSwitching)
+      anyChannelSwitching = resultAnySwitching
+    end
+  end
+
+  return sortedOffsetsWithSwitches, sortedCouldPause, anyChannelSwitching, perm
+end
+
+function prepareOffsets(offsetVectors::Vector{Vector{T}}, daq::RedPitayaDAQ) where T
+  result = Vector{Vector{Any}}()
+  inner = 1
+  numOffsets = prod(length.(offsetVectors))
+  for offsets in offsetVectors
+    outer = div(numOffsets, inner * length(offsets))
+    steps = repeat(offsets, inner = inner, outer = outer)
+    inner*=length(offsets)
+    push!(result, steps)
+  end
+  return map(x -> identity.(x), result) # Improve typing from Vector{Vector{Any}}
+end
+
 
 #### Producer/Consumer ####
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer

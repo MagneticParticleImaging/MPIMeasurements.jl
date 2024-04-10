@@ -50,6 +50,14 @@ function getindex(field::MagneticField, index::String)
   throw(KeyError(index))
 end
 setindex!(field::MagneticField, txChannel::TxChannel, i::Integer) = channels(field)[i] = txChannel
+function setindex!(field::MagneticField, txChannel::TxChannel, i::String)
+  for (index, channel) in enumerate(channels(field))
+    if isequal(id(channel), i)
+      return setindex!(field, txChannel, index)
+    end
+  end
+  push!(field, txChannel)
+end
 firstindex(field::MagneticField) = start_(field)
 lastindex(field::MagneticField) = length(field)
 keys(field::MagneticField) = map(id, field)
@@ -100,6 +108,9 @@ periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicEle
 
 export acyclicElectricalTxChannels
 acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
+
+export protocolElectricalTxChannels
+protocolTxChannels(field::MagneticField) = channels(field, ProtocolTxChannel)
 
 function toDict!(dict, field::MagneticField)
   for structField in [x for x in fieldnames(typeof(field)) if !in(x, [:id, :channels])]

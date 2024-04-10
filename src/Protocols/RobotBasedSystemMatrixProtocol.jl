@@ -346,7 +346,7 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   end
 
   sinks = StorageBuffer[]
-  push!(sinks, SimpleFrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx)))
+  push!(sinks, FrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx)))
   sequence = protocol.params.sequence
   if protocol.params.controlTx
     sequence = protocol.contSequence

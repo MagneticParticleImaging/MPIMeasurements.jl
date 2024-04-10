@@ -15,7 +15,7 @@ using InteractiveUtils
 using Mmap
 using Scratch
 using StringEncodings
-using Statistics: mean
+using Statistics
 using DocStringExtensions
 using MacroTools
 using LibSerialPort
@@ -29,7 +29,7 @@ import REPL
 import REPL: LineEdit, REPLCompletions
 import REPL: TerminalMenus
 import Base.write, Base.take!, Base.put!, Base.isready, Base.isopen, Base.eltype, Base.close, Base.wait, Base.length, Base.push!
-import Base: ==, isequal, hash, isfile, push!, pop!, empty!, getindex, setindex!, firstindex, lastindex, length, iterate, delete!, deleteat!, keys, haskey
+import Base: ==, isequal, hash, isfile, push!, pop!, empty!, getindex, setindex!, firstindex, lastindex, length, iterate, delete!, deleteat!, keys, haskey, values
 
 # Reexporting MPIFiles is disliked by Aqua since there are undefined exports. Therefore, I disabled reexporting here.
 #using Reexport

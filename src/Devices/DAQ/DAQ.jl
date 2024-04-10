@@ -15,6 +15,13 @@ abstract type DAQParams <: DeviceParams end
   SINK_HIGH
 end
 
+@enum TxValueRange begin
+  #POSITIVE
+  #NEGATIVE
+  BOTH
+  HBRIDGE
+end
+
 struct DAQTxChannelSettings
   "Applied channel voltage. Dimensions are (components, channels, periods)."
   amplitudes::Array{typeof(1.0u"V"), 3}
@@ -53,6 +60,35 @@ abstract type RxChannelParams <: DAQChannelParams end
 Base.@kwdef mutable struct DAQFeedback
   channelID::AbstractString
   calibration::Union{TransferFunction, String, Nothing} = nothing
+end
+
+Base.@kwdef struct DAQHBridge{N}
+  channelID::Union{String, Vector{String}}
+  manual::Bool = false
+  deadTime::typeof(1.0u"s") = 0.0u"s"
+  level::Matrix{typeof(1.0u"V")} # Can this be simplified by a convention for h-bridges?
+end
+negativeLevel(bridge::DAQHBridge) = bridge.level[:, 1]
+positiveLevel(bridge::DAQHBridge) = bridge.level[:, 2]
+level(bridge::DAQHBridge, x::Number) = signbit(x) ? negativeLevel(bridge) : positiveLevel(bridge)
+manual(bridge::DAQHBridge) = bridge.manual
+deadTime(bridge::DAQHBridge) = bridge.deadTime
+id(bridge::DAQHBridge) = bridge.channelID
+
+function createDAQChannels(::Type{DAQHBridge}, dict::Dict{String, Any})
+  splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelID] = dict["channelID"] isa Vector ? dict["channelID"] : [dict["channelID"]]
+  N = length(splattingDict[:channelID])
+  splattingDict[:level] = reshape(uparse.(dict["level"]), N, :)
+
+  if haskey(dict, "manual")
+    splattingDict[:manual] = dict["manual"]
+  end
+
+  if haskey(dict, "deadTime")
+    splattingDict[:deadTime] = uparse(dict["deadTime"])
+  end
+  return DAQHBridge{N}(;splattingDict...)
 end
 
 Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
