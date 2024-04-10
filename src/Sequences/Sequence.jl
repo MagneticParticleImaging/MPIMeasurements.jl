@@ -476,11 +476,12 @@ rxNumChannels(sequence::Sequence) = length(rxChannels(sequence))
 export rxNumSamplingPoints
 function rxNumSamplingPoints(sequence::Sequence)
   result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
-  if !isinteger(result)
+  if !(result≈round(result))
+    @debug "rxNumSamplingPoints" result≈round(result) rxSamplingRate(sequence) dfCycle(sequence)
     throw(ScannerConfigurationError("The selected combination of divider and decimation results in non-integer sampling points."))
   end
 
-  return Int64(result)
+  return round(Int64,result)
 end
 
 export rxNumSamplesPerPeriod
