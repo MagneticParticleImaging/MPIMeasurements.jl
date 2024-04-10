@@ -275,6 +275,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
   @info "Set sequence params"
 
   stepsPerRepetition = div(periodsPerFrame(daq.rpc), daq.acqPeriodsPerPatch)
+  @debug "Set sequence params" samplesPerStep=div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition)
   result = execute!(daq.rpc) do batch
     @add_batch batch samplesPerStep!(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
     @add_batch batch clearSequence!(daq.rpc)

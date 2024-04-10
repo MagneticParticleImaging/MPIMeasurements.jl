@@ -35,6 +35,7 @@ mutable struct AWControlSequence <: ControlSequence
   refIndices::Vector{Int64}
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcCorrection::Union{Vector{Float64}, Nothing}
+  dcCalibration::Union{Vector{Float64}, Nothing}
 end
 
 @enum ControlResult UNCHANGED UPDATED INVALID
@@ -110,7 +111,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
-    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, nothing)
+    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, nothing, nothing)
   end
 end
 
@@ -393,6 +394,8 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
         error("DC correction too large! Wanted to set $(dc_correction)")
       end
       control.dcCorrection = dc_correction
+      control.dcCalibration = (ref_offsets_δ.-ref_offsets_0)./δ
+      @info "Found DC Calibration" control.dcCalibration
     end
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
@@ -433,7 +436,11 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "Control measurement finished"
 
       @info "Evaluating control step"
-      Γ = read(sink(buffer, DriveFieldBuffer))[:, :, 1, end] # calcFieldsFromRef happened here already
+      tmp = read(sink(buffer, DriveFieldBuffer))
+      @debug "Size of calc fields from ref" size(tmp)
+      # TODO: Fix this to ensure, that the number of frames is alwys large enough (maybe add a parameter riseup time)
+      
+      Γ = mean(tmp[:, :, 1, 1:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
       if !isnothing(Γ)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone
@@ -584,7 +591,7 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
     Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
 
     diff = (Ωt .- Γt)
-    @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff)
+    @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
     @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
   end
   @debug "Check field deviation [T]" Ω Γ
@@ -600,10 +607,12 @@ function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, �
   
   Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
-
+  @debug "checkFieldDeviation" Γ[allComponentMask(cont)]' abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
-  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff)
-  @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
+  diff = diff .- mean(diff, dims=1)
+  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
+  @info "Observed field deviation:\nmax_diff:\t$(maximum(abs.(diff))*1000) mT"
+  diff = diff .- mean(diff, dims=1)
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
 end
@@ -645,6 +654,13 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # For now we completely ignore coupling and hope that it can find good values anyways
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
+
+  # handle DC separately:
+  if txCont.params.findZeroDC
+    @info "update ControlMatrix" κ[:,1] newTx[:,1]
+    @info "2" Γ[:,1] (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
+    newTx[:,1] .= (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
+  end
 
   #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
   #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
@@ -823,6 +839,7 @@ function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
   for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     if cont.rfftIndices[i,end,1]
       if !isnothing(cont.dcCorrection)
+        @debug "updateControlSequence" (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V"
         offset!(channel, (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V")
       else
         offset!(channel, real(newTx[i,1])*1.0u"V")
@@ -855,7 +872,7 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
   calibFieldToVoltMeasured = (diag(oldTx) ./ diag(Γ))
 
-  abs_deviation = abs.(1.0 .- calibFieldToVoltMeasured./calibFieldToVoltEstimate)
+  abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured)./abs.(calibFieldToVoltEstimate))
   phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate) V/T and got $(calibFieldToVoltMeasured) V/T, deviation: $(abs_deviation*100) %"
   valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
@@ -896,7 +913,7 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
   end
   valid = all(validChannel)
   if !valid
-    @debug "Valid Tx Channel" validChannel
+    @debug "Valid Tx Channel" validChannel newTx
     @warn "New control sequence exceeds voltage limits of tx channel"
   end
   return valid
@@ -917,7 +934,7 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
     validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
   
     valid = all(validSlew) && all(validPeak)
-    @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime') maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
+    @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
     if !valid
       @debug "Valid Tx Channel" validSlew validPeak
       @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
