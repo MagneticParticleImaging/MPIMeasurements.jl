@@ -175,7 +175,7 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
 end
 
 function extractBasicComponentProperties(componentDict::Dict{String, Any})
-  divider = componentDict["divider"]
+  divider = parse(Int, string(componentDict["divider"]))
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
