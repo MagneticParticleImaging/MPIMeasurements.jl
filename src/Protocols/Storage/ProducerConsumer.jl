@@ -1,16 +1,17 @@
-SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(x, sequence, StorageBuffer[])
-function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
+SequenceMeasState(daq::RedPitayaDAQ, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(daq, sequence, StorageBuffer[])
+function SequenceMeasState(daq::RedPitayaDAQ, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
   numFrames = acqNumFrames(sequence.targetSequence)
   numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
   bufferShape = controlMatrixShape(sequence)
   buffer = DriveFieldBuffer(1, zeros(ComplexF64, bufferShape[1], bufferShape[2], numPeriods, numFrames), sequence)
-  avgFrames = acqNumFrameAverages(sequence.targetSequence)
-  if avgFrames > 1
-    samples = rxNumSamplesPerPeriod(sequence.targetSequence)
-    periods = acqNumPeriodsPerFrame(sequence.targetSequence)
-    buffer = AverageBuffer(buffer, samples, len, periods, avgFrames)
-  end
-  return SequenceMeasState(x, sequence.targetSequence, push!(sequenceBuffer, buffer))
+  frameAvgs = acqNumFrameAverages(sequence.targetSequence)
+  if frameAvgs > 1
+     samples = rxNumSamplesPerPeriod(sequence.targetSequence)
+     @info daq.refChanIDs length(daq.refChanIDs)
+     #TODO/JA: replace hardcoded 3
+     buffer = AverageBuffer(buffer, samples, 3, numPeriods, frameAvgs)
+   end
+  return SequenceMeasState(daq, sequence.targetSequence, push!(sequenceBuffer, buffer))
 end
 SequenceMeasState(protocol::Protocol, x, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing) = SequenceMeasState(getDAQ(scanner(protocol)), x, sequenceBuffer)
 function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing)
