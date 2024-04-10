@@ -128,10 +128,9 @@ end
 function createChannelComponent(componentID::AbstractString, componentDict::Dict{String, Any})
   if haskey(componentDict, "type")
     type = pop!(componentDict, "type")
-    knownComponents = MPIFiles.concreteSubtypes(ElectricalComponent)
-    index = findfirst(x -> x == type, string.(knownComponents))
-    if !isnothing(index) 
-      createChannelComponent(componentID, knownComponents[index], componentDict)
+    concreteType = getConcreteType(ElectricalComponent, type)
+    if !isnothing(concreteType) 
+      createChannelComponent(componentID, concreteType, componentDict)
     else
       error("Component $componentID has an unknown channel type `$type`.")
     end

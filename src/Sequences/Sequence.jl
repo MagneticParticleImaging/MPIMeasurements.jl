@@ -179,10 +179,9 @@ end
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
     type = pop!(channelDict, "type")
-    knownChannels = MPIFiles.concreteSubtypes(TxChannel)
-    index = findfirst(x -> x == type, string.(knownChannels))
-    if !isnothing(index) 
-      createFieldChannel(channelID, knownChannels[index], channelDict)
+    concreteType = getConcreteType(TxChannel, type)
+    if !isnothing(concreteType) 
+      createFieldChannel(channelID, concreteType, channelDict)
     else
       error("Channel $channelID has an unknown channel type `$type`.")
     end
