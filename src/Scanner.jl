@@ -11,7 +11,7 @@ export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
 
 Recursively find all concrete types of the given type.
 """
-function deepsubtypes(type::DataType)
+function deepsubtypes(type::Type)
   subtypes_ = subtypes(type)
   allSubtypes = subtypes_
   for subtype in subtypes_
@@ -26,7 +26,7 @@ end
 
 Retrieve the concrete type of a given supertype corresponding to a given string.
 """
-function getConcreteType(supertype_::DataType, type::String)
+function getConcreteType(supertype_::Type, type::String)
   knownTypes = deepsubtypes(supertype_)
   foundImplementation = nothing
   for Implementation in knownTypes
