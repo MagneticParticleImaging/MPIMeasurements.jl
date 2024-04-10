@@ -15,11 +15,14 @@ using InteractiveUtils
 using Mmap
 using Scratch
 using StringEncodings
+using Statistics: mean
 using DocStringExtensions
 using MacroTools
 using LibSerialPort
 using UnicodePlots
 using LinearAlgebra
+using HDF5
+using FFTW
 
 using ReplMaker
 import REPL
