@@ -23,6 +23,7 @@ using UnicodePlots
 using LinearAlgebra
 using HDF5
 using FFTW
+using NaturalSort
 
 using ReplMaker
 import REPL

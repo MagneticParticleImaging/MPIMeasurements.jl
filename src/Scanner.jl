@@ -403,13 +403,21 @@ function Sequence(configdir::AbstractString, name::AbstractString)
   end
   return sequenceFromTOML(path)
 end
-
+function Sequences(configdir::AbstractString, name::AbstractString)
+  path = joinpath(configdir, "Sequences", name)
+  if !isdir(path)
+    error("Sequence-Directory $(path) not available!")
+  end
+  paths = sort(collect(readdir(path, join = true)), lt=natural)
+  return [sequenceFromTOML(p) for p in paths]
+end
 """
     $(SIGNATURES)
 
 Constructor for a sequence of `name` from the configuration directory specified for the scanner.
 """
 Sequence(scanner::MPIScanner, name::AbstractString) = Sequence(configDir(scanner), name)
+Sequences(scanner::MPIScanner, name::AbstractString) = Sequences(configDir(scanner), name)
 
 function Sequence(scanner::MPIScanner, dict::Dict)
   sequence = sequenceFromDict(dict)
