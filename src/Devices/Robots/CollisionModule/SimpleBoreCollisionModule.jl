@@ -15,16 +15,7 @@ end
 SimpleBoreCollisionModuleParams(dict::Dict) = params_from_dict(SimpleBoreCollisionModuleParams, dict)
 
 Base.@kwdef mutable struct SimpleBoreCollisionModule <: AbstractCollisionModule3D
-  "Unique device ID for this device as defined in the configuration."
-  deviceID::String
-  "Parameter struct for this devices read from the configuration."
-  params::SimpleBoreCollisionModuleParams
-  "Flag if the device is optional."
-	optional::Bool = false
-  "Flag if the device is present."
-  present::Bool = false
-  "Vector of dependencies for this device."
-  dependencies::Dict{String,Union{Device,Missing}}
+  @add_device_fields SimpleBoreCollisionModuleParams
 end
 
 collisionModuleType(cm::SimpleBoreCollisionModule) = PositionCollisionType()

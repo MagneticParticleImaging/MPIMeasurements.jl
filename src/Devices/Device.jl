@@ -13,7 +13,7 @@ abstract type DeviceParams end
 Base.close(device::Device) = @warn "The device type `$(typeof(device))` has no `close` function defined."
 
 function validateDeviceStruct(device::Type{<:Device})
-  requiredFields = [:deviceID, :params, :optional, :present, :dependencies]
+  requiredFields = [:deviceID, :params, :optional, :present, :dependencies, :configFile]
   missingFields = [x for x in requiredFields if !in(x, fieldnames(device))]
   if length(missingFields) > 0
     msg = "Device struct $(string(device)) is missing the required fields " * join(missingFields, ", ", " and ")
@@ -33,8 +33,8 @@ macro add_device_fields(paramType)
     present::Bool = false
     #"Vector of dependencies for this device."
     dependencies::Dict{String,Union{Device,Missing}}
-    #"Path of the config used to load the device (either Scanner.toml or Device.toml)"
-    configFile::String
+    #"Path of the config used to create the device (either Scanner.toml or Device.toml)"
+    configFile::Union{String, Nothing} = nothing
   end)
 end
 
@@ -53,15 +53,19 @@ isPresent(device::Device) = device.present
 "Retrieve the dependencies of a device."
 dependencies(device::Device) = device.dependencies
 
-"Retrieve the configuration file of a device."
+"Retrieve the path to the configuration file of a device."
 configFile(device::Device) = device.configFile
 
-"Retrieve the configuration directory of the scanner."
+"Retrieve the configuration directory of the scanner that the device is contructed from."
 function configDir(device::Device)
-  if basename(device.configFile) == "Scanner.toml"
-    return dirname(device.configFile) # if the device is read from a Scanner.toml the directory is the scanner directory
+  if !isnothing(device.configFile)
+    if basename(device.configFile) == "Scanner.toml"
+      return dirname(device.configFile) # if the device is read from a Scanner.toml the directory is the scanner directory
+    else
+      return joinpath(splitpath(device.configFile)[1:end-2]...) # otherwise the Device.toml is in the Devices folder
+    end
   else
-    return joinpath(splitpath(device.configFile)[1:end-2]...) # otherwise the Device.toml is in the Devices folder
+    return nothing
   end
 end
 

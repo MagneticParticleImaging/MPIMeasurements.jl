@@ -46,6 +46,8 @@ Base.@kwdef mutable struct TestDevice <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -73,6 +75,8 @@ Base.@kwdef mutable struct TestDependencyDevice <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -100,6 +104,8 @@ Base.@kwdef mutable struct TestDeviceB <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -123,6 +129,8 @@ Base.@kwdef mutable struct TestMissingIDDevice <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -138,6 +146,8 @@ Base.@kwdef mutable struct TestMissingParamsDevice <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -153,6 +163,8 @@ Base.@kwdef mutable struct TestMissingOptionalDevice <: Device
   present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -168,6 +180,8 @@ Base.@kwdef mutable struct TestMissingPresentDevice <: Device
   #present::Bool = false
   "Vector of dependencies for this device."
   dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
@@ -183,6 +197,25 @@ Base.@kwdef mutable struct TestMissingDependencyDevice <: Device
   present::Bool = false
   #"Vector of dependencies for this device."
   #dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
+
+  initRan::Bool = false
+end
+
+Base.@kwdef mutable struct TestMissingConfigFileDevice <: Device
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::TestDeviceParams
+  "Flag if the device is optional."
+	optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  #"Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  #configFile::Union{String, Nothing} = nothing
 
   initRan::Bool = false
 end
