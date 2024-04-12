@@ -300,7 +300,7 @@ end
 
 function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
   channel = Channel{channelType(daq)}(32)
-  buf = AsyncBuffer(SimpleFrameBuffer(1, zeros(Float32,rxNumSamplesPerPeriod(seq),length(daq.rpv)*2,acqNumPeriodsPerFrame(seq),acqNumFrames(seq))), daq)
+  buf = AsyncBuffer(FrameBuffer(1, zeros(Float32,rxNumSamplesPerPeriod(seq),length(daq.rpv)*2,acqNumPeriodsPerFrame(seq),acqNumFrames(seq))), daq)
   @info "DC Control measurement started"
   producer = @async begin
     @debug "Starting DC control producer" 

@@ -32,7 +32,7 @@ end
 
 function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
   splattingDict = Dict{Symbol, Any}()
-  splattingDict[:channelIdx] = value["channel"]
+  splattingDict[:channelIdx] = dict["channel"]
   if haskey(dict, "calibration")
     calib = uparse.(dict["calibration"])
 
@@ -46,20 +46,20 @@ function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, 
     splattingDict[:calibration] = calib
   end
 
-  if haskey(value, "hbridge")
-    splattingDict[:hbridge] = createDAQChannels(DAQHBridge, value["hbridge"])
+  if haskey(dict, "hbridge")
+    splattingDict[:hbridge] = createDAQChannels(DAQHBridge, dict["hbridge"])
   end
 
-  if haskey(value, "range")
-    splattingDict[:range] = value["range"]
+  if haskey(dict, "range")
+    splattingDict[:range] = dict["range"]
   end
 
-  if haskey(value, "switchTime")
-    splattingDict[:switchTime] = uparse(value["switchTime"])
+  if haskey(dict, "switchTime")
+    splattingDict[:switchTime] = uparse(dict["switchTime"])
   end
 
-  if haskey(value, "switchEnable")
-    splattingDict[:switchEnable] = value["switchEnable"]
+  if haskey(dict, "switchEnable")
+    splattingDict[:switchEnable] = dict["switchEnable"]
   end
   return RedPitayaLUTChannelParams(; splattingDict...)
 end
