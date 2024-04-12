@@ -52,13 +52,10 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
   # Get implementations for all devices in the specified order
   for deviceID in order
     params = nothing
-    configFile = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
-      configFile = joinpath(configDir, "Scanner.toml")
     else
       params = deviceParams(configDir, deviceID)
-      configFile = joinpath(configDir, "Devices", deviceID*".toml")
     end
 
     if !isnothing(params)
@@ -232,14 +229,15 @@ mutable struct MPIScanner
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
     configDir = findConfigDir(name)
-    params = getScannerParams(configDir)
+    configFile = findConfigFile(configDir)
+    params = getScannerParams(configFile)
     
-    @debug "Instantiating scanner `$name` from configuration file at `$filename`."
+    @info "Instantiating scanner `$name` from configuration folder `$configDir`."
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(configDir, params["Devices"], robust = robust)
 
-    scanner = new(name, filename, generalParams, devices)
+    scanner = new(name, configFile, generalParams, devices)
 
     return scanner
   end
@@ -255,11 +253,15 @@ function findConfigDir(name::AbstractString)
   return nothing
 end
 
-function getScannerParams(configDir::String)
+function findConfigFile(configDir::AbstractString) 
   filename = isnothing(configDir) ? nothing : joinpath(configDir, "Scanner.toml")
   if isnothing(filename)
     throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
   end
+  return filename
+end
+
+function getScannerParams(filename::String)
   return TOML.parsefile(filename)
 end
 """
