@@ -504,9 +504,12 @@ function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsP
     updatedPermutation = repeat(permutation, inner=stepsPerOffset)
     # to remove the repeated values, add 1 to all indizes starting from each value that is identical to its previous neighbor
     sortedIdx = sortperm(updatedPermutation)
+    incr = 0
     for i=2:length(updatedPermutation)
+      updatedPermutation[sortedIdx[i]] += incr
       if updatedPermutation[sortedIdx[i]] == updatedPermutation[sortedIdx[i-1]]
-        updatedPermutation[sortedIdx[i:end]] .+= 1 
+        updatedPermutation[sortedIdx[i]] += 1
+        incr += 1 
       end
     end
    
