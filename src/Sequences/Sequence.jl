@@ -486,7 +486,7 @@ function rxNumSamplingPoints(sequence::Sequence)
   result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
   if !(result≈round(result))
     @debug "rxNumSamplingPoints" result≈round(result) rxSamplingRate(sequence) dfCycle(sequence)
-    throw(ScannerConfigurationError("The selected combination of divider and decimation results in non-integer sampling points."))
+    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($(Int(baseFrequency(sequence)/rxSamplingRate(sequence)))) results in non-integer sampling points ($result)."))
   end
 
   return round(Int64,result)

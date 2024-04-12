@@ -129,19 +129,24 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
 
   fittingDeviceParams = []
   lastException = nothing
+  lastBacktrace = nothing
   for (i, paramType) in enumerate(tempDeviceParams)
     try
       tempParams = paramType(copy(params))
       push!(fittingDeviceParams, tempParams)
     catch ex
       lastException = ex
+      lastBacktrace = Base.catch_backtrace()
     end
   end
 
   if length(fittingDeviceParams) == 1
     return fittingDeviceParams[1]
   elseif length(fittingDeviceParams) == 0 && !isnothing(lastException)
-    throw(lastException)
+    Base.printstyled("ERROR: "; color=:red, bold=true)
+    Base.showerror(stdout, lastException)
+    Base.show_backtrace(stdout, lastBacktrace)
+    throw("The above error occured during device creation!")
   else
     return nothing
   end

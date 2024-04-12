@@ -284,6 +284,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
   for channel in periodicElectricalTxChannels(seq) 
     off = offset(channel)
     if dimension(off) != dimension(1.0u"V")
+      isnothing(calibration(daq, id(channel))) && throw(ScannerConfigurationError("An offset value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
       offsetVolts = off*abs(calibration(daq, id(channel))(0)) # use DC value for offsets
       offset!(channel, uconvert(u"V",offsetVolts))
     end
@@ -292,6 +293,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
       amp = amplitude(comp)
       pha = phase(comp)
       if dimension(amp) != dimension(1.0u"V")
+        isnothing(calibration(daq, id(channel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
         f_comp = ustrip(u"Hz", txBaseFrequency(seq)) / divider(comp)
         complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
         amplitude!(comp, uconvert(u"V",abs(complex_comp)))
@@ -310,6 +312,7 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
     if lutChannel isa StepwiseElectricalChannel
       values = lutChannel.values
       if dimension(values[1]) != dimension(1.0u"V")
+        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("A value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
         values = values.*calibration(daq, id(lutChannel))
         lutChannel.values = values
       end
@@ -317,10 +320,12 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
       amp = lutChannel.amplitude
       off = lutChannel.offset
       if dimension(amp) != dimension(1.0u"V")
+        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
         amp = amp*calibration(daq, id(lutChannel))
         lutChannel.amplitude = amp
       end
       if dimension(off) != dimension(1.0u"V")
+        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("An offset value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
         off = off*calibration(daq, id(lutChannel))
         lutChannel.offset = off
       end
