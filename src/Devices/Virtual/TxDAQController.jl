@@ -386,15 +386,15 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       updateControlSequence!(dc_cont, signals)
       setup(daq, dc_cont.currSequence)
       ref_offsets_δ = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
-
-      dc_correction = -ref_offsets_0./((ref_offsets_δ.-ref_offsets_0)./δ)
+      dc_slope = (ref_offsets_δ.-ref_offsets_0)./(δ.-0.0)
+      dc_correction = -ref_offsets_0./dc_slope
 
       @info "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
       if any(abs.(dc_correction).>maximum(δ)) # We do not accept any change that is larger than what we would expect for 1mT
         error("DC correction too large! Wanted to set $(dc_correction)")
       end
       control.dcCorrection = dc_correction
-      control.dcCalibration = (ref_offsets_δ.-ref_offsets_0)./δ
+      control.dcCalibration = dc_slope
       @info "Found DC Calibration" control.dcCalibration
     end
 
@@ -521,6 +521,8 @@ function getControlResult(cont::ControlSequence)::Sequence
   for field in fields(cont.targetSequence)
     if !control(field)
       push!(_fields, field)
+      # if there are LUT channels sharing a channel with the controlled fields, we should be able to use the DC calibration that has been found
+      # and insert it into the corresponding LUT channels as a calibration value
     end
   end
 
@@ -570,7 +572,7 @@ end
 
 #checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, uRef) = checkFieldDeviation(cont, txCont, calcFieldFromRef(cont, uRef))
 checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = checkFieldDeviation(cont, txCont, Γ, calcDesiredField(cont))
-function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+function checkFieldDeviation(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
 
   diff = Ω - Γ
   abs_deviation = abs.(diff)
@@ -579,20 +581,20 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   phase_deviation = angle.(Ω).-angle.(Γ)
   phase_deviation[abs.(Ω).<1e-15] .= 0 # phase deviation does not make sense for a zero goal
 
-  if !needsDecoupling(cont.targetSequence) && !isa(cont,AWControlSequence)
+  if !needsDecoupling(cont.targetSequence)
     abs_deviation = diag(abs_deviation)
     rel_deviation = diag(rel_deviation)
     phase_deviation = diag(phase_deviation)
-  elseif isa(cont, AWControlSequence)
-    abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
-    rel_deviation = rel_deviation[allComponentMask(cont)]'
-    phase_deviation = phase_deviation[allComponentMask(cont)]'
-    Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-    Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+  # elseif isa(cont, AWControlSequence)
+  #   abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
+  #   rel_deviation = rel_deviation[allComponentMask(cont)]'
+  #   phase_deviation = phase_deviation[allComponentMask(cont)]'
+  #   Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
+  #   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
 
-    diff = (Ωt .- Γt)
-    @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
-    @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
+  #   diff = (Ωt .- Γt)
+  #   @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
+  #   @info "checkFieldDeviation2" max_diff = maximum(abs.(diff))
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
@@ -609,10 +611,9 @@ function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, �
   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
   @debug "checkFieldDeviation" Γ[allComponentMask(cont)]' abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
-  diff = diff .- mean(diff, dims=1)
-  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
-  @info "Observed field deviation:\nmax_diff:\t$(maximum(abs.(diff))*1000) mT"
-  diff = diff .- mean(diff, dims=1)
+  zero_mean_diff = diff .- mean(diff, dims=1)
+  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
 end
@@ -655,12 +656,12 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
 
-  # handle DC separately:
-  if txCont.params.findZeroDC
-    @info "update ControlMatrix" κ[:,1] newTx[:,1]
-    @info "2" Γ[:,1] (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
-    newTx[:,1] .= (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
-  end
+  # # handle DC separately:
+  # if txCont.params.findZeroDC
+  #   @info "update ControlMatrix" κ[:,1] newTx[:,1]
+  #   @info "2" Γ[:,1] ((κ[:,1].-cont.dcCorrection).*(Ω[:,1]./Γ[:,1]))
+  #   #newTx[:,1] .= (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
+  # end
 
   #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
   #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
@@ -812,6 +813,9 @@ function calcControlMatrix(cont::AWControlSequence)
   for (i, channel) in enumerate(getControlledChannels(cont))
     if cont.rfftIndices[i,end,1]
       oldTx[i,1] = ustrip(u"V", offset(channel))
+      if !isnothing(cont.dcCorrection)
+        oldTx[i,1] -= cont.dcCorrection[i]
+      end
     end
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
