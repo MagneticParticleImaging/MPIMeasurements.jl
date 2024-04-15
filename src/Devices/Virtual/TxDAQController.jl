@@ -34,8 +34,7 @@ mutable struct AWControlSequence <: ControlSequence
   controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
   refIndices::Vector{Int64}
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
-  dcCorrection::Union{Vector{Float64}, Nothing}
-  dcCalibration::Union{Vector{Float64}, Nothing}
+  dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
 end
 
 @enum ControlResult UNCHANGED UPDATED INVALID
@@ -111,7 +110,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
-    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, nothing, nothing)
+    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, [])
   end
 end
 
@@ -304,7 +303,7 @@ function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
   @info "DC Control measurement started"
   producer = @async begin
     @debug "Starting DC control producer" 
-    endSample = startProducer(channel, daq, 1)
+    endSample = startProducer(channel, daq, acqNumFrames(seq))
     endSequence(daq, endSample)
   end
   bind(channel, producer)
@@ -319,7 +318,7 @@ function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
   end
   
   wait(consumer)
-  return mean(read(buf.target)[:,channelIdx(daq, daq.refChanIDs),1,1], dims=1)
+  return mean(read(buf.target),dims=4)[:,channelIdx(daq, daq.refChanIDs),:,:]
 end
 
 function controlTx(txCont::TxDAQController, control::ControlSequence)
@@ -367,43 +366,13 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   i = 1
 
   try
-    if txCont.params.findZeroDC # this is only possible with AWControlSequence
-      # create sequence with every field off, dc set to zero
-      # calculate mean for each ref channel
-      # create sequence with offsets set to small value
-      # measure men for each ref channel again
-      # use the two measurements to find the DC value that needs to be output to achieve zero on the reference channel
-      # always add found value to DC values in control
-      dc_cont = deepcopy(control)
-      signals = zeros(ComplexF64,controlMatrixShape(control))
-      updateControlSequence!(dc_cont, signals)
-      setup(daq, dc_cont.currSequence)
-      ref_offsets_0 = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
-
-      δ = ustrip.(u"V", [1u"mT"*abs(calibration(daq, id(channel))(0)) for channel in getControlledChannels(control)]) # use DC value for offsets
-      @debug "findZeroDC: Now outputting the following DC values: [V]" δ
-      signals[:,1] .= δ 
-      updateControlSequence!(dc_cont, signals)
-      setup(daq, dc_cont.currSequence)
-      ref_offsets_δ = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
-      dc_slope = (ref_offsets_δ.-ref_offsets_0)./(δ.-0.0)
-      dc_correction = -ref_offsets_0./dc_slope
-
-      @info "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
-      if any(abs.(dc_correction).>maximum(δ)) # We do not accept any change that is larger than what we would expect for 1mT
-        error("DC correction too large! Wanted to set $(dc_correction)")
-      end
-      control.dcCorrection = dc_correction
-      control.dcCalibration = dc_slope
-      @info "Found DC Calibration" control.dcCalibration
-    end
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
       # Prepare control measurement
       setup(daq, control.currSequence)
 
-      if haskey(ENV, "JULIA_DEBUG") && "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
+      if haskey(ENV, "JULIA_DEBUG") && contains(ENV["JULIA_DEBUG"],"checkEachControlStep")
         menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
         choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
         if choice == 1
@@ -656,12 +625,20 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = κ./Γ.*Ω
 
-  # # handle DC separately:
-  # if txCont.params.findZeroDC
-  #   @info "update ControlMatrix" κ[:,1] newTx[:,1]
-  #   @info "2" Γ[:,1] ((κ[:,1].-cont.dcCorrection).*(Ω[:,1]./Γ[:,1]))
-  #   #newTx[:,1] .= (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
-  # end
+  # handle DC separately:
+  if txCont.params.findZeroDC
+    push!(cont.dcSearch, (V=κ[:,1], B=Γ[:,1]))
+    if length(cont.dcSearch)==1
+      my_sign(x) = if x<0; -1 else 1 end
+      testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
+      newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
+    else
+      @debug "History of dcSearch" cont.dcSearch
+      last = cont.dcSearch[end]
+      previous = cont.dcSearch[end-1]
+      newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+    end
+  end
 
   #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
   #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
@@ -813,9 +790,6 @@ function calcControlMatrix(cont::AWControlSequence)
   for (i, channel) in enumerate(getControlledChannels(cont))
     if cont.rfftIndices[i,end,1]
       oldTx[i,1] = ustrip(u"V", offset(channel))
-      if !isnothing(cont.dcCorrection)
-        oldTx[i,1] -= cont.dcCorrection[i]
-      end
     end
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
@@ -842,12 +816,7 @@ end
 function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
   for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     if cont.rfftIndices[i,end,1]
-      if !isnothing(cont.dcCorrection)
-        @debug "updateControlSequence" (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V"
-        offset!(channel, (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V")
-      else
         offset!(channel, real(newTx[i,1])*1.0u"V")
-      end
     end
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
