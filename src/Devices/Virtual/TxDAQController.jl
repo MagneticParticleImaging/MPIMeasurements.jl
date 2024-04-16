@@ -3,11 +3,11 @@ export TxDAQControllerParams, TxDAQController, controlTx
 Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   phaseAccuracy::typeof(1.0u"rad")
   relativeAmplitudeAccuracy::Float64
-  controlPause::Float64
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
   maxControlSteps::Int64 = 20
   fieldToVoltDeviation::Float64 = 0.2
-  findZeroDC::Bool = false
+  controlDC::Bool = false
+  timeUntilStable::Float64 = 0.0
   minimumStepDuration::Float64 = 0.002
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
@@ -44,6 +44,7 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
 
   ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
   cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
+  startFrame::Int64 = 1
 end
 
 function _init(tx::TxDAQController)
@@ -65,8 +66,12 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
   currSeq = prepareSequenceForControl(target)
 
-  duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
-  acqNumFrames(currSeq, max(duration, 1))
+  measuredFrames = max(cld(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq))),1)
+  discardedFrames = cld(txCont.params.timeUntilStable, ustrip(u"s", dfCycle(currSeq)))
+  txCont.startFrame = discardedFrames + 1
+  acqNumFrames(currSeq, discardedFrames+measuredFrames)
+ 
+  
 
   applyForwardCalibration!(currSeq, daq) # uses the forward calibration to convert the values for the field from T to V
 
@@ -78,7 +83,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
-  controlSequenceType = decideControlSequenceType(target, txCont.params.findZeroDC)
+  controlSequenceType = decideControlSequenceType(target, txCont.params.controlDC)
   @debug "ControlSequence: Decided on using ControlSequence of type $controlSequenceType"
 
   if controlSequenceType==CrossCouplingControlSequence    
@@ -114,20 +119,20 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   end
 end
 
-function decideControlSequenceType(target::Sequence, findZeroDC::Bool=false)
+function decideControlSequenceType(target::Sequence, controlDC::Bool=false)
 
   hasAWComponent = any(isa.([component for channel in getControlledChannels(target) for component in channel.components], ArbitraryElectricalComponent))
   moreThanOneComponent = any(x -> length(x.components) > 1, getControlledChannels(target))
   moreThanThreeChannels = length(getControlledChannels(target)) > 3
   moreThanOneField = length(getControlledFields(target)) > 1
   needsDecoupling_ = needsDecoupling(target)
-  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ findZeroDC
+  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ controlDC
 
-  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
+  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !controlDC
       return CrossCouplingControlSequence
   elseif needsDecoupling_
-    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($findZeroDC) is also not possible"))
-  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
+    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($controlDC) is also not possible"))
+  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !controlDC
     return CrossCouplingControlSequence
   else 
     return AWControlSequence 
@@ -297,30 +302,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
   end
 end
 
-function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
-  channel = Channel{channelType(daq)}(32)
-  buf = AsyncBuffer(FrameBuffer(1, zeros(Float32,rxNumSamplesPerPeriod(seq),length(daq.rpv)*2,acqNumPeriodsPerFrame(seq),acqNumFrames(seq))), daq)
-  @info "DC Control measurement started"
-  producer = @async begin
-    @debug "Starting DC control producer" 
-    endSample = startProducer(channel, daq, acqNumFrames(seq))
-    endSequence(daq, endSample)
-  end
-  bind(channel, producer)
-  consumer = @async begin
-    while isopen(channel) || isready(channel)
-      while isready(channel)
-        chunk = take!(channel)
-        push!(buf, chunk)
-      end
-      sleep(0.001)
-    end      
-  end
-  
-  wait(consumer)
-  return mean(read(buf.target),dims=4)[:,channelIdx(daq, daq.refChanIDs),:,:]
-end
-
 function controlTx(txCont::TxDAQController, control::ControlSequence)
   # Prepare and check channel under control
   daq = dependency(txCont, AbstractDAQ)
@@ -409,7 +390,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @debug "Size of calc fields from ref" size(tmp)
       # TODO: Fix this to ensure, that the number of frames is alwys large enough (maybe add a parameter riseup time)
       
-      Γ = mean(tmp[:, :, 1, 1:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
+      Γ = mean(tmp[:, :, 1, txCont.startFrame:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
       if !isnothing(Γ)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone
@@ -626,7 +607,7 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   newTx = κ./Γ.*Ω
 
   # handle DC separately:
-  if txCont.params.findZeroDC
+  if txCont.params.controlDC
     push!(cont.dcSearch, (V=κ[:,1], B=Γ[:,1]))
     if length(cont.dcSearch)==1
       my_sign(x) = if x<0; -1 else 1 end
