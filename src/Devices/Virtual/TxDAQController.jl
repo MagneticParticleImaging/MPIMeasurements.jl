@@ -576,9 +576,9 @@ end
 
 function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   
-  Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-  Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
-  @debug "checkFieldDeviation" Γ[allComponentMask(cont)]' abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
+  Γt = transpose(checkVoltLimits(Γ,cont,return_time_signal=true))
+  Ωt = transpose(checkVoltLimits(Ω,cont,return_time_signal=true))
+  @debug "checkFieldDeviation" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
   @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
@@ -695,7 +695,7 @@ function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   spectrum[1,:,:,:] ./= 2
   sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fb_calibration = reduce(vcat, [ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
+  fb_calibration = reduce(vcat, transpose([ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
   return sortedSpectrum.*fb_calibration
 end
 
@@ -861,7 +861,7 @@ end
 function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::AWControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   N = rxNumSamplingPoints(cont.currSequence)
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  calibFieldToVoltEstimate = reduce(vcat,[ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
+  calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
   calibFieldToVoltMeasured = oldTx ./ Γ
 
   mask = allComponentMask(cont) .& (abs.(Ω).>1e-15)
