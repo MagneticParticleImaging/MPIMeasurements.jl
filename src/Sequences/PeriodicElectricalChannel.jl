@@ -120,7 +120,7 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
     splattingDict[:isDfChannel] = channelDict["isDfChannel"]
   end
   if haskey(channelDict, "dcEnabled")
-    splattingDict[:isDfChannel] = channelDict["dcEnabled"]
+    splattingDict[:dcEnabled] = channelDict["dcEnabled"]
   end
 
   components = Vector{ElectricalComponent}()

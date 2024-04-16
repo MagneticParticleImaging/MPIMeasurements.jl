@@ -153,7 +153,7 @@ function timeEstimate(protocol::MPSMeasurementProtocol)
       end
     end 
     perc_wait = round(Int,sum(isnothing.(protocol.patchPermutation))/size(protocol.patchPermutation,1)*100)
-    est = "FG: $(timeFormat(fgTime)) ($(perc_wait)% waiting), BG: $(timeFormat(bgTime))"
+    est = "FG: $(timeFormat(fgTime)) ($(perc_wait)% waiting)\nBG: $(timeFormat(bgTime))"
     @info "The estimated duration is FG: $fgTime ($(perc_wait)% waiting), BG: $bgTime."
   end
   return est
