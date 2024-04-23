@@ -344,6 +344,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
 
   # Hacky solution
   controlPhaseDone = false
+  controlPhaseError = nothing
   i = 1
 
   try
@@ -405,6 +406,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     end
   catch ex
     @error "Exception during control loop" exception=(ex, catch_backtrace())
+    controlPhaseError = ex
   finally
     try 
       stopTx(daq)
@@ -439,7 +441,11 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   end
   
   if !controlPhaseDone
-    error("TxDAQController $(deviceID(txCont)) could not control.")
+    if isnothing(controlPhaseError)
+      error("TxDAQController $(deviceID(txCont)) could not control.")
+    else
+      error("TxDAQController $(deviceID(txCont)) failed control with the following message:\n$(sprint(showerror, controlPhaseError))")
+    end
   end
 
   return control
