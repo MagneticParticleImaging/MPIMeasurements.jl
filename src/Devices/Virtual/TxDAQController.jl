@@ -5,10 +5,13 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   relativeAmplitudeAccuracy::Float64
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
   maxControlSteps::Int64 = 20
-  fieldToVoltDeviation::Float64 = 0.2
+  #fieldToVoltDeviation::Float64 = 0.2
   controlDC::Bool = false
   timeUntilStable::Float64 = 0.0
   minimumStepDuration::Float64 = 0.002
+  fieldToVoltRelDeviation::Float64 = 0.2
+  fieldToVoltAbsDeviation::typeof(1.0u"T") = 5.0u"mT"
+  maxField::typeof(1.0u"T") = 40.0u"mT"
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -389,7 +392,6 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "Evaluating control step"
       tmp = read(sink(buffer, DriveFieldBuffer))
       @debug "Size of calc fields from ref" size(tmp)
-      # TODO: Fix this to ensure, that the number of frames is alwys large enough (maybe add a parameter riseup time)
       
       Γ = mean(tmp[:, :, 1, txCont.startFrame:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
       if !isnothing(Γ)
@@ -517,7 +519,7 @@ controlMatrixShape(cont::CrossCouplingControlSequence) = (numControlledChannels(
 controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef) = controlStep!(cont, txCont, uRef, calcDesiredField(cont))
 controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef, Ω::Matrix{<:Complex}) = controlStep!(cont, txCont, calcFieldsFromRef(cont, uRef), Ω)
 function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
-  if checkFieldDeviation(cont, txCont, Γ, Ω)
+  if fieldAccuracyReached(cont, txCont, Γ, Ω)
     return UNCHANGED
   elseif updateControl!(cont, txCont, Γ, Ω)
     return UPDATED
@@ -526,9 +528,9 @@ function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix
   end
 end
 
-#checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, uRef) = checkFieldDeviation(cont, txCont, calcFieldFromRef(cont, uRef))
-checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = checkFieldDeviation(cont, txCont, Γ, calcDesiredField(cont))
-function checkFieldDeviation(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+#fieldAccuracyReached(cont::ControlSequence, txCont::TxDAQController, uRef) = fieldAccuracyReached(cont, txCont, calcFieldFromRef(cont, uRef))
+fieldAccuracyReached(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = fieldAccuracyReached(cont, txCont, Γ, calcDesiredField(cont))
+function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
 
   diff = Ω - Γ
   abs_deviation = abs.(diff)
@@ -549,8 +551,8 @@ function checkFieldDeviation(cont::CrossCouplingControlSequence, txCont::TxDAQCo
   #   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
 
   #   diff = (Ωt .- Γt)
-  #   @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
-  #   @info "checkFieldDeviation2" max_diff = maximum(abs.(diff))
+  #   @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
+  #   @info "fieldAccuracyReached2" max_diff = maximum(abs.(diff))
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
@@ -561,14 +563,14 @@ function checkFieldDeviation(cont::CrossCouplingControlSequence, txCont::TxDAQCo
   return all(phase_ok) && all(amplitude_ok)
 end
 
-function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   
   Γt = transpose(checkVoltLimits(Γ,cont,return_time_signal=true))
   Ωt = transpose(checkVoltLimits(Ω,cont,return_time_signal=true))
-  @debug "checkFieldDeviation" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
+  @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
-  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
   @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
@@ -579,9 +581,13 @@ updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateCon
 function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   @debug "Updating control values"
   κ = calcControlMatrix(cont)
+
+  if !validateAgainstForwardCalibrationAndSafetyLimit(κ, Γ, cont, txCont)
+    error("Last control step produced unexpected results! Either your forward calibration is inaccurate or the system is not in the expected state (e.g. amp not on)!" )
+  end
   newTx = updateControlMatrix(cont, txCont, Γ, Ω, κ)
 
-  if checkFieldToVolt(κ, Γ, cont, txCont, Ω) && checkVoltLimits(newTx, cont)
+  if validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) && checkVoltLimits(newTx, cont)
     updateControlSequence!(cont, newTx)
     return true
   else
@@ -825,6 +831,35 @@ end
 #################################################################################
 
 
+function calcExpectedField(tx::Matrix{<:Complex}, cont::CrossCouplingControlSequence)
+  dividers = divider.(getPrimaryComponents(cont))
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
+  B_fw = tx ./ calibFieldToVoltEstimate
+  return B_fw
+end
+
+function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
+  N = rxNumSamplingPoints(cont.currSequence)
+  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
+  calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
+  B_fw = tx ./ calibFieldToVoltEstimate
+  return B_fw
+end
+
+function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController)
+  # step 1 apply forward calibration to tx -> B_fw
+  B_fw = calcExpectedField(tx, cont)
+  
+  # step 2 check B_fw against B (rel. and abs. Accuracy)
+  forwardCalibrationAgrees = isapprox.(abs.(B_fw), abs.(B), rtol = txCont.params.fieldToVoltRelDeviation, atol=ustrip(u"T",txCont.params.fieldToVoltAbsDeviation))
+  
+  @debug "validateAgainstForwardCalibrationAndSafetyLimit" abs.(B_fw) abs.(B) forwardCalibrationAgrees
+  # step 3 check if B_fw and B are both below safety limit
+  isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
+
+  return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
+end
 
 function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   dividers = divider.(getPrimaryComponents(cont))
@@ -835,10 +870,10 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured)./abs.(calibFieldToVoltEstimate))
   phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate) V/T and got $(calibFieldToVoltMeasured) V/T, deviation: $(abs_deviation*100) %"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
+  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
   
   if !valid
-    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
+    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
@@ -855,9 +890,9 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured[mask])./abs.(calibFieldToVoltEstimate[mask]))
   phase_deviation = angle.(calibFieldToVoltMeasured[mask]) .- angle.(calibFieldToVoltEstimate[mask])
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[mask]) V/T and got $(calibFieldToVoltMeasured[mask]) V/T, deviation: $abs_deviation"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
+  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
   if !valid
-    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
+    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
