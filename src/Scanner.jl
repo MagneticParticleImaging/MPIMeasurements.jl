@@ -26,7 +26,11 @@ end
 
 Retrieve the concrete type of a given supertype corresponding to a given string.
 """
+concreteTypesCache = Dict{String, Type}()
 function getConcreteType(supertype_::Type, type::String)
+  if haskey(concreteTypesCache, type)
+    return concreteTypesCache[type]
+  end
   knownTypes = deepsubtypes(supertype_)
   foundImplementation = nothing
   for Implementation in knownTypes
@@ -34,6 +38,7 @@ function getConcreteType(supertype_::Type, type::String)
       foundImplementation = Implementation
     end
   end
+  push!(concreteTypesCache, type=>foundImplementation)
   return foundImplementation
 end
 
