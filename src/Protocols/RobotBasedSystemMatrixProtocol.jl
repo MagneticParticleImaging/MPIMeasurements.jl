@@ -82,7 +82,7 @@ function SystemMatrixMeasState()
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
+    Matrix{Float32}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)

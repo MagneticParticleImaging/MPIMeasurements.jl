@@ -88,12 +88,12 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
   protocol.systemMeasState.currPos = 1
   protocol.systemMeasState.positions = protocol.params.positions
 
-  #Prepare Signals
+
   numRxChannels = length(rxChannels(protocol.params.sequences[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
   rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequences[1])
   numPeriods = acqNumPeriodsPerFrame(protocol.params.sequences[1])
-  signals = zeros(Float32, rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
-  protocol.systemMeasState.signals = signals
+
+  #= Initialization of signals happens in execute, to handle restoring the protocol=#
 
   protocol.systemMeasState.currentSignal = zeros(Float32, rxNumSamplingPoints, numRxChannels, numPeriods, 1)
 
@@ -142,9 +142,14 @@ function initMeasData(protocol::MultiSequenceSystemMatrixProtocol)
       restore(protocol)
     end
   end
-  # Set signals to zero if we didn't restore
+  # Initialize Signals
   if !protocol.restored
-    signals = mmap!(protocol, "signals.bin", protocol.systemMeasState.signals);
+    numRxChannels = length(rxChannels(protocol.params.sequences[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
+    rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequences[1])
+    numPeriods = acqNumPeriodsPerFrame(protocol.params.sequences[1])
+    numTotalFrames = length(protocol.systemMeasState.measIsBGFrame)
+    rm(file(protocol, "signals.bin"), force=true)
+    signals = mmap!(protocol, "signals.bin", Float32, (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames))
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
   end
@@ -238,7 +243,7 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   # Prepare
   calib = protocol.systemMeasState
   index = calib.currPos
-  @info "Measurement" index length(calib.positions)
+  @info "Measurement $index of $(length(calib.positions))" 
   daq = getDAQ(protocol.scanner)
 
   sequence = protocol.params.sequences[index]
@@ -322,8 +327,6 @@ function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProt
 end
 
 function store(protocol::MultiSequenceSystemMatrixProtocol, index)
-  filename = file(protocol, "meta.toml")
-  rm(filename, force=true)
 
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
@@ -337,6 +340,12 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   #params["temperatures"] = vec(sysObj.temperatures)
   params["sequences"] = toDict.(protocol.params.sequences)
 
+  filename = file(protocol, "meta.toml")
+  if isfile(filename)
+    filename_backup = file(protocol, "meta.toml.backup")
+    mv(filename, filename_backup, force=true)
+  end
+
   open(filename, "w") do f
     TOML.print(f, params)
   end
@@ -344,6 +353,7 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   Mmap.sync!(sysObj.signals)
   #Mmap.sync!(sysObj.drivefield)
   #Mmap.sync!(sysObj.applied)
+  rm(filename_backup, force=true)
   return
 end
 
