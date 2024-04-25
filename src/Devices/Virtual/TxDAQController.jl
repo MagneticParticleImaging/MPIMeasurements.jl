@@ -854,9 +854,10 @@ function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, 
   # step 2 check B_fw against B (rel. and abs. Accuracy)
   forwardCalibrationAgrees = isapprox.(abs.(B_fw), abs.(B), rtol = txCont.params.fieldToVoltRelDeviation, atol=ustrip(u"T",txCont.params.fieldToVoltAbsDeviation))
   
-  @debug "validateAgainstForwardCalibrationAndSafetyLimit" abs.(B_fw) abs.(B) forwardCalibrationAgrees isSafe(B_fw) isSafe(B)
   # step 3 check if B_fw and B are both below safety limit
   isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
+
+  @debug "validateAgainstForwardCalibrationAndSafetyLimit" abs.(B_fw) abs.(B) forwardCalibrationAgrees isSafe(B_fw) isSafe(B)
 
   return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
 end
