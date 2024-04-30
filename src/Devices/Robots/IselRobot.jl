@@ -327,7 +327,7 @@ function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Velocity})
   return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-steps2mm(rob, steps::Vector{Integer}) = steps2mm(rob, Int64.(steps))
+steps2mm(rob::IselRobot, steps::Vector{Integer}) = steps2mm(rob, Int64.(steps))
 steps2mm(rob::IselRobot, steps::Vector{Int64}) = steps ./ rob.params.stepsPermm * u"mm"
 
 
