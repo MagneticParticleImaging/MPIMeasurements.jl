@@ -3,12 +3,15 @@ export TxDAQControllerParams, TxDAQController, controlTx
 Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   phaseAccuracy::typeof(1.0u"rad")
   relativeAmplitudeAccuracy::Float64
-  controlPause::Float64
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
   maxControlSteps::Int64 = 20
-  fieldToVoltDeviation::Float64 = 0.2
-  findZeroDC::Bool = false
+  #fieldToVoltDeviation::Float64 = 0.2
+  controlDC::Bool = false
+  timeUntilStable::Float64 = 0.0
   minimumStepDuration::Float64 = 0.002
+  fieldToVoltRelDeviation::Float64 = 0.2
+  fieldToVoltAbsDeviation::typeof(1.0u"T") = 5.0u"mT"
+  maxField::typeof(1.0u"T") = 40.0u"mT"
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
 
@@ -34,8 +37,7 @@ mutable struct AWControlSequence <: ControlSequence
   controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
   refIndices::Vector{Int64}
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
-  dcCorrection::Union{Vector{Float64}, Nothing}
-  dcCalibration::Union{Vector{Float64}, Nothing}
+  dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
 end
 
 @enum ControlResult UNCHANGED UPDATED INVALID
@@ -45,6 +47,7 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
 
   ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
   cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
+  startFrame::Int64 = 1
 end
 
 function _init(tx::TxDAQController)
@@ -66,8 +69,12 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
   currSeq = prepareSequenceForControl(target)
 
-  duration = div(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq)), RoundUp)
-  acqNumFrames(currSeq, max(duration, 1))
+  measuredFrames = max(cld(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq))),1)
+  discardedFrames = cld(txCont.params.timeUntilStable, ustrip(u"s", dfCycle(currSeq)))
+  txCont.startFrame = discardedFrames + 1
+  acqNumFrames(currSeq, discardedFrames+measuredFrames)
+ 
+  
 
   applyForwardCalibration!(currSeq, daq) # uses the forward calibration to convert the values for the field from T to V
 
@@ -79,7 +86,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
   refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
   
-  controlSequenceType = decideControlSequenceType(target, txCont.params.findZeroDC)
+  controlSequenceType = decideControlSequenceType(target, txCont.params.controlDC)
   @debug "ControlSequence: Decided on using ControlSequence of type $controlSequenceType"
 
   if controlSequenceType==CrossCouplingControlSequence    
@@ -111,24 +118,24 @@ function ControlSequence(txCont::TxDAQController, target::Sequence, daq::Abstrac
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
 
-    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, nothing, nothing)
+    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, [])
   end
 end
 
-function decideControlSequenceType(target::Sequence, findZeroDC::Bool=false)
+function decideControlSequenceType(target::Sequence, controlDC::Bool=false)
 
   hasAWComponent = any(isa.([component for channel in getControlledChannels(target) for component in channel.components], ArbitraryElectricalComponent))
   moreThanOneComponent = any(x -> length(x.components) > 1, getControlledChannels(target))
   moreThanThreeChannels = length(getControlledChannels(target)) > 3
   moreThanOneField = length(getControlledFields(target)) > 1
   needsDecoupling_ = needsDecoupling(target)
-  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ findZeroDC
+  @debug "decideControlSequenceType:" hasAWComponent moreThanOneComponent moreThanThreeChannels moreThanOneField needsDecoupling_ controlDC
 
-  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
+  if needsDecoupling_ && !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !controlDC
       return CrossCouplingControlSequence
   elseif needsDecoupling_
-    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($findZeroDC) is also not possible"))
-  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !findZeroDC
+    throw(SequenceConfigurationError("The given sequence can not be controlled! To control a field with decoupling it cannot have an AW component ($hasAWComponent), more than one field ($moreThanOneField), more than three channels ($moreThanThreeChannels) nor more than one component per channel ($moreThanOneComponent). DC control ($controlDC) is also not possible"))
+  elseif !hasAWComponent && !moreThanOneField && !moreThanThreeChannels && !moreThanOneComponent && !controlDC
     return CrossCouplingControlSequence
   else 
     return AWControlSequence 
@@ -298,30 +305,6 @@ function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
   end
 end
 
-function measureMeanReferenceSignal(daq::AbstractDAQ, seq::Sequence)
-  channel = Channel{channelType(daq)}(32)
-  buf = AsyncBuffer(FrameBuffer(1, zeros(Float32,rxNumSamplesPerPeriod(seq),length(daq.rpv)*2,acqNumPeriodsPerFrame(seq),acqNumFrames(seq))), daq)
-  @info "DC Control measurement started"
-  producer = @async begin
-    @debug "Starting DC control producer" 
-    endSample = startProducer(channel, daq, 1)
-    endSequence(daq, endSample)
-  end
-  bind(channel, producer)
-  consumer = @async begin
-    while isopen(channel) || isready(channel)
-      while isready(channel)
-        chunk = take!(channel)
-        push!(buf, chunk)
-      end
-      sleep(0.001)
-    end      
-  end
-  
-  wait(consumer)
-  return mean(read(buf.target)[:,channelIdx(daq, daq.refChanIDs),1,1], dims=1)
-end
-
 function controlTx(txCont::TxDAQController, control::ControlSequence)
   # Prepare and check channel under control
   daq = dependency(txCont, AbstractDAQ)
@@ -364,46 +347,17 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
 
   # Hacky solution
   controlPhaseDone = false
+  controlPhaseError = nothing
   i = 1
 
   try
-    if txCont.params.findZeroDC # this is only possible with AWControlSequence
-      # create sequence with every field off, dc set to zero
-      # calculate mean for each ref channel
-      # create sequence with offsets set to small value
-      # measure men for each ref channel again
-      # use the two measurements to find the DC value that needs to be output to achieve zero on the reference channel
-      # always add found value to DC values in control
-      dc_cont = deepcopy(control)
-      signals = zeros(ComplexF64,controlMatrixShape(control))
-      updateControlSequence!(dc_cont, signals)
-      setup(daq, dc_cont.currSequence)
-      ref_offsets_0 = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
-
-      δ = ustrip.(u"V", [1u"mT"*abs(calibration(daq, id(channel))(0)) for channel in getControlledChannels(control)]) # use DC value for offsets
-      @debug "findZeroDC: Now outputting the following DC values: [V]" δ
-      signals[:,1] .= δ 
-      updateControlSequence!(dc_cont, signals)
-      setup(daq, dc_cont.currSequence)
-      ref_offsets_δ = measureMeanReferenceSignal(daq, dc_cont.currSequence)[control.refIndices]
-
-      dc_correction = -ref_offsets_0./((ref_offsets_δ.-ref_offsets_0)./δ)
-
-      @info "Result of finding Zero DC" ref_offsets_0' ref_offsets_δ' dc_correction' 
-      if any(abs.(dc_correction).>maximum(δ)) # We do not accept any change that is larger than what we would expect for 1mT
-        error("DC correction too large! Wanted to set $(dc_correction)")
-      end
-      control.dcCorrection = dc_correction
-      control.dcCalibration = (ref_offsets_δ.-ref_offsets_0)./δ
-      @info "Found DC Calibration" control.dcCalibration
-    end
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
       # Prepare control measurement
       setup(daq, control.currSequence)
 
-      if haskey(ENV, "JULIA_DEBUG") && "checkEachControlStep" in split(ENV["JULIA_DEBUG"],",")
+      if haskey(ENV, "JULIA_DEBUG") && contains(ENV["JULIA_DEBUG"],"checkEachControlStep")
         menu = REPL.TerminalMenus.RadioMenu(["Continue", "Abort"], pagesize=2)
         choice = REPL.TerminalMenus.request("Please confirm the current values for control:", menu)
         if choice == 1
@@ -438,9 +392,8 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
       @info "Evaluating control step"
       tmp = read(sink(buffer, DriveFieldBuffer))
       @debug "Size of calc fields from ref" size(tmp)
-      # TODO: Fix this to ensure, that the number of frames is alwys large enough (maybe add a parameter riseup time)
       
-      Γ = mean(tmp[:, :, 1, 1:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
+      Γ = mean(tmp[:, :, 1, txCont.startFrame:end],dims=3)[:,:,1] # calcFieldsFromRef happened here already
       if !isnothing(Γ)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone
@@ -455,6 +408,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     end
   catch ex
     @error "Exception during control loop" exception=(ex, catch_backtrace())
+    controlPhaseError = ex
   finally
     try 
       stopTx(daq)
@@ -489,7 +443,11 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   end
   
   if !controlPhaseDone
-    error("TxDAQController $(deviceID(txCont)) could not control.")
+    if isnothing(controlPhaseError)
+      error("TxDAQController $(deviceID(txCont)) could not reach a stable field after $(txCont.params.maxControlSteps) steps.")
+    else
+      error("TxDAQController $(deviceID(txCont)) failed control with the following message:\n$(sprint(showerror, controlPhaseError))")
+    end
   end
 
   return control
@@ -521,6 +479,8 @@ function getControlResult(cont::ControlSequence)::Sequence
   for field in fields(cont.targetSequence)
     if !control(field)
       push!(_fields, field)
+      # if there are LUT channels sharing a channel with the controlled fields, we should be able to use the DC calibration that has been found
+      # and insert it into the corresponding LUT channels as a calibration value
     end
   end
 
@@ -559,7 +519,7 @@ controlMatrixShape(cont::CrossCouplingControlSequence) = (numControlledChannels(
 controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef) = controlStep!(cont, txCont, uRef, calcDesiredField(cont))
 controlStep!(cont::ControlSequence, txCont::TxDAQController, uRef, Ω::Matrix{<:Complex}) = controlStep!(cont, txCont, calcFieldsFromRef(cont, uRef), Ω)
 function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
-  if checkFieldDeviation(cont, txCont, Γ, Ω)
+  if fieldAccuracyReached(cont, txCont, Γ, Ω)
     return UNCHANGED
   elseif updateControl!(cont, txCont, Γ, Ω)
     return UPDATED
@@ -568,9 +528,9 @@ function controlStep!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix
   end
 end
 
-#checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, uRef) = checkFieldDeviation(cont, txCont, calcFieldFromRef(cont, uRef))
-checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = checkFieldDeviation(cont, txCont, Γ, calcDesiredField(cont))
-function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+#fieldAccuracyReached(cont::ControlSequence, txCont::TxDAQController, uRef) = fieldAccuracyReached(cont, txCont, calcFieldFromRef(cont, uRef))
+fieldAccuracyReached(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = fieldAccuracyReached(cont, txCont, Γ, calcDesiredField(cont))
+function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
 
   diff = Ω - Γ
   abs_deviation = abs.(diff)
@@ -579,20 +539,20 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   phase_deviation = angle.(Ω).-angle.(Γ)
   phase_deviation[abs.(Ω).<1e-15] .= 0 # phase deviation does not make sense for a zero goal
 
-  if !needsDecoupling(cont.targetSequence) && !isa(cont,AWControlSequence)
+  if !needsDecoupling(cont.targetSequence)
     abs_deviation = diag(abs_deviation)
     rel_deviation = diag(rel_deviation)
     phase_deviation = diag(phase_deviation)
-  elseif isa(cont, AWControlSequence)
-    abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
-    rel_deviation = rel_deviation[allComponentMask(cont)]'
-    phase_deviation = phase_deviation[allComponentMask(cont)]'
-    Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-    Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+  # elseif isa(cont, AWControlSequence)
+  #   abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
+  #   rel_deviation = rel_deviation[allComponentMask(cont)]'
+  #   phase_deviation = phase_deviation[allComponentMask(cont)]'
+  #   Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
+  #   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
 
-    diff = (Ωt .- Γt)
-    @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
-    @debug "checkFieldDeviation" max_diff = maximum(abs.(diff))
+  #   diff = (Ωt .- Γt)
+  #   @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
+  #   @info "fieldAccuracyReached2" max_diff = maximum(abs.(diff))
   end
   @debug "Check field deviation [T]" Ω Γ
   @debug "Ω - Γ = " abs_deviation rel_deviation phase_deviation
@@ -603,16 +563,15 @@ function checkFieldDeviation(cont::ControlSequence, txCont::TxDAQController, Γ:
   return all(phase_ok) && all(amplitude_ok)
 end
 
-function checkFieldDeviation(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
+function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   
-  Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-  Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
-  @debug "checkFieldDeviation" Γ[allComponentMask(cont)]' abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
+  Γt = transpose(checkVoltLimits(Γ,cont,return_time_signal=true))
+  Ωt = transpose(checkVoltLimits(Ω,cont,return_time_signal=true))
+  @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
-  diff = diff .- mean(diff, dims=1)
-  @debug "checkFieldDeviation" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
-  @info "Observed field deviation:\nmax_diff:\t$(maximum(abs.(diff))*1000) mT"
-  diff = diff .- mean(diff, dims=1)
+  zero_mean_diff = diff .- mean(diff, dims=1)
+  @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
 end
@@ -622,13 +581,17 @@ updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateCon
 function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   @debug "Updating control values"
   κ = calcControlMatrix(cont)
+
+  if !validateAgainstForwardCalibrationAndSafetyLimit(κ, Γ, cont, txCont)
+    error("Last control step produced unexpected results! Either your forward calibration is inaccurate or the system is not in the expected state (e.g. amp not on)!" )
+  end
   newTx = updateControlMatrix(cont, txCont, Γ, Ω, κ)
 
-  if checkFieldToVolt(κ, Γ, cont, txCont, Ω) && checkVoltLimits(newTx, cont)
+  if validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) && checkVoltLimits(newTx, cont)
     updateControlSequence!(cont, newTx)
     return true
   else
-    @warn "New control values are not allowed"
+    error("The new tx values are not allowed! Either your forward calibration is inaccurate or the system can not produce the requested field strength!")
     return false
   end
 end
@@ -656,10 +619,18 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   newTx = κ./Γ.*Ω
 
   # handle DC separately:
-  if txCont.params.findZeroDC
-    @info "update ControlMatrix" κ[:,1] newTx[:,1]
-    @info "2" Γ[:,1] (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
-    newTx[:,1] .= (κ[:,1].+(Ω[:,1].-Γ[:,1])./cont.dcCalibration)-cont.dcCorrection
+  if txCont.params.controlDC
+    push!(cont.dcSearch, (V=κ[:,1], B=Γ[:,1]))
+    if length(cont.dcSearch)==1
+      my_sign(x) = if x<0; -1 else 1 end
+      testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
+      newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
+    else
+      @debug "History of dcSearch" cont.dcSearch
+      last = cont.dcSearch[end]
+      previous = cont.dcSearch[end-1]
+      newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+    end
   end
 
   #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
@@ -717,7 +688,7 @@ function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   spectrum[1,:,:,:] ./= 2
   sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fb_calibration = reduce(vcat, [ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
+  fb_calibration = reduce(vcat, transpose([ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
   return sortedSpectrum.*fb_calibration
 end
 
@@ -838,12 +809,7 @@ end
 function updateControlSequence!(cont::AWControlSequence, newTx::Matrix)
   for (i, channel) in enumerate(periodicElectricalTxChannels(cont.currSequence))
     if cont.rfftIndices[i,end,1]
-      if !isnothing(cont.dcCorrection)
-        @debug "updateControlSequence" (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V"
-        offset!(channel, (cont.dcCorrection[i]+real(newTx[i,1]))*1.0u"V")
-      else
         offset!(channel, real(newTx[i,1])*1.0u"V")
-      end
     end
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
@@ -865,6 +831,36 @@ end
 #################################################################################
 
 
+function calcExpectedField(tx::Matrix{<:Complex}, cont::CrossCouplingControlSequence)
+  dividers = divider.(getPrimaryComponents(cont))
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
+  B_fw = tx ./ calibFieldToVoltEstimate
+  return B_fw
+end
+
+function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
+  N = rxNumSamplingPoints(cont.currSequence)
+  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
+  calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
+  B_fw = tx ./ calibFieldToVoltEstimate
+  return B_fw
+end
+
+function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController)
+  # step 1 apply forward calibration to tx -> B_fw
+  B_fw = calcExpectedField(tx, cont)
+  
+  # step 2 check B_fw against B (rel. and abs. Accuracy)
+  forwardCalibrationAgrees = isapprox.(abs.(B_fw), abs.(B), rtol = txCont.params.fieldToVoltRelDeviation, atol=ustrip(u"T",txCont.params.fieldToVoltAbsDeviation))
+  
+  # step 3 check if B_fw and B are both below safety limit
+  isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
+
+  @debug "validateAgainstForwardCalibrationAndSafetyLimit" abs.(B_fw) abs.(B) forwardCalibrationAgrees isSafe(B_fw) isSafe(B)
+
+  return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
+end
 
 function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   dividers = divider.(getPrimaryComponents(cont))
@@ -875,10 +871,10 @@ function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont:
   abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured)./abs.(calibFieldToVoltEstimate))
   phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate) V/T and got $(calibFieldToVoltMeasured) V/T, deviation: $(abs_deviation*100) %"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
+  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
   
   if !valid
-    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
+    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end
@@ -888,16 +884,16 @@ end
 function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::AWControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
   N = rxNumSamplingPoints(cont.currSequence)
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  calibFieldToVoltEstimate = reduce(vcat,[ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]')
+  calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
   calibFieldToVoltMeasured = oldTx ./ Γ
 
   mask = allComponentMask(cont) .& (abs.(Ω).>1e-15)
   abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured[mask])./abs.(calibFieldToVoltEstimate[mask]))
   phase_deviation = angle.(calibFieldToVoltMeasured[mask]) .- angle.(calibFieldToVoltEstimate[mask])
   @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[mask]) V/T and got $(calibFieldToVoltMeasured[mask]) V/T, deviation: $abs_deviation"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltDeviation
+  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
   if !valid
-    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltDeviation*100) %"
+    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
   elseif maximum(abs.(phase_deviation)) > 10/180*pi
     @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
   end

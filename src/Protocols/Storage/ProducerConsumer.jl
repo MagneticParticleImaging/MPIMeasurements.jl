@@ -7,9 +7,7 @@ function SequenceMeasState(daq::RedPitayaDAQ, sequence::ControlSequence, sequenc
   frameAvgs = acqNumFrameAverages(sequence.targetSequence)
   if frameAvgs > 1
      samples = rxNumSamplesPerPeriod(sequence.targetSequence)
-     @info daq.refChanIDs length(daq.refChanIDs)
-     #TODO/JA: replace hardcoded 3
-     buffer = AverageBuffer(buffer, samples, 3, numPeriods, frameAvgs)
+     buffer = AverageBuffer(buffer, samples, length(daq.refChanIDs), numPeriods, frameAvgs)
    end
   return SequenceMeasState(daq, sequence.targetSequence, push!(sequenceBuffer, buffer))
 end

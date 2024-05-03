@@ -88,12 +88,12 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
   protocol.systemMeasState.currPos = 1
   protocol.systemMeasState.positions = protocol.params.positions
 
-  #Prepare Signals
+
   numRxChannels = length(rxChannels(protocol.params.sequences[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
   rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequences[1])
   numPeriods = acqNumPeriodsPerFrame(protocol.params.sequences[1])
-  signals = zeros(Float32, rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames)
-  protocol.systemMeasState.signals = signals
+
+  #= Initialization of signals happens in execute, to handle restoring the protocol=#
 
   protocol.systemMeasState.currentSignal = zeros(Float32, rxNumSamplingPoints, numRxChannels, numPeriods, 1)
 
@@ -142,9 +142,14 @@ function initMeasData(protocol::MultiSequenceSystemMatrixProtocol)
       restore(protocol)
     end
   end
-  # Set signals to zero if we didn't restore
+  # Initialize Signals
   if !protocol.restored
-    signals = mmap!(protocol, "signals.bin", protocol.systemMeasState.signals);
+    numRxChannels = length(rxChannels(protocol.params.sequences[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
+    rxNumSamplingPoints = rxNumSamplesPerPeriod(protocol.params.sequences[1])
+    numPeriods = acqNumPeriodsPerFrame(protocol.params.sequences[1])
+    numTotalFrames = length(protocol.systemMeasState.measIsBGFrame)
+    rm(file(protocol, "signals.bin"), force=true)
+    signals = mmap!(protocol, "signals.bin", Float32, (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames))
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
   end
@@ -203,12 +208,11 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
     end
 
     wasRestored = protocol.restored
-    timePreparing = @elapsed begin
+    timeWaited = @elapsed begin
       wait(calib.producer)
       wait(calib.consumer)
-      prepareDAQ(protocol)
     end
-    diffTime = protocol.params.waitTime - timePreparing
+    diffTime = protocol.params.waitTime - timeWaited
     if diffTime > 0.0 && !wasRestored && protocol.systemMeasState.currPos > 1
       @info "Wait $diffTime s for next measurement"
       sleep(diffTime)
@@ -239,13 +243,14 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   # Prepare
   calib = protocol.systemMeasState
   index = calib.currPos
-  @info "Measurement" index length(calib.positions)
+  @info "Measurement $index of $(length(calib.positions))" 
   daq = getDAQ(protocol.scanner)
 
   sequence = protocol.params.sequences[index]
   if protocol.params.controlTx
-    sequence = protocol.contSequence.targetSequence
+    sequence = controlTx(protocol.txCont, sequence)
   end
+  setup(daq, sequence)
 
   channel = Channel{channelType(daq)}(32)
   calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, sequence)
@@ -261,29 +266,29 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   calib.currPos += 1
 end
 
-function prepareDAQ(protocol::MultiSequenceSystemMatrixProtocol)
-  calib = protocol.systemMeasState
-  daq = getDAQ(protocol.scanner)
+# function prepareDAQ(protocol::MultiSequenceSystemMatrixProtocol)
+#   calib = protocol.systemMeasState
+#   daq = getDAQ(protocol.scanner)
 
-  sequence = protocol.params.sequences[calib.currPos]
-  if protocol.params.controlTx
-    if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
-      protocol.contSequence = controlTx(protocol.txCont, protocol.params.sequence)
-    end
-    #if isempty(protocol.systemMeasState.drivefield)
-    #  len = length(keys(protocol.contSequence.simpleChannel))
-    #  drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-    #  calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
-    #  applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-    #  calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
-    #end
-    sequence = protocol.contSequence
-  end
-  setup(daq, sequence)
-  if protocol.restored
-    protocol.restored = false
-  end
-end
+#   sequence = protocol.params.sequences[calib.currPos]
+#   if protocol.params.controlTx
+#     if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
+#     sequence = controlTx(protocol.txCont, sequence)
+#     end
+#     #if isempty(protocol.systemMeasState.drivefield)
+#     #  len = length(keys(protocol.contSequence.simpleChannel))
+#     #  drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+#     #  calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
+#     #  applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+#     #  calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
+#     #end
+#     #sequence = protocol.contSequence
+#   end
+#   setup(daq, sequence)
+#   if protocol.restored
+#     protocol.restored = false
+#   end
+# end
 
 function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProtocol, index)
   calib = protocol.systemMeasState
@@ -322,8 +327,6 @@ function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProt
 end
 
 function store(protocol::MultiSequenceSystemMatrixProtocol, index)
-  filename = file(protocol, "meta.toml")
-  rm(filename, force=true)
 
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
@@ -337,6 +340,12 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   #params["temperatures"] = vec(sysObj.temperatures)
   params["sequences"] = toDict.(protocol.params.sequences)
 
+  filename = file(protocol, "meta.toml")
+  if isfile(filename)
+    filename_backup = file(protocol, "meta.toml.backup")
+    mv(filename, filename_backup, force=true)
+  end
+
   open(filename, "w") do f
     TOML.print(f, params)
   end
@@ -344,6 +353,7 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   Mmap.sync!(sysObj.signals)
   #Mmap.sync!(sysObj.drivefield)
   #Mmap.sync!(sysObj.applied)
+  rm(filename_backup, force=true)
   return
 end
 
