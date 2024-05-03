@@ -307,10 +307,12 @@ isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDF
 
 include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
-include("MPSMeasurementProtocol.jl")
 include("MPIForceProtocol.jl")
 include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("ContinousMeasurementProtocol.jl")
 include("MultiSequenceSystemMatrixProtocol.jl")
 #include("TransferFunctionProtocol.jl")
+include("AbstractMPSProtocol.jl")
+include("MPSMeasurementProtocol.jl")
+include("MPSSystemMatrixProtocol.jl")
