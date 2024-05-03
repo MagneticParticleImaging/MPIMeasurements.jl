@@ -89,7 +89,6 @@ function _init(protocol::MPSSystemMatrixProtocol)
     protocol.patchPermutation = patchPerm
     protocol.offsetfields = offsets
     protocol.calibsize = calibsize
-    @debug "Prepared Protocol Sequence: $(length(patchPerm)) measured and $(length(perm)) valid patches in Permutation"
   catch e
     throw(e)
   end

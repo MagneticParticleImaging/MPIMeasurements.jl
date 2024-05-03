@@ -44,20 +44,22 @@ mutable struct MPSBuffer <: IntermediateBuffer
   permutation::Vector{Union{Int64, Nothing}}
   average::Int64
   counter::Int64
-  total::Int64
+  limit::Int64
+  stride::Int64
+  MPSBuffer(target, perm, average, counter, limit) = new(target, perm, average, counter, limit, length(unique(filter(!isnothing, perm))))
 end
 function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
   from = nothing
   to = nothing
   for i = 1:size(frames, 4)
-    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.total)
-    patchCounter = mod1(mpsBuffer.counter, mpsBuffer.total)
+    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.limit)
+    patchCounter = mod1(mpsBuffer.counter, mpsBuffer.limit)
     patchIdx = mpsBuffer.permutation[patchCounter]
     if !isnothing(patchIdx)
       if mpsBuffer.average > 1
-        to = insert!(+, mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i)./mpsBuffer.average)
+        to = insert!(+, mpsBuffer.target, frameIdx * mpsBuffer.stride + patchIdx, view(frames, :, :, :, i:i)./mpsBuffer.average)
       else
-        to = insert!(mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i))
+        to = insert!(mpsBuffer.target, frameIdx * mpsBuffer.stride + patchIdx, view(frames, :, :, :, i:i))
       end
     end
     mpsBuffer.counter += 1
@@ -85,16 +87,15 @@ function SequenceMeasState(protocol::AbstractMPSProtocol, sequence::Sequence; pa
   
   # Now for the buffer chain we want to reinterpret periods to frames
   # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
+  oldFrames = acqNumFrames(sequence)
   acqNumFrames(sequence, acqNumFrames(sequence) * periodsPerFrame(daq.rpc))
   setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
-
-  numFrames = acqNumFrames(sequence)
 
   # Prepare buffering structures:
   # RedPitaya-> MPSBuffer -> Splitter --> FrameBuffer{Mmap}
   #                                   |-> DriveFieldBuffer 
   numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
-  numFrames = div(numValidPatches, averages)
+  numFrames = div(numValidPatches, averages) * oldFrames
   bufferSize = (rxNumSamplingPoints(sequence), length(rxChannels(sequence)), 1, numFrames)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
 
