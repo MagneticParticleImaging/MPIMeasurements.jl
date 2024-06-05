@@ -1,5 +1,5 @@
 export IselRobot, IselRobotParams, IselRobotPortParams, IselRobotPoolParams
-export initZYX, refZYX, initRefZYX, simRefZYX, prepareRobot
+export simRefZYX
 export setZeroPoint, setBrake, setFree, setStartStopFreq, setAcceleration
 export iselErrorCodes
 export readIOInput, writeIOOutput
@@ -40,7 +40,8 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
-  stepsPermm::Float64 = 100
+  stepsPermm::Union{Vector{Int64}, Int64} = 100
+  roundmmDigits::Int64 = 1 
 
   serial_port::String
   @add_serial_device_fields "\r"
@@ -62,7 +63,8 @@ Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   minMaxVel::Vector{Int64} = [30,10000] # velocity in steps/s
   minMaxAcc::Vector{Int64} = [1,4000] # acceleration in (steps/s)/ms
   minMaxFreq::Vector{Int64} = [20,4000] # initial speed of acceleration ramp in steps/s
-  stepsPermm::Float64 = 100
+  stepsPermm::Union{Vector{Int64}, Int64} = 100
+  roundmmDigits::Int64 = 1
 
   description::String
   @add_serial_device_fields "\r"
@@ -109,7 +111,7 @@ function _getPosition(robot::IselRobot)
   ret = queryIsel(robot, "@0P", 19)
   checkIselError(string(ret[1]))
   pos = _parseIselPos(ret[2:19])
-  return steps2mm.(pos, robot.params.stepsPermm)
+  return steps2mm(robot, pos)
 end
 
 function initSerialDevice(rob::IselRobot, params::IselRobotPortParams)
@@ -126,7 +128,7 @@ end
 function _setup(rob::IselRobot)
   rob.sd = initSerialDevice(rob, rob.params)
 
-  # TODO: verify the way to identify the controller version 
+  # TODO: verify the way to identify the controller version
   if queryIsel(rob, "@0Id 1600,1600,1600,1600") == "5"
     rob.controllerVersion = 1
   else
@@ -156,7 +158,7 @@ function _enable(robot::IselRobot, version::IselC142)
   _setMotorCurrent(robot, true)
 end
 
-function _disable(robot::IselRobot) 
+function _disable(robot::IselRobot)
   writeIOOutput(robot, zeros(Bool, 8))
   _disable(robot, controllerVersion(robot))
 end
@@ -214,7 +216,7 @@ function _isReferenced(robot::IselRobot)
 end
 _isReferenced(robot::IselRobot, version::IselC142) = robot.isReferenced
 function _isReferenced(robot::IselRobot, version::IseliMCS8)
-  try 
+  try
     currPos = getPosition(robot)
     currPos[1] += 0.01u"mm"
     #need to add 0.01mm, otherwise moveAbs returns 0 although it is no longer referenced
@@ -224,7 +226,7 @@ function _isReferenced(robot::IselRobot, version::IseliMCS8)
     @debug ex
   end
   return false
-end 
+end
 
 function _reset(rob::IselRobot)
   close(rob)
@@ -236,37 +238,54 @@ function _moveAbs(rob::IselRobot, pos::Vector{<:Unitful.Length}, speed::Union{Ve
   waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
-  steps = mm2steps.(pos, rob.params.stepsPermm)
+  steps = mm2steps(rob, pos)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
-  vel = mm2steps.(speed, rob.params.stepsPermm)
+  vel = mm2steps(rob, speed)
+
+  tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
+  # calclulate the timeout needed to do the full movement
+  minimum(getPositionScannerCoords(rob))
+  # TODO: following code can fail for negativ pos values. Pos values should be calclulated as pos minus current posistion
+  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* ((maximum(pos)-minimum(getPositionScannerCoords(rob)))/minimum(rob.params.defaultVel))/Unitful.s)])
+  rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
+  @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
+
   if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
     cmd = string("@0M", " ", steps[1], ",", vel[1], ",", steps[2], ",", vel[2], ",", steps[3], ",", vel[3], ",", 0, ",", 30)
     ret = queryIsel(rob, cmd)
     checkIselError(ret)
   else
-    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+    error("Velocities set not in the range of $(steps2mm(rob, rob.params.minMaxVel)/u"s"), you are trying to set: $speed")
   end
+  rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
 
 function _moveRel(rob::IselRobot, dist::Vector{<:Unitful.Length}, speed::Union{Vector{<:Unitful.Velocity},Nothing})
   waitEnableTime(rob)
   # for z-axis two steps and velocities are needed, compare documentation
   # set second z steps to zero
-  steps = mm2steps.(dist, rob.params.stepsPermm)
+  steps = mm2steps(rob, dist)
   if speed === nothing
     speed = defaultVelocity(rob)
   end
-  vel = mm2steps.(speed, rob.params.stepsPermm)
+  vel = mm2steps(rob, speed)
+
+  tempTimeout = rob.sd.timeout_ms # store the robot timeout default value
+  # calclulate the timeout needed to do the full movement
+  calculatedTimeout = maximum([tempTimeout, round(Int, 1000 * 1.5* (maximum(dist)/minimum(rob.params.defaultVel))/Unitful.s)])
+  rob.sd.timeout_ms = calculatedTimeout # set the robot Timeout to the calculated value
+  @debug "Robot timeout (rob.sd.timeout_ms) was temporarily set to $(calculatedTimeout) ms inside the function `$(nameof(var"#self#"))`."
 
   if all(rob.params.minMaxVel[1] .<= vel .<= rob.params.minMaxVel[2])
     cmd = string("@0A"," ",steps[1],",",vel[1], ",",steps[2],",",vel[2], ",",steps[3],",",vel[3], ",",0,",",30)
     ret = queryIsel(rob, cmd)
     checkIselError(ret)
   else
-    error("Velocities set not in the range of $(steps2mm.(rob.params.minMaxVel, rob.params.stepsPermm)/u"s"), you are trying to set: $speed")
+    error("Velocities set not in the range of $(steps2mm(rob, rob.params.minMaxVel)/u"s"), you are trying to set: $speed")
   end
+  rob.sd.timeout_ms = tempTimeout # set the robot Timeout to the default value
 end
 
 function waitEnableTime(robot::IselRobot)
@@ -277,7 +296,7 @@ function waitEnableTime(robot::IselRobot)
 end
 
 macro minimumISELversion(version::Int)
-  return esc(quote 
+  return esc(quote
     if rob.controllerVersion < $version
         @error "The desired function $(var"#self#") is not available for ISEL version $(rob.controllerVersion), the minimum version is $($version)"
         return nothing
@@ -298,22 +317,23 @@ function _parseIselPos(ret::AbstractString)
   return [xPos,yPos,zPos]
 end
 
-function mm2steps(len::Unitful.Length, stepsPermm::Real)
-  temp = round(ustrip(u"mm", len), digits=1) # round to 100um due to step error after setting powerless
-  return round(Int64, temp * stepsPermm)
+function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Length})
+  temp = round.(ustrip.(u"mm", len), digits=rob.params.roundmmDigits) # round to 100um due to step error after setting powerless
+  return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-function mm2steps(len::Unitful.Velocity, stepsPermm::Real)
-  temp = round(ustrip(u"mm/s", len), digits=1) # round to 100um due to step error after setting powerless
-  return round(Int64, temp * stepsPermm)
+function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Velocity})
+  temp = round.(ustrip.(u"mm/s", len), digits=rob.params.roundmmDigits) # round to 100um due to step error after setting powerless
+  return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-steps2mm(steps::Integer, stepsPermm::Real) = Int64(steps) / stepsPermm * u"mm"
+steps2mm(rob::IselRobot, steps::Vector{Integer}) = steps2mm(rob, Int64.(steps))
+steps2mm(rob::IselRobot, steps::Vector{Int64}) = steps ./ rob.params.stepsPermm * u"mm"
 
 
 """ Sets the Reference velocities of the axes x,y,z """
 function setRefVelocity(rob::IselRobot, vel::Vector{<:Unitful.Velocity})
-  vel = mm2steps.(vel, rob.params.stepsPermm)
+  vel = mm2steps(rob, vel)
   minVel = rob.params.minMaxVel[1]
   maxVel = rob.params.minMaxVel[2]
 
@@ -406,7 +426,7 @@ function setStartStopFreq(robot::IselRobot, version::IseliMCS8, frequency)
   end
 end
 function setStartStopFreq(robot::IselRobot, frequency)
-  setStartStopFreq(robot, controllerVersion(robot), frequency)  
+  setStartStopFreq(robot, controllerVersion(robot), frequency)
 end
 
 """ Sets brake, brake=false no current on brake , brake=true current on brake """
@@ -444,7 +464,7 @@ invertAxesYZ(robot::IselRobot) = invertAxes(robot, [false, true, true])
 
 """ Inverts the axis for z """
 invertAxisZ(robot::IselRobot) = invertAxes(robot, [false, false, true])
-    
+
 
 function checkIselError(ret::AbstractString)
   if ret != "0"

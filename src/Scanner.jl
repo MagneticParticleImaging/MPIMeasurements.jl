@@ -2,9 +2,9 @@ import Base: convert
 
 export MPIScanner, MPIScannerGeneral, scannerBoreSize, scannerFacility,
        scannerManufacturer, scannerName, scannerTopology, scannerGradient, scannerDatasetStore,
-       name, configDir, generalParams, getDevice, getDevices, getSequenceList,
-       asyncMeasurement, SequenceMeasState, asyncProducer, prepareAsyncMeasurement,
-       getProtocolList, setProtocol, getTransferFunctionList
+       name, configDir, generalParams, getDevice, getDevices, Device, Devices, getSequenceList,
+       asyncMeasurement, SequenceMeasState, asyncProducer,
+       getProtocolList, getTransferFunctionList
 
 """
     $(SIGNATURES)
@@ -46,11 +46,11 @@ The device types are referenced by strings matching their device struct name.
 All device structs are supplied with the device ID and the corresponding
 device configuration struct.
 """
-function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false)
+function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, Any}; robust = false, order::Vector{String} = get(devicesParams, "initializationOrder", String[]))
   devices = Dict{String, Device}()
 
   # Get implementations for all devices in the specified order
-  for deviceID in devicesParams["initializationOrder"]
+  for deviceID in order
     params = nothing
     if haskey(devicesParams, deviceID)
       params = devicesParams[deviceID]
@@ -59,63 +59,65 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
     end
 
     if !isnothing(params)
-      deviceType = pop!(params, "deviceType")
-
-      dependencies_ = Dict{String, Union{Device, Missing}}()
-      if haskey(params, "dependencies")
-        deviceDepencencies = pop!(params, "dependencies")
-        for dependencyID in deviceDepencencies
-          dependencies_[dependencyID] = missing
-        end
-      end
-
-      DeviceImpl = getConcreteType(Device, deviceType)
-      if isnothing(DeviceImpl)
-        error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
-      end
-      validateDeviceStruct(DeviceImpl)
-
-      paramsInst = getFittingDeviceParamsType(params, deviceType)
-      if isnothing(paramsInst)
-        error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
-      end
-
-      devices[deviceID] = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
-    else
-      throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
-    end
-  end
-
-  # Set dependencies for all devices
-  for device in Base.values(devices)
-    for dependencyID in keys(dependencies(device))
-      device.dependencies[dependencyID] = devices[dependencyID]
-    end
-
-    if !checkDependencies(device)
-      throw(ScannerConfigurationError("Unspecified dependency error in device with "
-                                     *"ID `$(deviceID(device))`. The device depends "
-                                     *"on the following device IDs: $(keys(device.dependencies))"))
-    end
-  end
-
-  # Initiate all devices in the specified order
-  for deviceID in devicesParams["initializationOrder"]
-    try
-      init(devices[deviceID])
-      if !isOptional(devices[deviceID]) && !isPresent(devices[deviceID])
+      dependencies = filter(kv -> in(kv[1], get(params, "dependencies", String[])), devices)
+      device = Device(deviceID, params; dependencies = dependencies, robust = robust)
+ 
+      if !isOptional(device) && !isPresent(device)
         @error "The device with ID `$deviceID` should be present but isn't."
       end
-    catch e
-      if !robust
-        rethrow()
-      else
-        @warn e
-      end
+
+      devices[deviceID] = device
     end
+
   end
 
   return devices
+end
+
+function Device(deviceID::String, deviceParams::Dict{String, Any}; dependencies::Dict{String, Device}, robust::Bool = false)
+  device = nothing
+  params = copy(deviceParams)
+
+  # Remove meta-data keys from dict
+  deviceType = pop!(params, "deviceType")
+  deviceDepencencies = pop!(params, "dependencies", String[])
+
+  try 
+    # Set dependencies
+    dependencies_ = Dict{String, Union{Device, Missing}}()
+    for dependencyID in deviceDepencencies
+      dependencies_[dependencyID] = get(dependencies, dependencyID, missing)
+    end
+
+    # Find valid device struct
+    DeviceImpl = getConcreteType(Device, deviceType)
+    if isnothing(DeviceImpl)
+      error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
+    end
+    validateDeviceStruct(DeviceImpl)
+
+    # Find fitting parameter struct
+    paramsInst = getFittingDeviceParamsType(params, deviceType)
+    if isnothing(paramsInst)
+      error("Could not find a fitting device parameter struct for device ID `$deviceID`.")
+    end
+
+    # Construct device
+    device = DeviceImpl(deviceID=deviceID, params=paramsInst, dependencies=dependencies_) # All other fields must have default values!
+    
+    # Initialize device
+    checkDependencies(device)
+    init(device)
+
+  catch e
+    if !robust
+      rethrow()
+    else
+      @warn e
+    end
+  end
+
+  return device
 end
 
 function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::String)
@@ -142,6 +144,22 @@ function getFittingDeviceParamsType(params::Dict{String, Any}, deviceType::Strin
   else
     return nothing
   end
+end
+
+function dependenciesDFS(deviceIDs::Vector{String}, params::Dict{String, Any})
+  stack = String[deviceIDs...]
+  devices = String[]
+  
+  # Find all dependencies
+  while !isempty(stack)
+    device = pop!(stack)
+    if !in(device, devices)
+      push!(devices, device)
+      push!(stack, get(params[device], "dependencies", String[])...)
+    end
+  end
+
+  return devices
 end
 
 """
@@ -205,23 +223,10 @@ mutable struct MPIScanner
   function MPIScanner(name::AbstractString; robust=false)
     # Search for scanner configurations of the given name in all known configuration directories
     # If you want to add a configuration directory, please use addConfigurationPath(path::String)
-    filename = nothing
-    configDir = nothing
-    for path in scannerConfigurationPath
-      configDir = joinpath(path, name)
-      if isdir(configDir)
-        filename = joinpath(configDir, "Scanner.toml")
-        break
-      end
-    end
-
-    if isnothing(filename)
-      throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
-    end
-
+    configDir = findConfigDir(name)
+    params = getScannerParams(configDir)
+    
     @debug "Instantiating scanner `$name` from configuration file at `$filename`."
-
-    params = TOML.parsefile(filename)
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(configDir, params["Devices"], robust = robust)
@@ -232,6 +237,23 @@ mutable struct MPIScanner
   end
 end
 
+function findConfigDir(name::AbstractString)
+  for path in scannerConfigurationPath
+    configDir = joinpath(path, name)
+    if isdir(configDir)
+      return configDir
+    end
+  end
+  return nothing
+end
+
+function getScannerParams(configDir::String)
+  filename = isnothing(configDir) ? nothing : joinpath(configDir, "Scanner.toml")
+  if isnothing(filename)
+    throw(ScannerConfigurationError("Could not find a valid configuration for scanner with name `$name`. Search path contains the following directories: $scannerConfigurationPath."))
+  end
+  return TOML.parsefile(filename)
+end
 """
     $(SIGNATURES)
 
@@ -268,10 +290,19 @@ getDevice(scanner::MPIScanner, deviceID::String) = scanner.devices[deviceID]
 """
     $(SIGNATURES)
 
+Initialize and retrieve a device by its `deviceID` from a scanners configuration file. Also initializes the devices dependency tree according to the initialization order defined in the configuration file.
+"""
+function Device(scannerName::String, deviceID::String; kwargs...) 
+  devices = Devices(scannerName, [deviceID]; kwargs...)
+  return isempty(devices) ? nothing : first(devices)
+end
+"""
+    $(SIGNATURES)
+
 Retrieve all devices of a specific `deviceType`. Returns an empty vector if none are found
 """
-function getDevices(scanner::MPIScanner, deviceType::Type{<:Device})
-  matchingDevices = Vector{Device}()
+function getDevices(scanner::MPIScanner, deviceType::Type{T}) where {T<:Device}
+  matchingDevices = Vector{T}()
   for (deviceID, device) in scanner.devices
     if typeof(device) <: deviceType && isPresent(device)
       push!(matchingDevices, device)
@@ -284,6 +315,33 @@ function getDevices(scanner::MPIScanner, deviceType::String)
   push!(knownDeviceTypes, Device)
   deviceTypeSearched = knownDeviceTypes[findall(type->string(type)==deviceType, knownDeviceTypes)][1]
   return getDevices(scanner, deviceTypeSearched)
+end
+function getDevices(scanner::MPIScanner, deviceIDs::Vector{String})
+  matchingDevices = Vector{Device}()
+  for (deviceID, device) in scanner.devices
+    if in(deviceID, deviceIDs) && isPresent(device)
+      push!(matchingDevices, device)
+    end
+  end
+  return matchingDevices
+end
+
+"""
+    $(SIGNATURES)
+
+Initialize and retrieve devices by their`deviceID` from a scanners configuration file. Also initializes the devices dependency trees according to the initialization order defined in the configuration file..
+"""
+function Devices(scannerName::String, deviceIDs::Vector{String}; kwargs...)
+  configDir = findConfigDir(scannerName)
+  params = getScannerParams(configDir)["Devices"]
+
+  devices = dependenciesDFS(deviceIDs, params)
+
+  order = filter(x -> in(x, devices), params["initializationOrder"])
+  
+  deviceDict = initiateDevices(configDir, params; kwargs..., order = order)
+
+  return [deviceDict[id] for id in deviceIDs]
 end
 
 """
@@ -313,7 +371,7 @@ end
 
 function getDevices(f::Function, scanner::MPIScanner, arg)
   c_ex = nothing
-  devices = getDevice(scanner, arg)
+  devices = getDevices(scanner, arg)
   if !isnothing(devices) && !isempty(devices)
     for device in devices
       try
@@ -332,6 +390,32 @@ function getDevices(f::Function, scanner::MPIScanner, arg)
     throw(c_ex)
   end
   nothing
+end
+
+
+init(scanner::MPIScanner, devices::Vector{<:Device}; kwargs...) = init(scanner, map(deviceID, devices); kwargs...)
+"""
+    $SIGNATURES
+
+(Re-)initializes the given devices of a Scanner according to the current configuration file. This also initializes all dependencies of the given devices.
+This does not initialize devices that themselves depend on the given devices.
+"""
+function init(scanner::MPIScanner, deviceIDs::Vector{String} = getDeviceIDs(scanner); kwargs...)
+  configDir = scanner.configDir
+  params = getScannerParams(configDir)["Devices"]
+
+  devices = dependenciesDFS(deviceIDs, params)
+  order = filter(x -> in(x, devices), params["initializationOrder"])
+  
+  getDevices(close, scanner, order)
+
+  deviceDict = initiateDevices(configDir, params; kwargs..., order = order)
+
+  for (id, device) in deviceDict
+    scanner.devices[id] = device
+  end
+
+  return scanner
 end
 
 "Bore size of the scanner."
@@ -367,7 +451,7 @@ defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol
 Retrieve a list of all device IDs available for the scanner.
 """
 function getDeviceIDs(scanner::MPIScanner)
-  return keys(scanner.devices)
+  return map(String, collect(keys(scanner.devices)))
 end
 
 """

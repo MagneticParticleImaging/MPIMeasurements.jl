@@ -1,6 +1,6 @@
-export  Protocol, ProtocolParams, name, description, scanner, params, add_protocol_fields, runProtocol,
-        init, execute, cleanup, timeEstimate, ProtocolEvent, InfoQueryEvent,
-        InfoEvent, DecisionEvent, AnswerEvent, StopEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
+export  Protocol, ProtocolParams, name, description, scanner, params,
+        init, execute, cleanup, timeEstimate, ProtocolEvent,
+        DecisionEvent, AnswerEvent, StopEvent, PauseEvent, ResumeEvent, CancelEvent, RestartEvent, ProgressQueryEvent,
         ProgressEvent, UndefinedEvent, DataQueryEvent, DataAnswerEvent, FinishedNotificationEvent, FinishedAckEvent,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, FileStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
@@ -10,6 +10,7 @@ abstract type ProtocolParams end
 export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
 @enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
 
+export @add_protocol_fields
 macro add_protocol_fields(paramType)
   return esc(quote
     name::AbstractString
@@ -88,18 +89,6 @@ end
 
 Protocol(protocolName::AbstractString, scannerName::AbstractString) = Protocol(protocolName, MPIScanner(scannerName))
 Protocol(protocolDict::Dict{String, Any}, scannerName::AbstractString) = Protocol(protocolDict, MPIScanner(scannerName))
-
-# TODO (from Jonas): Is this still used?
-function runProtocol(protocol::Protocol)
-  # TODO: Error handling
-  # TODO command line "handler"
-  channel = init(protocol)
-  @async begin
-    execute(protocol)
-    cleanup(protocol)
-  end
-  return channel
-end
 
 abstract type ProtocolEvent end
 
@@ -199,6 +188,7 @@ end
 
 # (Mandatory) Control flow events for all protocols
 struct StopEvent <: ProtocolEvent end
+struct PauseEvent <: ProtocolEvent end
 struct ResumeEvent <: ProtocolEvent end
 struct CancelEvent <: ProtocolEvent end
 struct RestartEvent <: ProtocolEvent end
@@ -286,7 +276,8 @@ function askChoices(protocol::Protocol, message::AbstractString, choices::Vector
   end
 end
 
-handleEvent(protocol::Protocol, event::StopEvent) = stop(protocol)
+handleEvent(protocol::Protocol, event::PauseEvent) = stop(protocol)
+handleEvent(protocol::Protocol, event::StopEvent) = stop(protocol) # TODO Differentiate stop and pause
 handleEvent(protocol::Protocol, event::ResumeEvent) = resume(protocol) 
 handleEvent(protocol::Protocol, event::CancelEvent) = cancel(protocol)
 handleEvent(protocol::Protocol, event::ProtocolEvent) = put!(biChannel(protocol), UndefinedEvent(event))
@@ -316,6 +307,8 @@ isUsingMDFStudy(protocol::Protocol) = protocolMDFStudyUse(protocol) isa UsingMDF
 
 include("MechanicalMPIMeasurementProtocol.jl")
 include("MPIMeasurementProtocol.jl")
+include("MPSMeasurementProtocol.jl")
+include("MPIForceProtocol.jl")
 include("RobotMPIMeasurementProtocol.jl")
 include("RobotBasedProtocol.jl")
 include("ContinousMeasurementProtocol.jl")

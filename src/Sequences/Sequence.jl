@@ -38,6 +38,41 @@ Base.@kwdef struct Sequence
   acquisition::AcquisitionSettings
 end
 
+# Indexing Interface
+length(seq::Sequence) = length(fields(seq))
+function getindex(seq::Sequence, index::Integer)
+  1 <= index <= length(seq) || throw(BoundsError(fields(seq), index))
+  return fields(seq)[index]
+end
+function getindex(seq::Sequence, index::String)
+  for channel in seq
+    if id(channel) == index
+      return channel
+    end
+  end
+  throw(KeyError(index))
+end
+setindex!(seq::Sequence, field::MagneticField, i::Integer) = fields(seq)[i] = field
+firstindex(seq::Sequence) = start_(seq)
+lastindex(seq::Sequence) = length(seq)
+keys(seq::Sequence) = map(id, seq)
+haskey(seq::Sequence, key) = in(key, keys(seq))
+
+# Iterable Interface
+start_(seq::Sequence) = 1
+next_(seq::Sequence,state) = (seq[state],state+1)
+done_(seq::Sequence,state) = state > length(seq)
+iterate(seq::Sequence, s=start_(seq)) = done_(seq, s) ? nothing : next_(seq, s)
+
+push!(seq::Sequence, field::MagneticField) = push!(fields(seq), field)
+pop!(seq::Sequence) = pop!(fields(seq))
+empty!(seq::Sequence) = empty!(fields(seq))
+deleteat!(seq::Sequence, i) = deleteat!(fields(seq), i)
+function delete!(seq::Sequence, index::String)
+  idx = findfirst(isequal(index), map(id, seq))
+  isnothing(idx) ? throw(KeyError(index)) : deleteat!(seq, idx)
+end
+
 function Sequence(filename::AbstractString)
   return sequenceFromTOML(filename)
 end
@@ -195,7 +230,7 @@ hasPeriodicElectricalTxChannels(sequence::Sequence) = length(periodicElectricalT
 export hasAcyclicElectricalTxChannels
 hasAcyclicElectricalTxChannels(sequence::Sequence) = length(acyclicElectricalTxChannels(sequence)) > 0
 
-export hasContinuousElectricalTxChannels
+export hasContinuousElectricalChannels
 hasContinuousElectricalChannels(sequence::Sequence) = any(isContinuous.(electricalTxChannels(sequence)))
 
 export hasStepwiseElectricalChannels
@@ -285,7 +320,20 @@ export acqNumPatches
 acqNumPatches(sequence::Sequence) = div(acqNumPeriodsPerFrame(sequence), acqNumPeriodsPerPatch(sequence))
 
 export acqOffsetField
-acqOffsetField(sequence::Sequence) = nothing # TODO: Implement
+function acqOffsetField(sequence::Sequence)
+  # TODO: This is a hack for getting the required information for the MPSMeasurementProtocol. Can we find a generalized solution?
+  if hasAcyclicElectricalTxChannels(sequence)
+    @warn "This is a hack for the MPSMeasurementProtocol. It might result in wrong MDF settings in other cases."
+    channels = acyclicElectricalTxChannels(sequence)
+    offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
+    values_ =  MPIMeasurements.values(offsetChannel)
+    values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
+    
+    return values3D
+  else
+    return nothing
+  end
+end
 
 export dfBaseFrequency
 dfBaseFrequency(sequence::Sequence) = baseFrequency(sequence)
@@ -435,6 +483,11 @@ for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChann
         end
         return temp
       end
+    end
+    @generated function hash(x::$T, h::UInt)
+      hashes = [Expr(:(=), :(h), Expr(:call, :hash, :(x.$field), :(h))) for field in fieldnames($T)]
+      push!(hashes, Expr(:(=), :(h), Expr(:call, :hash, $T, :(h))))
+      return Expr(:block, hashes...)
     end
   end
 end

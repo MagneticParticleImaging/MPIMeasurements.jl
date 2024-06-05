@@ -1,40 +1,45 @@
-function asyncMeasurement(protocol::Protocol, sequence::Sequence)
-  scanner_ = scanner(protocol)
-  prepareAsyncMeasurement(protocol, sequence)
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
-  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
-  return protocol.seqMeasState
+SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(x, sequence, StorageBuffer[])
+function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
+  numFrames = acqNumFrames(sequence.targetSequence)
+  numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
+  # TODO function for length(keys(simpleChannel))
+  len = length(keys(sequence.simpleChannel))
+  buffer = DriveFieldBuffer(1, zeros(ComplexF64, len, len, numPeriods, numFrames), sequence)
+  avgFrames = acqNumFrameAverages(sequence.targetSequence)
+  if avgFrames > 1
+    samples = rxNumSamplesPerPeriod(sequence.targetSequence)
+    periods = acqNumPeriodsPerFrame(sequence.targetSequence)
+    buffer = AverageBuffer(buffer, samples, len, periods, avgFrames)
+  end
+  return SequenceMeasState(x, sequence.targetSequence, push!(sequenceBuffer, buffer))
 end
-
-function prepareAsyncMeasurement(protocol::Protocol, sequence::Sequence)
-  scanner_ = scanner(protocol)
-  daq = getDAQ(scanner_)
+SequenceMeasState(protocol::Protocol, x, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing) = SequenceMeasState(getDAQ(scanner(protocol)), x, sequenceBuffer)
+function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing)
   numFrames = acqNumFrames(sequence)
-  rxNumSamplingPoints = rxNumSamplesPerPeriod(sequence)
-  numPeriods = acqNumPeriodsPerFrame(sequence)
-  frameAverage = acqNumFrameAverages(sequence)
-  setup(daq, sequence)
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  # TODO implement properly with only RxMeasurementChannels
-  buffer = zeros(Float32,rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames) # TODO: Change to Array{Float32, 4}(undef, rxNumSamplingPoints, length(rxChannels(sequence)),numPeriods,numFrames)?
-  #buffer = zeros(Float32,rxNumSamplingPoints,numRxChannelsMeasurement(daq),numPeriods,numFrames)
-  avgBuffer = nothing
-  if frameAverage > 1
-    avgBuffer = FrameAverageBuffer(zeros(Float32, frameAverageBufferSize(daq, frameAverage)), 1)
+  buffer = SimpleFrameBuffer(sequence)
+  if acqNumFrameAverages(sequence) > 1
+    buffer = AverageBuffer(buffer, sequence)
   end
   channel = Channel{channelType(daq)}(32)
+  
+  buffers = StorageBuffer[buffer]
+  if !isnothing(sequenceBuffer)
+    push!(buffers, sequenceBuffer...)
+  end
+
+  buffer = FrameSplitterBuffer(daq, buffers)
 
   # Prepare measState
-  measState = SequenceMeasState(numFrames, 1, nothing, nothing, nothing, AsyncBuffer(daq), buffer, avgBuffer, asyncMeasType(sequence))
-  measState.channel = channel
+  measState = SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), nothing, asyncMeasType(sequence))
 
-  protocol.seqMeasState = measState
+  return measState
 end
 
-function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence; prepTx = true)
+asyncProducer(channel, protocol, sequence::ControlSequence) = asyncProducer(channel, protocol, sequence.targetSequence)
+function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   scanner_ = scanner(protocol)
   su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
   if !isnothing(su)
@@ -63,7 +68,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
   endSample = nothing
   try
     daq = getDAQ(scanner_)
-    endSample = asyncProducer(channel, daq, sequence, prepTx = prepTx)
+    endSample = asyncProducer(channel, daq, sequence)
   finally
     try
       daq = getDAQ(scanner_)
@@ -109,26 +114,20 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence;
   end
 end
 
-# Default Consumer
-function asyncConsumer(channel::Channel, protocol::Protocol)
-  scanner_ = scanner(protocol)
-  daq = getDAQ(scanner_)
-  measState = protocol.seqMeasState
-
+asyncConsumer(measState::SequenceMeasState) = asyncConsumer(measState.channel, measState.sequenceBuffer, measState.deviceBuffers)
+function asyncConsumer(channel::Channel, sequenceBuffer::StorageBuffer, deviceBuffers::Union{Vector{DeviceBuffer}, Nothing} = nothing)
   @debug "Consumer start"
   while isopen(channel) || isready(channel)
     while isready(channel)
       chunk = take!(channel)
-      updateAsyncBuffer!(measState.asyncBuffer, chunk)
-      updateFrameBuffer!(measState, daq)
+      update = push!(sequenceBuffer, chunk)
+      if !isnothing(update) && !isnothing(deviceBuffers)
+        for buffer in deviceBuffers
+          update!(buffer, update...)
+        end
+      end
     end
     sleep(0.001)
   end
   @debug "Consumer end"
-
-  # TODO calibTemperatures is not filled in asyncVersion yet, would need own innerAsyncConsumer
-  #if length(measState.temperatures) > 0
-  #  params["calibTemperatures"] = measState.temperatures
-  #end
 end
-

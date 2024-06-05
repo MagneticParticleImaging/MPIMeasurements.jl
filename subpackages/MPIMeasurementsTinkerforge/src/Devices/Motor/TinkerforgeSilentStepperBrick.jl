@@ -17,7 +17,7 @@ end
 TinkerforgeSilentStepperBrickParams(dict::Dict) = params_from_dict(TinkerforgeSilentStepperBrickParams, dict)
 
 Base.@kwdef mutable struct TinkerforgeSilentStepperBrick <: TinkerforgeStepperMotor
-  @add_device_fields TinkerforgeSilentStepperBrickParams
+  MPIMeasurements.@add_device_fields TinkerforgeSilentStepperBrickParams
 
   deviceInternal::Union{PyTinkerforge.BrickSilentStepper, Missing} = missing
   ipcon::Union{PyTinkerforge.IPConnection, Missing} = missing
@@ -25,7 +25,7 @@ Base.@kwdef mutable struct TinkerforgeSilentStepperBrick <: TinkerforgeStepperMo
   stallSum = 0
 end
 
-function init(motor::TinkerforgeSilentStepperBrick)
+function MPIMeasurements.init(motor::TinkerforgeSilentStepperBrick)
   @debug "Initializing Tinkerforge silent stepper unit with ID `$(motor.deviceID)`."
 
   motor.ipcon = PyTinkerforge.IPConnection()
@@ -46,8 +46,8 @@ function init(motor::TinkerforgeSilentStepperBrick)
   return
 end
 
-neededDependencies(::TinkerforgeSilentStepperBrick) = []
-optionalDependencies(::TinkerforgeSilentStepperBrick) = []
+MPIMeasurements.neededDependencies(::TinkerforgeSilentStepperBrick) = []
+MPIMeasurements.optionalDependencies(::TinkerforgeSilentStepperBrick) = []
 Base.close(motor::TinkerforgeSilentStepperBrick) = PyTinkerforge.disconnect(motor.ipcon)
 isTinkerforgeDevice(::TinkerforgeSilentStepperBrick) = true
 

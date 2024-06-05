@@ -3,12 +3,16 @@ export MechanicalMPIMeasurementProtocol, MechanicalMPIMeasurementProtocolParams
 Parameters for the MechanicalMPIMeasurementProtocol
 """
 Base.@kwdef mutable struct MechanicalMPIMeasurementProtocolParams <: ProtocolParams
+  "Foreground frames to measure. Overwrites sequence frames"
+  fgFrames::Int64 = 1
   "Background frames to measure. Overwrites sequence frames"
   bgFrames::Int64 = 1
   "If set the tx amplitude and phase will be set with control steps"
   controlTx::Bool = false
   "If unset no background measurement will be taken"
   measureBackground::Bool = true
+  "If the temperature should be safed or not"
+  saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
   "Remember background measurement"
@@ -31,15 +35,16 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
   @add_protocol_fields MechanicalMPIMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+  protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
-  steppedMeas::Vector{Array{Float32, 4}} = []
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController, Nothing} = nothing
   mechCont::Union{MechanicsController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::MechanicalMPIMeasurementProtocol)
@@ -61,18 +66,16 @@ function _init(protocol::MechanicalMPIMeasurementProtocol)
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
     protocol.txCont = getDevice(protocol.scanner, TxDAQController)
-    protocol.txCont.currTx = nothing
   else
     protocol.txCont = nothing
   end
+  protocol.protocolMeasState = ProtocolMeasState()
 
   if hasMechanicalTxChannels(protocol.params.sequence)
     @debug "The sequence has mechanical channels. Now setting them up."
     protocol.mechCont = getDevice(protocol.scanner, MechanicsController)
     setup(protocol.mechCont, protocol.params.sequence)
   end
-
-  protocol.bgMeas = zeros(Float32, 0, 0, 0, 0)
 
   return nothing
 end
@@ -96,6 +99,8 @@ function enterExecute(protocol::MechanicalMPIMeasurementProtocol)
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
+  protocol.unit = ""
+  protocol.protocolMeasState = ProtocolMeasState()
 end
 
 function _execute(protocol::MechanicalMPIMeasurementProtocol)
@@ -116,9 +121,6 @@ function _execute(protocol::MechanicalMPIMeasurementProtocol)
 end
 
 function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
-  # Clear possible old MPIMeasurements
-  protocol.steppedMeas = []
-
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
@@ -126,26 +128,27 @@ function performMeasurement(protocol::MechanicalMPIMeasurementProtocol)
     acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
 
     @debug "Taking background measurement."
+    protocol.unit = "BG Frames"
     measurement(protocol)
-    protocol.bgMeas = protocol.seqMeasState.buffer
+    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = true)
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
   end
 
   @debug "Setting number of foreground frames."
-  acqNumFrames(protocol.params.sequence, 1) #TODO: Do we need to make this more flexible?
+  acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
+  protocol.unit = "Frames"
 
   mechCont = getDevice(scanner(protocol), MechanicsController)
-  totalNumberOfSteps_ = totalNumberOfSteps(mechCont)
-  for stepNumber in 1:totalNumberOfSteps_
-    @info "Starting measurement step $stepNumber of $totalNumberOfSteps_."
-    measurement(protocol)
-    push!(protocol.steppedMeas, protocol.seqMeasState.buffer)
-    doStep(mechCont)
-  end
+
+  measurement(protocol)
+  deviceBuffers = protocol.seqMeasState.deviceBuffers
+  push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
 end
 
 function measurement(protocol::MechanicalMPIMeasurementProtocol)
@@ -194,16 +197,23 @@ end
 function asyncMeasurement(protocol::MechanicalMPIMeasurementProtocol)
   scanner_ = scanner(protocol)
   sequence = protocol.params.sequence
-  prepareAsyncMeasurement(protocol, sequence)
+  daq = getDAQ(scanner_)
+  deviceBuffer = DeviceBuffer[]
   if protocol.params.controlTx
-    controlTx(protocol.txCont, sequence, protocol.txCont.currTx)
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
   end
-  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence, prepTx = !protocol.params.controlTx)
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  end
+  protocol.seqMeasState.deviceBuffers = deviceBuffer
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
-  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState.channel, protocol)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
 end
-
 
 function cleanup(protocol::MechanicalMPIMeasurementProtocol)
   # NOP
@@ -226,14 +236,20 @@ end
 function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURRFRAME"
-    data = max(protocol.seqMeasState.nextFrame - 1, 0)
+    data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
   elseif startswith(event.message, "FRAME")
     frame = tryparse(Int64, split(event.message, ":")[2])
     if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
-      data = protocol.seqMeasState.buffer[:, :, :, frame:frame]
+        data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))[:, :, :, frame:frame]
     end
   elseif event.message == "BUFFER"
-    data = protocol.seqMeasState.buffer
+    data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -244,12 +260,10 @@ end
 
 function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::ProgressQueryEvent)
   reply = nothing
-  if length(protocol.bgMeas) > 0 && !protocol.measuring
-    reply = ProgressEvent(0, 1, "No bg meas", event)
-  elseif !isnothing(protocol.seqMeasState)
+  if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(protocol.seqMeasState.nextFrame - 1, framesTotal)
-    reply = ProgressEvent(framesDone, framesTotal, "Frames", event)
+    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
   end
@@ -262,22 +276,13 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DatasetS
   store = event.datastore
   scanner = protocol.scanner
   mdf = event.mdf
-
-  measSize = collect(size(protocol.seqMeasState.buffer))
-  measSize[4] = length(protocol.steppedMeas)
-  data = Array{Float32, 4}(undef, Tuple(measSize))
-  
-  for (frameIdx, meas) in enumerate(protocol.steppedMeas)
-    data[:, :, :, frameIdx] = meas # Note: Assumes one frame per measurement
-  end
-
-  @warn data
-
-  bgdata = nothing
-  if length(protocol.bgMeas) > 0
-    bgdata = protocol.bgMeas
-  end
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, mdf, bgdata = bgdata)
+  data = read(protocol.protocolMeasState, MeasurementBuffer)
+  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+  drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
+  appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
+  temperature = read(protocol.protocolMeasState, TemperatureBuffer)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+  @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
