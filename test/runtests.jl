@@ -12,8 +12,7 @@ addConfigurationPath(testConfigDir)
 
 @testset "MPIMeasurements" begin
   @testset "Aqua" begin
-    @warn "Ambiguities and piracies are accepted for now"
-    Aqua.test_all(MPIMeasurements, ambiguities=false, piracies=false)
+    Aqua.test_all(MPIMeasurements)
   end
 
   include("TestDevices.jl")
