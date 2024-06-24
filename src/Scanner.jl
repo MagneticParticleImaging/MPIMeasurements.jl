@@ -518,7 +518,7 @@ function getTransferFunctionList(scanner::MPIScanner)
   end
 end
 
-function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractString)
+function getTransferFunction(configdir::AbstractString, name::AbstractString)
   path = joinpath(configdir, "TransferFunctions", name*".h5")
   if !isfile(path)
     error("TransferFunction $(path) not available!")
@@ -526,7 +526,7 @@ function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractStri
   return TransferFunction(path)
 end
 
-MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
+getTransferFunction(scanner::MPIScanner) = getTransferFunction(configDir(scanner), transferFunction(scanner))
 
 #### Protocol ####
 function getProtocolList(scanner::MPIScanner)
