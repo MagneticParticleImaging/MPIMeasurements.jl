@@ -61,13 +61,42 @@ end
 neededDependencies(::TxDAQController) = [AbstractDAQ]
 optionalDependencies(::TxDAQController) = [SurveillanceUnit, Amplifier, TemperatureController]
 
-function ControlSequence(txCont::TxDAQController, target::Sequence, daq::AbstractDAQ)
+function checkIfControlPossible(txCont::TxDAQController, target::Sequence)
+  daq = dependency(txCont, AbstractDAQ)
 
-  if any(.!isa.(getControlledChannels(target), PeriodicElectricalChannel))
-    error("A field that requires control can only have PeriodicElectricalChannels.") # TODO/JA: check if this limitation can be lifted: would require special care when merging a sequence
+  if any(.!isa.(getControlledChannels(target), ElectricalTxChannel))
+    error("A field that requires control can only have ElectricalTxChannels.")
   end
 
-  currSeq = prepareSequenceForControl(target)
+  if !all(unitIsTesla.(getControlledChannels(target)))
+    error("All values corresponding to a field that should be controlled need to be given in T, instead of V or A!")
+  end
+
+  periodicChannels = [channel for channel in getControlledChannels(target) if typeof(channel) <: PeriodicElectricalChannel]
+  lutChannels = [channel for channel in getControlledChannels(target) if typeof(channel) <: AcyclicElectricalTxChannel]
+
+  if !isempty(lutChannels) #&& !txCont.params.controlDC
+    error("A field that requires control can only have PeriodicElectricalChannels if controlDC is set to false for the TxDAQController!")
+  end
+
+  outputsPeriodic = channelIdx(daq, id.(periodicChannels))
+  if !allunique(outputsPeriodic)
+    error("Multiple periodic field channels are output on the same DAC output. This can not be controlled!")
+  end
+
+  mapToFastDAC(i) = begin x = mod(i,6); if x==1 || x==2; return 2*(i÷6)+x end end
+  outputsLUT = channelIdx(daq, id.(lutChannels))
+  if !all([x ∈ outputsPeriodic for x = mapToFastDAC.(outputsLUT)])
+    error("If AcyclicElectricalTxChannels should be controlled they must map to the same output as a controlled PeriodicElectricalChannel!")
+  end
+
+
+end
+
+function ControlSequence(txCont::TxDAQController, target::Sequence)
+  daq = dependency(txCont, AbstractDAQ)
+  
+  currSeq = prepareSequenceForControl(txCont, target)
 
   measuredFrames = max(cld(txCont.params.minimumStepDuration, ustrip(u"s", dfCycle(currSeq))),1)
   discardedFrames = cld(txCont.params.timeUntilStable, ustrip(u"s", dfCycle(currSeq)))
@@ -226,43 +255,21 @@ function createReferenceIndexMapping(controlledChannelsDict::OrderedDict{Periodi
   return [mapping[x] for x in controlOrderChannelIndices]
 end
 
-function prepareSequenceForControl(seq::Sequence)
+function prepareSequenceForControl(txCont::TxDAQController, seq::Sequence)
   # Ausgangslage: Eine Sequenz enthält eine Reihe an Feldern, von denen ggf nicht alle geregelt werden sollen
   # Jedes dieser Felder enthält eine Reihe an Channels, die nicht alle geregelt werden können (nur periodicElectricalChannel)
 
   # Ziel: Eine Sequenz, die, wenn Sie abgespielt wird, alle Informationen beinhaltet, die benötigt werden, um die Regelung durchzuführen, Sendefelder in V
-  
+  checkIfControlPossible(txCont, seq)
+
   _name = "Control Sequence for target $(name(seq))"
   description = ""
   _targetScanner = targetScanner(seq)
   _baseFrequency = baseFrequency(seq)
   general = GeneralSettings(;name=_name, description = description, targetScanner = _targetScanner, baseFrequency = _baseFrequency)
   acq = AcquisitionSettings(;channels = RxChannel[], bandwidth = rxBandwidth(seq)) # uses the default values of 1 for numPeriodsPerFrame, numFrames, numAverages, numFrameAverages
-
-  _fields = MagneticField[]
-  for field in fields(seq)
-    if control(field)
-      _id = id(field)
-      safeStart = safeStartInterval(field)
-      safeTrans = safeTransitionInterval(field)
-      safeEnd = safeEndInterval(field)
-      safeError = safeErrorInterval(field)
-      # Use only periodic electrical channels
-      periodicChannel = [deepcopy(channel) for channel in periodicElectricalTxChannels(field)]
-      #periodicComponents = [comp for channel in periodicChannel for comp in periodicElectricalComponents(channel)]
-      for channel in periodicChannel
-        for comp in components(channel)
-            if dimension(amplitude(comp)) != dimension(1.0u"T")
-              error("The amplitude components of a field that is controlled by a TxDAQController need to be given in T. Please fix component $(id(comp)) of channel $(id(channel))")
-            end
-        end
-      end
-      contField = MagneticField(;id = _id, channels = periodicChannel, safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
-          safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = decouple(field), control = true)
-      push!(_fields, contField)
-    end
-  end
-  return Sequence(;general = general, acquisition = acq, fields = _fields)
+  
+  return Sequence(;general = general, acquisition = acq, fields = [deepcopy(f) for f in fields(seq) if control(f)])
 end
 
 
@@ -297,7 +304,7 @@ function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
   if needsControlOrDecoupling(seq)
     daq = dependency(txCont, AbstractDAQ)
     setupRx(daq, seq)
-    control = ControlSequence(txCont, seq, daq) # depending on the controlled channels and settings this will select the appropiate type of ControlSequence
+    control = ControlSequence(txCont, seq) # depending on the controlled channels and settings this will select the appropiate type of ControlSequence
     return controlTx(txCont, control)
   else
     @warn "The sequence you selected does not need control, even though the protocol wanted to control!"
