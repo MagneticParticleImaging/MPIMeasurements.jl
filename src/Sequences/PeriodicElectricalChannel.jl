@@ -52,6 +52,8 @@ Base.@kwdef mutable struct PeriodicElectricalChannel <: ElectricalTxChannel
   dcEnabled::Bool = true
 end
 
+unitIsTesla(chan::PeriodicElectricalChannel) = (dimension(offset(chan)) == dimension(u"T")) && all([dimension(amplitude(comp))==dimension(u"T") for comp in components(chan)])
+
 # Indexing Interface
 length(ch::PeriodicElectricalChannel) = length(components(ch))
 function getindex(ch::PeriodicElectricalChannel, index::Integer)

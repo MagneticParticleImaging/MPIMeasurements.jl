@@ -52,6 +52,9 @@ cycleDuration(::T, var) where T <: TxChannel = error("The method has not been im
 export id
 id(channel::TxChannel) = channel.id
 
+export unitIsTesla
+unitIsTesla(channel::ElectricalTxChannel) = false #default fallback
+
 function toDict!(dict, channel::TxChannel)
   for field in [x for x in fieldnames((typeof(channel))) if x != :id]
     dict[String(field)] = toDictValue(getproperty(channel, field))

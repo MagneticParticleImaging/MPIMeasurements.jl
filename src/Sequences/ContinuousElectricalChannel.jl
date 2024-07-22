@@ -18,6 +18,8 @@ Base.@kwdef mutable struct ContinuousElectricalChannel <: AcyclicElectricalTxCha
   waveform::Waveform = WAVEFORM_SINE
 end
 
+unitIsTesla(chan::ContinuousElectricalChannel) = (dimension(chan.offset) == dimension(u"T")) && (dimension(chan.amplitude)==dimension(u"T"))
+
 channeltype(::Type{<:ContinuousElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{ContinuousElectricalChannel}, channelDict::Dict{String, Any})

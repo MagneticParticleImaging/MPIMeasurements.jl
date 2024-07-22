@@ -12,6 +12,8 @@ Base.@kwdef mutable struct StepwiseElectricalChannel <: AcyclicElectricalTxChann
   enable::Vector{Bool} = Bool[]
 end
 
+unitIsTesla(chan::StepwiseElectricalChannel) = all(dimension(chan.values) .== [dimension(u"T")])
+
 channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseElectricalChannel}, channelDict::Dict{String, Any})
