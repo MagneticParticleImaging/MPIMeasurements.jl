@@ -269,23 +269,32 @@ function calibration(daq::AbstractDAQ, channelID::AbstractString)
     return channel(daq, channelID).calibration 
   end
 end
-  
+
+function calibration(daq::AbstractDAQ, channelID::AbstractString, frequency::Real)
+  cal = calibration(daq, channelID)
+  if cal isa TransferFunction
+    return cal(frequency)
+  else
+    @warn "You requested a calibration for a specific frequency $frequency but the channel $channelID has no frequency dependent calibration value"
+    return cal
+  end
+end
 
 export applyForwardCalibration!, applyForwardCalibration
 
-function applyForwardCalibration(seq::Sequence, daq::AbstractDAQ)
+function applyForwardCalibration(seq::Sequence, device::Device)
   seqCopy = deepcopy(seq)
-  applyForwardCalibration!(seqCopy, daq)
+  applyForwardCalibration!(seqCopy, device)
   return seqCopy
 end
 
-function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
+function applyForwardCalibration!(seq::Sequence, device::Device)
 
   for channel in periodicElectricalTxChannels(seq) 
     off = offset(channel)
     if dimension(off) != dimension(1.0u"V")
-      isnothing(calibration(daq, id(channel))) && throw(ScannerConfigurationError("An offset value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
-      offsetVolts = off*abs(calibration(daq, id(channel))(0)) # use DC value for offsets
+      isnothing(calibration(device, id(channel))) && throw(ScannerConfigurationError("An offset value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
+      offsetVolts = off*abs(calibration(device, id(channel), 0)) # use DC value for offsets
       offset!(channel, uconvert(u"V",offsetVolts))
     end
 
@@ -293,15 +302,15 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
       amp = amplitude(comp)
       pha = phase(comp)
       if dimension(amp) != dimension(1.0u"V")
-        isnothing(calibration(daq, id(channel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
+        isnothing(calibration(device, id(channel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(channel)) requires calibration but no calibration is configured on the DAQ channel!"))
         f_comp = ustrip(u"Hz", txBaseFrequency(seq)) / divider(comp)
-        complex_comp = (amp*exp(im*pha)) * calibration(daq, id(channel))(f_comp)
+        complex_comp = (amp*exp(im*pha)) * calibration(device, id(channel), f_comp)
         amplitude!(comp, uconvert(u"V",abs(complex_comp)))
         phase!(comp, angle(complex_comp)u"rad")
         if comp isa ArbitraryElectricalComponent
           N = length(values(comp))
           f_awg = rfftfreq(N, f_comp*N)
-          calib = calibration(daq, id(channel))(f_awg) ./ (abs.(calibration(daq, id(channel))(f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(daq, id(channel))(f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
           values!(comp, irfft(rfft(values(comp)).*calib, N))
         end
       end
@@ -312,21 +321,21 @@ function applyForwardCalibration!(seq::Sequence, daq::AbstractDAQ)
     if lutChannel isa StepwiseElectricalChannel
       values = lutChannel.values
       if dimension(values[1]) != dimension(1.0u"V")
-        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("A value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
-        values = values.*calibration(daq, id(lutChannel))
+        isnothing(calibration(device, id(lutChannel))) && throw(ScannerConfigurationError("A value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
+        values = values.*calibration(device, id(lutChannel))
         lutChannel.values = values
       end
     elseif lutChannel isa ContinuousElectricalChannel
       amp = lutChannel.amplitude
       off = lutChannel.offset
       if dimension(amp) != dimension(1.0u"V")
-        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
-        amp = amp*calibration(daq, id(lutChannel))
+        isnothing(calibration(device, id(lutChannel))) && throw(ScannerConfigurationError("An amplitude value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
+        amp = amp*calibration(device, id(lutChannel))
         lutChannel.amplitude = amp
       end
       if dimension(off) != dimension(1.0u"V")
-        isnothing(calibration(daq, id(lutChannel))) && throw(ScannerConfigurationError("An offset value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
-        off = off*calibration(daq, id(lutChannel))
+        isnothing(calibration(device, id(lutChannel))) && throw(ScannerConfigurationError("An offset value in channel $(id(lutChannel)) requires calibration but no calibration is configured on the DAQ channel!"))
+        off = off*calibration(device, id(lutChannel))
         lutChannel.offset = off
       end
     end

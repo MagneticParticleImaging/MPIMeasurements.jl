@@ -38,6 +38,7 @@ mutable struct AWControlSequence <: ControlSequence
   refIndices::Vector{Int64}
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
+  #lutMap::Dict{String, Dict{AcyclicElectricalTxChannel, Int}} # for every field ID contain a dict of removed LUTChannels together with the corresponding channel
 end
 
 @enum ControlResult UNCHANGED UPDATED INVALID
@@ -48,6 +49,23 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
   cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
   startFrame::Int64 = 1
+  controlResults::Dict{String, Union{typeof(1.0u"V/T"), Dict{Float64,typeof(1.0u"V/T")}}} = Dict{String, Union{typeof(1.0u"V/T"), Dict{Float64,typeof(1.0u"V/T")}}}()
+end
+
+function calibration(txCont::TxDAQController, channelID::AbstractString)
+  if haskey(txCont.controlResults, channelID) && txCont.controlResults[channelID] isa typeof(1.0u"V/T")
+    return txCont.controlResults[channelID]
+  else
+    return calibration(dependency(txCont, AbstractDAQ), channelID)
+  end
+end
+
+function calibration(txCont::TxDAQController, channelID::AbstractString, frequency::Real)
+  if haskey(txCont.controlResults, channelID) && txCont.controlResults[channelID] isa Dict && haskey(txCont.controlResults[channelID],frequency)
+    return txCont.controlResults[channelID][frequency]
+  else
+    return calibration(dependency(txCont, AbstractDAQ), channelID, frequency)
+  end
 end
 
 function _init(tx::TxDAQController)
@@ -405,6 +423,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone
           @info "Could control"
+          # TODO/JA: extract control results as new calibration here
         else
           @info "Could not control"
         end
