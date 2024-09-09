@@ -49,7 +49,9 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
   cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
   startFrame::Int64 = 1
-  controlResults::Dict{String, Union{typeof(1.0u"V/T"), Dict{Float64,typeof(1.0u"V/T")}}} = Dict{String, Union{typeof(1.0u"V/T"), Dict{Float64,typeof(1.0u"V/T")}}}()
+  controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  lastDCResults::Union{Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}},Nothing} = nothing
+  lastChannelIDs::Vector{String} = String[]
 end
 
 function calibration(txCont::TxDAQController, channelID::AbstractString)
@@ -121,9 +123,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
   txCont.startFrame = discardedFrames + 1
   acqNumFrames(currSeq, discardedFrames+measuredFrames)
  
-  
-
-  applyForwardCalibration!(currSeq, daq) # uses the forward calibration to convert the values for the field from T to V
+  applyForwardCalibration!(currSeq, txCont) # uses the forward calibration to convert the values for the field from T to V
 
   seqControlledChannels = getControlledChannels(currSeq)
 
@@ -164,8 +164,22 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
     end
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
+    
+    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, [])
 
-    return AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, [])
+    ## Apply last DC result
+    if !isnothing(txCont.lastDCResults) && (txCont.lastChannelIDs == id.(seqControlledChannels))
+      cont.dcSearch = txCont.lastDCResults[end-1:end]
+      Ω = calcDesiredField(cont)
+      initTx = calcControlMatrix(cont)
+      last = cont.dcSearch[end]
+      previous = cont.dcSearch[end-1]
+      initTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      @info "Would have reused last DC Results" initTx[:,1]
+      #updateControlSequence!(cont, initTx)
+    end
+
+    return cont
   end
 end
 
@@ -424,6 +438,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
         if controlPhaseDone
           @info "Could control"
           # TODO/JA: extract control results as new calibration here
+          updateCachedCalibration(txCont, control)
         else
           @info "Could not control"
         end
@@ -514,6 +529,29 @@ function getControlResult(cont::ControlSequence)::Sequence
 end
 
 setup(daq::AbstractDAQ, sequence::ControlSequence) = setup(daq, getControlResult(sequence))
+
+function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequence)
+  finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
+ 
+  calibrationResults = findall(x->!isnan(x), finalCalibration)
+  channelIDs = id.(keys(cont.controlledChannelsDict))
+  freqAxis = rfftfreq(rxNumSamplingPoints(cont.currSequence),ustrip(u"Hz",2*rxBandwidth(cont.currSequence)))
+    
+  for res in calibrationResults
+    chId = channelIDs[res[1]]
+    f = freqAxis[res[2]]
+    if !haskey(txCont.controlResults, chId)
+      txCont.controlResults[chId] = Dict{Float64,typeof(1.0im*u"V/T")}()
+    end
+    txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
+    @debug "Cached calibration result:" chId f finalCalibration[res]
+  end
+
+  txCont.lastDCResults = cont.dcSearch[end-1:end]
+  txCont.lastChannelIDs = channelIDs
+  
+  @info "Cached DC result" txCont.lastDCResults
+end
 
 
 # TODO/JA: check if changes here needs changes somewhere else
