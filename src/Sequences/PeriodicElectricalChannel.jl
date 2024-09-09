@@ -6,7 +6,7 @@ export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectrical
 Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
-  divider::Integer
+  divider::Rational{Int}
   "Amplitude (peak) of the component for each period of the field."
   amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"V")}, Vector{typeof(1.0u"A")}} # Is it really the right choice to have the periods here? Or should it be moved to the MagneticField?
   "Phase of the component for each period of the field."
@@ -30,7 +30,7 @@ end
 Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
-  divider::Integer
+  divider::Rational{Int}
   "Amplitude scale of the base waveform for each period of the field"
   amplitude::Union{Vector{typeof(1.0u"T")}, Vector{typeof(1.0u"A")}, Vector{typeof(1.0u"V")}}
   "Phase of the component for each period of the field."
@@ -185,7 +185,9 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
 end
 
 function extractBasicComponentProperties(componentDict::Dict{String, Any})
-  divider = parse(Int, string(componentDict["divider"]))
+  divider = eval(Meta.parse("$(componentDict["divider"])"))
+  if divider isa Dict; divider = divider["num"]//divider["den"] end
+  if !(divider isa Rational); divider=rationalize(divider) end
   amplitude = uparse.(componentDict["amplitude"])
   if eltype(amplitude) <: Unitful.Current
     amplitude = amplitude .|> u"A"
@@ -229,7 +231,7 @@ periodicElectricalComponents(channel::PeriodicElectricalChannel) = components(ch
 export arbitraryElectricalComponents
 arbitraryElectricalComponents(channel::PeriodicElectricalChannel) = components(channel, ArbitraryElectricalComponent)
 
-cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([comp.divider for comp in components(channel)])/baseFrequency
+cycleDuration(channel::PeriodicElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = lcm([numerator(comp.divider) for comp in components(channel)])/baseFrequency
 
 isDfChannel(channel::PeriodicElectricalChannel) = channel.isDfChannel
 
@@ -245,7 +247,7 @@ end
 
 export divider, divider!
 divider(component::ElectricalComponent, trigger::Integer=1) = length(component.divider) == 1 ? component.divider[1] : component.divider[trigger]
-divider!(component::PeriodicElectricalComponent,value::Integer) = component.divider = value
+divider!(component::PeriodicElectricalComponent,value::Union{Rational,Integer}) = component.divider = value
 
 export amplitude, amplitude!
 amplitude(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}; period::Integer=1) = component.amplitude[period]

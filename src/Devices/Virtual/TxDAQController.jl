@@ -721,7 +721,7 @@ end
 function calcFieldFromRef(cont::CrossCouplingControlSequence, uRef, ::SortedRef)
   len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
-  dividers = Int64[divider.(getPrimaryComponents(cont))]
+  dividers = [divider.(getPrimaryComponents(cont))]
   frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence)) ./ dividers
   Γ = zeros(ComplexF64, len, len)
   calcFieldFromRef!(Γ, cont, uRef, SortedRef())
