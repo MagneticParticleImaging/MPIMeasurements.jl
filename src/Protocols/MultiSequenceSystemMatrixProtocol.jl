@@ -341,8 +341,8 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   params["sequences"] = toDict.(protocol.params.sequences)
 
   filename = file(protocol, "meta.toml")
+  filename_backup = file(protocol, "meta.toml.backup")
   if isfile(filename)
-    filename_backup = file(protocol, "meta.toml.backup")
     mv(filename, filename_backup, force=true)
   end
 
