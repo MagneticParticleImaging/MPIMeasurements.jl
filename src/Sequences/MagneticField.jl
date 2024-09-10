@@ -109,7 +109,7 @@ periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicEle
 export acyclicElectricalTxChannels
 acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
 
-export protocolElectricalTxChannels
+export protocolTxChannels
 protocolTxChannels(field::MagneticField) = channels(field, ProtocolTxChannel)
 
 function toDict!(dict, field::MagneticField)
