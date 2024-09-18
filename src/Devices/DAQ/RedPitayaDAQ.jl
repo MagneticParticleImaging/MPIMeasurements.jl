@@ -102,7 +102,8 @@ function _init(daq::RedPitayaDAQ)
   for channelID in keys(daq.params.channels)
     if isa(channel(daq, channelID), DAQTxChannelParams)
       calibration(daq, channelID)
-      feedbackCalibration(daq, channelID)
+    elseif isa(channel(daq, channelID), DAQRxChannelParams)
+      transferFunction(daq, channelID)
     end
   end
 
@@ -147,6 +148,8 @@ neededDependencies(::RedPitayaDAQ) = []
 optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
+
+channel(daq::RedPitayaDAQ, channelID::AbstractString) = daq.params.channels[channelID]
 
 export usesCounterTrigger
 usesCounterTrigger(daq::RedPitayaDAQ) = daq.params.useCounterTrigger
@@ -1069,7 +1072,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
   txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
-  daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
+  daq.refChanIDs = unique(filter!(!isnothing, feedbackChannelID.(txChannels)))
 
   # Construct view to save bandwidth
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))

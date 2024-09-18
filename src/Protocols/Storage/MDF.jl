@@ -310,7 +310,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
 	MPIFiles.dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
 	dividers = dfDivider(sequence)
-	dividers[!isinteger.(dividers)] .= 0
+	dividers[.!isinteger.(dividers)] .= 0
 	MPIFiles.dfDivider(mdf, Int.(dividers))
 	MPIFiles.dfNumChannels(mdf, dfNumChannels(sequence))
 	MPIFiles.dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
@@ -327,13 +327,12 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.rxUnit(mdf, "V")
 
 	# transferFunction
-	if hasTransferFunction(scanner)
-		numFreq = div(numSamplingPoints_,2)+1
-		freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
-		tf_ =  TransferFunction(scanner)
-		tf = ustrip.(tf_(freq,1:numRxChannels_)) # TODO/JA: check if sampleTF can be used here!
-		MPIFiles.rxTransferFunction(mdf, tf)
-		MPIFiles.rxInductionFactor(mdf, tf_.inductionFactor)
+	if any(hasTransferFunction.([getDAQ(scanner)], id.(rxChannels(sequence))))
+		tfs = transferFunction.([getDAQ(scanner)], id.(rxChannels(sequence)))
+		tf = reduce((x,y)->MPIFiles.combine(x,y,interpolate=true), tfs)
+		sampledTF = ustrip.(sampleTF(tf, mdf))
+		MPIFiles.rxTransferFunction(mdf, sampledTF)
+		MPIFiles.rxInductionFactor(mdf, tf.inductionFactor)
 	end
 
 end

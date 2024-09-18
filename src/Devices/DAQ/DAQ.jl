@@ -1,11 +1,11 @@
 import Base: setindex!, getindex
 
-export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxChannelSettings, DAQChannelParams, DAQFeedback, DAQTxChannelParams, DAQRxChannelParams,
+export AbstractDAQ, DAQParams, SinkImpedance, SINK_FIFTY_OHM, SINK_HIGH, DAQTxChannelSettings, DAQChannelParams, DAQTxChannelParams, DAQRxChannelParams,
        createDAQChannels, createDAQParams, startTx, stopTx, setTxParams, readData,
        numRxChannelsTotal, numTxChannelsTotal, numRxChannelsActive, numTxChannelsActive,
        currentPeriod, getDAQ, getDAQs,
        channelIdx, limitPeak, sinkImpedance, allowedWaveforms, isWaveformAllowed,
-       feedbackChannelID, feedbackCalibration, calibration
+       feedbackChannelID, feedbackTransferFunction, transferFunction, hasTransferFunction, calibration
 
 abstract type AbstractDAQ <: Device end
 abstract type DAQParams <: DeviceParams end
@@ -57,11 +57,6 @@ abstract type DAQChannelParams end
 abstract type TxChannelParams <: DAQChannelParams end
 abstract type RxChannelParams <: DAQChannelParams end
 
-Base.@kwdef mutable struct DAQFeedback
-  channelID::AbstractString
-  calibration::Union{TransferFunction, String, Nothing} = nothing
-end
-
 Base.@kwdef struct DAQHBridge{N}
   channelID::Union{String, Vector{String}}
   manual::Bool = false
@@ -97,12 +92,13 @@ Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   limitSlewRate::typeof(1.0u"V/s") = 1000.0u"V/µs" # default is basically no limit
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
-  feedback::Union{DAQFeedback, Nothing} = nothing
+  feedbackChannelID::Union{String, Nothing} = nothing
   calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
-Base.@kwdef struct DAQRxChannelParams <: RxChannelParams
+Base.@kwdef mutable struct DAQRxChannelParams <: RxChannelParams
   channelIdx::Int64
+  transferFunction::Union{TransferFunction, String, Nothing} = nothing
 end
 
 function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
@@ -122,10 +118,8 @@ function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
     splattingDict[:allowedWaveforms] = toWaveform.(dict["allowedWaveforms"])
   end
 
-  if haskey(dict, "feedback")
-    channelID = dict["feedback"]["channelID"]
-    calibration_tf = parse_into_tf(dict["feedback"]["calibration"])
-    splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration_tf)
+  if haskey(dict, "feedbackChannelID")
+    splattingDict[:feedbackChannelID] = dict["feedbackChannelID"]
   end
 
   if haskey(dict, "calibration")
@@ -135,17 +129,16 @@ function createDAQChannel(::Type{DAQTxChannelParams}, dict::Dict{String,Any})
   return DAQTxChannelParams(;splattingDict...)
 end
 
-function parse_into_tf(value::String)
-  if occursin(".h5", value) # case 1: filename to transfer function, the TF will be read the first time calibration() is called, (done in _init(), to prevent delays while using the device)
-    calibration_tf = value
-  else # case 2: single value, extended into transfer function with no frequency dependency
-    calibration_value = uparse(value)
-    calibration_tf = TransferFunction([0,10e6],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
-  end
-  return calibration_tf
-end
+function createDAQChannel(::Type{DAQRxChannelParams}, dict::Dict{String,Any})
+  splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelIdx] = dict["channel"]
 
-createDAQChannel(::Type{DAQRxChannelParams}, value) = DAQRxChannelParams(channelIdx=value["channel"])
+  if haskey(dict, "transferFunction")
+    splattingDict[:transferFunction] = parse_into_tf(dict["transferFunction"])
+  end
+
+  return DAQRxChannelParams(;splattingDict...)
+end
 
 "Create DAQ channel description from device dict part."
 function createDAQChannels(dict::Dict{String, Any})
@@ -231,6 +224,7 @@ end
 @mustimplement numComponentsMax(daq::AbstractDAQ)
 @mustimplement canPostpone(daq::AbstractDAQ)
 @mustimplement canConvolute(daq::AbstractDAQ)
+@mustimplement channel(daq::AbstractDAQ, channelID::AbstractString)
 
 getDAQs(scanner::MPIScanner) = getDevices(scanner, AbstractDAQ)
 getDAQ(scanner::MPIScanner) = getDevice(scanner, AbstractDAQ)
@@ -242,36 +236,57 @@ getDAQ(scanner::MPIScanner) = getDevice(scanner, AbstractDAQ)
 #   return factor
 # end
 
-channel(daq::AbstractDAQ, channelID::AbstractString) = daq.params.channels[channelID]
-channelIdx(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).channelIdx
-channelIdx(daq::AbstractDAQ, channelIDs::Vector{<:AbstractString}) = [channel(daq, channelID).channelIdx for channelID in channelIDs]
-limitPeak(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).limitPeak
-sinkImpedance(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).sinkImpedance
-allowedWaveforms(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).allowedWaveforms
-isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Waveform) = waveform in allowedWaveforms(daq, channelID)
-feedback(daq::AbstractDAQ, channelID::AbstractString) = channel(daq, channelID).feedback
-feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedback(daq, channelID).channelID
-function feedbackCalibration(daq::AbstractDAQ, channelID::AbstractString)
-  if !isnothing(feedback(daq, channelID)) && isa(feedback(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
-    feedback(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",feedback(daq, channelID).calibration))
+channelIdx(channel::DAQChannelParams) = channel.channelIdx
+channelIdx(daq::AbstractDAQ, channelID::AbstractString) = channelIdx(channel(daq, channelID))
+channelIdx(daq::AbstractDAQ, channelIDs::Vector{<:AbstractString}) = [channelIdx(channel(daq, channelID)) for channelID in channelIDs]
+
+limitPeak(channel::DAQTxChannelParams) = channel.limitPeak
+limitPeak(daq::AbstractDAQ, channelID::AbstractString) = limitPeak(channel(daq, channelID))
+
+sinkImpedance(channel::DAQTxChannelParams) = channel.sinkImpedance
+sinkImpedance(daq::AbstractDAQ, channelID::AbstractString) = sinkImpedance(channel(daq, channelID))
+
+allowedWaveforms(channel::DAQTxChannelParams) = channel.allowedWaveforms
+allowedWaveforms(daq::AbstractDAQ, channelID::AbstractString) = allowedWaveforms(channel(daq, channelID))
+
+isWaveformAllowed(channel::DAQTxChannelParams, waveform::Waveform) = waveform in allowedWaveforms(channel)
+isWaveformAllowed(daq::AbstractDAQ, channelID::AbstractString, waveform::Waveform) = isWaveformAllowed(channel(daq, channelID), waveform)
+
+feedbackChannelID(channel::DAQTxChannelParams) = channel.feedbackChannelID
+feedbackChannelID(daq::AbstractDAQ, channelID::AbstractString) = feedbackChannelID(channel(daq, channelID))
+
+feedbackChannel(daq::AbstractDAQ, channel_::DAQTxChannelParams) = channel(daq, feedbackChannelID(channel_))
+feedbackChannel(daq::AbstractDAQ, channelID::AbstractString) = feedbackChannel(daq, channel(daq,channelID))
+
+feedbackTransferFunction(daq::AbstractDAQ, channel::DAQTxChannelParams) = transferFunction(daq, feedbackChannel(daq, channel))
+feedbackTransferFunction(daq::AbstractDAQ, channelID::AbstractString) = feedbackTransferFunction(daq, channel(daq, channelID))
+
+hasTransferFunction(channel::DAQRxChannelParams) = !isnothing(channel.transferFunction)
+hasTransferFunction(daq::AbstractDAQ, channelID::AbstractString) = hasTransferFunction(channel(daq,channelID))
+
+transferFunction(::AbstractDAQ, ::Nothing) = nothing
+transferFunction(daq::AbstractDAQ, channelID::AbstractString) = transferFunction(daq, channel(daq, channelID))
+function transferFunction(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQRxChannelParams)
+  if isa(channel.transferFunction, String)
+    channel.transferFunction = TransferFunction(joinpath(configDir(dev), "TransferFunctions", channel.transferFunction))
   else
-    if !isnothing(feedback(daq, channelID))
-      return feedback(daq, channelID).calibration
-    else 
-      return nothing
-    end
-  end
-end
-function calibration(daq::AbstractDAQ, channelID::AbstractString)
-  if isa(channel(daq, channelID).calibration, String) # if TF has not been loaded yet, load the h5 file
-    channel(daq, channelID).calibration = TransferFunction(joinpath(configDir(daq),"TransferFunctions",channel(daq, channelID).calibration))
-  else
-    return channel(daq, channelID).calibration 
+    channel.transferFunction
   end
 end
 
-function calibration(daq::AbstractDAQ, channelID::AbstractString, frequency::Real)
-  cal = calibration(daq, channelID)
+calibration(daq::AbstractDAQ, channelID::AbstractString) = calibration(daq, channel(daq,channelID))
+function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams)
+  if isa(channel.calibration, String)
+    channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", channel.calibration))
+  else
+    channel.calibration
+  end
+end
+
+calibration(dev::Device, channelID::AbstractString, frequencies) = calibration.([dev], [channelID], frequencies)
+calibration(daq::AbstractDAQ, channelID::AbstractString, frequency::Real) = calibration(daq, channel(daq, channelID), frequency)
+function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams, frequency::Real)
+  cal = calibration(dev, channel)
   if cal isa TransferFunction
     return cal(frequency)
   else
@@ -311,6 +326,7 @@ function applyForwardCalibration!(seq::Sequence, device::Device)
           N = length(values(comp))
           f_awg = rfftfreq(N, f_comp*N)
           calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          calib = ustrip.(NoUnits, calib)
           values!(comp, irfft(rfft(values(comp)).*calib, N))
         end
       end

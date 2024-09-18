@@ -46,6 +46,16 @@ function parsePossibleURange(val::String)
 end
 parsePossibleURange(val::Vector{String}) = parsePossibleURange.(val)
 
+function parse_into_tf(value::String)
+  if occursin(".h5", value) # case 1: filename to transfer function, the TF will be read the first time calibration() is called, (done in _init(), to prevent delays while using the device)
+    calibration_tf = value
+  else # case 2: single value, extended into transfer function with no frequency dependency
+    calibration_value = uparse(value)
+    calibration_tf = TransferFunction([0,10e6],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
+  end
+  return calibration_tf
+end
+
 function dict_to_splatting(dict::Dict)
   splattingDict = Dict{Symbol, Any}()
   for (key, value) in dict

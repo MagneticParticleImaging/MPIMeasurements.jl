@@ -169,7 +169,7 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
   if componentDict["values"] isa AbstractString # case 1: filename to waveform
     filename = joinpath(homedir(), ".mpi", "Waveforms", componentDict["values"])
     try
-      values = h5read(filename, "/values")
+      values = reshape(h5read(filename, "/values"),:)
     catch 
       throw(SequenceConfigurationError("Could not load the waveform $(componentDict["values"]), either the file does not exist at $filename or the file structure is wrong"))
     end

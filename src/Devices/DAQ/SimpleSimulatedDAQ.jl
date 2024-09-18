@@ -54,6 +54,7 @@ end
 
 neededDependencies(::SimpleSimulatedDAQ) = [SimulationController]
 optionalDependencies(::SimpleSimulatedDAQ) = [TxDAQController, SurveillanceUnit]
+channel(daq::SimpleSimulatedDAQ, channelID::AbstractString) = daq.params.channels[channelID]
 
 Base.close(daq::SimpleSimulatedDAQ) = nothing
 
@@ -90,8 +91,8 @@ function setupTx(daq::SimpleSimulatedDAQ, sequence::Sequence)
     channelMapping = scannerChannel.channelIdx # Switch to getter?
 
     # Activate corresponding receive channels
-    if !isnothing(scannerChannel.feedback)
-      feedbackChannelID = scannerChannel.feedback.channelID
+    if !isnothing(scannerChannel.feedbackChannelID)
+      feedbackChannelID = scannerChannel.feedbackChannelID
       scannerFeedbackChannel = daq.params.channels[feedbackChannelID]
       feedbackChannelIdx = scannerFeedbackChannel.channelIdx # Switch to getter?
       push!(daq.refChanIDs, feedbackChannelID)

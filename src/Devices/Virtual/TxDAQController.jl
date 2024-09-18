@@ -20,22 +20,29 @@ struct UnsortedRef end
 
 abstract type ControlSequence end
 
-mutable struct CrossCouplingControlSequence <: ControlSequence
+macro ControlSequence_fields()
+  return esc(quote 
+  #"Goal sequence of the controller, amplitudes are in T"
   targetSequence::Sequence
+  #"Current best guess of a sequence to reach the goal, amplitudes are in V"
   currSequence::Sequence
-  # Periodic Electric Components
+  #"Dictionary containing the sequence channels needing control and their respective DAQ channels"
   controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
+  #"Vector of indices into the receive channels selecting the correct feedback channels for the controlledChannels"
+  refIndices::Vector{Int64}
+  #"Vector of TransferFunctions to be applied to the feedback channels"
+  refTFs::Vector{TransferFunction}
+  end)
+end
+
+mutable struct CrossCouplingControlSequence <: ControlSequence
+  @ControlSequence_fields
   sinLUT::Union{Matrix{Float64}, Nothing}
   cosLUT::Union{Matrix{Float64}, Nothing}
-  refIndices::Vector{Int64}
 end
 
 mutable struct AWControlSequence <: ControlSequence
-  targetSequence::Sequence
-  currSequence::Sequence
-  # Periodic Electric Components
-  controlledChannelsDict::OrderedDict{PeriodicElectricalChannel, TxChannelParams}
-  refIndices::Vector{Int64}
+  @ControlSequence_fields
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
   #lutMap::Dict{String, Dict{AcyclicElectricalTxChannel, Int}} # for every field ID contain a dict of removed LUTChannels together with the corresponding channel
@@ -131,7 +138,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
   
   # Dict(PeriodicElectricalChannel => TxChannelParams)
   controlledChannelsDict = createControlledChannelsDict(seqControlledChannels, daq) # should this be changed to components instead of channels?
-  refIndices = createReferenceIndexMapping(controlledChannelsDict, daq)
+  refIndices, refTFs = createReferenceIndexMapping(controlledChannelsDict, daq)
   
   controlSequenceType = decideControlSequenceType(target, txCont.params.controlDC)
   @debug "ControlSequence: Decided on using ControlSequence of type $controlSequenceType"
@@ -154,7 +161,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
 
     sinLUT, cosLUT = createLUTs(seqControlledChannels, currSeq) # TODO/JA: check if this makes a difference between target and currSeq, though it should not
     
-    return CrossCouplingControlSequence(target, currSeq, controlledChannelsDict, sinLUT, cosLUT, refIndices)
+    return CrossCouplingControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, sinLUT, cosLUT)
 
   elseif controlSequenceType == AWControlSequence # use the new controller
     
@@ -165,7 +172,7 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
     
-    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, rfftIndices, [])
+    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [])
 
     ## Apply last DC result
     if !isnothing(txCont.lastDCResults) && (txCont.lastChannelIDs == id.(seqControlledChannels))
@@ -214,7 +221,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
   rfftSize = Int(div(rxNumSamplingPoints(seq),2)+1)
   index_mask = falses(numControlledChannels, numComponentsMax(daq)+1, rfftSize)
 
-  refChannelIdx = [channelIdx(daq, ch.feedback.channelID) for ch in collect(Base.values(controlledChannelsDict))]
+  refChannelIdx = [channelIdx(daq, ch.feedbackChannelID) for ch in collect(Base.values(controlledChannelsDict))]
   
 
   for (i, channel) in enumerate(keys(controlledChannelsDict))
@@ -282,9 +289,12 @@ function createReferenceIndexMapping(controlledChannelsDict::OrderedDict{Periodi
   # Dict(RedPitaya ChannelIndex => Index in daq.refChanIDs)
   mapping = Dict( b => a for (a,b) in enumerate(channelIdx(daq, daq.refChanIDs)))
   # RedPitaya ChannelIndex der Feedback-Kanäle in Reihenfolge der Kanäle im controlledChannelsDict
-  controlOrderChannelIndices = [channelIdx(daq, ch.feedback.channelID) for ch in collect(Base.values(controlledChannelsDict))]
+  controlOrderChannelIndices = [channelIdx(daq, ch.feedbackChannelID) for ch in collect(Base.values(controlledChannelsDict))]
   # Index in daq.refChanIDs in der Reihenfolge der Kanäle im controlledChannelsDict
-  return [mapping[x] for x in controlOrderChannelIndices]
+  refIndices = [mapping[x] for x in controlOrderChannelIndices]
+  # Feedback TransferFunction for the controlled Channels
+  refTFs = [feedbackTransferFunction(daq, ch) for ch in collect(Base.values(controlledChannelsDict))]
+  return refIndices, refTFs
 end
 
 function prepareSequenceForControl(txCont::TxDAQController, seq::Sequence)
@@ -312,8 +322,8 @@ function createControlledChannelsDict(seqControlledChannels::Vector{PeriodicElec
   for seqChannel in seqControlledChannels
     name = id(seqChannel)
     daqChannel = get(daq.params.channels, name, nothing)
-    if isnothing(daqChannel) || isnothing(daqChannel.feedback) || !in(daqChannel.feedback.channelID, daq.refChanIDs)
-      @debug "Found missing control def: " name isnothing(daqChannel) isnothing(daqChannel.feedback) !in(daqChannel.feedback.channelID, daq.refChanIDs)
+    if isnothing(daqChannel) || isnothing(daqChannel.feedbackChannelID) || !in(daqChannel.feedbackChannelID, daq.refChanIDs)
+      @debug "Found missing control def: " name isnothing(daqChannel) isnothing(daqChannel.feedbackChannelID) !in(daqChannel.feedbackChannelID, daq.refChanIDs)
       push!(missingControlDef, name)
     else
       dict[seqChannel] = daqChannel
@@ -641,7 +651,7 @@ function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, 
 end
 
 
-updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateControl!(cont, txCont, calcFieldFromRef(cont, uRef), calcDesiredField(cont))
+#updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateControl!(cont, txCont, calcFieldFromRef(cont, uRef), calcDesiredField(cont))
 function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   @debug "Updating control values"
   κ = calcControlMatrix(cont)
@@ -709,15 +719,6 @@ end
 ########## Functions for calculating the field matrix in T from the reference channels
 #################################################################################
 
-
-# calcFieldFromRef(cont::CrossCouplingControlSequence, uRef; frame::Int64 = 1, period::Int64 = 1) = calcFieldFromRef(cont, uRef, UnsortedRef(), frame = frame, period = period)
-# function calcFieldFromRef(cont::CrossCouplingControlSequence, uRef::Array{Float32, 4}, ::UnsortedRef; frame::Int64 = 1, period::Int64 = 1)
-#   return calcFieldFromRef(cont, uRef[:, :, :, frame], UnsortedRef(), period = period)
-# end
-# function calcFieldFromRef(cont::CrossCouplingControlSequence, uRef::Array{Float32, 3}, ::UnsortedRef; period::Int64 = 1)
-#   return calcFieldFromRef(cont, view(uRef[:, cont.refIndices, :], :, :, period), SortedRef())
-# end
-
 function calcFieldsFromRef(cont::CrossCouplingControlSequence, uRef::Array{Float32, 4})
   len = numControlledChannels(cont)
   N = rxNumSamplingPoints(cont.currSequence)
@@ -728,11 +729,11 @@ function calcFieldsFromRef(cont::CrossCouplingControlSequence, uRef::Array{Float
   sorted = uRef[:, cont.refIndices, :, :]
   for i = 1:size(Γ, 4)
     for j = 1:size(Γ, 3)
-      calcFieldFromRef!(view(Γ, :, :, j, i), cont, view(sorted, :, :, j, i), SortedRef())
+      _calcFieldFromRef!(view(Γ, :, :, j, i), cont, view(sorted, :, :, j, i), SortedRef())
     end
   end
   for d =1:len
-    c = ustrip(u"T/V", getControlledDAQChannels(cont)[d].feedback.calibration(frequencies[d]))
+    c = ustrip(u"T/V", 1 ./cont.refTFs[d](frequencies[d]))
     for e=1:len
       correction = c * dividers[e]/dividers[d] * 2/N
       for j = 1:size(Γ, 3)
@@ -752,28 +753,11 @@ function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   spectrum[1,:,:,:] ./= 2
   sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fb_calibration = reduce(vcat, transpose([ustrip.(u"T/V", chan.feedback.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
-  return sortedSpectrum.*fb_calibration
+  fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in cont.refTFs]))
+  return sortedSpectrum./fbTF
 end
 
-function calcFieldFromRef(cont::CrossCouplingControlSequence, uRef, ::SortedRef)
-  len = numControlledChannels(cont)
-  N = rxNumSamplingPoints(cont.currSequence)
-  dividers = [divider.(getPrimaryComponents(cont))]
-  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence)) ./ dividers
-  Γ = zeros(ComplexF64, len, len)
-  calcFieldFromRef!(Γ, cont, uRef, SortedRef())
-  for d =1:len
-    c = ustrip(u"T/V", getControlledDAQChannels(cont)[d].feedback.calibration(frequencies[d]))
-    for e=1:len
-      correction = c * dividers[e]/dividers[d] * 2/N
-      Γ[d,e] = correction * Γ[d,e]
-    end
-  end
-  return Γ
-end
-
-function calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::CrossCouplingControlSequence, uRef, ::SortedRef)
+function _calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::CrossCouplingControlSequence, uRef, ::SortedRef)
   len = size(Γ, 1)
   for d=1:len
     for e=1:len

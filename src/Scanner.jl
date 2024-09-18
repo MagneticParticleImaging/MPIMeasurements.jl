@@ -183,8 +183,6 @@ Base.@kwdef struct MPIScannerGeneral
   defaultSequence::String = ""
   "Default protocol of the scanner."
   defaultProtocol::String = ""
-  "Location of the scanner's transfer function."
-  transferFunction::String = ""
   "Thread ID of the producer thread."
   producerThreadID::Int32 = 2
   "Thread ID of the consumer thread."
@@ -267,12 +265,6 @@ configDir(scanner::MPIScanner) = dirname(scanner.configFile)
 
 "General parameters of the scanner like its bore size or gradient."
 generalParams(scanner::MPIScanner) = scanner.generalParams
-
-"Location of the scanner's transfer function."
-transferFunction(scanner::MPIScanner) = scanner.generalParams.transferFunction
-
-"Check, whether the scanner has a transfer function defined."
-hasTransferFunction(scanner::MPIScanner) = transferFunction(scanner) != ""
 
 """
     $(SIGNATURES)
@@ -465,8 +457,6 @@ function MPIFiles.TransferFunction(configdir::AbstractString, name::AbstractStri
   end
   return TransferFunction(path)
 end
-
-MPIFiles.TransferFunction(scanner::MPIScanner) = TransferFunction(configDir(scanner),transferFunction(scanner))
 
 #### Protocol ####
 function getProtocolList(scanner::MPIScanner)
