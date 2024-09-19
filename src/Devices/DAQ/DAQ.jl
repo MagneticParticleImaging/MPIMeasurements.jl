@@ -275,6 +275,7 @@ function transferFunction(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQRxCha
 end
 
 calibration(daq::AbstractDAQ, channelID::AbstractString) = calibration(daq, channel(daq,channelID))
+calibration(dev::Device, channel::RedPitayaLUTChannelParams) = channel.calibration
 function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams)
   if isa(channel.calibration, String)
     channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", channel.calibration))
