@@ -310,7 +310,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
 	MPIFiles.dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
 	dividers = dfDivider(sequence)
-	dividers[!isinteger.(dividers)] .= 0
+	dividers[.!isinteger.(dividers)] .= 0
 	MPIFiles.dfDivider(mdf, Int.(dividers))
 	MPIFiles.dfNumChannels(mdf, dfNumChannels(sequence))
 	MPIFiles.dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))

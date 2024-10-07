@@ -12,7 +12,7 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolPa
   "SM Positions mapped to the natural sorting of sequence tomls"
   positions::Union{Positions, Nothing} = nothing
   "Flag if the calibration should be saved as a system matrix or not"
-  saveAsSystemMatrix::Bool = true
+  saveInCalibFolder::Bool = true
   "Seconds to wait between measurements"
   waitTime::Float64 = 0.0
 end
@@ -486,7 +486,7 @@ function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::Dataset
     if !isempty(protocol.systemMeasState.applied)
       applied = protocol.systemMeasState.applied
     end
-    filename = saveasMDF(store, scanner, protocol.params.sequences[1], data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures=temperatures, drivefield=drivefield, applied=applied)
+    filename = saveasMDF(store, scanner, protocol.params.sequences[1], data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveInCalibFolder, temperatures=temperatures, drivefield=drivefield, applied=applied)
     @show filename
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end

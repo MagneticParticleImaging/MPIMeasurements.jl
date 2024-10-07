@@ -22,7 +22,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Sort patches"
   sortPatches::Bool = true
   "Flag if the measurement should be saved as a system matrix or not"
-  saveAsSystemMatrix::Bool = true
+  saveInCalibFolder::Bool = true
 
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 2
@@ -96,7 +96,7 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.bgMeas = zeros(Float32,0,0,0,0)
   protocol.protocolMeasState = ProtocolMeasState()
 
-  try
+  #try
     seq, perm, offsets, calibsize, numPeriodsPerFrame = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerOffset = protocol.params.dfPeriodsPerOffset)
 
     # For each patch assign nothing if invalid or otherwise index in "proper" frame
@@ -119,9 +119,9 @@ function _init(protocol::MPSMeasurementProtocol)
     protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
     protocol.calibsize = calibsize
     @debug "Prepared Protocol Sequence: $(length(patchPerm)) measured and $(length(perm)) valid patches in Permutation"
-  catch e
-    throw(e)
-  end
+  #catch e
+  #  throw(e)
+  #end
 
   return nothing
 end
@@ -290,14 +290,14 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   bufferSize = (rxNumSamplingPoints(protocol.sequence), length(rxChannels(protocol.sequence)), 1, numFrames)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
 
-  buffers = StorageBuffer[buffer]
+  # buffers = StorageBuffer[buffer]
 
-  if protocol.params.controlTx
-    len = length(keys(sequence.simpleChannel))
-    push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, len, len, 1, numFrames), sequence))
-  end
+  # if protocol.params.controlTx
+  #   len = length(keys(sequence.simpleChannel))
+  #   push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, len, len, 1, numFrames), sequence))
+  # end
 
-  buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
+  # buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
   buffer = MPSBuffer(buffer, protocol.patchPermutation, numFrames, 1, acqNumPeriodsPerFrame(protocol.sequence))
 
   channel = Channel{channelType(daq)}(32)
@@ -414,7 +414,7 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   offsetPerm = zeros(Int64, size(data, 3))
   for (index, patch) in enumerate(protocol.patchPermutation)
     if !isnothing(patch)
-      offsetPerm[patch] = index÷periodsPerOffset 
+      offsetPerm[patch] = (index-1)÷periodsPerOffset + 1
     end
   end
   offsets = protocol.offsetfields[offsetPerm, :]
@@ -427,17 +427,15 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
 
   filename = nothing
-  if protocol.params.saveAsSystemMatrix
-    periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
-    isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
-    data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
-    # All periods in one frame (should) have same offset
-    offsets = reshape(offsets, periodsPerOffset, :, size(offsets, 2))[1, :, :]
-    offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
-    filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, drivefield = drivefield, temperatures = temperature, applied = appliedField)
-  else
-    filename = saveasMDF(store, scanner, sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
-  end
+
+  periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
+  isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
+  data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
+  # All periods in one frame (should) have same offset
+  offsets = reshape(offsets, periodsPerOffset, :, size(offsets, 2))[1, :, :]
+  offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
+  filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveInCalibFolder, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
