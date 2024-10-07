@@ -30,6 +30,8 @@ Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   switchEnable::Bool = true
 end
 
+calibration(dev::Device, channel::RedPitayaLUTChannelParams) = channel.calibration
+
 function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
   splattingDict = Dict{Symbol, Any}()
   splattingDict[:channelIdx] = dict["channel"]

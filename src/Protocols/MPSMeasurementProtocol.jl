@@ -293,8 +293,8 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   buffers = StorageBuffer[buffer]
 
   if protocol.params.controlTx
-    len = length(keys(sequence.simpleChannel))
-    push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, len, len, 1, numFrames), sequence))
+    #len = length(keys(sequence.refIndices))
+    push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(sequence)..., 1, numFrames), sequence))
   end
 
   buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
