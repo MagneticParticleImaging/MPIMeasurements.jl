@@ -12,7 +12,7 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolPa
   "SM Positions mapped to the natural sorting of sequence tomls"
   positions::Union{Positions, Nothing} = nothing
   "Flag if the calibration should be saved as a system matrix or not"
-  saveInCalibFolder::Bool = true
+  saveInCalibFolder::Bool = false
   "Seconds to wait between measurements"
   waitTime::Float64 = 0.0
 end

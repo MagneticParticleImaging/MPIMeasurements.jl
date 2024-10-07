@@ -22,7 +22,7 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Sort patches"
   sortPatches::Bool = true
   "Flag if the measurement should be saved as a system matrix or not"
-  saveInCalibFolder::Bool = true
+  saveInCalibFolder::Bool = false
 
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
   dfPeriodsPerOffset::Integer = 2
