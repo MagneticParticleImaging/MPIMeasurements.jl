@@ -431,9 +431,16 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
   isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
   data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
+
   # All periods in one frame (should) have same offset
-  offsets = reshape(offsets, periodsPerOffset, :, size(offsets, 2))[1, :, :]
-  offsets = reshape(offsets, protocol.calibsize..., :) # make calib size "visible" to storing function
+  offsets = reshape(offsets, (periodsPerOffset, :, size(offsets, 2)))[1, :, :]
+
+  # Pad zeros in z or z and y direction if the protocol uses less than 3 offset dimensions.
+  @assert size(offsets, 2) <= 3 "The number of offset dimensions must be below or equal to 3 since the MDF specifies Ox3 with directions in x, y and z."
+  offsets = hcat(offsets, zeros(eltype(offsets), (size(offsets, 1), 3 - size(offsets, 2))))
+
+  calibsize_ = vcat(protocol.calibsize, ones(eltype(protocol.calibsize), 3 - length(protocol.calibsize)))
+  offsets = reshape(offsets, (calibsize_..., :)) # make calib size "visible" to storing function
   filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveInCalibFolder, drivefield = drivefield, temperatures = temperature, applied = appliedField)
 
   @info "The measurement was saved at `$filename`."
