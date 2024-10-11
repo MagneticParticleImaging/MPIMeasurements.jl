@@ -540,6 +540,12 @@ end
 
 setup(daq::AbstractDAQ, sequence::ControlSequence) = setup(daq, getControlResult(sequence))
 
+function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
+  finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
+  calibrationResults = finalCalibration[.!isnan.(finalCalibration)]
+  @debug "Control result: You could update the forward calibration in the Scanner.toml to this value for faster control" calibrationResults
+  nothing
+end
 function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequence)
   finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
  
@@ -606,8 +612,7 @@ end
 fieldAccuracyReached(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}) = fieldAccuracyReached(cont, txCont, Γ, calcDesiredField(cont))
 function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
 
-  diff = Ω - Γ
-  abs_deviation = abs.(diff)
+  abs_deviation = abs.(Ω) .- abs.(Γ)
   rel_deviation = abs_deviation ./ abs.(Ω)
   rel_deviation[abs.(Ω).<1e-15] .= 0 # relative deviation does not make sense for a zero goal
   phase_deviation = angle.(Ω).-angle.(Γ)
