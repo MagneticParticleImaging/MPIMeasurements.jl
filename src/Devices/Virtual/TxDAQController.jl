@@ -459,6 +459,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     end
   catch ex
     @error "Exception during control loop" exception=(ex, catch_backtrace())
+    resetCachedCalibration(txCont)
     controlPhaseError = ex
   finally
     try 
@@ -560,7 +561,15 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
   txCont.lastDCResults = cont.dcSearch[end-1:end]
   txCont.lastChannelIDs = channelIDs
   
-  @info "Cached DC result" txCont.lastDCResults
+  @debug "Cached DC result" txCont.lastDCResults
+end
+
+function resetCachedCalibration(txCont::TxDAQController)
+  txCont.controlResults = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  txCont.lastDCResults = nothing
+  txCont.lastChannelIDs = String[]
+  @debug "Reset cached calibration"
+  nothing
 end
 
 
