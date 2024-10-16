@@ -120,7 +120,7 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
 end
 
 function timeEstimate(protocol::MultiSequenceSystemMatrixProtocol)
-  if protocol.params.waitTime > 5
+  if protocol.params.waitTime >= 5
     t = protocol.params.waitTime*length(protocol.params.sequences) * 1u"s"
     est = timeFormat(t)
   else
