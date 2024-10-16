@@ -340,19 +340,6 @@ function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
 end
 sinks!(buffer::MPSBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
-
-function cleanup(protocol::MPSMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::MPSMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::MPSMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::MPSMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))

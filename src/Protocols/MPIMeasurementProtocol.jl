@@ -205,19 +205,6 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-
-function cleanup(protocol::MPIMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::MPIMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::MPIMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::MPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))

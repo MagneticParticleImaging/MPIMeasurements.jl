@@ -122,7 +122,7 @@ function _execute(protocol::ContinousMeasurementProtocol)
     while !measPauseOver || protocol.stopped
       handleEvents(protocol)
       if !notifiedStop && protocol.stopped
-        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
         notifiedStop = true
       end
       if notifiedStop && !protocol.stopped
@@ -198,11 +198,7 @@ function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-function cleanup(protocol::ContinousMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::ContinousMeasurementProtocol)
+function pause(protocol::ContinousMeasurementProtocol)
   protocol.stopped = true
 end
 
