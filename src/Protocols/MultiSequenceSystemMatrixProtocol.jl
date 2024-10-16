@@ -46,7 +46,7 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocol <: Protocol
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
-  stopped::Bool = false
+  paused::Bool = false
   restored::Bool = false
   measuring::Bool = false
   txCont::Union{TxDAQController,Nothing} = nothing
@@ -66,6 +66,14 @@ end
 function _init(protocol::MultiSequenceSystemMatrixProtocol)
   if isnothing(protocol.params.sequences)
     throw(IllegalStateException("Protocol requires sequences"))
+  end
+
+  if any(acqNumFrameAverages.(protocol.params.sequences) .!= 1)
+    throw(ProtocolConfigurationError("The sequences for a MultiSequenceSystemMatrixProtocol currently do not support numFrameAverages != 1"))
+  end
+
+  if length(protocol.params.sequences) != length(protocol.params.positions)
+    @warn "The MultiSequenceSystemMatrixProtocol has $(length(protocol.params.sequences)) sequences but you configured $(length(protocol.params.positions)) positions."
   end
 
   protocol.systemMeasState = SystemMatrixMeasState()
@@ -112,7 +120,12 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
 end
 
 function timeEstimate(protocol::MultiSequenceSystemMatrixProtocol)
-  est = "Unknown"
+  if protocol.params.waitTime > 5
+    t = protocol.params.waitTime*length(protocol.params.sequences) * 1u"s"
+    est = timeFormat(t)
+  else
+    est = "Unknown"
+  end
   #if !isnothing(protocol.params.sequence)
   #  params = protocol.params
   #  seq = params.sequence
@@ -127,7 +140,7 @@ function timeEstimate(protocol::MultiSequenceSystemMatrixProtocol)
 end
 
 function enterExecute(protocol::MultiSequenceSystemMatrixProtocol)
-  protocol.stopped = false
+  protocol.paused = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.restored = false
@@ -166,16 +179,16 @@ function _execute(protocol::MultiSequenceSystemMatrixProtocol)
   while !finished
     finished = performMeasurements(protocol)
 
-    # Stopped 
+    # paused 
     notifiedStop = false
-    while protocol.stopped
+    while protocol.paused
       handleEvents(protocol)
       protocol.cancelled && throw(CancelException())
       if !notifiedStop
-        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
         notifiedStop = true
       end
-      if !protocol.stopped
+      if !protocol.paused
         put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
       end
       sleep(0.05)
@@ -199,15 +212,10 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
 
   while !finished
-    handleEvents(protocol)
-
-    if protocol.stopped
-      enterPause(protocol)
-      finished = false
-      break
-    end
 
     wasRestored = protocol.restored
+    protocol.restored = false
+
     timeWaited = @elapsed begin
       wait(calib.producer)
       wait(calib.consumer)
@@ -215,7 +223,18 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
     diffTime = protocol.params.waitTime - timeWaited
     if diffTime > 0.0 && !wasRestored && protocol.systemMeasState.currPos > 1
       @info "Wait $diffTime s for next measurement"
-      sleep(diffTime)
+      for _ in 1:diffTime/0.1
+        handleEvents(protocol)
+        if protocol.paused || protocol.cancelled
+          break
+        end
+        sleep(0.1)
+      end
+    end
+    if protocol.paused || protocol.cancelled
+      enterPause(protocol)
+      finished = false
+      break
     end
 
     performMeasurement(protocol)
@@ -243,7 +262,7 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   # Prepare
   calib = protocol.systemMeasState
   index = calib.currPos
-  @info "Measurement $index of $(length(calib.positions))" 
+  @info "Measurement $index of $(length(protocol.params.sequences))" 
   daq = getDAQ(protocol.scanner)
 
   sequence = protocol.params.sequences[index]
@@ -331,7 +350,7 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   sysObj = protocol.systemMeasState
   params = MPIFiles.toDict(sysObj.positions)
   params["currPos"] = index + 1 # Safely stored up to and including index
-  #params["stopped"] = protocol.stopped
+  #params["paused"] = protocol.paused
   #params["currentSignal"] = sysObj.currentSignal
   params["waitTime"] = protocol.params.waitTime
   params["measIsBGPos"] = sysObj.measIsBGPos
@@ -364,7 +383,7 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
   if isfile(protocol, "meta.toml")
     params = TOML.parsefile(file(protocol, "meta.toml"))
     sysObj.currPos = params["currPos"]
-    protocol.stopped = false
+    protocol.paused = false
     protocol.params.waitTime = params["waitTime"]
     sysObj.measIsBGPos = params["measIsBGPos"]
     sysObj.posToIdx = params["posToIdx"]
@@ -412,34 +431,31 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
   end
 end
 
-
-
 function cleanup(protocol::MultiSequenceSystemMatrixProtocol)
   rm(dir(protocol), force = true, recursive = true)
 end
 
-function stop(protocol::MultiSequenceSystemMatrixProtocol)
+function pause(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
   if calib.currPos <= length(calib.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
-    protocol.stopped = true
+    protocol.paused = true
   else
-    # Stopped has no concept once all measurements are done
-    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+    # paused has no concept once all measurements are done
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(PauseEvent()))
   end
 end
 
 function resume(protocol::MultiSequenceSystemMatrixProtocol)
-  protocol.stopped = false
+  protocol.paused = false
   protocol.restored = true
   # OperationSuccessfulEvent is put when it actually leaves the stop loop
 end
 
 function cancel(protocol::MultiSequenceSystemMatrixProtocol)
   protocol.cancelled = true # Set cancel s.t. exception can be thrown when appropiate
-  protocol.stopped = true # Set stop to reach a known/save state
+  protocol.paused = true # Set stop to reach a known/save state
 end
-
 
 function handleEvent(protocl::MultiSequenceSystemMatrixProtocol, event::ProgressQueryEvent)
   put!(protocl.biChannel, ProgressEvent(protocl.systemMeasState.currPos, length(protocl.params.sequences), "Position", event))
