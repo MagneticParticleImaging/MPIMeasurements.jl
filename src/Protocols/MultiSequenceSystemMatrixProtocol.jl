@@ -457,8 +457,8 @@ function cancel(protocol::MultiSequenceSystemMatrixProtocol)
   protocol.paused = true # Set stop to reach a known/save state
 end
 
-function handleEvent(protocl::MultiSequenceSystemMatrixProtocol, event::ProgressQueryEvent)
-  put!(protocl.biChannel, ProgressEvent(protocl.systemMeasState.currPos, length(protocl.params.sequences), "Position", event))
+function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::ProgressQueryEvent)
+  put!(protocol.biChannel, ProgressEvent(protocol.systemMeasState.currPos, length(protocol.params.sequences), "Position", event))
 end
 
 function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::DataQueryEvent)
