@@ -136,22 +136,6 @@ function timeEstimate(protocol::MPSMeasurementProtocol)
     txSamplesPerFrame = lcm(dfDivider(seq)) * size(protocol.patchPermutation, 1)
     fgTime = (txSamplesPerFrame * fgFrames) / txBaseFrequency(seq) |> u"s"
     bgTime = (txSamplesPerFrame * bgFrames) / txBaseFrequency(seq) |> u"s"
-    function timeFormat(t)
-      v = ustrip(u"s",t)
-      if v>3600  
-        x = Int((v%3600)÷60)
-        return "$(Int(v÷3600)):$(if x<10; " " else "" end)$(x) h"
-      elseif v>60
-        x = round(v%60,digits=1)
-        return "$(Int(v÷60)):$(if x<10; " " else "" end)$(x) min"
-      elseif v>0.5
-        return "$(round(v,digits=2)) s"
-      elseif v>0.5e-3
-        return "$(round(v*1e3,digits=2)) ms"
-      else
-        return "$(round(v*1e6,digits=2)) µs"
-      end
-    end 
     perc_wait = round(Int,sum(isnothing.(protocol.patchPermutation))/size(protocol.patchPermutation,1)*100)
     est = "FG: $(timeFormat(fgTime)) ($(perc_wait)% waiting)\nBG: $(timeFormat(bgTime))"
     @info "The estimated duration is FG: $fgTime ($(perc_wait)% waiting), BG: $bgTime."
@@ -339,19 +323,6 @@ function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
   end
 end
 sinks!(buffer::MPSBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
-
-
-function cleanup(protocol::MPSMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::MPSMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::MPSMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
 
 function cancel(protocol::MPSMeasurementProtocol)
   protocol.cancelled = true

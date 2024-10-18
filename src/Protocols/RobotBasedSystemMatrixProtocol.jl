@@ -473,14 +473,14 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 
-function stop(protocol::RobotBasedSystemMatrixProtocol)
+function pause(protocol::RobotBasedSystemMatrixProtocol)
   calib = protocol.systemMeasState
   if calib.currPos <= length(calib.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.stopped = true
   else 
     # Stopped has no concept once all measurements are done
-    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(PauseEvent()))
   end
 end
 

@@ -7,8 +7,8 @@ export  Protocol, ProtocolParams, name, description, scanner, params,
 
 abstract type ProtocolParams end
 
-export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED
-@enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED
+export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED, PS_STOPPED
+@enum ProtocolState PS_UNDEFINED PS_INIT PS_RUNNING PS_PAUSED PS_FINISHED PS_FAILED PS_STOPPED
 
 export @add_protocol_fields
 macro add_protocol_fields(paramType)
@@ -95,10 +95,29 @@ abstract type ProtocolEvent end
 @mustimplement _init(protocol::Protocol) # Prepare necessary data structures, ex. buffer for samples + background meas
 @mustimplement _execute(protocol::Protocol)
 @mustimplement enterExecute(protocol::Protocol) # Prepare execution tracking flags, ex. execution done or cancelled flags
-@mustimplement cleanup(protocol::Protocol)
-@mustimplement stop(protocol::Protocol)
-@mustimplement resume(protocol::Protocol)
-@mustimplement cancel(protocol::Protocol)
+
+
+### all Protocols must implement these events
+function cleanup(protocol::Protocol) 
+  # NOP
+end
+
+function pause(protocol::Protocol)
+  put!(protocol.biChannel, OperationNotSupportedEvent(PauseEvent()))
+end
+
+function resume(protocol::Protocol)
+  put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
+end
+
+function stop(protocol::Protocol)
+  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
+end
+
+function cancel(protocol::Protocol)
+  put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
+end
+###
 
 function init(protocol::Protocol)
   @debug "Initializing protocol $(name(protocol)) with inner initializer."
@@ -276,12 +295,14 @@ function askChoices(protocol::Protocol, message::AbstractString, choices::Vector
   end
 end
 
-handleEvent(protocol::Protocol, event::PauseEvent) = stop(protocol)
-handleEvent(protocol::Protocol, event::StopEvent) = stop(protocol) # TODO Differentiate stop and pause
+handleEvent(protocol::Protocol, event::PauseEvent) = pause(protocol)
+handleEvent(protocol::Protocol, event::StopEvent) = stop(protocol)
 handleEvent(protocol::Protocol, event::ResumeEvent) = resume(protocol) 
 handleEvent(protocol::Protocol, event::CancelEvent) = cancel(protocol)
 handleEvent(protocol::Protocol, event::ProtocolEvent) = put!(biChannel(protocol), UndefinedEvent(event))
 #handleEvent(protocol::Protocol, event::InfoQueryEvent) = 
+
+# by default all event are not supported
 
 function handleEvents(protocol::Protocol)
   while isready(protocol.biChannel)

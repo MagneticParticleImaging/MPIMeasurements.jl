@@ -236,19 +236,6 @@ function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-
-function cleanup(protocol::RobotMPIMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::RobotMPIMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::RobotMPIMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::RobotMPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))

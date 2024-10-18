@@ -31,7 +31,7 @@ function _execute(protocol::RobotBasedProtocol)
       handleEvents(protocol)
       protocol.cancelled && throw(CancelException())
       if !notifiedStop
-        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
         notifiedStop = true
       end
       if !protocol.stopped
