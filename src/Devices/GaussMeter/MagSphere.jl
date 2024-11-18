@@ -12,10 +12,10 @@ MagSphereDirectParams(dict::Dict) = params_from_dict(MagSphereDirectParams, dict
 Base.@kwdef struct MagSphereDescriptionParams <: MagSphereParams
   description::String
   bufferSize::Int64 = 2048
-  #N::Int64 = 86
-  # calib::Matrix{Float64}
-  #t::Int64 = 12
-  #radius::typeof(1u"m") = 0.045u"m"
+  N::Int64 = 86
+  calib::String = ""
+  t::Int64 = 12
+  radius::typeof(1.0u"m") = 0.045u"m"
 #  sensorRotation::Matrix{Float64}
   @add_serial_device_fields "\r\n"
 end
@@ -27,17 +27,25 @@ MagSphereDescriptionParams(dict::Dict) = params_from_dict(MagSphereDescriptionPa
 #     # This into a function
 #     calib = dict["calib"]
 #     if calib isa String
-#       # does file exist
-      
-#       # read file
-#       calib = ...
-#       dict["calib"] = calib
+#       # # does file exist?
+#       # if isfile(calib)
+#       #   # read file
+#       #   h5open(calib, "r") do file
+#       #     dict["calibrationOffset"] = read(file,"/calibrationOffset")
+#       #     dict["calibrationRotation"] = read(file,"/calibrationRotation")
+#       #   end
+#       # else
+#       #   @error "File does not exist."
+#       # end
+#       dict["calib"]=calib
 #     else 
-
+#       @error "No filename specified in the toml."
+      
 #     end
-#     # End function
 #   else
-#     dict["calib"] = ones(Float64, 86, 3)
+#     #TODO noch Warnung, dass nichts angegeben wurde
+#     dict["calibrationOffset"] = zeros(86,3)
+#     dict["calibrationRotation"] = zeros(86,3,3)
 #   end
 
 #   return params_from_dict(MagSphereDescriptionParams, dict)
@@ -55,6 +63,9 @@ Base.@kwdef mutable struct MagSphere <: GaussMeter
   ch::Channel{MagSphereResult} = Channel{MagSphereResult}(1)
   task::Union{Nothing, Task} = nothing
   lock::ReentrantLock = ReentrantLock()
+
+  calibrationOffset::Matrix{Float64} = zeros(Float64, 86, 3) 
+  calibrationRotation::Array{Float64, 3} = zeros(Float64,86,3,3)
 end
 
 neededDependencies(::MagSphere) = []
@@ -65,6 +76,20 @@ function _init(gauss::MagSphere)
   sd = initSerialDevice(gauss, params)
   @info "Connection to MagSphere established."        
   gauss.sd = sd
+  if !isempty(gauss.params.calib)
+    # does file exist?
+    if isfile(gauss.params.calib)
+      # read file
+      gauss.calibrationOffset = h5read(gauss.params.calib,"/calibrationOffset")
+      gauss.calibrationRotation = h5read(gauss.params.calib,"/calibrationRotation")
+    else
+      @error "File does not exist."
+    end
+  else
+    @warn "No filename specified in the toml."
+    gauss.calibrationRotation=permutedims(cat(map(x ->  Matrix{Float64}(I,(3,3)), zeros(Float64,86,1))...,dims=3),(3,1,2))
+
+  end
 end
 
 function initSerialDevice(gauss::MagSphere, params::MagSphereDirectParams)

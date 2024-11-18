@@ -196,12 +196,20 @@ function handleEvent(protocol::MagSphereProtocol, event::FileStorageRequestEvent
   magSphere = getDevice(protocol.scanner,MagSphere)
   h5open(filename, "w") do file
     data = cat(map(x-> x.data, protocol.fieldData)..., dims = 3)
-    write(file,"/fields", data) 		# measured field (size: 3 x #points x #patches)
-    # write(file,"/positions/tDesign/radius", ustrip(u"m", magSphere.radius))	# radius of the measured ball
-    # write(file,"/positions/tDesign/N", magSphere.N)		# number of points of the t-design
-    # write(file,"/positions/tDesign/t", magSphere.T)		# t of the t-design
+    data=permutedims(data,(2,1,3))
+    for frame = 1:size(data,3)
+      for sensor = 1:size(data,1)
+        data[sensor,:,frame] = magSphere.calibrationRotation[sensor,:,:] * data[sensor,:,frame] + magSphere.calibrationOffset[sensor,:] .*u"T"
+      end
+    end
+    write(file,"/fields", ustrip.(u"T", data)) 		# measured field (size: 3 x #points x #patches)
+    write(file,"/positions/tDesign/radius", ustrip(u"m", magSphere.params.radius))	# radius of the measured ball
+    write(file,"/positions/tDesign/N", magSphere.params.N)		# number of points of the t-design
+    write(file,"/positions/tDesign/t", magSphere.params.t)		# t of the t-design
     write(file,"/positions/tDesign/center",  [0.0, 0.0, 0.0])	# center of the measured ball
     write(file,"/timeStamp", map(x -> x.timestamp, protocol.fieldData)) # timeStamp for the corresponding measured field 
+    write(file,"/calibrationOffset", magSphere.calibrationOffset)		# calibration data from toml (size(N,3))
+    write(file,"/calibrationRotation", magSphere.calibrationRotation)		# calibration data from toml (size(N,3,3))
     # write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO only works for LakeShore460 atm
   end
   put!(protocol.biChannel, StorageSuccessEvent(filename))
