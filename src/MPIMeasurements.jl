@@ -32,6 +32,7 @@ import Base: ==, isequal, hash, isfile, push!, pop!, empty!, getindex, setindex!
 #@reexport using MPIFiles
 
 using MPIFiles
+using MPIFiles.HDF5
 import MPIFiles: hasKeyAndValue, 
     acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
     acqNumFrames, acqNumAverages,

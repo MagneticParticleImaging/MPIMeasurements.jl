@@ -226,7 +226,7 @@ mutable struct MPIScanner
     configDir = findConfigDir(name)
     params = getScannerParams(configDir)
     
-    @debug "Instantiating scanner `$name` from configuration file at `$filename`."
+    #@debug "Instantiating scanner `$name` from configuration file at `$filename`."
     generalParams = params_from_dict(MPIScannerGeneral, params["General"])
     @assert generalParams.name == name "The folder name and the scanner name in the configuration do not match."
     devices = initiateDevices(configDir, params["Devices"], robust = robust)
