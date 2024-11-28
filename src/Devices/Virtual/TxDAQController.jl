@@ -53,8 +53,8 @@ end
 Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   @add_device_fields TxDAQControllerParams
 
-  ref::Union{Array{Float32, 4}, Nothing} = nothing # TODO remove when done
-  cont::Union{Nothing, ControlSequence} = nothing # TODO remove when done
+  ref::Union{Array{Float32, 4}, Nothing} = nothing
+  cont::Union{Nothing, ControlSequence} = nothing
   startFrame::Int64 = 1
   controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
   lastDCResults::Union{Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}},Nothing} = nothing
@@ -342,7 +342,7 @@ end
 ############## Top-Level functions for interacting with the controller
 ###############################################################################
 
-function controlTx(txCont::TxDAQController, seq::Sequence, ::Nothing = nothing)
+function controlTx(txCont::TxDAQController, seq::Sequence)
   if needsControlOrDecoupling(seq)
     daq = dependency(txCont, AbstractDAQ)
     setupRx(daq, seq)
@@ -447,7 +447,6 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
         controlPhaseDone = controlStep!(control, txCont, Γ, Ω) == UNCHANGED
         if controlPhaseDone
           @info "Could control"
-          # TODO/JA: extract control results as new calibration here
           updateCachedCalibration(txCont, control)
         else
           @info "Could not control"
@@ -523,7 +522,6 @@ function getControlResult(cont::ControlSequence)::Sequence
       safeTrans = safeTransitionInterval(field)
       safeEnd = safeEndInterval(field)
       safeError = safeErrorInterval(field)
-      #TODO/JA: should the channels be a copy? Is it even necessary to create a new object just to set control to false? Maybe this will work anyways
       contField = MagneticField(;id = _id, channels = deepcopy(channels(field)), safeStartInterval = safeStart, safeTransitionInterval = safeTrans, 
           safeEndInterval = safeEnd, safeErrorInterval = safeError, decouple = false, control = false)
       push!(_fields, contField)
@@ -531,7 +529,7 @@ function getControlResult(cont::ControlSequence)::Sequence
   for field in fields(cont.targetSequence)
     if !control(field)
       push!(_fields, field)
-      # if there are LUT channels sharing a channel with the controlled fields, we should be able to use the DC calibration that has been found
+      # TODO/JA: if there are LUT channels sharing a channel with the controlled fields, we should be able to use the DC calibration that has been found
       # and insert it into the corresponding LUT channels as a calibration value
     end
   end
@@ -668,12 +666,12 @@ end
 #updateControl!(cont::ControlSequence, txCont::TxDAQController, uRef) = updateControl!(cont, txCont, calcFieldFromRef(cont, uRef), calcDesiredField(cont))
 function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   @debug "Updating control values"
-  κ = calcControlMatrix(cont)
+  oldTx = calcControlMatrix(cont)
 
-  if !validateAgainstForwardCalibrationAndSafetyLimit(κ, Γ, cont, txCont)
+  if !validateAgainstForwardCalibrationAndSafetyLimit(oldTx, Γ, cont, txCont)
     error("Last control step produced unexpected results! Either your forward calibration is inaccurate or the system is not in the expected state (e.g. amp not on)!" )
   end
-  newTx = updateControlMatrix(cont, txCont, Γ, Ω, κ)
+  newTx = updateControlMatrix(cont, txCont, Γ, Ω, oldTx)
 
   if validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) && checkVoltLimits(newTx, cont)
     updateControlSequence!(cont, newTx)
@@ -686,29 +684,29 @@ end
 
 # Γ: Matrix from Ref
 # Ω: Desired Matrix
-# κ: Last Set Matrix
-function updateControlMatrix(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
+# oldTx: Last Set Matrix
+function updateControlMatrix(cont::CrossCouplingControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, oldTx::Matrix{<:Complex})
   if needsDecoupling(cont.targetSequence)
-    β = Γ*inv(κ)
+    β = Γ*inv(oldTx)
   else
-    β = diagm(diag(Γ))*inv(diagm(diag(κ))) 
+    β = diagm(diag(Γ))*inv(diagm(diag(oldTx))) 
   end
   newTx = inv(β)*Ω
-  @debug "Last TX matrix [V]:" κ
+  @debug "Last TX matrix [V]:" oldTx
   @debug "Ref matrix [T]:" Γ
   @debug "Desired matrix [T]:" Ω
   @debug "New TX matrix [V]:" newTx 
   return newTx
 end
 
-function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, κ::Matrix{<:Complex})
+function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex}, oldTx::Matrix{<:Complex})
   # For now we completely ignore coupling and hope that it can find good values anyways
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
-  newTx = κ./Γ.*Ω
+  newTx = oldTx./Γ.*Ω
 
   # handle DC separately:
   if txCont.params.controlDC
-    push!(cont.dcSearch, (V=κ[:,1], B=Γ[:,1]))
+    push!(cont.dcSearch, (V=oldTx[:,1], B=Γ[:,1]))
     if length(cont.dcSearch)==1
       my_sign(x) = if x<0; -1 else 1 end
       testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
@@ -721,7 +719,7 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
     end
   end
 
-  #@debug "Last TX matrix [V]:" κ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(κ,cont,return_time_signal=true)')
+  #@debug "Last TX matrix [V]:" oldTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(oldTx,cont,return_time_signal=true)')
   #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
   #@debug "Desired matrix [V]:" Ω=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Ω,cont,return_time_signal=true)')
   #@debug "New TX matrix [T]:" newTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(newTx,cont,return_time_signal=true)')
@@ -831,13 +829,13 @@ end
 
 # Convert Last Tx (currSequence) to Matrix in V
 function calcControlMatrix(cont::CrossCouplingControlSequence)
-  κ = zeros(ComplexF64, controlMatrixShape(cont))
+  oldTx = zeros(ComplexF64, controlMatrixShape(cont))
   for (i, channel) in enumerate(getControlledChannels(cont))
     for (j, comp) in enumerate(periodicElectricalComponents(channel))
-      κ[i, j] = ustrip(u"V", amplitude(comp)) * exp(im*ustrip(u"rad", phase(comp)))
+      oldTx[i, j] = ustrip(u"V", amplitude(comp)) * exp(im*ustrip(u"rad", phase(comp)))
     end
   end
-  return κ
+  return oldTx
 end
 
 function calcControlMatrix(cont::AWControlSequence)
@@ -919,49 +917,10 @@ function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, 
   # step 3 check if B_fw and B are both below safety limit
   isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
 
-  @debug "validateAgainstForwardCalibrationAndSafetyLimit" abs.(B_fw) abs.(B) forwardCalibrationAgrees isSafe(B_fw) isSafe(B)
+  @debug "validateAgainstForwardCalibrationAndSafetyLimit" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
 
   return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
 end
-
-function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::CrossCouplingControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
-  dividers = divider.(getPrimaryComponents(cont))
-  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
-  calibFieldToVoltEstimate = [ustrip(u"V/T", chan.calibration(frequencies[i])) for (i,chan) in enumerate(getControlledDAQChannels(cont))]
-  calibFieldToVoltMeasured = (diag(oldTx) ./ diag(Γ))
-
-  abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured)./abs.(calibFieldToVoltEstimate))
-  phase_deviation = angle.(calibFieldToVoltMeasured./calibFieldToVoltEstimate)
-  @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate) V/T and got $(calibFieldToVoltMeasured) V/T, deviation: $(abs_deviation*100) %"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
-  
-  if !valid
-    @warn "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
-  elseif maximum(abs.(phase_deviation)) > 10/180*pi
-    @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
-  end
-  return valid
-end
-
-function checkFieldToVolt(oldTx::Matrix{<:Complex}, Γ::Matrix{<:Complex}, cont::AWControlSequence, txCont::TxDAQController, Ω::Matrix{<:Complex})
-  N = rxNumSamplingPoints(cont.currSequence)
-  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
-  calibFieldToVoltMeasured = oldTx ./ Γ
-
-  mask = allComponentMask(cont) .& (abs.(Ω).>1e-15)
-  abs_deviation = abs.(1.0 .- abs.(calibFieldToVoltMeasured[mask])./abs.(calibFieldToVoltEstimate[mask]))
-  phase_deviation = angle.(calibFieldToVoltMeasured[mask]) .- angle.(calibFieldToVoltEstimate[mask])
-  @debug "checkFieldToVolt: We expected $(calibFieldToVoltEstimate[mask]) V/T and got $(calibFieldToVoltMeasured[mask]) V/T, deviation: $abs_deviation"
-  valid = maximum( abs_deviation ) < txCont.params.fieldToVoltRelDeviation
-  if !valid
-    @error "Measured field to volt deviates by $(abs_deviation*100) % from estimate, exceeding allowed deviation of $(txCont.params.fieldToVoltRelDeviation*100) %"
-  elseif maximum(abs.(phase_deviation)) > 10/180*pi
-    @warn "The phase of the measured field to volt deviates by $phase_deviation from estimate. Please check you phases! Continuing anyways..."
-  end
-  return valid
-end
-
 
 function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSequence)
   validChannel = zeros(Bool, size(newTx, 1))

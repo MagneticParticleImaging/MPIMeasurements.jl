@@ -51,7 +51,7 @@ function parse_into_tf(value::String)
     calibration_tf = value
   else # case 2: single value, extended into transfer function with no frequency dependency
     calibration_value = uparse(value)
-    calibration_tf = TransferFunction([0,10e6],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
+    calibration_tf = TransferFunction([0,Inf],ComplexF64[ustrip(calibration_value), ustrip(calibration_value)], units=[unit(calibration_value)])
   end
   return calibration_tf
 end

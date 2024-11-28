@@ -285,15 +285,7 @@ end
 
 calibration(dev::Device, channelID::AbstractString, frequencies) = calibration.([dev], [channelID], frequencies)
 calibration(daq::AbstractDAQ, channelID::AbstractString, frequency::Real) = calibration(daq, channel(daq, channelID), frequency)
-function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams, frequency::Real)
-  cal = calibration(dev, channel)
-  if cal isa TransferFunction
-    return cal(frequency)
-  else
-    @warn "You requested a calibration for a specific frequency $frequency but the channel $channelID has no frequency dependent calibration value"
-    return cal
-  end
-end
+calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams, frequency::Real) = calibration(dev, channel)(frequency)
 
 export applyForwardCalibration!, applyForwardCalibration
 
