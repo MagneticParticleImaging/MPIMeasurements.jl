@@ -19,7 +19,7 @@ function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer
 
   # Prepare buffering structures
   @debug "Allocating buffer for $numFrames frames"
-  buffer = SimpleFrameBuffer(sequence)
+  buffer = FrameBuffer(sequence)
   if acqNumFrameAverages(sequence) > 1
     buffer = AverageBuffer(buffer, sequence)
   end
