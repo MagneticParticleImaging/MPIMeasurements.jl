@@ -264,11 +264,20 @@ feedbackTransferFunction(daq::AbstractDAQ, channelID::AbstractString) = feedback
 hasTransferFunction(channel::DAQRxChannelParams) = !isnothing(channel.transferFunction)
 hasTransferFunction(daq::AbstractDAQ, channelID::AbstractString) = hasTransferFunction(channel(daq,channelID))
 
+function splitTFName(name::AbstractString)
+  if endswith(name, r"\.h5:\d+")
+    tmp = rsplit(name, ":"; limit=2)
+    return tmp[1], parse(Int, tmp[2])
+  else
+    return name, nothing
+  end
+end
 transferFunction(::AbstractDAQ, ::Nothing) = nothing
 transferFunction(daq::AbstractDAQ, channelID::AbstractString) = transferFunction(daq, channel(daq, channelID))
 function transferFunction(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQRxChannelParams)
   if isa(channel.transferFunction, String)
-    channel.transferFunction = TransferFunction(joinpath(configDir(dev), "TransferFunctions", channel.transferFunction))
+    filename, channel = splitTFName(channel.transferFunction)
+    channel.transferFunction = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = channel)
   else
     channel.transferFunction
   end
@@ -277,7 +286,8 @@ end
 calibration(daq::AbstractDAQ, channelID::AbstractString) = calibration(daq, channel(daq,channelID))
 function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams)
   if isa(channel.calibration, String)
-    channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", channel.calibration))
+    filename, channel = splitTFName(channel.calibration)
+    channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = channel)
   else
     channel.calibration
   end
