@@ -542,7 +542,7 @@ setup(daq::AbstractDAQ, sequence::ControlSequence) = setup(daq, getControlResult
 function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
   finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
   calibrationResults = finalCalibration[.!isnan.(finalCalibration)]
-  @debug "Control result: You could update the forward calibration in the Scanner.toml to this value for faster control" calibrationResults
+  @info "Control result: You could update the forward calibration in the Scanner.toml to this value for faster control" calibrationResults
   nothing
 end
 function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequence)
