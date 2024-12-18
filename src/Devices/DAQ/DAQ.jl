@@ -276,8 +276,8 @@ transferFunction(::AbstractDAQ, ::Nothing) = nothing
 transferFunction(daq::AbstractDAQ, channelID::AbstractString) = transferFunction(daq, channel(daq, channelID))
 function transferFunction(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQRxChannelParams)
   if isa(channel.transferFunction, String)
-    filename, channel = splitTFName(channel.transferFunction)
-    channel.transferFunction = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = channel)
+    filename, tfChannel = splitTFName(channel.transferFunction)
+    channel.transferFunction = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = tfChannel)
   else
     channel.transferFunction
   end
