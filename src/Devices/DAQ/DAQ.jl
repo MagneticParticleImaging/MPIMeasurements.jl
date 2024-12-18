@@ -286,8 +286,8 @@ end
 calibration(daq::AbstractDAQ, channelID::AbstractString) = calibration(daq, channel(daq,channelID))
 function calibration(dev::Union{MPIScanner, AbstractDAQ}, channel::DAQTxChannelParams)
   if isa(channel.calibration, String)
-    filename, channel = splitTFName(channel.calibration)
-    channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = channel)
+    filename, tfChannel = splitTFName(channel.calibration)
+    channel.calibration = TransferFunction(joinpath(configDir(dev), "TransferFunctions", filename), channels = tfChannel)
   else
     channel.calibration
   end
