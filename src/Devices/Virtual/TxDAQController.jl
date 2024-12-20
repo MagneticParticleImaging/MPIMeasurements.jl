@@ -540,16 +540,28 @@ end
 setup(daq::AbstractDAQ, sequence::ControlSequence) = setup(daq, getControlResult(sequence))
 
 function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
-  finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
-  calibrationResults = finalCalibration[.!isnan.(finalCalibration)]
-  @info "Control result: You could update the forward calibration in the Scanner.toml to this value for faster control" calibrationResults
+  finalCalibration = diag(calcControlMatrix(cont) ./ calcDesiredField(cont))
+  channelIds = id.(getControlledChannels(cont))
+  dividers = divider.(MPIMeasurements.getPrimaryComponents(cont))
+  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  for i in axes(finalCalibration, 1)
+      if !isnan(finalCalibration[i])
+        if !haskey(txCont.controlResults, channelIds[i])
+          txCont.controlResults[channelIds[i]] = Dict{Float64,typeof(1.0im*u"V/T")}()
+        end
+        txCont.controlResults[channelIds[i]][frequencies[i]] = finalCalibration[i]*u"V/T"
+        @debug "Cached control result: $(round(finalCalibration[i], digits,2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
+      end
+  end
+  
   nothing
 end
+
 function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequence)
   finalCalibration = calcControlMatrix(cont) ./ calcDesiredField(cont)
  
   calibrationResults = findall(x->!isnan(x), finalCalibration)
-  channelIDs = id.(keys(cont.controlledChannelsDict))
+  channelIDs = id.(getControlledChannels(cont))
   freqAxis = rfftfreq(rxNumSamplingPoints(cont.currSequence),ustrip(u"Hz",2*rxBandwidth(cont.currSequence)))
     
   for res in calibrationResults
