@@ -299,7 +299,7 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	#acqGradient(mdf, acqGradient(sequence)) # TODO: Impelent in Sequence
 	#MPIFiles.acqGradient(mdf, ustrip.(u"T/m", scannerGradient(scanner)))
 
-	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
+	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence)*acqNumFrameAverages(sequence))
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
 	MPIFiles.acqNumPeriodsPerFrame(mdf, size(measData(mdf), 3)) # Hacky to support cases where periods of data != periods of sequence
 	offsetField_ = acqOffsetField(sequence)
