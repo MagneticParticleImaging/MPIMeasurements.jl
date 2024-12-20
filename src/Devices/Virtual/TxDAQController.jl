@@ -550,7 +550,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
           txCont.controlResults[channelIds[i]] = Dict{Float64,typeof(1.0im*u"V/T")}()
         end
         txCont.controlResults[channelIds[i]][frequencies[i]] = finalCalibration[i]*u"V/T"
-        @debug "Cached control result: $(round(finalCalibration[i], digits,2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
+        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
       end
   end
   
