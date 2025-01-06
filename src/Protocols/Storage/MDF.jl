@@ -152,7 +152,7 @@ function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArra
 	mdf.calibration = MDFv2Calibration(;
 		deltaSampleSize = deltaSampleSize,
 		method = method,
-		offsetFields = collect(offsetFields'), # Switch dimensions since the MDF specifies Ox3 but Julia is column major
+		offsetFields = permutedims(offsetFields), # Switch dimensions since the MDF specifies Ox3 but Julia is column major
 		order = order,
 		size = collect(calibsize)
 	)
