@@ -3,7 +3,7 @@ abstract type TemperatureSensor <: Device end
 
 include("ArduinoTemperatureSensor.jl")
 include("DummyTemperatureSensor.jl")
-#include("FOTemp.jl")
+include("FOTemp.jl")
 include("SimulatedTemperatureSensor.jl")
 
 Base.close(t::TemperatureSensor) = nothing
