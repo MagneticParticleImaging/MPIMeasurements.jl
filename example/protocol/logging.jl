@@ -1,44 +1,43 @@
 using Logging, LoggingExtras, Dates
 
-mutable struct LockableLogger{L <: AbstractLogger} <: AbstractLogger
-  logger::L
-  args::Vector{Any}
-  kwargs::Vector{Any}
+mutable struct ProtocolWidgetLogger <: AbstractLogger
+  widget::ProtocolInformationWidget
+  logbuffer::IOBuffer
+  logger::ConsoleLogger
   lock::ReentrantLock
-  enabled::Bool
 end
-LockableLogger(logger::AbstractLogger) = LockableLogger(logger, Any[], Any[], ReentrantLock(), true)
+function ProtocolWidgetLogger(widget::ProtocolInformationWidget)
+  buffer = IOBuffer()
+  context = IOContext(buffer, :limit => true, :compact => true)
+  logger = ConsoleLogger(context)
+  return ProtocolWidgetLogger(widget, buffer, logger, ReentrantLock())
+end
+Base.lock(logger::ProtocolWidgetLogger) = lock(logger.lock)
+Base.unlock(logger::ProtocolWidgetLogger) = unlock(logger.lock)
+Base.lock(f::Base.Callable, logger::ProtocolWidgetLogger) = lock(f, logger.lock)
 
-Base.lock(logger::LockableLogger) = lock(logger.lock)
-Base.unlock(logger::LockableLogger) = unlock(logger.lock)
-Base.lock(f::Base.Callable, logger::LockableLogger) = lock(f, logger.lock)
+Logging.shouldlog(logger::ProtocolWidgetLogger, args...) = Logging.shouldlog(logger.logger, args...)
+Logging.min_enabled_level(logger::ProtocolWidgetLogger) = Logging.min_enabled_level(logger.logger)
 
-Logging.shouldlog(logger::LockableLogger, args...) = Logging.shouldlog(logger.logger, args...)
-Logging.min_enabled_level(logger::LockableLogger) = Logging.min_enabled_level(logger.logger)
-
-function Logging.handle_message(logger::LockableLogger, args...; kwargs...)
+function Logging.handle_message(logger::ProtocolWidgetLogger, args...; kwargs...)
   lock(logger) do
-    if logger.enabled
-      Logging.handle_message(logger.logger, args...; kwargs...)
-    else
-      push!(logger.args, args)
-      push!(logger.kwargs, kwargs)
-    end
+    Logging.handle_message(logger.logger, args...; kwargs...)
+    str = String(take!(logger.logbuffer))
+    push!(logger.widget, str)
   end
 end
-function MPIMeasurements.enable(logger::LockableLogger)
-  lock(logger) do
-    logger.enabled = true
-    while !isempty(logger.args)
-      Logging.handle_message(logger.logger, popfirst!(logger.args)...; popfirst!(logger.kwargs)...)
-    end
-  end 
+function Base.empty!(logger::ProtocolWidgetLogger)
+  lock(logger) do 
+    empty!(logger.buffer)
+    logger.pager.text = ""
+    logger.pager.curr_line = 1
+    Term.LiveWidgets.reshape_pager_content(logger.pager.text, false, logger.pager.internals.measure.w)
+  end
 end
-MPIMeasurements.disable(logger::LockableLogger) = lock(() -> logger.enabled = false, logger)
 
 struct ProtocolScriptLogger{L <: AbstractLogger} <: AbstractLogger
   logger::L
-  lockedLogger::LockableLogger
+  ProtocolWidgetLogger::ProtocolWidgetLogger
   logpath::String
 end
 
@@ -46,8 +45,6 @@ Logging.shouldlog(logger::ProtocolScriptLogger, args...) = Logging.shouldlog(log
 Logging.min_enabled_level(logger::ProtocolScriptLogger) = Logging.min_enabled_level(logger.logger)
 
 Logging.handle_message(logger::ProtocolScriptLogger, args...; kwargs...) = Logging.handle_message(logger.logger, args...; kwargs...)
-MPIMeasurements.enable(logger::ProtocolScriptLogger) = enable(logger.lockedLogger)
-MPIMeasurements.disable(logger::ProtocolScriptLogger) = disable(logger.lockedLogger)
 
 const dateTimeFormatter = DateFormat("yyyy-mm-dd HH:MM:SS.sss")
 
@@ -66,10 +63,9 @@ datetimeFormater_logger(logger) = TransformerLogger(logger) do log
   merge(log, (; kwargs = kwargs, message = "$(Dates.format(dateTime, dateTimeFormatter)) $(log.message)"))
 end
 
-function ProtocolScriptLogger(logpath::String = joinpath(homedir(), ".mpi/Logs"))
+function ProtocolScriptLogger(widget::ProtocolInformationWidget, logpath::String = joinpath(homedir(), ".mpi/Logs"))
   # Console 
-  consolelogger = MinLevelLogger(ConsoleLogger(), Logging.Info)
-  lockedlogger = LockableLogger(consolelogger)
+  lockedlogger = ProtocolWidgetLogger(widget)
   
   # Files
   mkpath(logpath)
