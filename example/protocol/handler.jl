@@ -101,9 +101,8 @@ function Term.play(handler::ProtocolScriptHandler; transient = true)
       if isnothing(handler.appTask) || istaskdone(handler.appTask)
         app = App(handler.layout; widgets = handler.widgets, expand = true, transition_rules = handler.transitions)
         handler.appTask = Threads.@spawn :interactive begin
-          println("Starting Term App")
           play(app, transient = transient)
-          println("Exiting Term App. Repl is now usable")
+          transient && print("\033c")
         end
       end
     end
@@ -124,6 +123,7 @@ function tryinit(handler::ProtocolScriptHandler)
     with_logger(handler.logger) do
       try
       handler.channel = MPIMeasurements.init(handler.protocol)
+      @info "Initialized protocol"
       updateState(handler, PS_INIT)
       catch e
         @error e
@@ -135,10 +135,11 @@ function tryexecute(handler::ProtocolScriptHandler)
   lock(handler.lock) do
     with_logger(handler.logger) do
       try
-      handler.channel = MPIMeasurements.execute(handler.scanner, handler.protocol)
-      put!(handler.channel, ProgressQueryEvent())
-      handler.timer = Timer(timer -> handle(handler, timer), 0.0, interval = handler.interval)
-      updateState(handler, PS_RUNNING)
+        handler.channel = MPIMeasurements.execute(handler.scanner, handler.protocol)
+        put!(handler.channel, ProgressQueryEvent())
+        handler.timer = Timer(timer -> handle(handler, timer), 0.0, interval = handler.interval)
+        @info "Executing protocol"
+        updateState(handler, PS_RUNNING)
       catch e
         @error e
       end
@@ -146,12 +147,14 @@ function tryexecute(handler::ProtocolScriptHandler)
   end
 end
 function trypause(handler::ProtocolScriptHandler)
-  error("Not implemented")
-  displayState(handler)
+  if handler.widgets[:pause].status != :pressed
+    put!(handler.channel, PauseEvent())
+  else
+    put!(handler.channel, ResumeEvent())
+  end
 end
 function trycancel(handler::ProtocolScriptHandler)
-  error("Not implemented")
-  displayState(handler)
+  put!(handler.channel, CancelEvent())
 end
 
 
@@ -176,6 +179,7 @@ function handle(handler::ProtocolScriptHandler, timer::Timer)
       handler.channel = nothing
       handler.timer = nothing
       updateState(handler, PS_FINISHED)
+      handler.widgets[:execute].status = :not_pressed 
     end
   end
 end
@@ -216,31 +220,35 @@ function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::Excep
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::DecisionEvent)
+  @debug "Handling user input event $(typeof(event))"
   choices = ["No", "Yes"]
   handleQuestion(handler, protocol, event.message, choices, (choice) -> put!(handler.channel, AnswerEvent(choice == 2, event)))
   return false
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::MultipleChoiceEvent)
+  @debug "Handling user input event $(typeof(event))"
   handleQuestion(handler, protocol, event.message, event.choices, (choice) -> put!(handler.channel, ChoiceAnswerEvent(choice, event)))
   return false
 end
 
 function handleQuestion(handler::ProtocolScriptHandler, ::Protocol, message, choices, cb)
-  @info "Test log"
   askQuestion(handler.widgets[:info], message, string.(choices), cb)
 end
 
 # Operations
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::OperationSuccessfulEvent)
+  @debug "Handling succesful operation $(typeof(event.operation))"
   return handleSuccessfulOperation(handler, protocol, event.operation)
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::OperationNotSupportedEvent)
+  @debug "Handling unsupported operation $(typeof(event.operation))"
   return handleUnsupportedOperation(handler, protocol, event.operation)
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::OperationUnsuccessfulEvent)
+  @debug "Handling unsuccessful operation $(typeof(event.operation))"
   return handleUnsuccessfulOperation(handler, protocol, event.operation)
 end
 
@@ -248,19 +256,19 @@ end
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol stopped"
   handler.state = PS_PAUSED
-  # TODO UI 
+  handler.widgets[:pause].status = :pressed
   return false
 end
 
 function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol can not be stopped"
-  # TODO UI
+  handler.widgets[:pause].status = :not_pressed
   return false
 end
 
 function handleUnsuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol failed to be stopped"
-  # TODO UI
+  handler.widgets[:pause].status = :not_pressed
   return false
 end
 
@@ -269,27 +277,28 @@ end
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol resumed"
   handler.state = PS_RUNNING
-  # TODO UI
+  handler.widgets[:pause].status = :not_pressed
   put!(handler.channel, ProgressQueryEvent()) # Restart "Main" loop
   return false
 end
 
 function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol can not be resumed"
-  # TODO UI
+  handler.widgets[:pause].status = :pressed
   return false
 end
 
 function handleUnsuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol failed to be resumed"
-  # TODO UI
+  handler.widgets[:pause].status = :pressed
   return false
 end
 
-# Cancelt
+# Cancel
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::CancelEvent)
   @info "Protocol cancelled"
   handler.state = PS_FAILED
+  handler.widgets[:execute].status = :not_pressed
   return true
 end
 
