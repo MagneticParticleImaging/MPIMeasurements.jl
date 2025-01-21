@@ -18,12 +18,12 @@ mutable struct ProtocolScriptHandler{P <: Protocol, S <: MPIScanner, L <: Base.A
   channel::Union{BidirectionalChannel, Nothing}
   timer::Union{Timer, Nothing}
 end
-function ProtocolScriptHandler(protocol::Protocol, scanner::MPIScanner; interval = 0.01, storage = NoStorageRequestHandler(), logpath = logpath)
+function ProtocolScriptHandler(protocol::Protocol, scanner::MPIScanner; interval = 0.01, storage = NoStorageRequestHandler(), logpath = logpath, loglevel = loglevel, loglines = loglines)
   lock = ReentrantLock()
 
   layout = :(
     ( (header(3, 0.33) * state(3, 0.33) * progress(3, 0.33)) / 
-      info(20, 1.0) / 
+      info($loglines, 1.0) / 
       (init(3, 0.25) * execute(3, 0.25) * pause(3, 0.25) * cancel(3, 0.25))
     )
   )
@@ -75,7 +75,7 @@ function ProtocolScriptHandler(protocol::Protocol, scanner::MPIScanner; interval
     ArrowRight() => rightDict,
   )
 
-  logger = ProtocolScriptLogger(widgets[:info], logpath)
+  logger = ProtocolScriptLogger(widgets[:info]; logpath, loglevel)
 
 
   handler =  ProtocolScriptHandler(protocol, scanner, interval, lock, storage, nothing, widgets, layout, transitions, logger, PS_UNDEFINED, nothing, nothing)

@@ -21,9 +21,13 @@ protocol = Protocol("MPIMeasurement", scanner)
 params = protocol.params
 params.fgFrames = 10
 
-# Data Storage
+# Logging
 logpath = joinpath(homedir(), ".mpi/Logs")        # Location of log files
-# Where and how to store protocol data
+loglevel = Logging.Info                           # Log Level of Term display
+loglines = 30                                     # How many log lines to display
+
+# Data Storage
+# Where and how to store protocol data. Chose one option for the storage variable
 # Option 1: No storage necessary
 storage = NoStorageRequestHandler()
 
@@ -52,7 +56,6 @@ conc = 1e-3*0.0
 conc = 17.85 * 1e-3*0.0
 tracerConcentration(mdf, [conc])
 tracerSolute(mdf, [""])
-
 # DatasetStore
 datastore = MDFDatasetStore(joinpath(homedir(), ".mpi", "data"))
 

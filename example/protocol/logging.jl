@@ -6,10 +6,10 @@ mutable struct ProtocolWidgetLogger <: AbstractLogger
   logger::ConsoleLogger
   lock::ReentrantLock
 end
-function ProtocolWidgetLogger(widget::ProtocolInformationWidget)
+function ProtocolWidgetLogger(widget::ProtocolInformationWidget; loglevel)
   buffer = IOBuffer()
   context = IOContext(buffer, :limit => true, :compact => true)
-  logger = ConsoleLogger(context)
+  logger = ConsoleLogger(context, loglevel)
   return ProtocolWidgetLogger(widget, buffer, logger, ReentrantLock())
 end
 Base.lock(logger::ProtocolWidgetLogger) = lock(logger.lock)
@@ -28,7 +28,7 @@ function Logging.handle_message(logger::ProtocolWidgetLogger, args...; kwargs...
 end
 function Base.empty!(logger::ProtocolWidgetLogger)
   lock(logger) do
-
+    # TODO necessary?
   end
 end
 
@@ -60,9 +60,9 @@ datetimeFormater_logger(logger) = TransformerLogger(logger) do log
   merge(log, (; kwargs = kwargs, message = "$(Dates.format(dateTime, dateTimeFormatter)) $(log.message)"))
 end
 
-function ProtocolScriptLogger(widget::ProtocolInformationWidget, logpath::String = joinpath(homedir(), ".mpi/Logs"))
+function ProtocolScriptLogger(widget::ProtocolInformationWidget; loglevel = Logging.Info, logpath::String = joinpath(homedir(), ".mpi/Logs"))
   # Console 
-  lockedlogger = ProtocolWidgetLogger(widget)
+  lockedlogger = ProtocolWidgetLogger(widget; loglevel = loglevel)
   
   # Files
   mkpath(logpath)
