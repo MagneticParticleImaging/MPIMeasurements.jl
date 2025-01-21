@@ -27,11 +27,8 @@ function Logging.handle_message(logger::ProtocolWidgetLogger, args...; kwargs...
   end
 end
 function Base.empty!(logger::ProtocolWidgetLogger)
-  lock(logger) do 
-    empty!(logger.buffer)
-    logger.pager.text = ""
-    logger.pager.curr_line = 1
-    Term.LiveWidgets.reshape_pager_content(logger.pager.text, false, logger.pager.internals.measure.w)
+  lock(logger) do
+    
   end
 end
 
