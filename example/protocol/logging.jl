@@ -28,13 +28,13 @@ function Logging.handle_message(logger::ProtocolWidgetLogger, args...; kwargs...
 end
 function Base.empty!(logger::ProtocolWidgetLogger)
   lock(logger) do
-    
+
   end
 end
 
 struct ProtocolScriptLogger{L <: AbstractLogger} <: AbstractLogger
   logger::L
-  ProtocolWidgetLogger::ProtocolWidgetLogger
+  widgetlogger::ProtocolWidgetLogger
   logpath::String
 end
 

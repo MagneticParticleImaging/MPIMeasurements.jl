@@ -66,6 +66,7 @@ function prev_choice(widget::ProtocolInformationWidget, ::Union{Char, ArrowLeft}
 end
 function confirm_choice(widget::ProtocolInformationWidget, ::Enter)
   if !isnothing(widget.decision) && !isnothing(widget.callback)
+    @info "User chose option $(widget.choices[widget.curr_choice])"
     widget.callback(widget.curr_choice)
   end
   widget.decision = nothing
@@ -111,13 +112,32 @@ function frame_messages(widget::ProtocolInformationWidget)
 
   # From curr_message down up to numlines messages
   curr = widget.curr_message
-  # First get maximum messages, convert to lines and then get numlines from then
-  # Adapted from Pager.jl
-  messages = join(reverse(widget.messages[max(curr - numlines, 1):curr]))
-  reshaped_content = Term.reshape_code_string(messages, width - 6)
-  text = split(string(RenderableText(reshaped_content; width = width - 6)), "\n")[max(end-numlines, 1):end]
-  text = collect(text)
+  text = String[]
+  if !isempty(widget.messages)
+    # First get maximum messages, convert to lines and then get numlines from then
+    messages = widget.messages[max(curr - numlines, 1):curr]
+    reshaped_messages = map(msg -> Term.reshape_code_string(msg, width - 6), messages)
+    # Only display beginning and end of large messages
+    cut_messages = map(reshaped_messages) do msg
+      msg_lines = split(msg, "\n")
+      if length(msg_lines) > 8
+        buffer = IOBuffer()
+        for i = 1:5
+          println(buffer, msg_lines[i])
+        end
+        println(buffer, repeat(" ", max(div(width, 2) - 8, 0)) * "{dim}<output omitted>{/dim}")
+        println(buffer, msg_lines[end-1])
+        println(buffer, msg_lines[end])
+        return String(take!(buffer)) 
+      else
+        return msg
+      end
+    end
+    ordered_messages = join(reverse(map(msg -> RenderableText(msg; width = width -6), cut_messages)))
 
+    text = filter(line -> !all(isspace, line), split(ordered_messages, "\n"))
+    text = collect(text[1:min(length(text), numlines)])
+  end
   style = LiveWidgets.isactive(widget) ? "red" : "blue dim"
 
   # return content
