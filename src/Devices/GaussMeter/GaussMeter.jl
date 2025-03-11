@@ -36,6 +36,10 @@ function getXYZValues(gauss::GaussMeter)
   return gauss.params.coordinateTransformation*values
 end
 
+abstract type AbstractFieldCamera <: GaussMeter end
+tDesignParameter(camera::AbstractFieldCamera) = 1, 1, 1.0, [0.0, 0.0, 0.0]
+translation(camera::AbstractFieldCamera) = nothing
+
 include("DummyGaussMeter.jl")
 include("SimulatedGaussMeter.jl")
 include("LakeShore.jl")

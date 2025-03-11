@@ -20,7 +20,7 @@ struct MagSphereResult
   data::Array{typeof(1.0u"T")}
 end
 
-Base.@kwdef mutable struct MagSphere <: GaussMeter
+Base.@kwdef mutable struct MagSphere <: AbstractFieldCamera
   @add_device_fields MagSphereParams
   sd::Union{SerialDevice, Nothing} = nothing
 
