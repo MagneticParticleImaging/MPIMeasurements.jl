@@ -1,4 +1,4 @@
-export GaussMeter
+export GaussMeter, AbstractFieldCamera
 abstract type GaussMeter <: Device end
 
 Base.close(gauss::GaussMeter) = nothing
@@ -41,6 +41,7 @@ tDesignParameter(camera::AbstractFieldCamera) = 1, 1, 1.0, [0.0, 0.0, 0.0]
 translation(camera::AbstractFieldCamera) = nothing
 
 include("DummyGaussMeter.jl")
+include("DummyFieldCamera.jl")
 include("SimulatedGaussMeter.jl")
 include("LakeShore.jl")
 include("ArduinoGaussMeter.jl")
