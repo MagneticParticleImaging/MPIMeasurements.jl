@@ -95,24 +95,41 @@ end
 function parseData(gauss::MagSphere, line::String)
   components = split(line, ";")
   # Unexpected format
-  if length(components) != 87
+  if length(components) != 259
     return nothing
   end
 
   timestamp = tryparse(Float64, components[1])
   isnothing(timestamp) && return nothing
 
+  components = reshape(components[2:end], 3, 86)
   data = zeros(typeof(1.0u"T"), 3, 86)
-  for i = 1:86
-    xyz = split(components[i+1], ",")
-
-    if length(xyz) != 3
-      return nothing
-    end
-
+  
+  for (i, xyz) in enumerate(eachcol(components))
     xyz = tryparse.(Float64, xyz)
-    data[:, i] = xyz./1e6 .* 1.0u"T"
+    data[:, i] = xyz.* 1.0u"T"#./1e6 .* 1.0u"T"
   end
+
+  # apply calib
+  #@info size(data)
+  #Check whether one sensor only sends zeros
+  for i=1:86
+    if iszero(data[:,i])
+      @warn "Zero entries were found in sensor $i"
+    end
+  end
+  ####ATTENTION: No COORDINATE TRAFO CAUSE THE SAVING OF THE CALIBRATION FILES SHOULD BE DONE WITHOUT CORRECTION
+
+  # for i=1:86
+  #   data[:,i] = coordinateTrafo[i,:,:]*data[:,i] - offSets[i,:] #Where is the Offset Correction???????????????????
+  # end
+
+  #@info "Here is the data ", data
+
+  #@info maximum(abs.(data))
+  #@info size(data)
+  #data = ones(3,86)
+  
 
   return MagSphereResult(timestamp, data)
 end
