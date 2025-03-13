@@ -37,7 +37,7 @@ function getXYZValues(gauss::GaussMeter)
 end
 
 abstract type AbstractFieldCamera <: GaussMeter end
-tDesignParameter(camera::AbstractFieldCamera) = 1, 1, 1.0, [0.0, 0.0, 0.0]
+tDesignParameter(camera::AbstractFieldCamera) = 12, 86, 0.045, [0.0, 0.0, 0.0]
 translation(camera::AbstractFieldCamera) = nothing
 
 include("DummyGaussMeter.jl")
