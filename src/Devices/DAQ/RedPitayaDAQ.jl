@@ -780,7 +780,7 @@ function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{Prot
     resultAnySwitching = Bool[] # Store when any channel is switching
 
     previous = CartesianIndex(Tuple(fill(-1, length(iterations)))) # This will be used to detect which index is currently "running"/changing
-    for indices in eachindex(loop)
+    for indices in loop
       value = offsetVec[indices[channelIdx]]
 
       # Apply (loop) switch steps for each changing index, i.e. an index that is not equal to its previous iteration value
