@@ -275,14 +275,14 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
 
   # buffers = StorageBuffer[buffer]
-
-  if protocol.params.controlTx
+  # TODO: reenable DriveFieldBuffer
+  #if protocol.params.controlTx 
     #len = length(keys(sequence.refIndices))
-    push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(sequence)..., 1, numFrames), sequence))
-  end
+  #  push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(sequence)..., 1, numFrames), sequence))
+  #end
 
   # buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
-  buffer = MPSBuffer(buffer, protocol.patchPermutation, numFrames, 1, acqNumPeriodsPerFrame(protocol.sequence))
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, averages, 1, acqNumPeriodsPerFrame(protocol.sequence))
 
   channel = Channel{channelType(daq)}(32)
   deviceBuffer = DeviceBuffer[]
