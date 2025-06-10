@@ -423,6 +423,11 @@ function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanic
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
       for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+        if strength isa Unitful.Voltage
+          # HACKY way to save Voltage DFs into the MDF -> use Tesla as mV (everything > 1 will be V)
+          @warn "Your DF is defined as a voltage! Will save $(uconvert(u"mV",strength)) as $(ustrip(u"mV", strength).*u"T")"
+          strength = ustrip(u"mV", strength).*u"T"
+        end
         result[periodIdx, channelIdx, componentIdx] = strength
       end
     end
