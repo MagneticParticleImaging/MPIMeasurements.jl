@@ -24,6 +24,7 @@ using LinearAlgebra
 using HDF5
 using FFTW
 using NaturalSort
+using RelocatableFolders
 
 using ReplMaker
 import REPL
@@ -44,11 +45,11 @@ import MPIFiles: hasKeyAndValue,
     rxBandwidth, rxNumChannels, rxNumSamplingPoints
 
 using RedPitayaDAQServer
-
-const scannerConfigurationPath = [normpath(string(@__DIR__), "../config")] # Push custom configuration directories here
+const DEFAULT_SCANNER_CONFIG_PATH = @path joinpath(@__DIR__, "..", "config")
+const scannerConfigurationPath = AbstractString[DEFAULT_SCANNER_CONFIG_PATH] # Push custom configuration directories here
 
 export addConfigurationPath
-addConfigurationPath(path::String) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
+addConfigurationPath(path) = !(path in scannerConfigurationPath) ? pushfirst!(scannerConfigurationPath, path) : nothing
 
 # Circular reference between Scanner.jl and Protocol.jl. Thus we predefine the protocol
 """
