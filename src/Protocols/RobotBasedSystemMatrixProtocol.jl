@@ -86,7 +86,7 @@ function SystemMatrixMeasState()
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
-  result = [AbstractDAQ, Robot, SurveillanceUnit]
+  result = [AbstractDAQ, Robot]
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
@@ -289,7 +289,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
+if !isnothing(su)
   enableACPower(su)
+end
   if tempControl != nothing
     disableControl(tempControl)
   end
@@ -326,7 +328,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     if tempControl != nothing
       enableControl(tempControl)
     end
+if !isnothing(su)
     disableACPower(su)
+end
   end
 end
 
