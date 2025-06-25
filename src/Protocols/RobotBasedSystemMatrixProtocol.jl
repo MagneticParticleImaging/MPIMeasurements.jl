@@ -502,7 +502,7 @@ end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
   data = nothing
-  if event.message == "CURR"
+  if event.message == "SIGNAL"
     data = protocol.systemMeasState.currentSignal
   elseif event.message == "BG"
     sysObj = protocol.systemMeasState
