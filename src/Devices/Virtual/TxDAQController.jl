@@ -419,7 +419,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
 
       channel = Channel{channelType(daq)}(32)
       buffer = AsyncBuffer(FrameSplitterBuffer(daq, StorageBuffer[DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(control)..., 1, acqNumFrames(control.currSequence)), control)]), daq)
-      @info "Control measurement started"
+      @debug "Control measurement started"
       producer = @async begin
         @debug "Starting control producer" 
         endSample = asyncProducer(channel, daq, control.currSequence, isControlStep=true)
@@ -436,9 +436,9 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
         end      
       end
       wait(consumer)
-      @info "Control measurement finished"
+      @debug "Control measurement finished"
 
-      @info "Evaluating control step"
+      @debug "Evaluating control step"
       tmp = read(sink(buffer, DriveFieldBuffer))
       @debug "Size of calc fields from ref" size(tmp)
       
