@@ -62,12 +62,7 @@ function _init(protocol::ContinousMeasurementProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
-    controllers = getDevices(protocol.scanner, TxDAQController)
-    if length(controllers) > 1
-      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
-    end
-    protocol.txCont = controllers[1]
-    protocol.txCont.currTx = nothing
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
   else
     protocol.txCont = nothing
   end
