@@ -26,7 +26,7 @@ function push!(avgBuffer::AverageBuffer{T}, frames::AbstractArray{T,4}) where {T
     # Insert into buffer
     toFrames = fr + fit
     toAvg = avgBuffer.setIndex + fit
-    avgBuffer.buffer[:, :, :, avgBuffer.setIndex:toAvg] = frames[:, :, :, fr:toFrames]
+    avgBuffer.buffer[:, :, :, avgBuffer.setIndex:toAvg] = @view frames[:, :, :, fr:toFrames]
     avgBuffer.setIndex += length(avgBuffer.setIndex:toAvg)
     fr = toFrames + 1
 
