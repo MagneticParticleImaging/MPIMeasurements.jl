@@ -1,0 +1,10 @@
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+MPIFiles = "371237a9-e6c1-5201-9adb-3d8cfa78fa9f"
+MPIMeasurements = "a874a27a-e9a7-503d-98b6-bf61df4bb725"
+Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+Term = "22787eb5-b846-44ae-b979-8e399b8463ab"

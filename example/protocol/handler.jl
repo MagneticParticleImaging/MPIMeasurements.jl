@@ -1,6 +1,8 @@
-using Term, Term.LiveWidgets
-using REPL, REPL.TerminalMenus
+using GLMakie, Observables
 using MPIMeasurements, MPIFiles
+using Dates, Logging
+
+include("makie_gui.jl")
 
 abstract type AbstractStorageRequestHandler end
 mutable struct ProtocolScriptHandler{P <: Protocol, S <: MPIScanner, L <: Base.AbstractLogger}
@@ -9,82 +11,43 @@ mutable struct ProtocolScriptHandler{P <: Protocol, S <: MPIScanner, L <: Base.A
   const interval::Float64
   const lock::ReentrantLock
   const storage::AbstractStorageRequestHandler
-  appTask::Union{Nothing, Task}
-  widgets::Dict
-  layout::Expr
-  transitions::Dict
+  gui::SimpleProtocolGUI
   logger::L
   state::MPIMeasurements.ProtocolState
   channel::Union{BidirectionalChannel, Nothing}
   timer::Union{Timer, Nothing}
+  paused::Bool
+end
+function setButtonCallbacks(handler::ProtocolScriptHandler)
+  # Set up button callbacks
+  on(handler.gui.button_row[1].clicks) do n
+    tryinit(handler)
+  end
+
+  on(handler.gui.button_row[2].clicks) do n
+    tryexecute(handler)
+  end
+
+  on(handler.gui.button_row[3].clicks) do n
+    trypause(handler)
+  end
+  
+  on(handler.gui.button_row[4].clicks) do n
+    trycancel(handler)
+  end
 end
 function ProtocolScriptHandler(protocol::Protocol, scanner::MPIScanner; interval = 0.01, storage = NoStorageRequestHandler(), logpath = logpath, loglevel = loglevel, loglines = loglines)
   lock = ReentrantLock()
 
-  layout = :(
-    ( (header(3, 0.33) * state(3, 0.33) * progress(3, 0.33)) / 
-      info($loglines, 1.0) / 
-      (init(3, 0.25) * execute(3, 0.25) * pause(3, 0.25) * cancel(3, 0.25))
-    )
-  )
+  # Create GUI
+  gui = SimpleProtocolGUI(name(protocol), name(scanner))
+  
+  # Create logger
+  logger = SimpleProtocolGUIScriptLogger(gui; loglevel, logpath)
 
-  widgets = Dict(
-    :header => TextWidget(name(protocol); title = name(scanner), as_panel = true),
-    :state => TextWidget(""; title = "State", as_panel = true),
-    :progress => TextWidget(""; title = "Progress", as_panel = true),
-    # Override pager controls s.t. Up and Down Keys function correctly
-    :info => ProtocolInformationWidget(; title = "Info"),
-    :init => Button("Init"),
-    :execute => ToggleButton("Execute"),
-    :pause => ToggleButton("Pause"),
-    :cancel => Button("Cancel"),
-  )
+  handler = ProtocolScriptHandler(protocol, scanner, interval, lock, storage, gui, logger, PS_UNDEFINED, nothing, nothing, false)
 
-  # Set transition rules
-  upDict = Dict(
-    :init => :info,
-    :execute => :info,
-    :pause => :info,
-    :cancel => :info,
-    :info => :header,
-  )
-  downDict = Dict(
-    :info => :init,
-    :header => :info,
-    :state => :info,
-    :progress => :info
-  )
-  rightDict = Dict(
-    :header => :state,
-    :state => :progress,
-    :init => :execute,
-    :execute => :pause,
-    :pause => :cancel
-  )
-  leftDict = Dict(
-    :progress => :state,
-    :state => :header,
-    :cancel => :pause,
-    :pause => :execute,
-    :execute => :init
-  )
-  transitions = Dict(
-    ArrowUp() => upDict,
-    ArrowDown() => downDict,
-    ArrowLeft() => leftDict,
-    ArrowRight() => rightDict,
-  )
-
-  logger = ProtocolScriptLogger(widgets[:info]; logpath, loglevel)
-
-
-  handler =  ProtocolScriptHandler(protocol, scanner, interval, lock, storage, nothing, widgets, layout, transitions, logger, PS_UNDEFINED, nothing, nothing)
-
-  # Callbacks
-  widgets[:init].callback = (btn) -> tryinit(handler)
-  widgets[:execute].callback = (btn) -> tryexecute(handler)
-  widgets[:pause].callback = (btn) -> trypause(handler)
-  widgets[:cancel].callback = (btn) -> trycancel(handler)
+  setButtonCallbacks(handler)
 
   return handler
 end
@@ -95,17 +58,18 @@ Base.lock(f::Base.Callable, handler::ProtocolScriptHandler) = lock(f, handler.lo
 Base.unlock(handler::ProtocolScriptHandler) = unlock(handler.lock)
 
 
-function Term.play(handler::ProtocolScriptHandler; transient = true)
+function show_gui(handler::ProtocolScriptHandler)
   lock(handler.lock) do
     with_logger(handler.logger) do
-      if isnothing(handler.appTask) || istaskdone(handler.appTask)
-        app = App(handler.layout; widgets = handler.widgets, expand = true, transition_rules = handler.transitions)
-        handler.appTask = Threads.@spawn :interactive begin
-          play(app, transient = transient)
-          transient && print("\033c")
-        end
-      end
+      show_gui!(handler.gui)
     end
+  end
+  return nothing
+end
+
+function close_gui(handler::ProtocolScriptHandler)
+  lock(handler.lock) do
+    close_gui!(handler.gui)
   end
   return nothing
 end
@@ -114,7 +78,7 @@ function updateState(handler::ProtocolScriptHandler, state::MPIMeasurements.Prot
   handler.state = state
   displayState(handler)
 end 
-displayState(handler::ProtocolScriptHandler) = handler.widgets[:state].text = string(handler.state)
+displayState(handler::ProtocolScriptHandler) = update_state!(handler.gui, string(handler.state))
 
 
 # Button Callbacks
@@ -147,14 +111,22 @@ function tryexecute(handler::ProtocolScriptHandler)
   end
 end
 function trypause(handler::ProtocolScriptHandler)
-  if handler.widgets[:pause].status != :pressed
-    put!(handler.channel, PauseEvent())
+  if !isnothing(handler.channel)
+    if !handler.paused
+      put!(handler.channel, PauseEvent())
+    else
+      put!(handler.channel, ResumeEvent())
+    end
   else
-    put!(handler.channel, ResumeEvent())
+    @warn "Cannot pause/resume: Protocol not running"
   end
 end
 function trycancel(handler::ProtocolScriptHandler)
-  put!(handler.channel, CancelEvent())
+  if !isnothing(handler.channel)
+    put!(handler.channel, CancelEvent())
+  else
+    @warn "Cannot cancel: Protocol not running"
+  end
 end
 
 
@@ -178,14 +150,13 @@ function handle(handler::ProtocolScriptHandler, timer::Timer)
       close(timer)
       handler.channel = nothing
       handler.timer = nothing
-      updateState(handler, PS_FINISHED)
-      handler.widgets[:execute].status = :not_pressed 
+      updateState(handler, PS_FINISHED) 
     end
   end
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::ProgressEvent)
-  handler.widgets[:progress].text = "$(event.done)/$(event.total) $(event.unit)"
+  update_progress!(handler.gui, "$(event.done)/$(event.total) $(event.unit)")
   if isopen(handler.channel) && handler.state == PS_RUNNING
     put!(handler.channel, ProgressQueryEvent())
   end
@@ -211,6 +182,7 @@ end
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::ExceptionEvent)
   currExceptions = current_exceptions(protocol.executeTask)
   @error "Protocol exception" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+  println(currExceptions)
   for i in 1:length(currExceptions) - 1
     stack = currExceptions[i]
     @error stack[:exception] trace = stacktrace(stack[:backtrace])
@@ -233,7 +205,7 @@ function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::Multi
 end
 
 function handleQuestion(handler::ProtocolScriptHandler, ::Protocol, message, choices, cb)
-  askQuestion(handler.widgets[:info], message, string.(choices), cb)
+  show_decision_dialog!(handler.gui, message, string.(choices), cb, () -> setButtonCallbacks(handler))
 end
 
 # Operations
@@ -256,19 +228,19 @@ end
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol stopped"
   handler.state = PS_PAUSED
-  handler.widgets[:pause].status = :pressed
+  handler.paused = true
   return false
 end
 
 function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol can not be stopped"
-  handler.widgets[:pause].status = :not_pressed
+  handler.paused = false
   return false
 end
 
 function handleUnsuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::PauseEvent)
   @info "Protocol failed to be stopped"
-  handler.widgets[:pause].status = :not_pressed
+  handler.paused = false
   return false
 end
 
@@ -277,20 +249,20 @@ end
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol resumed"
   handler.state = PS_RUNNING
-  handler.widgets[:pause].status = :not_pressed
+  handler.paused = false
   put!(handler.channel, ProgressQueryEvent()) # Restart "Main" loop
   return false
 end
 
 function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol can not be resumed"
-  handler.widgets[:pause].status = :pressed
+  handler.paused = true
   return false
 end
 
 function handleUnsuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::ResumeEvent)
   @info "Protocol failed to be resumed"
-  handler.widgets[:pause].status = :pressed
+  handler.paused = true
   return false
 end
 
@@ -298,12 +270,15 @@ end
 function handleSuccessfulOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::CancelEvent)
   @info "Protocol cancelled"
   handler.state = PS_FAILED
-  handler.widgets[:execute].status = :not_pressed
   return true
 end
 
 function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::CancelEvent)
   @warn "Protocol can not be cancelled"
+  return false
+end
+function handleUnsupportedOperation(handler::ProtocolScriptHandler, protocol::Protocol, event::StopEvent)
+  @warn "Protocol can not be stopped"
   return false
 end
 
@@ -338,6 +313,10 @@ function (storage::DatasetStoreStorageRequestHandler)(handler::ProtocolScriptHan
 end
 
 function handle(handler::ProtocolScriptHandler, protocol::Protocol, event::StorageSuccessEvent)
-  put!(handler.channel, FinishedAckEvent())
+  if !isnothing(handler.channel) && isopen(handler.channel)
+    put!(handler.channel, FinishedAckEvent())
+  else
+    @warn "Storage success event received, no channel is open"
+  end
   return true
 end

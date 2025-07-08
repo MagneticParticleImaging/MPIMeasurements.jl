@@ -1,0 +1,1 @@
+julia --project=example/protocol/venv -t 4 --startup-file=no -i -e "include(\"example/protocol/execution.jl\")"

@@ -1,7 +1,7 @@
 using Dates
 # Scanner
 reloadScanner = false                             # if the scanner should be reloaded for each execution
-scannerName = "HomeScanner"                       # Which scanner to load
+scannerName = "SimpleSimulatedScanner"                       # Which scanner to load
 
 
 scannerDefined = @isdefined scanner
