@@ -31,6 +31,7 @@ mutable struct SimpleProtocolGUI
         
         tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false))
         visible_log_lines = Observable(1)
+        log_scroll_offset = Observable(0)  # 0 = bottom (latest), positive = scroll up
         
         # Control buttons (default)
         init_btn = Button(fig[4, 2], label = "Initialize")
@@ -54,16 +55,36 @@ mutable struct SimpleProtocolGUI
                 tb.stored_string = "No messages yet..."
                 tb.displayed_string = "No messages yet..."
             else
-                # Only show the last N lines that fit in the textbox
-                n = min(length(messages), visible_log_lines[])
-                shown = messages[end-n+1:end]
+                n = visible_log_lines[]
+                total = length(messages)
+                offset = log_scroll_offset[]
+                # Clamp offset so we never scroll past the top
+                max_offset = max(total - n, 0)
+                offset = clamp(offset, 0, max_offset)
+                log_scroll_offset[] = offset
+                start_idx = max(total - n - offset + 1, 1)
+                end_idx = max(total - offset, 1)
+                shown = messages[start_idx:end_idx]
+
                 tb.stored_string = join(shown, "\n")
                 tb.displayed_string = join(shown, "\n")
             end
         end
+        # Mouse wheel scroll event for custom scrolling
+        on(events(fig.scene).scroll) do scroll_event
+            # if !tb.focused
+            #     return
+            # end
+
+            if length(gui.log_messages[]) > visible_log_lines[]
+                log_scroll_offset[] = clamp(log_scroll_offset[] + sign(scroll_event[2]), 0, max(length(gui.log_messages[]) - visible_log_lines[], 0))
+                println(log_scroll_offset[])
+                setLogText(gui.log_messages[])
+            end
+        end
         on(tb.layoutobservables.computedbbox) do bbox
             if bbox.widths[2] > 0
-                new_visible_log_lines = max(Int(floor(bbox.widths[2] / 16)), 1)
+                new_visible_log_lines = max(Int(floor((bbox.widths[2] - 4) / 16)), 1)
                 if new_visible_log_lines != visible_log_lines[]
                     visible_log_lines[] = new_visible_log_lines
                     setLogText(gui.log_messages[])
@@ -71,6 +92,7 @@ mutable struct SimpleProtocolGUI
             end
         end
         on(log_messages_obs) do messages
+            log_scroll_offset[] = 0
             setLogText(messages)
         end
         on(tb.displayed_string) do new_text # Prevent character deletion
