@@ -9,6 +9,7 @@ mutable struct SimpleProtocolGUI
     state::Observable{String}
     progress::Observable{String}
     log_messages::Observable{Vector{String}}
+    log_textbox::Textbox
     init_button::Button
     execute_button::Button
     pause_button::Button
@@ -21,7 +22,6 @@ mutable struct SimpleProtocolGUI
         fig = Figure(size = (800, 400))
         state_obs = Observable("UNDEFINED")
         progress_obs = Observable("0/0")
-        log_lines = round(Int, (fig.scene.viewport.val.widths[2] - 148) / 14)
         log_messages_obs = Observable(String[])
         decision_active = Observable(false)
         decision_buttons = Button[]
@@ -29,20 +29,7 @@ mutable struct SimpleProtocolGUI
         Label(fig[1, 2:5], "Protocol: $protocol_name | Scanner: $scanner_name", fontsize = 16)
         status_label = Label(fig[2, 2:5], "State: UNDEFINED | Progress: 0/0", fontsize = 14)
         
-        # Log area
-        ax = Axis(fig[3, 1:6], backgroundcolor = RGBf(0.95, 0.95, 0.95),
-            xlabelvisible = false, ylabelvisible = false,
-            xgridvisible = false, ygridvisible = false,
-            xticksvisible = false, yticksvisible = false,
-            xticklabelsvisible = false, yticklabelsvisible = false,
-        )
-        # hidespines!(ax)
-        log_label = Label(fig[3, 1:6], "No messages yet..." * join(["\n" for _ in 1:log_lines]), 
-            fontsize = 12, 
-            halign = :left, 
-            valign = :top, 
-            tellwidth = false, 
-            justification = :left)
+        tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false))
         
         # Control buttons (default)
         init_btn = Button(fig[4, 2], label = "Initialize")
@@ -52,7 +39,7 @@ mutable struct SimpleProtocolGUI
         button_row = Any[init_btn, execute_btn, pause_btn, cancel_btn]
         
         gui = new(fig, protocol_name, scanner_name, state_obs, progress_obs, log_messages_obs,
-                 init_btn, execute_btn, pause_btn, cancel_btn, button_row, decision_active, decision_buttons)
+                 tb, init_btn, execute_btn, pause_btn, cancel_btn, button_row, decision_active, decision_buttons)
         
         # Set up reactive updates
         on(state_obs) do state
@@ -63,19 +50,24 @@ mutable struct SimpleProtocolGUI
         end
         function setLogText(messages)
             if isempty(messages)
-                log_label.text[] = "No messages yet..." * join(["\n" for _ in 1:log_lines])
+                tb.stored_string = "No messages yet..."
+                tb.displayed_string = "No messages yet..."
             else
-                n = min(length(messages), log_lines)
-                log_label.text[] = join(messages[end-n+1:end], "\n") * join(["\n" for _ in 1:(log_lines - n + 1)])
+                tb.stored_string = join(messages, "\n")
+                tb.displayed_string = join(messages, "\n")
             end
         end
         on(log_messages_obs) do messages
             setLogText(messages)
         end
-        on(gui.fig.scene.viewport) do x
-            height = fig.scene.viewport.val.widths[2]
-            log_lines = round(Int, (height - 148) / 14)
-            setLogText(log_messages_obs[])
+        on(tb.displayed_string) do new_text # Prevent character deletion
+            if isnothing(new_text) || isnothing(tb.stored_string[])
+                return
+            end
+
+            if length(new_text) < length(tb.stored_string[])
+                tb.displayed_string[] = tb.stored_string[]
+            end
         end
 
         return gui
