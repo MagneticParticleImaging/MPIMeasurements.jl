@@ -72,13 +72,13 @@ mutable struct SimpleProtocolGUI
         end
         # Mouse wheel scroll event for custom scrolling
         on(events(fig.scene).scroll) do scroll_event
-            # if !tb.focused
-            #     return
-            # end
+            if !(tb.focused[])
+                return
+            end
 
             if length(gui.log_messages[]) > visible_log_lines[]
                 log_scroll_offset[] = clamp(log_scroll_offset[] + sign(scroll_event[2]), 0, max(length(gui.log_messages[]) - visible_log_lines[], 0))
-                println(log_scroll_offset[])
+                # println(log_scroll_offset[])
                 setLogText(gui.log_messages[])
             end
         end
