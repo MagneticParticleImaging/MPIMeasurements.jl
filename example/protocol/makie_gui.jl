@@ -30,6 +30,7 @@ mutable struct SimpleProtocolGUI
         status_label = Label(fig[2, 2:5], "State: UNDEFINED | Progress: 0/0", fontsize = 14)
         
         tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false))
+        width = Observable(tb.layoutobservables.computedbbox[].widths[1])
         visible_log_lines = Observable(1)
         log_scroll_offset = Observable(0)  # 0 = bottom (latest), positive = scroll up
         
@@ -55,16 +56,35 @@ mutable struct SimpleProtocolGUI
                 tb.stored_string = "No messages yet..."
                 tb.displayed_string = "No messages yet..."
             else
+                # Estimate max chars per line based on textbox width and font size
+                font_width_px = 7
+                max_chars = max(Int(floor((width[] - 8) / font_width_px)), 10)
+
+                # Wrap each line manually
+                function wrap_line(line, max_chars)
+                    wrapped = String[]
+                    i = 1
+                    while i <= lastindex(line)
+                        push!(wrapped, line[i:min(i+max_chars-1, lastindex(line))])
+                        i += max_chars
+                    end
+                    return wrapped
+                end
+
+                wrapped_lines = String[]
+                for msg in messages
+                    append!(wrapped_lines, wrap_line(msg, max_chars))
+                end
+
                 n = visible_log_lines[]
-                total = length(messages)
+                total = length(wrapped_lines)
                 offset = log_scroll_offset[]
-                # Clamp offset so we never scroll past the top
                 max_offset = max(total - n, 0)
                 offset = clamp(offset, 0, max_offset)
                 log_scroll_offset[] = offset
                 start_idx = max(total - n - offset + 1, 1)
                 end_idx = max(total - offset, 1)
-                shown = messages[start_idx:end_idx]
+                shown = wrapped_lines[start_idx:end_idx]
 
                 tb.stored_string = join(shown, "\n")
                 tb.displayed_string = join(shown, "\n")
@@ -73,7 +93,7 @@ mutable struct SimpleProtocolGUI
         # Mouse wheel scroll event for custom scrolling
         on(events(fig.scene).scroll) do scroll_event
             if !(tb.focused[])
-                return
+                # return
             end
 
             if length(gui.log_messages[]) > visible_log_lines[]
@@ -87,6 +107,12 @@ mutable struct SimpleProtocolGUI
                 new_visible_log_lines = max(Int(floor((bbox.widths[2] - 4) / 16)), 1)
                 if new_visible_log_lines != visible_log_lines[]
                     visible_log_lines[] = new_visible_log_lines
+                    setLogText(gui.log_messages[])
+                end
+
+                currentWidth = tb.layoutobservables.computedbbox[].widths[1]
+                if currentWidth !== width[]
+                    width[] = currentWidth
                     setLogText(gui.log_messages[])
                 end
             end
