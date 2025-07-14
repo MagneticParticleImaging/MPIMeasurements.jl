@@ -2,6 +2,8 @@ using GLMakie, Observables
 using MPIMeasurements, MPIFiles
 using Dates, Logging, LoggingExtras
 
+GLMakie.set_theme!(fonts = (;regular="DejaVu Sans Mono", bold="DejaVu Sans Bold"))  # Set default font for all components
+
 mutable struct SimpleProtocolGUI
     fig::Figure
     protocol_name::String
@@ -26,10 +28,10 @@ mutable struct SimpleProtocolGUI
         decision_active = Observable(false)
         decision_buttons = Button[]
         
-        Label(fig[1, 2:5], "Protocol: $protocol_name | Scanner: $scanner_name", fontsize = 16)
-        status_label = Label(fig[2, 2:5], "State: UNDEFINED | Progress: 0/0", fontsize = 14)
+        Label(fig[1, 2:5], "Protocol: $protocol_name | Scanner: $scanner_name", fontsize = 16, font = :bold)
+        status_label = Label(fig[2, 2:5], "State: UNDEFINED | Progress: 0/0", fontsize = 14, font = :bold)
         
-        tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false))
+        tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false), font="DejaVu Sans Mono")
         width = Observable(tb.layoutobservables.computedbbox[].widths[1])
         visible_log_lines = Observable(1)
         log_scroll_offset = Observable(0)  # 0 = bottom (latest), positive = scroll up
@@ -57,8 +59,8 @@ mutable struct SimpleProtocolGUI
                 tb.displayed_string = "No messages yet..."
             else
                 # Estimate max chars per line based on textbox width and font size
-                font_width_px = 7
-                max_chars = max(Int(floor((width[] - 8) / font_width_px)), 10)
+                font_width_px = 8.6
+                max_chars = max(Int(floor(width[] / font_width_px)), 10)
 
                 # Wrap each line manually
                 function wrap_line(line, max_chars)
