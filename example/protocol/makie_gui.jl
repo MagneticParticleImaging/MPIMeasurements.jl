@@ -100,13 +100,12 @@ mutable struct SimpleProtocolGUI
 
             if length(gui.log_messages[]) > visible_log_lines[]
                 log_scroll_offset[] = clamp(log_scroll_offset[] + sign(scroll_event[2]), 0, max(length(gui.log_messages[]) - visible_log_lines[], 0))
-                # println(log_scroll_offset[])
                 setLogText(gui.log_messages[])
             end
         end
         on(tb.layoutobservables.computedbbox) do bbox
             if bbox.widths[2] > 0
-                new_visible_log_lines = max(Int(floor((bbox.widths[2] - 4) / 16)), 1)
+                new_visible_log_lines = max(Int(floor((bbox.widths[2] - 10) / 16.33)), 1)
                 if new_visible_log_lines != visible_log_lines[]
                     visible_log_lines[] = new_visible_log_lines
                     setLogText(gui.log_messages[])
@@ -151,14 +150,10 @@ function add_log_message!(gui::SimpleProtocolGUI, message::String)
     formatted_message = "[$timestamp] $message"
     push!(current_messages, formatted_message)
     
-    # Keep only last 100 messages
-    if length(current_messages) > 100
-        current_messages = current_messages[end-99:end]
-    end
-    
     gui.log_messages[] = current_messages
 end
 
+# Show decision dialog in a separate modal window
 function show_decision_dialog!(gui::SimpleProtocolGUI, message::String, choices::Vector{String}, callback::Function, handlerCallback::Function)
     for i in reverse(eachindex(gui.fig.content))
         c = gui.fig.content[i]
@@ -166,20 +161,51 @@ function show_decision_dialog!(gui::SimpleProtocolGUI, message::String, choices:
             delete!(c)
         end
     end
+    for (i, btn) in enumerate(gui.button_row)
+        col = 1 + i
+        Button(gui.fig[4, col], label=btn.label)
+    end
 
-    empty!(gui.decision_buttons)
+    # Mark decision active
     gui.decision_active[] = true
     add_log_message!(gui, "Decision needed: $message")
     add_log_message!(gui, "Choices: $(join(choices, ", "))")
+
+    # Create decision dialog figure
+    dialog_fig = Figure(size = (600, 200))
+
+    Label(dialog_fig[1, 1:length(choices)], message, fontsize=14, font=:bold)
+    btns = Button[]
     for (i, choice) in enumerate(choices)
-        col = 2 + i
-        btn = Button(gui.fig[4, col], label = choice)
+        btn = Button(dialog_fig[2, i], label=choice)
+        push!(btns, btn)
+    end
+
+    # Show dialog window
+    dialog_window = display(GLMakie.Screen(), dialog_fig)
+
+    on(events(dialog_fig.scene).window_open) do _
+        if !isempty(gui.decision_buttons)
+            cancel_idx = findfirst(btn -> lowercase(btn.label[]) == "cancel", gui.decision_buttons)
+            hide_decision_dialog!(gui, handlerCallback)
+            if cancel_idx !== nothing
+                callback(cancel_idx)
+            end
+        end
+    end
+
+    # Button click handler
+    for (i, btn) in enumerate(btns)
         on(btn.clicks) do _
             hide_decision_dialog!(gui, handlerCallback)
+            if dialog_window isa GLMakie.Screen
+                GLMakie.close(dialog_window)
+            end
             callback(i)
         end
-        push!(gui.decision_buttons, btn)
     end
+
+    gui.decision_buttons = btns
 end
 
 function hide_decision_dialog!(gui::SimpleProtocolGUI, handlerCallback::Function)
@@ -199,7 +225,7 @@ function hide_decision_dialog!(gui::SimpleProtocolGUI, handlerCallback::Function
 end
 
 function show_gui!(gui::SimpleProtocolGUI)
-    GLMakie.activate!(title="PNS Studie")
+    GLMakie.activate!(title = "PNS Studie", float = true, focus_on_show = true)
     display(gui.fig)
 end
 
