@@ -21,7 +21,7 @@ mutable struct SimpleProtocolGUI
     decision_buttons::Vector{Button}
     
     function SimpleProtocolGUI(protocol_name::String, scanner_name::String)
-        fig = Figure(size = (800, 400))
+        fig = Figure(size = (800, 400), focus_on_show = true)
         state_obs = Observable("UNDEFINED")
         progress_obs = Observable("0/0")
         log_messages_obs = Observable(String[])
@@ -225,7 +225,7 @@ function hide_decision_dialog!(gui::SimpleProtocolGUI, handlerCallback::Function
 end
 
 function show_gui!(gui::SimpleProtocolGUI)
-    GLMakie.activate!(title = "PNS Studie", float = true, focus_on_show = true)
+    GLMakie.activate!(title = "PNS Studie", focus_on_show = true)
     display(gui.fig)
 end
 
