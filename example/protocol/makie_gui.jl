@@ -31,7 +31,7 @@ mutable struct SimpleProtocolGUI
         Label(fig[1, 2:5], "Protocol: $protocol_name | Scanner: $scanner_name", fontsize = 16, font = :bold)
         status_label = Label(fig[2, 2:5], "State: UNDEFINED | Progress: 0/0", fontsize = 14, font = :bold)
         
-        tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false), font="DejaVu Sans Mono")
+        tb = Textbox(fig[3, 1:6], placeholder="No messages yet...", displayed_string="No messages yet...", width=Relative(0.95), height=Relative(0.95), restriction=(inputchar -> false), font=:regular)
         width = Observable(tb.layoutobservables.computedbbox[].widths[1])
         visible_log_lines = Observable(1)
         log_scroll_offset = Observable(0)  # 0 = bottom (latest), positive = scroll up
