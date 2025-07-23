@@ -1,0 +1,5 @@
+[General]
+name = "PNSTestScanner"
+
+[Devices]
+initializationOrder = ["dummy_su"]
