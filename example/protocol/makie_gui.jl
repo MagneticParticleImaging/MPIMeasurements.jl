@@ -182,7 +182,7 @@ function show_decision_dialog!(gui::SimpleProtocolGUI, message::String, choices:
     end
 
     # Show dialog window
-    dialog_window = display(GLMakie.Screen(), dialog_fig)
+    dialog_window = display(GLMakie.Screen(title="PNS Studie - Decision Dialog"), dialog_fig)
 
     on(events(dialog_fig.scene).window_open) do _
         if !isempty(gui.decision_buttons)
