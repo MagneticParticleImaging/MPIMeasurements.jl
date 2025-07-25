@@ -351,7 +351,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DataQueryEvent)
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  mdf = prepareAsMDF(data, protocol.scanner, protocol.params.sequence)
+  put!(protocol.biChannel, DataAnswerEvent(mdf, event))
 end
 
 

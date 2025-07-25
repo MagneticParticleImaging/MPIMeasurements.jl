@@ -240,7 +240,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
     bgdata::Nothing; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Nothing=nothing, bgTransmit::Nothing=nothing)
 	numFrames = acqNumFrames(sequence)
 	isBackgroundFrame = zeros(Bool, numFrames)
-	return fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	return fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 end
 function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
 	bgdata::Union{Array{Float32}}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Union{Array{ComplexF64}, Nothing}=nothing, bgTransmit::Union{Array{ComplexF64}, Nothing}=nothing)
@@ -258,11 +258,11 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 	end
 	isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
 	numFrames = numFrames + numBGFrames
-	return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
+	return fillMDFMeasurement(mdf, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 	# /measurement/ subgroup
 	numFrames = size(data, 4)
 
@@ -335,4 +335,11 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 		MPIFiles.rxInductionFactor(mdf, tf.inductionFactor)
 	end
 
+end
+
+function prepareAsMDF(data, scanner::MPIScanner, sequence::Sequence, isBackgroundFrame::Vector{Bool} = zeros(Bool, size(data, 4)))
+	mdf = MDFv2InMemory()
+  fillMDFMeasurement(mdf, data, isBackgroundFrame)
+  fillMDFAcquisition(mdf, scanner, sequence)
+	return mdf
 end

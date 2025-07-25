@@ -476,7 +476,8 @@ function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::DataQue
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  mdf = prepareAsMDF(data, protocol.scanner, protocol.params.sequences[1])
+  put!(protocol.biChannel, DataAnswerEvent(mdf, event))
 end
 
 function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::DatasetStoreStorageRequestEvent)
