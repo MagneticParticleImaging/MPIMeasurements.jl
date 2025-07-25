@@ -241,8 +241,8 @@ end
 struct DataQueryEvent <: ProtocolEvent
   message::AbstractString
 end
-struct DataAnswerEvent <: ProtocolEvent
-  data::Any
+struct DataAnswerEvent{T} <: ProtocolEvent
+  data::T
   query::DataQueryEvent
 end
 struct UnknownDataQueryEvent <: ProtocolEvent
