@@ -1116,7 +1116,9 @@ function startTx(daq::RedPitayaDAQ; isControlStep=false)
 end
 
 function stopTx(daq::RedPitayaDAQ)
-  masterTrigger!(daq.rpc, false)
+  if masterTrigger(daq.rpc)
+    masterTrigger!(daq.rpc, false) # only deactivate trigger if it is currently active
+  end
   execute!(daq.rpc) do batch
     @add_batch batch serverMode!(daq.rpc, CONFIGURATION)
     for channel in 1:2*length(daq.rpc)
