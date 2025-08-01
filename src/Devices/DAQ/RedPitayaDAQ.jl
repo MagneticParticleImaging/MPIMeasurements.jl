@@ -1137,6 +1137,7 @@ function clearTx!(daq::RedPitayaDAQ)
       for comp = 1:4
         @add_batch batch amplitudeDAC!(daq.rpc, channel, comp, 0.0)
       end
+      @add_batch batch offsetDAC!(daq.rpc, channel, 0.0)
     end
   end
 end
