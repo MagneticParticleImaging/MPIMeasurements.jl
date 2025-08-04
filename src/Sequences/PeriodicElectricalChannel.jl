@@ -125,11 +125,39 @@ function createChannelComponent(componentID::AbstractString, componentDict::Dict
       error("Component $componentID has an unknown channel type `$type`.")
     end
   else
-    error("Component $componentID has no `type` field.")
+    createChannelComponentTypeless(componentID, componentDict)
   end
 end
 
 function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
+  divider = componentDict["divider"]
+  
+  amplitude = uparse.(componentDict["amplitude"])
+  if eltype(amplitude) <: Unitful.Current
+    amplitude = amplitude .|> u"A"
+  elseif eltype(amplitude) <: Unitful.Voltage
+    amplitude = amplitude .|> u"V"
+  elseif eltype(amplitude) <: Unitful.BField
+    amplitude = amplitude .|> u"T"
+  else
+    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+  end
+
+  if haskey(componentDict, "phase")
+    phase = uparse.(componentDict["phase"])
+  else
+    phase = fill(0.0u"rad", length(divider)) # Default phase
+  end
+
+  if haskey(componentDict, "waveform")
+    waveform = toWaveform(componentDict["waveform"])
+  else
+    waveform = WAVEFORM_SINE # Default to sine
+  end
+  return PeriodicElectricalComponent(id=componentID, divider=divider, amplitude=amplitude, phase=phase, waveform=waveform)
+end
+
+function createChannelComponentTypeless(componentID::AbstractString, componentDict::Dict{String, Any})
   divider = componentDict["divider"]
   
   amplitude = uparse.(componentDict["amplitude"])

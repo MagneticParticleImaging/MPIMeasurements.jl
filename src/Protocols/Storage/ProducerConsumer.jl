@@ -37,6 +37,29 @@ function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer
 
   return measState
 end
+function SequenceMeasState(daq::SimpleSimulatedDAQ, sequence::Sequence, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing)
+  numFrames = acqNumFrames(sequence)
+
+  # Prepare buffering structures
+  @debug "Allocating buffer for $numFrames frames"
+  buffer = SimpleFrameBuffer(sequence)
+  if acqNumFrameAverages(sequence) > 1
+    buffer = AverageBuffer(buffer, sequence)
+  end
+  channel = Channel(32)
+
+  buffers = StorageBuffer[buffer]
+  if !isnothing(sequenceBuffer)
+    push!(buffers, sequenceBuffer...)
+  end
+
+  buffer = FrameSplitterBuffer(daq, buffers)
+
+  # Prepare measState
+  measState = SequenceMeasState(numFrames, channel, nothing, nothing, buffer, nothing, asyncMeasType(sequence))
+
+  return measState
+end
 
 asyncProducer(channel, protocol, sequence::ControlSequence) = asyncProducer(channel, protocol, sequence.targetSequence)
 function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)

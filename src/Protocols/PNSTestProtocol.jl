@@ -1,12 +1,15 @@
 export PNSTestProtocol, PNSTestProtocolParams
+using Dates
 """
 Parameters for the PNSTestProtocol
 """
 Base.@kwdef mutable struct PNSTestProtocolParams <: ProtocolParams
   "Strings to print"
   testMeasurements::Vector{String} = ["Measurement1", "Measurement2", "Measurement3", "Measurement4", "Measurement5"]
-  "Seconds to wait between measurements"
-  waitTime::Float64 = 2.0
+  "Minimum wait time between measurements (seconds)"
+  minWaitTime::Float64 = 1.0
+  "Maximum wait time between measurements (seconds)"
+  maxWaitTime::Float64 = 3.0
 end
 function PNSTestProtocolParams(dict::Dict, scanner::MPIScanner)
   params = params_from_dict(PNSTestProtocolParams, dict)
@@ -24,6 +27,8 @@ Base.@kwdef mutable struct PNSTestProtocol <: Protocol
   restored::Bool = false
   measuring::Bool = false
   currStep::Int = 0
+  currentMeasurement::String = ""
+  waitingForDecision::Bool = false
 end
 
 function requiredDevices(protocol::PNSTestProtocol)
@@ -56,15 +61,56 @@ end
 function _execute(protocol::PNSTestProtocol)
   @debug "Measurement protocol started"
 
-#   @async begin
-    for testMeasurement in protocol.params.testMeasurements
-      @info "Test measurement: $testMeasurement"
-      # Simulate some work
-      sleep(protocol.params.waitTime)
+  protocol.currStep = 0
+  
+  for (index, testMeasurement) in enumerate(protocol.params.testMeasurements)
+    # Check if we should stop or if cancelled
+    if protocol.stopped || protocol.cancelled
+      break
     end
-#   end
+    
+    protocol.currStep = index
+    protocol.currentMeasurement = testMeasurement
+    
+    @info "Test measurement: $testMeasurement"
+    
+    # Random wait time between min and max
+    waitTime = protocol.params.minWaitTime + rand() * (protocol.params.maxWaitTime - protocol.params.minWaitTime)
+    sleep(waitTime)
+    
+    # Check again after sleep if we should stop
+    if protocol.stopped || protocol.cancelled
+      break
+    end
+    
+    # Ask for decision after each measurement (except the last one)
+    if index < length(protocol.params.testMeasurements)
+      protocol.waitingForDecision = true
+      decision = askChoices(protocol, "Messung '$testMeasurement' abgeschlossen. Wie soll es weitergehen?", 
+                           ["Weitermachen", "Wiederholen", "Abbrechen"])
+      protocol.waitingForDecision = false
+      
+      if decision == "Abbrechen"
+        @info "Protocol cancelled by user decision."
+        protocol.cancelled = true
+        break
+      elseif decision == "Wiederholen"
+        # Decrement index to repeat current measurement
+        # Note: the for loop will increment it again
+        protocol.currStep = index - 1
+        continue
+      end
+      # "Weitermachen" - just continue normally
+    end
+  end
 
-  @info "Protocol finished."
+  if !protocol.cancelled
+    protocol.done = true
+    @info "Protocol finished successfully."
+  else
+    @info "Protocol was cancelled."
+  end
+  
   close(protocol.biChannel)
   @debug "Protocol channel closed after execution."
 end
@@ -79,14 +125,16 @@ function stop(protocol::PNSTestProtocol)
     protocol.measuring = false
     @info "Protocol stopped."
     if !protocol.cancelled && !protocol.finishAcknowledged
-        put!(protocol.biChannel, OperationSuccessfulEvent("Protocol stopped successfully."))
+        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
     end
 end
 
 function resume(protocol::PNSTestProtocol)
   protocol.stopped = false
   protocol.restored = true
-  # OperationSuccessfulEvent is put when it actually leaves the stop loop
+  protocol.measuring = true
+  @info "Protocol resumed."
+  put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
 end
 
 function cancel(protocol::PNSTestProtocol)
@@ -95,52 +143,44 @@ function cancel(protocol::PNSTestProtocol)
 end
 
 function handleEvent(protocol::PNSTestProtocol, event::ProgressQueryEvent)
-  put!(protocol.biChannel, ProgressEvent(protocol.systemMeasState.currPos, length(protocol.params.sequences), "Position", event))
+  put!(protocol.biChannel, ProgressEvent(protocol.currStep, length(protocol.params.testMeasurements), "Step", event))
 end
 
 function handleEvent(protocol::PNSTestProtocol, event::DataQueryEvent)
   data = nothing
   if event.message == "CURR"
-    data = protocol.systemMeasState.currentSignal
-  elseif event.message == "BG"
-    sysObj = protocol.systemMeasState
-    index = sysObj.currPos
-    while index > 1 && !sysObj.measIsBGPos[index]
-      index = index - 1
+    data = protocol.currentMeasurement
+  elseif event.message == "STEP"
+    data = protocol.currStep
+  elseif event.message == "TOTAL"
+    data = length(protocol.params.testMeasurements)
+  elseif event.message == "STATUS"
+    if protocol.waitingForDecision
+      data = "Waiting for decision"
+    elseif protocol.measuring
+      data = "Measuring"
+    elseif protocol.stopped
+      data = "Stopped"
+    elseif protocol.cancelled
+      data = "Cancelled"
+    elseif protocol.done
+      data = "Finished"
+    else
+      data = "Unknown"
     end
-    startIdx = sysObj.posToIdx[index]
-    data = copy(sysObj.signals[:, :, :, startIdx:startIdx])
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
+    return
   end
   put!(protocol.biChannel, DataAnswerEvent(data, event))
 end
 
 function handleEvent(protocol::PNSTestProtocol, event::DatasetStoreStorageRequestEvent)
   if false
-    # TODO this should be some sort of storage failure event
     put!(protocol.biChannel, IllegaleStateEvent("Calibration measurement is not done yet. Cannot save!"))
   else
-    store = event.datastore
-    scanner = protocol.scanner
-    mdf = event.mdf
-    data = protocol.systemMeasState.signals
-    positions = protocol.systemMeasState.positions
-    isBackgroundFrame = protocol.systemMeasState.measIsBGFrame
-    temperatures = nothing
-    if protocol.params.saveTemperatureData
-      temperatures = protocol.systemMeasState.temperatures
-    end
-    drivefield = nothing
-    if !isempty(protocol.systemMeasState.drivefield)
-      drivefield = protocol.systemMeasState.drivefield
-    end
-    applied = nothing
-    if !isempty(protocol.systemMeasState.applied)
-      applied = protocol.systemMeasState.applied
-    end
-    filename = saveasMDF(store, scanner, protocol.params.sequences[1], data, positions, isBackgroundFrame, mdf; storeAsSystemMatrix=protocol.params.saveAsSystemMatrix, temperatures=temperatures, drivefield=drivefield, applied=applied)
-    @show filename
+    # For now, just create a dummy filename since this is a test protocol
+    filename = "PNSTestProtocol_$(now()).txt"
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
 end
