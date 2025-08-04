@@ -1,7 +1,7 @@
 using Dates
 # Scanner
 reloadScanner = false                             # if the scanner should be reloaded for each execution
-scannerName = "SimpleSimulatedScanner"                       # Which scanner to load
+scannerName = "PNSTestScanner"                    # Which scanner to load
 
 
 scannerDefined = @isdefined scanner
@@ -14,12 +14,11 @@ end
 
 # Protocol
 @info "Loading protocol"
-protocol = Protocol("MPIMeasurement", scanner)
+protocol = Protocol("PNSTest", scanner)
 @info "Finished loading protocol"
 
 # (Optional) Configure protocol parameters
 params = protocol.params
-params.fgFrames = 10
 
 # Logging
 logpath = joinpath(homedir(), ".mpi/Logs")        # Location of log files

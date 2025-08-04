@@ -99,11 +99,11 @@ function tryexecute(handler::ProtocolScriptHandler)
   lock(handler.lock) do
     with_logger(handler.logger) do
       try
+        @info "Executing protocol"
+        updateState(handler, PS_RUNNING)
         handler.channel = MPIMeasurements.execute(handler.scanner, handler.protocol)
         put!(handler.channel, ProgressQueryEvent())
         handler.timer = Timer(timer -> handle(handler, timer), 0.0, interval = handler.interval)
-        @info "Executing protocol"
-        updateState(handler, PS_RUNNING)
       catch e
         @error e
       end
