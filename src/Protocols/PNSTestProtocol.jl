@@ -45,7 +45,10 @@ function _init(protocol::PNSTestProtocol)
 end
 
 function timeEstimate(protocol::PNSTestProtocol)
-  est = "Unknown"
+  numMeasurements = length(protocol.params.testMeasurements)
+  avgWaitTime = (protocol.params.minWaitTime + protocol.params.maxWaitTime) / 2
+  totalTime = numMeasurements * avgWaitTime
+  est = "≈ $(round(totalTime, digits=1)) seconds"
   return est
 end
 
@@ -62,46 +65,74 @@ function _execute(protocol::PNSTestProtocol)
   @debug "Measurement protocol started"
 
   protocol.currStep = 0
+  index = 1
   
-  for (index, testMeasurement) in enumerate(protocol.params.testMeasurements)
-    # Check if we should stop or if cancelled
-    if protocol.stopped || protocol.cancelled
+  while index <= length(protocol.params.testMeasurements)
+    # Handle pause/resume logic
+    notifiedStop = false
+    while protocol.stopped
+      handleEvents(protocol)
+      protocol.cancelled && throw(CancelException())
+      if !notifiedStop
+        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        notifiedStop = true
+      end
+      if !protocol.stopped
+        put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+      end
+      sleep(0.05)
+    end
+    
+    # Check if we should cancel
+    if protocol.cancelled
       break
     end
     
     protocol.currStep = index
+    testMeasurement = protocol.params.testMeasurements[index]
     protocol.currentMeasurement = testMeasurement
     
     @info "Test measurement: $testMeasurement"
     
     # Random wait time between min and max
     waitTime = protocol.params.minWaitTime + rand() * (protocol.params.maxWaitTime - protocol.params.minWaitTime)
-    sleep(waitTime)
     
-    # Check again after sleep if we should stop
+    # Sleep with cancellation checks
+    sleepStart = time()
+    while time() - sleepStart < waitTime
+      if protocol.stopped || protocol.cancelled
+        break
+      end
+      sleep(0.1)
+    end
+    
+    # Check again after sleep if we should stop or cancel
     if protocol.stopped || protocol.cancelled
-      break
+      continue  # Go back to pause/cancel handling
     end
     
     # Ask for decision after each measurement (except the last one)
     if index < length(protocol.params.testMeasurements)
       protocol.waitingForDecision = true
-      decision = askChoices(protocol, "Messung '$testMeasurement' abgeschlossen. Wie soll es weitergehen?", 
-                           ["Weitermachen", "Wiederholen", "Abbrechen"])
+      decision = askChoices(protocol, "Measurement '$testMeasurement' completed. How should we proceed?", 
+                           ["Continue", "Repeat", "Cancel"])
       protocol.waitingForDecision = false
       
-      if decision == "Abbrechen"
+      if decision == 3  # "Cancel" 
         @info "Protocol cancelled by user decision."
         protocol.cancelled = true
         break
-      elseif decision == "Wiederholen"
-        # Decrement index to repeat current measurement
-        # Note: the for loop will increment it again
-        protocol.currStep = index - 1
+      elseif decision == 2  # "Repeat"
+        @info "Repeating measurement: $testMeasurement"
+        # Don't increment index, so we repeat the current measurement
         continue
+      else  # decision == 1, "Continue"
+        @info "Continuing to next measurement."
       end
-      # "Weitermachen" - just continue normally
     end
+    
+    # Move to next measurement
+    index += 1
   end
 
   if !protocol.cancelled
@@ -111,6 +142,16 @@ function _execute(protocol::PNSTestProtocol)
     @info "Protocol was cancelled."
   end
   
+  # Always send FinishedNotificationEvent, even if cancelled
+  put!(protocol.biChannel, FinishedNotificationEvent())
+  
+  while !protocol.finishAcknowledged
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
+  end
+  
+  @info "Protocol finished."
   close(protocol.biChannel)
   @debug "Protocol channel closed after execution."
 end
@@ -123,10 +164,7 @@ function stop(protocol::PNSTestProtocol)
     protocol.stopped = true
     protocol.restored = false
     protocol.measuring = false
-    @info "Protocol stopped."
-    if !protocol.cancelled && !protocol.finishAcknowledged
-        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
-    end
+    @info "Protocol paused."
 end
 
 function resume(protocol::PNSTestProtocol)
@@ -134,7 +172,6 @@ function resume(protocol::PNSTestProtocol)
   protocol.restored = true
   protocol.measuring = true
   @info "Protocol resumed."
-  put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
 end
 
 function cancel(protocol::PNSTestProtocol)
@@ -176,8 +213,9 @@ function handleEvent(protocol::PNSTestProtocol, event::DataQueryEvent)
 end
 
 function handleEvent(protocol::PNSTestProtocol, event::DatasetStoreStorageRequestEvent)
-  if false
-    put!(protocol.biChannel, IllegaleStateEvent("Calibration measurement is not done yet. Cannot save!"))
+  # Only handle storage if the protocol completed successfully
+  if protocol.cancelled
+    put!(protocol.biChannel, IllegaleStateEvent("Protocol was cancelled, cannot save data."))
   else
     # For now, just create a dummy filename since this is a test protocol
     filename = "PNSTestProtocol_$(now()).txt"
