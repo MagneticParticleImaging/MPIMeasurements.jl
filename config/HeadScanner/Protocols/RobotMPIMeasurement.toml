@@ -1,0 +1,10 @@
+type = "RobotMPIMeasurementProtocol"
+description = "A sychronous acquisition with the Red Pitaya Scanner. Data can be queried after the finished notification. Uses current scanner sequence"
+targetScanner = "HeadScanner"
+
+sequence = "3D_xyz_4Hz"
+
+controlTx = true
+measureBackground = true
+fgFrames = 1
+bgFrames = 1

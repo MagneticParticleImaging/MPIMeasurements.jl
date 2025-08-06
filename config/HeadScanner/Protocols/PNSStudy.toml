@@ -1,0 +1,9 @@
+type = "PNSStudyProtocol"
+description = "A sychronous acquisition with the Red Pitaya Scanner. Data can be queried after the finished notification. Uses current scanner sequence"
+targetScanner = "HeadScanner"
+
+sequence = "1D_x"
+waitTime = 2.0
+allowRepeats = true
+
+controlTx = true

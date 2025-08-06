@@ -1,0 +1,58 @@
+[General]
+name = "1D_z"
+description = "1D MPI measurement sequence in z-direction with progressive amplitude increases from 0.1 mT to 2.0 mT in 20 steps"
+targetScanner = "HeadScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.01s"
+safeEndInterval = "0.01s"
+safeErrorInterval = "0.01s"
+control = true
+decouple = true
+
+[Fields.df.dfz]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.dfz.c1]
+type = "PeriodicElectricalComponent"
+divider = 4800
+amplitude = ["0.0001T", "0.0002T", "0.0003T", "0.0004T", "0.0005T", "0.0006T", "0.0007T", "0.0008T", "0.0009T", "0.001T", "0.0011T", "0.0012T", "0.0013T", "0.0014T", "0.0015T", "0.0016T", "0.0017T", "0.0018T", "0.0019T", "0.002T"]
+phase = ["0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad", "0.0rad"]
+waveform = "sine"
+
+[Fields.ff]
+safeStartInterval = "0.1s"
+safeEndInterval = "0.1s"
+safeErrorInterval = "0.1s"
+control = false
+decouple = false
+
+[Fields.ff.ff1]
+type = "ContinuousElectricalChannel"
+dividerSteps = 364800
+divider = 31008000
+amplitude = "0.0A"
+offset = "10.0A"
+phase = "0.0rad"
+waveform = "sine"
+
+[Fields.ff.ff2]
+type = "ContinuousElectricalChannel"
+dividerSteps = 364800
+divider = 31008000
+amplitude = "0.0A"
+offset = "10.0A"
+phase = "3.14rad"
+waveform = "sine"
+
+[Acquisition]
+channels = ["rx1", "rx2", "rx5"]
+bandwidth = "0.9765625MHz"
+numPeriodsPerFrame = 1
+numFrames = 1
+numAverages = 1
+numFrameAverages = 1

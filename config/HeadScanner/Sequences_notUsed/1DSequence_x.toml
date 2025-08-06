@@ -1,0 +1,59 @@
+[General]
+name = "1D_x"
+description = "Precise description."
+targetScanner = "HeadScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "0.01s"
+safeEndInterval = "0.01s"
+safeErrorInterval = "0.01s"
+control = true
+decouple = true
+
+[Fields.df.dfx]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.dfx.c1]
+divider = 4864
+amplitude = ["0.0025T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.ff]
+safeStartInterval = "0.1s"
+safeEndInterval = "0.1s"
+safeErrorInterval = "0.1s"
+control = false
+decouple = false
+
+
+[Fields.ff.ff1]
+type = "ContinuousElectricalChannel"						# 1.7 Hz, 1 periods per patch, 200 patches, 4864 dfdividerx , 4800 dfdividerz  
+dividerSteps = 4864			# periodsPerPatch*samplesPerLissajous 	# 1*lcm(4864,4800)
+divider = 4864			# samplesPerLissajous*patches		# lcm(4864,4800)*1
+amplitude = "0.0A"
+offset = "0.0A"
+phase = "0.0rad"
+waveform = "sine"
+
+[Fields.ff.ff2]
+type = "ContinuousElectricalChannel"
+dividerSteps = 4864
+divider = 4864
+amplitude = "0.0A"
+offset = "0.0A"
+phase = "3.14rad"
+waveform = "sine"
+
+
+[Acquisition]
+channels = ["rx1"]
+bandwidth = "0.9765625MHz"
+numPeriodsPerFrame = 1
+numFrames = 1
+numAverages = 1
+numFrameAverages = 1

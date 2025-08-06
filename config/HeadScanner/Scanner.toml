@@ -1,0 +1,293 @@
+[General]
+boreSize = "230mm"
+facility = "Universitätsklinikum Hamburg-Eppendorf"
+manufacturer = "IBI"
+name = "HeadScanner"
+topology = "FFP"
+gradient = "42T/m"
+datasetStore = "/opt/data/HeadScanner"
+#datasetStore = "~/HeadScannerLocal"
+defaultSequence = "1D_x"
+defaultProtocol = "MPIMeasurement"
+producerThreadID = 1
+consumerThreadID = 3
+protocolThreadID = 4
+serialThreadID = 5
+
+[Devices]
+initializationOrder = [
+  "serial_pool",
+  "hubi_x",
+  "hubi_z",
+  "temp_control",
+  "su_temp",
+  "surveillance",
+  "rp_cluster",
+  "tx_controller",
+  "collision_module",
+  "robot",
+]
+
+[Devices.serial_pool]
+deviceType = "SerialPortPool"
+blacklist = []
+
+# 3DAQ
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+ips = ["192.168.1.103","192.168.1.104","192.168.1.105"]
+rampingMode = "STARTUP"
+rampingFraction = 0.2
+
+## Receive Channels
+
+[Devices.rp_cluster.rx1]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx2]
+type = "rx"
+channel = 2
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx3]
+type = "rx"
+channel = 3
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx4]
+type = "rx"
+channel = 4
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx5]
+type = "rx"
+channel = 5
+limitPeak = "1V"
+
+[Devices.rp_cluster.rx6]
+type = "rx"
+channel = 6
+limitPeak = "1V"
+
+## Feedback Channels
+
+[Devices.rp_cluster.feedbackx]
+type = "rx"
+channel = 3
+limitPeak = "1V"
+
+[Devices.rp_cluster.feedbackz]
+type = "rx"
+channel = 4
+limitPeak = "1V"
+
+## DF Channels
+
+[Devices.rp_cluster.dfx]
+type = "tx"
+channel = 3
+limitPeak = "0.92V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "171.3V/T" # "97V/T" 
+feedback.channelID = "feedbackx"
+feedback.calibration = "0.006779362004220081T/V" #25.10.22 "0.006635120259449441T/V" # voltage divider; "0.011787241625089095T/V" differential signal path # "0.010040983606557377T/V"
+
+[Devices.rp_cluster.dfz]
+type = "tx"
+channel = 4
+limitPeak = "0.92V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "216V/T" #
+feedback.channelID = "feedbackz"
+feedback.calibration = "0.0056962375223290245T/V" # voltage divider; "0.009916041965013249T/V" differential signal path
+
+### The following is only for testing purposes ###
+
+[Devices.rp_cluster.df1]
+type = "tx"
+channel = 1
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackx"
+feedback.calibration = "1T/V"
+
+[Devices.rp_cluster.df2]
+type = "tx"
+channel = 2
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackz"
+feedback.calibration = "1T/V"
+
+[Devices.rp_cluster.df3]
+type = "tx"
+channel = 3
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackx"
+feedback.calibration = "1T/V"
+
+[Devices.rp_cluster.df4]
+type = "tx"
+channel = 4
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackz"
+feedback.calibration = "1T/V"
+
+[Devices.rp_cluster.df5]
+type = "tx"
+channel = 5
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackx"
+feedback.calibration = "1T/V"
+
+[Devices.rp_cluster.df6]
+type = "tx"
+channel = 6
+limitPeak = "1V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1V/T"
+feedback.channelID = "feedbackz"
+feedback.calibration = "1T/V"
+
+## FF Channels
+
+[Devices.rp_cluster.ff1]
+type = "txSlow"
+channel = 1
+calibration = "0.03205V/A"
+
+[Devices.rp_cluster.ff2]
+type = "txSlow"
+channel = 2
+calibration = "0.03353V/A"
+
+## Controller
+
+[Devices.tx_controller]
+deviceType = "TxDAQController"
+dependencies = ["rp_cluster", "surveillance", "temp_control", "hubi_z", "hubi_x"]
+phaseAccuracy = 0.1
+amplitudeAccuracy = 0.01
+controlPause = 0.2
+maxControlSteps = 10
+correctCrossCoupling = false
+
+# Robot
+[Devices.robot]
+deviceType = "IselRobot"
+dependencies = ["serial_pool", "collision_module"]
+baudrate = 19200
+stepsPermm = 1000
+# serial_port = "/dev/ttyUSB1"
+description = "USB-Serial Controller D"
+defaultRefVel = ["40mm/s", "40mm/s", "40mm/s"]
+axisRange = [["0mm", "400mm"], ["0mm", "390mm"], ["0mm", "180mm"]]
+defaultVel = ["40mm/s", "40mm/s", "40mm/s"]
+invertAxes = [false, false, true]
+minMaxVel = [30,60000]
+referenceOrder = "xyz"
+enableWaitTime = 0.2 # How much time needs to pass after enable and first movement
+timeout_ms = 20000
+
+[Devices.robot.coordinateSystem]
+# origin = ["125.5mm", "125.5mm", "75.5mm"]
+origin = ["143.0mm", "125.5mm", "75.5mm"] # 22.7.2022 Tobi
+
+[Devices.robot.namedPositions]
+origin = ["143.0mm", "125.5mm", "75.5mm"] # 22.7.2022 Tob
+park = ["400mm", "125.5mm", "75.5mm"]
+calCoil3D = ["205mm", "125.5mm", "75.5mm"]
+
+[Devices.collision_module]
+deviceType = "SimpleBoreCollisionModule"
+objGeometry.type = "Circle"
+objGeometry.diameter = "10mm"
+objGeometry.name = "Delta sample"
+scannerDiameter = "200mm" #"170mm" # "170mm"
+clearance = "1mm"
+minMaxBoreAxis = ["-100mm","Inf*mm"] #["-90mm","Inf*mm"]
+
+
+# Surveillance Unit
+[Devices.surveillance]
+deviceType = "ArduinoSurveillanceUnitExternalTemp"
+dependencies = ["serial_pool", "su_temp" ,"temp_control"]
+# portAdress = "/dev/ttyACM3" # 
+description = "8503631333035111B131"
+baudrate = 9600
+
+[Devices.su_temp]
+deviceType = "ArduinoTemperatureSensor"
+dependencies = ["serial_pool"]
+# portAdress = "/dev/ttyACM2" # 
+description = "859373133373514160E0"
+baudrate = 9600
+numSensors = 21
+maxTemps = [55,55,55,60,60,60,60,70,70,65,65,80,40,70,70,70,70,75,60,60,60]
+selectSensors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]
+#selectSensors = [4,6,10,11,12]
+groupSensors = [1, 1, 1, 2, 2, 2, 2, 4, 4, 2, 2, 2, 4, 3, 3, 3, 3, 4, 4, 4, 4]
+#groupSensors = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+nameSensors = ["RX1","RX2","RX3","TX1/1","TX1/2","TX2/1","TX2/2", "SefoCoilRight", "SefoCoilLeft", "ICN X", "ICN Z", "Dec C", "(Rack)", "CapX1","CapX2","CapZ1","CapZ2","Joker", "SefoCoreRight", "SefoCoreLeft","SefoCabin"]
+
+# Hubert Amplifier
+[Devices.hubi_x]
+deviceType = "HubertAmplifier"
+dependencies = ["serial_pool"] 
+channelID = "dfx"
+baudrate = 9600
+#port = "/dev/ttyUSB3" #id: 
+description = "P146QD2L"
+mode = "voltage"      #do NOT use current mode w/o load!
+voltageMode = "high voltage"
+warmUpDelay = 0.3
+timeout_ms = 2000
+
+[Devices.hubi_z]
+deviceType = "HubertAmplifier"
+dependencies = ["serial_pool"]
+channelID = "dfz"
+baudrate = 9600
+#port = "/dev/ttyUSB0" #id: 
+description = "P146SSQC"
+mode = "voltage"      #do NOT use current mode w/o load!
+voltageMode = "high voltage"
+warmUpDelay = 0.3
+timeout_ms = 2000
+
+# Temperature Controller
+[Devices.temp_control]
+deviceType = "ArduinoTemperatureController"
+dependencies = ["serial_pool"]
+# portAddress = "/dev/ACM1"
+description = "850363133303511111C0"
+baudrate = 9600
+numSensors = 8
+#targetTemps = [57,57,49,49,49,49,45,45]
+targetTemps = [48,48,53,53,59,59,45,45]
+maxTemps = [63, 63, 68, 68, 70, 70, 60, 60]
+mode = "TEMP_PID"
+
+# Display
+selectSensors = [1, 2, 3, 4, 5, 6, 7, 8]
+groupSensors = [1, 1, 1, 1, 2, 2, 2, 2]
+nameSensors = ["X1", "X2", "X3", "X4", "Z1", "Z2", "Z3", "Z4"]
