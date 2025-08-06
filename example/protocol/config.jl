@@ -1,7 +1,7 @@
 using Dates
 # Scanner
 reloadScanner = false                             # if the scanner should be reloaded for each execution
-scannerName = "PNSTestScanner"                    # Which scanner to load
+scannerName = "HeadScanner"                    # Which scanner to load
 
 
 scannerDefined = @isdefined scanner
@@ -14,7 +14,7 @@ end
 
 # Protocol
 @info "Loading protocol"
-protocol = Protocol("PNSTest", scanner)
+protocol = Protocol("PNSStudy", scanner)
 @info "Finished loading protocol"
 
 # (Optional) Configure protocol parameters
