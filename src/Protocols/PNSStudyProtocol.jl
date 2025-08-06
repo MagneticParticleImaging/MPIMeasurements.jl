@@ -11,6 +11,18 @@ Base.@kwdef mutable struct PNSStudyProtocolParams <: ProtocolParams
   waitTime::Float64 = 2.0
   "Allow repeating measurements for the same amplitude"
   allowRepeats::Bool = true
+  "Foreground frames to measure per amplitude"
+  fgFrames::Int64 = 1
+  "Background frames to measure"
+  bgFrames::Int64 = 1
+  "If set the tx amplitude and phase will be set with control steps"
+  controlTx::Bool = true
+  "If unset no background measurement will be taken"
+  measureBackground::Bool = true
+  "If the temperature should be saved or not"
+  saveTemperatureData::Bool = false
+  "Remember background measurement"
+  rememberBGMeas::Bool = false
 end
 
 function PNSStudyProtocolParams(dict::Dict, scanner::MPIScanner)
@@ -29,6 +41,10 @@ PNSStudyProtocolParams(dict::Dict) = params_from_dict(PNSStudyProtocolParams, di
 Base.@kwdef mutable struct PNSStudyProtocol <: Protocol
   @add_protocol_fields PNSStudyProtocolParams
 
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+  protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  
+  bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
   finishAcknowledged::Bool = false
@@ -39,10 +55,19 @@ Base.@kwdef mutable struct PNSStudyProtocol <: Protocol
   currentAmplitude::String = ""
   waitingForDecision::Bool = false
   amplitudes::Vector{String} = String[]
+  txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
 end
 
 function requiredDevices(protocol::PNSStudyProtocol)
-  result = []
+  result = [AbstractDAQ]
+  if protocol.params.controlTx
+    push!(result, TxDAQController)
+  end
+  if protocol.params.saveTemperatureData
+    push!(result, TemperatureSensor)
+  end
+  return []
   return result
 end
 
@@ -57,6 +82,16 @@ function _init(protocol::PNSStudyProtocol)
   if isempty(protocol.amplitudes)
     throw(IllegalStateException("Sequence contains no drive field amplitudes"))
   end
+
+  protocol.done = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  if protocol.params.controlTx
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
+  else
+    protocol.txCont = nothing
+  end
+  protocol.protocolMeasState = ProtocolMeasState()
 
   return nothing
 end
@@ -103,7 +138,9 @@ function enterExecute(protocol::PNSStudyProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   protocol.restored = false
-  protocol.measuring = true
+  protocol.measuring = false
+  protocol.unit = ""
+  protocol.protocolMeasState = ProtocolMeasState()
 end
 
 function _execute(protocol::PNSStudyProtocol)
@@ -111,7 +148,24 @@ function _execute(protocol::PNSStudyProtocol)
 
   protocol.currStep = 0
   index = 1
-  remainingWaitTime = 0.0  # Track remaining time when paused
+  
+  # Take background measurement once if needed
+  if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+    
+    # Set first amplitude for background measurement
+    setAmplitudeForCurrentStep(protocol, index)
+    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+
+    @debug "Taking background measurement."
+    protocol.unit = "BG Frames"
+    measurement(protocol)
+    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = true)
+  end
   
   while index <= length(protocol.amplitudes) && !protocol.cancelled
     # Handle pause/resume logic
@@ -141,7 +195,10 @@ function _execute(protocol::PNSStudyProtocol)
     currentAmplitude = protocol.amplitudes[index]
     protocol.currentAmplitude = currentAmplitude
     
-    @info "PNS Study: Testing magnetic field amplitude: $currentAmplitude"
+    @info "PNS Study: Measuring magnetic field amplitude: $currentAmplitude"
+    
+    # Set the amplitude in the sequence for this measurement
+    setAmplitudeForCurrentStep(protocol, index)
     
     # Check for events immediately after starting measurement
     handleEvents(protocol)
@@ -149,33 +206,32 @@ function _execute(protocol::PNSStudyProtocol)
       throw(CancelException())
     end
     
-    # Determine wait time - use remaining time if resuming, otherwise use fixed wait time
-    if remainingWaitTime > 0.0
-      waitTime = remainingWaitTime
-      remainingWaitTime = 0.0
-      @info "Resuming amplitude test with $(round(waitTime, digits=2)) seconds remaining"
-    else
-      # Use fixed wait time for consistent amplitude exposure duration
-      waitTime = protocol.params.waitTime
-    end
+    # Perform the actual measurement for this amplitude
+    @debug "Setting number of foreground frames."
+    acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+
+    @debug "Starting foreground measurement for amplitude: $currentAmplitude"
+    protocol.unit = "Frames"
+    measurement(protocol)
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
     
-    # Sleep with cancellation and pause checks - more responsive 
+    # Wait for the specified duration after measurement
+    @info "Amplitude $currentAmplitude measurement complete. Waiting $(protocol.params.waitTime) seconds..."
     sleepStart = time()
-    while time() - sleepStart < waitTime
+    while time() - sleepStart < protocol.params.waitTime
       # Check for events more frequently for immediate cancellation/pause
       handleEvents(protocol)
       if protocol.cancelled
         throw(CancelException())
       elseif protocol.stopped
-        # Calculate remaining time when paused
-        remainingWaitTime = waitTime - (time() - sleepStart)
-        @info "Amplitude test paused with $(round(remainingWaitTime, digits=2)) seconds remaining"
+        @info "Amplitude test paused during wait period"
         break
       end
       sleep(0.05)  # Shorter sleep for more responsive cancellation/pause
     end
     
-    # Check again after sleep if we should stop or cancel
+    # Check again after wait if we should stop or cancel
     if protocol.cancelled
       throw(CancelException())  # Immediately terminate thread
     elseif protocol.stopped
@@ -198,7 +254,7 @@ function _execute(protocol::PNSStudyProtocol)
         options = ["Continue", "Repeat", "Cancel"]
       end
       
-      decision = askChoices(protocol, "Amplitude '$currentAmplitude' test completed. How should we proceed?", options)
+      decision = askChoices(protocol, "Amplitude '$currentAmplitude' measurement completed. How should we proceed?", options)
       protocol.waitingForDecision = false
       
       if decision == length(options)  # "Cancel" (last option)
@@ -206,10 +262,8 @@ function _execute(protocol::PNSStudyProtocol)
         protocol.cancelled = true
         throw(CancelException())
       elseif protocol.params.allowRepeats && decision == 2  # "Repeat" (if enabled)
-        @info "Repeating amplitude test: $currentAmplitude"
+        @info "Repeating amplitude measurement: $currentAmplitude"
         # Don't increment index, so we repeat the current amplitude
-        # Reset remaining time so the test gets a fresh fixed wait time
-        remainingWaitTime = 0.0
         continue
       else  # decision == 1, "Continue"
         @info "Continuing to next amplitude."
@@ -245,6 +299,91 @@ function cleanup(protocol::PNSStudyProtocol)
 
 end
 
+function setAmplitudeForCurrentStep(protocol::PNSStudyProtocol, index::Int)
+  # Parse the amplitude string back to a value with units
+  amplitudeStr = protocol.amplitudes[index]
+  amplitudeValue = uparse(amplitudeStr)
+  
+  # Get all drive field channels from the sequence and set their amplitudes
+  dfChannels = [channel for field in fields(protocol.params.sequence) if field.id == "df" for channel in field.channels]
+  
+  for channel in dfChannels
+    if isa(channel, PeriodicElectricalChannel)
+      for component in components(channel)
+        if isa(component, PeriodicElectricalComponent)
+          # Set the amplitude for the first period (period = 1)
+          amplitude!(component, amplitudeValue, period = 1)
+        end
+      end
+    end
+  end
+  
+  @debug "Set amplitude to $amplitudeValue for measurement step $index"
+end
+
+function measurement(protocol::PNSStudyProtocol)
+  # Start async measurement
+  protocol.measuring = true
+  measState = asyncMeasurement(protocol)
+  producer = measState.producer
+  consumer = measState.consumer
+
+  # Handle events
+  while !istaskdone(consumer)
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
+  end
+  protocol.measuring = false
+
+  # Check tasks
+  ex = nothing
+  if Base.istaskfailed(producer)
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
+  end
+  if Base.istaskfailed(consumer)
+    currExceptions = current_exceptions(consumer)
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    if isnothing(ex)
+      ex = currExceptions[1][:exception]
+    end
+  end
+  if !isnothing(ex)
+    throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
+  end
+end
+
+function asyncMeasurement(protocol::PNSStudyProtocol)
+  scanner_ = scanner(protocol)
+  sequence = protocol.params.sequence
+  daq = getDAQ(scanner_)
+  deviceBuffer = DeviceBuffer[]
+  if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  end
+  protocol.seqMeasState.deviceBuffers = deviceBuffer
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
+  return protocol.seqMeasState
+end
+
 function stop(protocol::PNSStudyProtocol)
     protocol.stopped = true
     protocol.restored = false
@@ -265,7 +404,15 @@ function cancel(protocol::PNSStudyProtocol)
 end
 
 function handleEvent(protocol::PNSStudyProtocol, event::ProgressQueryEvent)
-  put!(protocol.biChannel, ProgressEvent(protocol.currStep, length(protocol.amplitudes), "Amplitude", event))
+  reply = nothing
+  if !isnothing(protocol.seqMeasState) && protocol.measuring
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
+  else
+    reply = ProgressEvent(protocol.currStep, length(protocol.amplitudes), "Amplitude", event)
+  end
+  put!(protocol.biChannel, reply)
 end
 
 function handleEvent(protocol::PNSStudyProtocol, event::DataQueryEvent)
@@ -280,7 +427,7 @@ function handleEvent(protocol::PNSStudyProtocol, event::DataQueryEvent)
     if protocol.waitingForDecision
       data = "Waiting for decision"
     elseif protocol.measuring
-      data = "Testing amplitude"
+      data = "Measuring amplitude"
     elseif protocol.stopped
       data = "Stopped"
     elseif protocol.cancelled
@@ -294,6 +441,21 @@ function handleEvent(protocol::PNSStudyProtocol, event::DataQueryEvent)
     data = protocol.amplitudes
   elseif event.message == "SEQUENCE"
     data = isnothing(protocol.params.sequence) ? "None" : name(protocol.params.sequence)
+  elseif event.message == "CURRFRAME" && !isnothing(protocol.seqMeasState)
+    data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
+  elseif startswith(event.message, "FRAME") && !isnothing(protocol.seqMeasState)
+    frame = tryparse(Int64, split(event.message, ":")[2])
+    if !isnothing(frame) && frame > 0 && frame <= protocol.seqMeasState.numFrames
+        data = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))[:, :, :, frame:frame]
+    end
+  elseif event.message == "BUFFER" && !isnothing(protocol.seqMeasState)
+    data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
@@ -307,8 +469,16 @@ function handleEvent(protocol::PNSStudyProtocol, event::DatasetStoreStorageReque
     # Don't log error, just silently skip storage for cancelled protocols
     return
   else
-    # For now, just create a dummy filename since this is a PNS study protocol
-    filename = "PNSStudyProtocol_$(now()).txt"
+    store = event.datastore
+    scanner = protocol.scanner
+    mdf = event.mdf
+    data = read(protocol.protocolMeasState, MeasurementBuffer)
+    isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+    drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
+    appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
+    temperature = read(protocol.protocolMeasState, TemperatureBuffer)
+    filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+    @info "The PNS Study measurement was saved at `$filename`."
     put!(protocol.biChannel, StorageSuccessEvent(filename))
   end
 end

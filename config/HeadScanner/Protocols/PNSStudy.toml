@@ -7,3 +7,6 @@ waitTime = 2.0
 allowRepeats = true
 
 controlTx = true
+measureBackground = true
+fgFrames = 1
+bgFrames = 1

@@ -17,15 +17,6 @@ serialThreadID = 5
 [Devices]
 initializationOrder = [
   "serial_pool",
-  "hubi_x",
-  "hubi_z",
-  "temp_control",
-  "su_temp",
-  "surveillance",
-  "rp_cluster",
-  "tx_controller",
-  "collision_module",
-  "robot",
 ]
 
 [Devices.serial_pool]
