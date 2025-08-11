@@ -62,12 +62,14 @@ mutable struct SimpleProtocolGUI
                 font_width_px = 8.6
                 max_chars = max(Int(floor(width[] / font_width_px)), 10)
 
-                # Wrap each line manually
+                # Wrap each line manually - Unicode-safe version
                 function wrap_line(line, max_chars)
                     wrapped = String[]
+                    chars = collect(line)  # Convert to array of characters
                     i = 1
-                    while i <= lastindex(line)
-                        push!(wrapped, line[i:min(i+max_chars-1, lastindex(line))])
+                    while i <= length(chars)
+                        end_idx = min(i + max_chars - 1, length(chars))
+                        push!(wrapped, join(chars[i:end_idx]))
                         i += max_chars
                     end
                     return wrapped
