@@ -11,14 +11,16 @@ Base.@kwdef mutable struct PNSStudyProtocolParams <: ProtocolParams
   waitTime::Float64 = 2.0
   "Allow repeating measurements for the same amplitude"
   allowRepeats::Bool = true
+  "Amplitudes to iterate over"
+  amplitudes::Vector{Unitful.Quantity} = ["0.0001T", "0.0002T", "0.0003T", "0.0004T", "0.0005T", "0.0006T", "0.0007T", "0.0008T", "0.0009T", "0.001T", "0.0011T", "0.0012T", "0.0013T", "0.0014T", "0.0015T", "0.0016T", "0.0017T", "0.0018T", "0.0019T", "0.002T"]
   "Foreground frames to measure per amplitude"
   fgFrames::Int64 = 1
   "Background frames to measure"
   bgFrames::Int64 = 1
   "If set the tx amplitude and phase will be set with control steps"
-  controlTx::Bool = true
+  controlTx::Bool = false
   "If unset no background measurement will be taken"
-  measureBackground::Bool = true
+  measureBackground::Bool = false
   "If the temperature should be saved or not"
   saveTemperatureData::Bool = false
   "Remember background measurement"
@@ -77,7 +79,7 @@ function _init(protocol::PNSStudyProtocol)
   end
 
   # Extract amplitudes from the sequence
-  protocol.amplitudes = extractAmplitudes(protocol.params.sequence)
+  protocol.amplitudes = [string(amplitude) for amplitude in protocol.params.amplitudes]
   
   if isempty(protocol.amplitudes)
     throw(IllegalStateException("Sequence contains no drive field amplitudes"))
@@ -94,36 +96,6 @@ function _init(protocol::PNSStudyProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   return nothing
-end
-
-function extractAmplitudes(sequence::Sequence)::Vector{String}
-  amplitudes = String[]
-  
-  # Get all drive field channels from the sequence
-  dfChannels = [channel for field in fields(sequence) if field.id == "df" for channel in field.channels]
-  
-  if isempty(dfChannels)
-    return amplitudes
-  end
-  
-  # Get the first periodic electrical channel and extract amplitudes
-  for channel in dfChannels
-    if isa(channel, PeriodicElectricalChannel)
-      for component in components(channel)
-        if isa(component, PeriodicElectricalComponent)
-          for amp in component.amplitude
-            # Format amplitude as string with proper units
-            amp_str = string(amp)
-            if !(amp_str in amplitudes)
-              push!(amplitudes, amp_str)
-            end
-          end
-        end
-      end
-    end
-  end
-  
-  return amplitudes
 end
 
 function timeEstimate(protocol::PNSStudyProtocol)

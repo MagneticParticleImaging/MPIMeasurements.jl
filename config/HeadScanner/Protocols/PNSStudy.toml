@@ -6,7 +6,6 @@ sequence = "1D_x"
 waitTime = 2.0
 allowRepeats = true
 
-controlTx = true
-measureBackground = true
-fgFrames = 1
-bgFrames = 1
+controlTx = false
+measureBackground = false
+fgFrames = 4
