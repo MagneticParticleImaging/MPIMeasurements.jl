@@ -59,6 +59,11 @@ Base.@kwdef mutable struct PNSStudyProtocol <: Protocol
   amplitudes::Vector{String} = String[]
   txCont::Union{TxDAQController, Nothing} = nothing
   unit::String = ""
+  
+  # Control system state
+  controlSequence::Union{ControlSequence, Nothing} = nothing
+  fieldMeasured::Union{Array, Nothing} = nothing
+  initialControlDone::Bool = false
 end
 
 function requiredDevices(protocol::PNSStudyProtocol)
@@ -94,6 +99,11 @@ function _init(protocol::PNSStudyProtocol)
     protocol.txCont = nothing
   end
   protocol.protocolMeasState = ProtocolMeasState()
+  
+  # Initialize control system
+  protocol.controlSequence = nothing
+  protocol.fieldMeasured = nothing
+  protocol.initialControlDone = false
 
   return nothing
 end
@@ -120,6 +130,13 @@ function _execute(protocol::PNSStudyProtocol)
 
   protocol.currStep = 0
   index = 1
+  
+  # Perform initial control at the very start for accurate baseline
+  if protocol.params.controlTx && !protocol.initialControlDone
+    @info "Performing initial control/calibration..."
+    performInitialControl(protocol)
+    protocol.initialControlDone = true
+  end
   
   # Take background measurement once if needed
   if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
@@ -169,6 +186,12 @@ function _execute(protocol::PNSStudyProtocol)
     
     @info "PNS Study: Measuring magnetic field amplitude: $currentAmplitude"
     
+    # Apply single-shot regulation if we have previous measurement data
+    if protocol.params.controlTx && index > 1 && !isnothing(protocol.fieldMeasured)
+      @debug "Applying single-shot regulation based on previous measurement"
+      applySingleShotRegulation(protocol, index)
+    end
+    
     # Set the amplitude in the sequence for this measurement
     setAmplitudeForCurrentStep(protocol, index)
     
@@ -187,6 +210,12 @@ function _execute(protocol::PNSStudyProtocol)
     measurement(protocol)
     deviceBuffers = protocol.seqMeasState.deviceBuffers
     push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
+    
+    # Store measured field data for next iteration's regulation
+    if protocol.params.controlTx && !isnothing(protocol.seqMeasState)
+      protocol.fieldMeasured = extractMeasuredField(protocol)
+      @debug "Stored measured field data for regulation: $(protocol.fieldMeasured)"
+    end
     
     # Wait for the specified duration after measurement
     @info "Amplitude $currentAmplitude measurement complete. Waiting $(protocol.params.waitTime) seconds..."
@@ -269,6 +298,115 @@ end
 
 function cleanup(protocol::PNSStudyProtocol)
 
+end
+
+function performInitialControl(protocol::PNSStudyProtocol)
+  """
+  Perform comprehensive control/calibration at the start of PNS study.
+  This establishes accurate baseline for all subsequent measurements.
+  """
+  if isnothing(protocol.txCont)
+    @warn "Cannot perform control - TxDAQController not available"
+    return
+  end
+  
+  @info "Starting initial control sequence..."
+  
+  # Create control sequence from the base sequence 
+  # Wenn regeln: seq = sequences[i], control_sequence = ControlSequence(txCont,seq)
+  seq = protocol.params.sequence
+  protocol.controlSequence = ControlSequence(protocol.txCont, seq)
+  
+  # Perform the control
+  # controlTx(txCont, control_sequence)
+  controlTx(protocol.txCont, protocol.controlSequence)
+  
+  @info "Initial control sequence completed"
+end
+
+function applySingleShotRegulation(protocol::PNSStudyProtocol, currentIndex::Int)
+  """
+  Apply single-shot regulation using previous measurement as feedback.
+  This adjusts the next amplitude based on the error from the last measurement.
+  """
+  if isnothing(protocol.controlSequence) || isnothing(protocol.fieldMeasured) || isnothing(protocol.txCont)
+    @warn "Cannot perform single-shot regulation - missing control data"
+    return
+  end
+  
+  try
+    # Calculate desired field for the next measurement
+    # Wenn Werte anpassen: field_desired = calcDesiredField(ControlSequence(txCont,sequences[i+1])
+    nextSeq = deepcopy(protocol.params.sequence)
+    setAmplitudeForSequence(nextSeq, protocol.params.amplitudes, currentIndex)
+    nextControlSeq = ControlSequence(protocol.txCont, nextSeq)
+    field_desired = calcDesiredField(nextControlSeq)
+    
+    # Apply control step using measured vs desired field
+    # step = controlStep!(control_sequence, txCont, field_measured, field_desired) # alte Sequenz
+    step = controlStep!(protocol.controlSequence, protocol.txCont, protocol.fieldMeasured, field_desired)
+    
+    if step == INVALID
+      @warn "Control step returned INVALID - performing emergency control"
+      # if step == INVALID: pause(), controlTx()
+      if askChoices(protocol, "Control adjustment failed. Perform full control recalibration?", ["Cancel", "Recalibrate"]) == 2
+        controlTx(protocol.txCont, protocol.controlSequence)
+        @info "Emergency control recalibration completed"
+      else
+        throw(CancelException())
+      end
+    else
+      @debug "Single-shot regulation applied successfully (step: $step)"
+    end
+    
+  catch e
+    @error "Error during single-shot regulation: $e"
+    @warn "Continuing without regulation adjustment"
+  end
+end
+
+function setAmplitudeForSequence(seq::Sequence, amplitudes::Vector, index::Int)
+  """
+  Helper function to set amplitude for a sequence copy.
+  """
+  amplitudeStr = string(amplitudes[index])
+  amplitudeValue = uparse(amplitudeStr)
+  
+  # Get all drive field channels from the sequence and set their amplitudes
+  dfChannels = [channel for field in fields(seq) if field.id == "df" for channel in field.channels]
+  
+  for channel in dfChannels
+    if isa(channel, PeriodicElectricalChannel)
+      for component in components(channel)
+        if isa(component, PeriodicElectricalComponent)
+          # Set the amplitude for the first period (period = 1)
+          amplitude!(component, amplitudeValue, period = 1)
+        end
+      end
+    end
+  end
+end
+
+function extractMeasuredField(protocol::PNSStudyProtocol)
+  """
+  Extract measured field data from the measurement for use in regulation.
+  Returns the actual field values that were measured.
+  """
+  try
+    if !isnothing(protocol.seqMeasState) && haskey(protocol.seqMeasState.sequenceBuffer.sinks, DriveFieldBuffer)
+      # Get drive field buffer data
+      dfBuffer = protocol.seqMeasState.sequenceBuffer.sinks[DriveFieldBuffer]
+      measuredData = read(dfBuffer)
+      @debug "Extracted measured field data with size: $(size(measuredData))"
+      return measuredData
+    else
+      @warn "No drive field buffer available for field measurement extraction"
+      return nothing
+    end
+  catch e
+    @error "Error extracting measured field: $e"
+    return nothing
+  end
 end
 
 function setAmplitudeForCurrentStep(protocol::PNSStudyProtocol, index::Int)
@@ -413,6 +551,18 @@ function handleEvent(protocol::PNSStudyProtocol, event::DataQueryEvent)
     data = protocol.amplitudes
   elseif event.message == "SEQUENCE"
     data = isnothing(protocol.params.sequence) ? "None" : name(protocol.params.sequence)
+  elseif event.message == "CONTROL_STATUS"
+    if protocol.params.controlTx
+      if protocol.initialControlDone
+        data = "Control active (initial calibration completed)"
+      else
+        data = "Control enabled (awaiting initial calibration)"
+      end
+    else
+      data = "Control disabled"
+    end
+  elseif event.message == "FIELD_MEASURED"
+    data = protocol.fieldMeasured
   elseif event.message == "CURRFRAME" && !isnothing(protocol.seqMeasState)
     data = max(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, 0)
   elseif startswith(event.message, "FRAME") && !isnothing(protocol.seqMeasState)
