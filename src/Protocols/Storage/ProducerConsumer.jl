@@ -1,19 +1,20 @@
-SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(x, sequence, StorageBuffer[])
-function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
-  numFrames = acqNumFrames(sequence.targetSequence)
-  numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
-  # TODO function for length(keys(simpleChannel))
-  len = length(keys(sequence.simpleChannel))
-  buffer = DriveFieldBuffer(1, zeros(ComplexF64, len, len, numPeriods, numFrames), sequence)
-  avgFrames = acqNumFrameAverages(sequence.targetSequence)
-  if avgFrames > 1
-    samples = rxNumSamplesPerPeriod(sequence.targetSequence)
-    periods = acqNumPeriodsPerFrame(sequence.targetSequence)
-    buffer = AverageBuffer(buffer, samples, len, periods, avgFrames)
-  end
-  return SequenceMeasState(x, sequence.targetSequence, push!(sequenceBuffer, buffer))
-end
-SequenceMeasState(protocol::Protocol, x, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing) = SequenceMeasState(getDAQ(scanner(protocol)), x, sequenceBuffer)
+# TODO: I guess this is all obsolete. Only SequenceMeasState(daq, sequence) calls can be found in the protocol code
+# SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Nothing = nothing) = SequenceMeasState(x, sequence, StorageBuffer[])
+# function SequenceMeasState(x, sequence::ControlSequence, sequenceBuffer::Vector{StorageBuffer})
+#   numFrames = acqNumFrames(sequence.targetSequence)
+#   numPeriods = acqNumPeriodsPerFrame(sequence.targetSequence)
+#   # TODO function for length(keys(simpleChannel))
+#   len = length(keys(sequence.simpleChannel))
+#   buffer = DriveFieldBuffer(1, zeros(ComplexF64, len, len, numPeriods, numFrames), sequence)
+#   avgFrames = acqNumFrameAverages(sequence.targetSequence)
+#   if avgFrames > 1
+#     samples = rxNumSamplesPerPeriod(sequence.targetSequence)
+#     periods = acqNumPeriodsPerFrame(sequence.targetSequence)
+#     buffer = AverageBuffer(buffer, samples, len, periods, avgFrames)
+#   end
+#   return SequenceMeasState(x, sequence.targetSequence, push!(sequenceBuffer, buffer))
+# end
+# SequenceMeasState(protocol::Protocol, x, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing) = SequenceMeasState(getDAQ(scanner(protocol)), x, sequenceBuffer)
 function SequenceMeasState(daq::RedPitayaDAQ, sequence::Sequence, sequenceBuffer::Union{Nothing, Vector{StorageBuffer}} = nothing)
   numFrames = acqNumFrames(sequence)
 

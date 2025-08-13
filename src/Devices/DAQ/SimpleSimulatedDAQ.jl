@@ -128,7 +128,7 @@ function stopTx(daq::SimpleSimulatedDAQ)
   daq.txRunning = false
 end
 
-function setTxParams(daq::SimpleSimulatedDAQ, Γ; postpone=false)
+function setTxParams(daq::SimpleSimulatedDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
 # Needs to update period and frame
 end
 
