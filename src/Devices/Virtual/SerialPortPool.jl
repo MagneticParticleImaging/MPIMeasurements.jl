@@ -77,7 +77,7 @@ function getSerialDevice(pool::SerialPortPool, description::String; kwargs...)
       end
     end
   else
-    error("No suitable Port found!")
+    throw(ScannerConfigurationError("No suitable SerialPort for `$description` found in SerialPortPool!"))
   end
   return nothing
 end
