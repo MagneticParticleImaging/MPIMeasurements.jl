@@ -411,15 +411,14 @@ init(scanner::MPIScanner, devices::Vector{<:Device}; kwargs...) = init(scanner, 
 This does not initialize devices that themselves depend on the given devices.
 """
 function init(scanner::MPIScanner, deviceIDs::Vector{String} = getDeviceIDs(scanner); kwargs...)
-  configDir = configDir(scanner)
-  params = getScannerParams(configDir)["Devices"]
+  params = getScannerParams(configDir(scanner))["Devices"]
 
   devices = dependenciesDFS(deviceIDs, params)
   order = filter(x -> in(x, devices), params["initializationOrder"])
   
   getDevices(close, scanner, order)
 
-  deviceDict = initiateDevices(configDir, params; kwargs..., order = order)
+  deviceDict = initiateDevices(configDir(scanner), params; kwargs..., order = order)
 
   for (id, device) in deviceDict
     scanner.devices[id] = device
