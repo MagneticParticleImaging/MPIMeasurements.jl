@@ -2,10 +2,12 @@ type = "PNSStudyProtocol"
 description = "A sychronous acquisition with the Red Pitaya Scanner. Data can be queried after the finished notification. Uses current scanner sequence"
 targetScanner = "HeadScanner"
 
-sequence = "1D_x"
+sequence = "3D_xyz_4Hz_tri_lowamplitude"
 waitTime = 2.0
 allowRepeats = true
+amplitudes = ["0.0001T", "0.0002T", "0.0003T", "0.0004T", "0.0005T", "0.0006T", "0.0007T", "0.0008T", "0.0009T", "0.001T", "0.0011T", "0.0012T", "0.0013T", "0.0014T", "0.0015T", "0.0016T", "0.0017T", "0.0018T", "0.0019T", "0.002T"]
 
-controlTx = false
+controlTx = true
 measureBackground = false
 fgFrames = 4
+bgFrames = 1

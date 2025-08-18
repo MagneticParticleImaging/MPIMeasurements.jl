@@ -70,7 +70,7 @@ end
 function checkSerialDevice(controller::ArduinoTemperatureController, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
-    if !(startswith(reply, "HEATINGUNIT:1"))
+    if !(startswith(reply, "HEATINGUNIT:3"))
         close(sd)
         throw(ScannerConfigurationError(string("Connected to wrong Device ", reply)))
     end

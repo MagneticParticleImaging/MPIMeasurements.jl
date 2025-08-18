@@ -64,6 +64,7 @@ Base.@kwdef mutable struct PNSStudyProtocol <: Protocol
   controlSequence::Union{ControlSequence, Nothing} = nothing
   fieldMeasured::Union{Array, Nothing} = nothing
   initialControlDone::Bool = false
+  daq::Union{AbstractDAQ, Nothing} = nothing
 end
 
 function requiredDevices(protocol::PNSStudyProtocol)
@@ -74,7 +75,6 @@ function requiredDevices(protocol::PNSStudyProtocol)
   if protocol.params.saveTemperatureData
     push!(result, TemperatureSensor)
   end
-  return []
   return result
 end
 
@@ -104,6 +104,7 @@ function _init(protocol::PNSStudyProtocol)
   protocol.controlSequence = nothing
   protocol.fieldMeasured = nothing
   protocol.initialControlDone = false
+  protocol.daq = getDAQ(protocol.scanner)
 
   return nothing
 end
@@ -315,11 +316,12 @@ function performInitialControl(protocol::PNSStudyProtocol)
   # Create control sequence from the base sequence 
   # Wenn regeln: seq = sequences[i], control_sequence = ControlSequence(txCont,seq)
   seq = protocol.params.sequence
-  protocol.controlSequence = ControlSequence(protocol.txCont, seq)
+  setup(protocol.daq, seq)
+  protocol.controlSequence = ControlSequence(protocol.txCont, seq, protocol.daq)
   
   # Perform the control
   # controlTx(txCont, control_sequence)
-  controlTx(protocol.txCont, protocol.controlSequence)
+  controlTx(protocol.txCont, seq, protocol.controlSequence)
   
   @info "Initial control sequence completed"
 end
@@ -334,35 +336,33 @@ function applySingleShotRegulation(protocol::PNSStudyProtocol, currentIndex::Int
     return
   end
   
-  try
+  #try
     # Calculate desired field for the next measurement
     # Wenn Werte anpassen: field_desired = calcDesiredField(ControlSequence(txCont,sequences[i+1])
     nextSeq = deepcopy(protocol.params.sequence)
-    setAmplitudeForSequence(nextSeq, protocol.params.amplitudes, currentIndex)
-    nextControlSeq = ControlSequence(protocol.txCont, nextSeq)
+    setAmplitudeForSequence(nextSeq, protocol.params.amplitudes, currentIndex - 1)
+    nextControlSeq = ControlSequence(protocol.txCont, nextSeq, protocol.daq)
     field_desired = calcDesiredField(nextControlSeq)
+    @info protocol.fieldMeasured[:, :, end, 1]
+    @info field_desired
     
     # Apply control step using measured vs desired field
     # step = controlStep!(control_sequence, txCont, field_measured, field_desired) # alte Sequenz
-    step = controlStep!(protocol.controlSequence, protocol.txCont, protocol.fieldMeasured, field_desired)
+    step = controlStep!(protocol.controlSequence, protocol.txCont, protocol.fieldMeasured[:, :, 1, 1], field_desired)
     
     if step == INVALID
       @warn "Control step returned INVALID - performing emergency control"
-      # if step == INVALID: pause(), controlTx()
-      if askChoices(protocol, "Control adjustment failed. Perform full control recalibration?", ["Cancel", "Recalibrate"]) == 2
-        controlTx(protocol.txCont, protocol.controlSequence)
-        @info "Emergency control recalibration completed"
-      else
-        throw(CancelException())
-      end
+      stop(protocol)
+      controlTx(protocol.txCont, protocol.controlSequence)
+      @info "Emergency control recalibration completed"
     else
       @debug "Single-shot regulation applied successfully (step: $step)"
     end
     
-  catch e
-    @error "Error during single-shot regulation: $e"
-    @warn "Continuing without regulation adjustment"
-  end
+  #catch e
+  #  @error "Error during single-shot regulation: $e"
+  #  @warn "Continuing without regulation adjustment"
+  #end
 end
 
 function setAmplitudeForSequence(seq::Sequence, amplitudes::Vector, index::Int)
@@ -393,12 +393,10 @@ function extractMeasuredField(protocol::PNSStudyProtocol)
   Returns the actual field values that were measured.
   """
   try
-    if !isnothing(protocol.seqMeasState) && haskey(protocol.seqMeasState.sequenceBuffer.sinks, DriveFieldBuffer)
-      # Get drive field buffer data
-      dfBuffer = protocol.seqMeasState.sequenceBuffer.sinks[DriveFieldBuffer]
-      measuredData = read(dfBuffer)
-      @debug "Extracted measured field data with size: $(size(measuredData))"
-      return measuredData
+    if !isnothing(protocol.protocolMeasState)
+      measuredData = read(protocol.protocolMeasState, DriveFieldBuffer)
+      #@debug "Extracted measured field data with size: $(size(measuredData))"
+      return measuredData[:, :, :, end:end]
     else
       @warn "No drive field buffer available for field measurement extraction"
       return nothing
@@ -478,10 +476,10 @@ function asyncMeasurement(protocol::PNSStudyProtocol)
   sequence = protocol.params.sequence
   daq = getDAQ(scanner_)
   deviceBuffer = DeviceBuffer[]
-  if protocol.params.controlTx
-    sequence = controlTx(protocol.txCont, sequence)
-    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
-  end
+  #if protocol.params.controlTx
+  #  sequence = controlTx(protocol.txCont, sequence)
+  #  push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  #end
   setup(daq, sequence)
   protocol.seqMeasState = SequenceMeasState(daq, sequence)
   if protocol.params.saveTemperatureData
