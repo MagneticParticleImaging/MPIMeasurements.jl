@@ -16,7 +16,7 @@ channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseElectricalChannel}, channelDict::Dict{String, Any})
   divider = channelDict["divider"]
-  enable = haskey(channelDict, "enable") ? parsePossibleURange(channelDict["enable"]) : Bool[]
+  enable = Bool[] # haskey(channelDict, "enable") ? parsePossibleURange(channelDict["enable"]) : Bool[]
   values = parsePossibleURange(channelDict["values"])
   if eltype(values) <: Unitful.Current
     values = values .|> u"A"

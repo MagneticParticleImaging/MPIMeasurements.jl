@@ -67,7 +67,9 @@ function checkSerialDevice(sensor::ArduinoTemperatureSensor, sd::SerialDevice)
         throw(ScannerConfigurationError(string("Connected to wrong Device ", reply)))
     end
     return sd
+  
   catch e
+  @error e
     throw(ScannerConfigurationError("Could not verify if connected to correct device"))
   end
 end
