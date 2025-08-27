@@ -7,101 +7,120 @@ baseFrequency = "125.0MHz"
 [Fields]
 
 [Fields.cage1]
-safeStartInterval = "0.1s"
-safeEndInterval = "0.1s"
-safeErrorInterval = "0.1s"
+safeStartInterval = "0.0s"
+safeEndInterval = "0.0s"
+safeErrorInterval = "0.0s"
 control = false
 decouple = false
 
-# All coil channels will be generated dynamically with single current values
+
 [Fields.cage1.coil1]
 type = "StepwiseElectricalChannel"
+divider = 31200000
+values = ["-0.0A"]
+
+[Fields.cage1.coil1_fast]
+type = "PeriodicElectricalChannel"
+offset = "0.0T"
+
+[Fields.cage1.coil1_fast.c1]
+type = "PeriodicElectricalComponent"
 divider = 12480
-values = ["0.0A"]
+amplitude = ["0.0T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
 
 [Fields.cage1.coil2]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
+divider = 31200000
+values = ["-0.0A"]
 
 [Fields.cage1.coil3]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
 [Fields.cage1.coil4]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
+divider = 31200000
+values = ["-0.0A"]
 
 [Fields.cage1.coil5]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
+divider = 31200000
+values = ["-0.0A"]
 
 [Fields.cage1.coil6]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
+divider = 31200000
+values = ["-0.0A"]
 
 [Fields.cage1.coil7]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
+divider = 31200000
+values = ["-0.0A"]
 
 [Fields.cage1.coil8]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
 [Fields.cage1.coil9]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
+values = ["-0.0A"]
+
+[Fields.cage2]
+safeStartInterval = "0.0s"
+safeEndInterval = "0.0s"
+safeErrorInterval = "0.0s"
+control = false
+decouple = false
+
+[Fields.cage2.coil10]
+type = "StepwiseElectricalChannel"
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil10]
+[Fields.cage2.coil11]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil11]
+[Fields.cage2.coil12]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil12]
+[Fields.cage2.coil13]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil13]
+[Fields.cage2.coil14]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil14]
+[Fields.cage2.coil15]
 type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
+values = ["0.95A"]
+
+[Fields.cage2.coil16]
+type = "StepwiseElectricalChannel"
+divider = 31200000
+values = ["-0.0A"]
+
+[Fields.cage2.coil17]
+type = "StepwiseElectricalChannel"
+divider = 31200000
 values = ["0.0A"]
 
-[Fields.cage1.coil15]
+[Fields.cage2.coil18]
 type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
-
-[Fields.cage1.coil16]
-type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
-
-[Fields.cage1.coil17]
-type = "StepwiseElectricalChannel"
-divider = 12480
-values = ["0.0A"]
-
-[Fields.cage1.coil18]
-type = "StepwiseElectricalChannel"
-divider = 12480
+divider = 31200000
 values = ["0.0A"]
 
 [Acquisition]
