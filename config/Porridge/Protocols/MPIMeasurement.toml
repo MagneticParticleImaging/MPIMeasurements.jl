@@ -1,0 +1,8 @@
+type = "MPIMeasurementProtocol"
+description = "Blabla"
+targetScanner = "Stepcraft"
+
+sequence = "1DSequence"
+
+fgFrames = 1
+bgFrames = 1

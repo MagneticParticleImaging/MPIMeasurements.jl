@@ -1,0 +1,333 @@
+[General]
+boreSize = "70mm"
+facility = "Institute for Biomedical Imaging"
+manufacturer = "Förger GmbH"
+name = "Porridge"
+topology = "FFP" 
+gradient = "42T/m"
+datasetStore = "/home/labuser/Dokumente/DataStore"
+defaultSequence = "1DSequence"
+defaultProtocol = "TDesignMeasurement"
+producerThreadID = 1
+consumerThreadID = 2
+protocolThreadID = 3
+serialThreadID = 4
+
+[Devices]
+initializationOrder = [
+	"serial_pool",
+	"rp_cluster",
+	"stepcraft",
+	#"surveillance",
+	#"su_temp"
+	"gauss"
+]
+
+[Devices.rp_cluster]
+deviceType = "RedPitayaDAQ"
+dependencies = []
+ips = ["192.168.1.100","192.168.1.101","192.168.1.102","192.168.1.103","192.168.1.104","192.168.1.105","192.168.1.106","192.168.1.107","192.168.1.108"]
+
+## Receive Channels
+
+[Devices.rp_cluster.rx1]
+type = "rx"
+channel = 1
+limitPeak = "1V"
+## Feedback Channels
+
+[Devices.rp_cluster.feedbackx]
+type = "rx"
+channel = 3
+limitPeak = "1V"
+
+[Devices.rp_cluster.feedbacky]
+type = "rx"
+channel = 4
+limitPeak = "1V"
+
+## Coil Channels
+[Devices.rp_cluster.coil1]
+type = "txSlow"
+channel = 1
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil1_fast]
+type = "tx"
+channel = 1
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil2]
+type = "txSlow"
+channel = 2
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil2_fast]
+type = "tx"
+channel = 2
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil3]
+type = "txSlow"
+channel = 7
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil3_fast]
+type = "tx"
+channel = 3
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil4]
+type = "txSlow"
+channel = 8
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil4_fast]
+type = "tx"
+channel = 4
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil5]
+type = "txSlow"
+channel = 13
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil5_fast]
+type = "tx"
+channel = 5
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil6]
+type = "txSlow"
+channel = 14
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil6_fast]
+type = "tx"
+channel = 6
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil7]
+type = "txSlow"
+channel = 19
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil7_fast]
+type = "tx"
+channel = 7
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil8]
+type = "txSlow"
+channel = 20
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil8_fast]
+type = "tx"
+channel = 8
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil9]
+type = "txSlow"
+channel = 25
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil9_fast]
+type = "tx"
+channel = 9
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil10]
+type = "txSlow"
+channel = 26
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil10_fast]
+type = "tx"
+channel = 10
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil11]
+type = "txSlow"
+channel = 31
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil11_fast]
+type = "tx"
+channel = 11
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil12]
+type = "txSlow"
+channel = 32
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil12_fast]
+type = "tx"
+channel = 12
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil13]
+type = "txSlow"
+channel = 37
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil13_fast]
+type = "tx"
+channel = 13
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil14]
+type = "txSlow"
+channel = 38
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil14_fast]
+type = "tx"
+channel = 14
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil15]
+type = "txSlow"
+channel = 43
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil15_fast]
+type = "tx"
+channel = 15
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil16]
+type = "txSlow"
+channel = 44
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil16_fast]
+type = "tx"
+channel = 16
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil17]
+type = "txSlow"
+channel = 49
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil17_fast]
+type = "tx"
+channel = 17
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil18]
+type = "txSlow"
+channel = 50
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil18_fast]
+type = "tx"
+channel = 18
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+
+
+[Devices.serial_pool]
+deviceType = "SerialPortPool"
+blacklist = []
+
+# Surveillance Unit
+[Devices.surveillance]
+deviceType = "ArduinoSurveillanceUnitExternalTemp"
+dependencies = ["serial_pool", "su_temp"]
+# portAdress = "/dev/ttyACM3" # 
+description = "85937313337351F0C181"
+baudrate = 9600
+
+[Devices.su_temp]
+deviceType = "ArduinoTemperatureSensor"
+dependencies = ["serial_pool"]
+# portAdress = "/dev/ttyACM2" # 
+description = "859373133373514160E0"
+baudrate = 9600
+numSensors = 18
+maxTemps = [55,55,55,60,60,60,60,70,70,65,65,80,40,70,70,70,70,75]
+selectSensors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
+#selectSensors = [4,6,10,11,12]
+groupSensors = [1, 1, 1, 2, 2, 2, 2, 4, 4, 2, 2, 2, 4, 3, 3, 3, 3, 4]
+#groupSensors = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+nameSensors = ["RX1","RX2","RX3","TX1/1","TX1/2","TX2/1","TX2/2", "SefoCoilRight", "SefoCoilLeft", "ICN X", "ICN Z", "Dec C", "(Rack)", "CapX1","CapX2","CapZ1","CapZ2","Joker"]
+
+
+[Devices.stepcraft]
+deviceType = "StepcraftRobot"
+dependencies = []
+axisRange = [["0mm", "348mm"], ["0mm", "543mm"], ["0mm", "194mm"]]
+serial_port = "/dev/ttyUSB0"
+stepsPerRotation = 800
+distancePerRotation = "5mm"
+invertAxes = [false, false, true]
+invertRefAxes = [false, false, false]
+statusTimeout = "60s"
+
+[Devices.stepcraft.namedPositions]
+origin = ["0mm","0mm","0mm"]
+park = ["0mm","0.0mm","0.0mm"]
+
+[Devices.gauss]
+deviceType = "LakeShore460GaussMeter"
+dependencies = []
+portAddress = "/dev/ttyUSB2"
+baudrate = 9600
+coordinateTransformation = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]

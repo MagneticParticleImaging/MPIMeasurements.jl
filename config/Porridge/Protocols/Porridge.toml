@@ -1,0 +1,29 @@
+type = "PorridgeProtocol"
+description = "Protocol for machine learning data generation by measuring magnetic fields at various coil current amplitudes"
+targetScanner = "Porridge"
+
+sequence = "DynamicPorridgeSequence"
+
+fgFrames = 1
+bgFrames = 1
+framesPerAmplitude = 1
+
+[coilCurrents]
+coil1 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil2 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil3 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil4 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil5 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil6 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil7 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil8 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil9 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil10 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil11 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil12 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil13 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil14 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil15 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil16 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil17 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
+coil18 = ["0.1", "0.2", "0.3", "0.4", "0.5"]
