@@ -3,26 +3,3 @@ description = "Protocol for machine learning data generation by measuring magnet
 targetScanner = "Porridge"
 
 sequence = "DynamicPorridgeSequence"
-
-bgFrames = 1
-framesPerAmplitude = 1
-
-# Individual coil current sequences - each coil has its own vector of current values
-coil1Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil2Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil3Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil4Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil5Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil6Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil7Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil8Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil9Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil10Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil11Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil12Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil13Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil14Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil15Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil16Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil17Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
-coil18Currents = [0.01, 0.02, 0.03, 0.04, 0.05]
