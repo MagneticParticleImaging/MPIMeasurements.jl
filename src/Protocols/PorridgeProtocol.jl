@@ -5,8 +5,25 @@ Parameters for the PorridgeProtocol
 Base.@kwdef mutable struct PorridgeProtocolParams <: ProtocolParams
   "Base sequence template to use for measurements"
   sequence::Union{Sequence, Nothing} = nothing
-  "Current sequences as matrix: (sequence_step, coil_number)"
-  coilCurrents::Matrix{typeof(1.0u"A")} = Matrix{typeof(1.0u"A")}(undef, 0, 0)
+  "Current vectors for each of the 18 coils"
+  coil1Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil2Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil3Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil4Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil5Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil6Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil7Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil8Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil9Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil10Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil11Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil12Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil13Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil14Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil15Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil16Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil17Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
+  coil18Currents::Vector{typeof(1.0u"A")} = typeof(1.0u"A")[]
   "Number of frames per sequence measurement"
   framesPerAmplitude::Int = 1
   "Background frames"
@@ -20,32 +37,21 @@ function PorridgeProtocolParams(dict::Dict, scanner::MPIScanner)
     delete!(dict, "sequence")
   end
   
-  # Parse coil currents matrix if provided
-  coilCurrents = Matrix{typeof(1.0u"A")}(undef, 0, 0)
-  if haskey(dict, "coilCurrents")
-    currentMatrix = dict["coilCurrents"]
-    if currentMatrix isa Vector{Vector{Float64}}
-      # Convert nested vectors to matrix with units
-      nSteps = length(currentMatrix)
-      nCoils = length(currentMatrix[1])
-      coilCurrents = Matrix{typeof(1.0u"A")}(undef, nSteps, nCoils)
-      for i in 1:nSteps
-        for j in 1:nCoils
-          coilCurrents[i, j] = currentMatrix[i][j] * 1.0u"A"
-        end
+  # Parse individual coil current vectors
+  coilNames = ["coil$(i)Currents" for i in 1:18]
+  for coilName in coilNames
+    if haskey(dict, coilName)
+      currentVector = dict[coilName]
+      if currentVector isa Vector{Float64}
+        dict[coilName] = currentVector * 1.0u"A"
+      else
+        @warn "Unexpected format for $coilName, expected vector of floats"
       end
-    elseif currentMatrix isa Matrix{Float64}
-      # Convert matrix to unitful matrix
-      coilCurrents = currentMatrix * 1.0u"A"
-    else
-      @warn "Unexpected format for coilCurrents, expected matrix or vector of vectors"
     end
-    delete!(dict, "coilCurrents")
   end
   
   params = params_from_dict(PorridgeProtocolParams, dict)
   params.sequence = sequence
-  params.coilCurrents = coilCurrents
   return params
 end
 PorridgeProtocolParams(dict::Dict) = params_from_dict(PorridgeProtocolParams, dict)
@@ -76,15 +82,43 @@ function _init(protocol::PorridgeProtocol)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
   
-  if isempty(protocol.params.coilCurrents)
+  # Check if we have any coil currents defined
+  coilVectors = [protocol.params.coil1Currents, protocol.params.coil2Currents, 
+                 protocol.params.coil3Currents, protocol.params.coil4Currents,
+                 protocol.params.coil5Currents, protocol.params.coil6Currents,
+                 protocol.params.coil7Currents, protocol.params.coil8Currents,
+                 protocol.params.coil9Currents, protocol.params.coil10Currents,
+                 protocol.params.coil11Currents, protocol.params.coil12Currents,
+                 protocol.params.coil13Currents, protocol.params.coil14Currents,
+                 protocol.params.coil15Currents, protocol.params.coil16Currents,
+                 protocol.params.coil17Currents, protocol.params.coil18Currents]
+  
+  if all(isempty, coilVectors)
     throw(IllegalStateException("Protocol requires coil current sequences in the TOML configuration"))
   end
   
-  # Get sequence length from matrix dimensions
-  protocol.sequenceLength = size(protocol.params.coilCurrents, 1)  # Number of rows = sequence steps
-  protocol.totalSequences = protocol.sequenceLength
+  # Get sequence length from first non-empty coil vector
+  protocol.sequenceLength = 0
+  for coilVector in coilVectors
+    if !isempty(coilVector)
+      protocol.sequenceLength = length(coilVector)
+      break
+    end
+  end
   
-  nCoils = size(protocol.params.coilCurrents, 2)  # Number of columns = coils
+  if protocol.sequenceLength == 0
+    throw(IllegalStateException("No valid coil current sequences found"))
+  end
+  
+  # Verify all non-empty vectors have the same length
+  for (i, coilVector) in enumerate(coilVectors)
+    if !isempty(coilVector) && length(coilVector) != protocol.sequenceLength
+      throw(IllegalStateException("Coil $(i) current vector length $(length(coilVector)) does not match expected length $(protocol.sequenceLength)"))
+    end
+  end
+  
+  protocol.totalSequences = protocol.sequenceLength
+  nCoils = sum(!isempty, coilVectors)
   @info "Initialized Porridge protocol with $(protocol.totalSequences) sequence measurements for $nCoils coils"
   
   protocol.done = false
@@ -99,18 +133,38 @@ end
 
 function timeEstimate(protocol::PorridgeProtocol)
   est = "Unknown"
-  if !isnothing(protocol.params.sequence) && !isempty(protocol.params.coilCurrents)
+  if !isnothing(protocol.params.sequence)
     params = protocol.params
     seq = params.sequence
     framesPerSequence = acqNumFrames(seq) * acqNumFrameAverages(seq) * params.framesPerAmplitude
     samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    # Use the sequence length from matrix dimensions
-    sequenceLength = size(params.coilCurrents, 1)
-    totalFrames = framesPerSequence * sequenceLength + params.bgFrames
-    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
-    time = totalTime * 1u"s"
-    est = string(time)
-    @info "Estimated measurement time: $est for $sequenceLength sequence measurements"
+    
+    # Get sequence length from first non-empty coil vector
+    sequenceLength = 0
+    coilVectors = [params.coil1Currents, params.coil2Currents, 
+                   params.coil3Currents, params.coil4Currents,
+                   params.coil5Currents, params.coil6Currents,
+                   params.coil7Currents, params.coil8Currents,
+                   params.coil9Currents, params.coil10Currents,
+                   params.coil11Currents, params.coil12Currents,
+                   params.coil13Currents, params.coil14Currents,
+                   params.coil15Currents, params.coil16Currents,
+                   params.coil17Currents, params.coil18Currents]
+    
+    for coilVector in coilVectors
+      if !isempty(coilVector)
+        sequenceLength = length(coilVector)
+        break
+      end
+    end
+    
+    if sequenceLength > 0
+      totalFrames = framesPerSequence * sequenceLength + params.bgFrames
+      totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
+      time = totalTime * 1u"s"
+      est = string(time)
+      @info "Estimated measurement time: $est for $sequenceLength sequence measurements"
+    end
   end
   return est
 end
@@ -195,7 +249,7 @@ end
 
 function performSingleMeasurement(protocol::PorridgeProtocol, step::Int)
   """Perform a single measurement for the given sequence step (similar to MagSphereProtocol)"""
-  sequence = createSequenceForStep(protocol.params.sequence, protocol.params.coilCurrents, step)
+  sequence = createSequenceForStep(protocol, step)
   daq = getDAQ(protocol.scanner)
   
   setup(daq, sequence)
@@ -227,26 +281,68 @@ function performSingleMeasurement(protocol::PorridgeProtocol, step::Int)
   endSequence(daq, finish)
 end
 
-function createSequenceForStep(baseSequence::Sequence, coilCurrents::Matrix{typeof(1.0u"A")}, step::Int)
+function createSequenceForStep(protocol::PorridgeProtocol, step::Int)
   """Create a sequence with current values for the specified step
   
   Step 0 = background (all currents zero)
-  Step 1-N = use the step-th row from the current matrix
+  Step 1-N = use the step-th index from each coil's current vector
   """
   @debug "Creating sequence for step $step"
   
-  if step == 0
-    @debug "Background step - all currents zero"
-  else
-    # Get current values for this step (row from matrix)
-    stepCurrents = coilCurrents[step, :]
-    nCoils = length(stepCurrents)
-    @debug "Step $step current values: $nCoils coils configured"
+  baseSequence = protocol.params.sequence
+  
+  # Get all coil current vectors
+  coilVectors = [protocol.params.coil1Currents, protocol.params.coil2Currents, 
+                 protocol.params.coil3Currents, protocol.params.coil4Currents,
+                 protocol.params.coil5Currents, protocol.params.coil6Currents,
+                 protocol.params.coil7Currents, protocol.params.coil8Currents,
+                 protocol.params.coil9Currents, protocol.params.coil10Currents,
+                 protocol.params.coil11Currents, protocol.params.coil12Currents,
+                 protocol.params.coil13Currents, protocol.params.coil14Currents,
+                 protocol.params.coil15Currents, protocol.params.coil16Currents,
+                 protocol.params.coil17Currents, protocol.params.coil18Currents]
+  
+  # Create a modified copy of the sequence
+  modifiedSequence = deepcopy(baseSequence)
+  
+  # Modify each coil's current value
+  for (coilIndex, coilVector) in enumerate(coilVectors)
+    if !isempty(coilVector)
+      # Determine current value for this step
+      currentValue = if step == 0
+        0.0u"A"  # Background - zero current
+      elseif step <= length(coilVector)
+        coilVector[step]
+      else
+        0.0u"A"  # If step exceeds vector length, use zero
+      end
+      
+      # Apply current to the corresponding coil channel in the sequence
+      coilName = "coil$coilIndex"
+      applyCurrentToSequence!(modifiedSequence, coilName, currentValue)
+      
+      @debug "Step $step: Set $coilName current to $currentValue"
+    end
   end
   
-  # TODO: Implement proper sequence modification when needed
-  # For now, return the base sequence
-  return baseSequence
+  return modifiedSequence
+end
+
+function applyCurrentToSequence!(sequence::Sequence, coilName::String, currentValue)
+  """Apply current value to the specified coil in the sequence"""
+  # Look for the coil in all field cages
+  for (cageName, cageDict) in sequence.fields
+    if haskey(cageDict, coilName)
+      coilChannel = cageDict[coilName]
+      if hasfield(typeof(coilChannel), :values)
+        # For StepwiseElectricalChannel, modify the values array
+        coilChannel.values = [string(currentValue)]
+        @debug "Applied $currentValue to $cageName.$coilName"
+      else
+        @debug "Coil channel $cageName.$coilName does not have values field"
+      end
+    end
+  end
 end
 
 function asyncConsumer(protocol::PorridgeProtocol)
@@ -308,17 +404,34 @@ function handleEvent(protocol::PorridgeProtocol, event::FileStorageRequestEvent)
     write(file,"/calibrationRotation", magSphere.calibrationRotation)		# calibration data from toml (size(N,3,3))
     
     # Store sequence information for ML training data (PorridgeProtocol extension)
-    if !isempty(protocol.params.coilCurrents)
-      write(file, "/totalSequences", protocol.sequenceLength)
-      write(file, "/framesPerAmplitude", protocol.params.framesPerAmplitude)
-      
-      # Store the current sequences matrix directly
-      sequenceMatrix = ustrip.(u"A", protocol.params.coilCurrents)
+    write(file, "/totalSequences", protocol.sequenceLength)
+    write(file, "/framesPerAmplitude", protocol.params.framesPerAmplitude)
+    
+    # Convert individual coil vectors back to a matrix for storage
+    coilVectors = [protocol.params.coil1Currents, protocol.params.coil2Currents, 
+                   protocol.params.coil3Currents, protocol.params.coil4Currents,
+                   protocol.params.coil5Currents, protocol.params.coil6Currents,
+                   protocol.params.coil7Currents, protocol.params.coil8Currents,
+                   protocol.params.coil9Currents, protocol.params.coil10Currents,
+                   protocol.params.coil11Currents, protocol.params.coil12Currents,
+                   protocol.params.coil13Currents, protocol.params.coil14Currents,
+                   protocol.params.coil15Currents, protocol.params.coil16Currents,
+                   protocol.params.coil17Currents, protocol.params.coil18Currents]
+    
+    # Create matrix from individual vectors (sequence_step × coil_number)
+    if protocol.sequenceLength > 0
+      sequenceMatrix = zeros(Float64, protocol.sequenceLength, 18)
+      for (coilIndex, coilVector) in enumerate(coilVectors)
+        if !isempty(coilVector)
+          for stepIndex in 1:min(length(coilVector), protocol.sequenceLength)
+            sequenceMatrix[stepIndex, coilIndex] = ustrip(u"A", coilVector[stepIndex])
+          end
+        end
+      end
       write(file, "/currentSequences", sequenceMatrix)
       
       # Generate coil names for reference
-      nCoils = size(protocol.params.coilCurrents, 2)
-      coilNames = ["coil$i" for i in 1:nCoils]
+      coilNames = ["coil$i" for i in 1:18]
       write(file, "/coilNames", coilNames)
     end
     
