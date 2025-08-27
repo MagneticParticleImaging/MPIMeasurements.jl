@@ -24,7 +24,7 @@ function PorridgeProtocolParams(dict::Dict, scanner::MPIScanner)
   coilCurrents = Matrix{typeof(1.0u"A")}(undef, 0, 0)
   if haskey(dict, "coilCurrents")
     currentMatrix = dict["coilCurrents"]
-    if currentMatrix isa Vector{Vector{<:Real}}
+    if currentMatrix isa Vector{Vector{Float64}}
       # Convert nested vectors to matrix with units
       nSteps = length(currentMatrix)
       nCoils = length(currentMatrix[1])
@@ -34,7 +34,7 @@ function PorridgeProtocolParams(dict::Dict, scanner::MPIScanner)
           coilCurrents[i, j] = currentMatrix[i][j] * 1.0u"A"
         end
       end
-    elseif currentMatrix isa Matrix{<:Real}
+    elseif currentMatrix isa Matrix{Float64}
       # Convert matrix to unitful matrix
       coilCurrents = currentMatrix * 1.0u"A"
     else
