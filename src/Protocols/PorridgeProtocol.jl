@@ -5,8 +5,8 @@ Parameters for the PorridgeProtocol
 Base.@kwdef mutable struct PorridgeProtocolParams <: ProtocolParams
   "Base sequence template to use for measurements"
   sequence::Union{Sequence, Nothing} = nothing
-  "Current sequences for each coil (coil_name => [sequence_values...])"
-  coilCurrents::Dict{String, Vector{typeof(1.0u"A")}} = Dict{String, Vector{typeof(1.0u"A")}}()
+  "Current sequences as matrix: (sequence_step, coil_number)"
+  coilCurrents::Matrix{typeof(1.0u"A")} = Matrix{typeof(1.0u"A")}(undef, 0, 0)
   "Number of frames per sequence measurement"
   framesPerAmplitude::Int = 1
   "Background frames"
@@ -20,17 +20,25 @@ function PorridgeProtocolParams(dict::Dict, scanner::MPIScanner)
     delete!(dict, "sequence")
   end
   
-  # Parse coil currents if provided
-  coilCurrents = Dict{String, Vector{typeof(1.0u"A")}}()
+  # Parse coil currents matrix if provided
+  coilCurrents = Matrix{typeof(1.0u"A")}(undef, 0, 0)
   if haskey(dict, "coilCurrents")
-    for (coilName, values) in dict["coilCurrents"]
-      if values isa Vector{String}
-        coilCurrents[coilName] = [parse(Float64, v) * 1.0u"A" for v in values]
-      elseif values isa Vector{<:Real}
-        coilCurrents[coilName] = [v * 1.0u"A" for v in values]
-      else
-        coilCurrents[coilName] = values
+    currentMatrix = dict["coilCurrents"]
+    if currentMatrix isa Vector{Vector{<:Real}}
+      # Convert nested vectors to matrix with units
+      nSteps = length(currentMatrix)
+      nCoils = length(currentMatrix[1])
+      coilCurrents = Matrix{typeof(1.0u"A")}(undef, nSteps, nCoils)
+      for i in 1:nSteps
+        for j in 1:nCoils
+          coilCurrents[i, j] = currentMatrix[i][j] * 1.0u"A"
+        end
       end
+    elseif currentMatrix isa Matrix{<:Real}
+      # Convert matrix to unitful matrix
+      coilCurrents = currentMatrix * 1.0u"A"
+    else
+      @warn "Unexpected format for coilCurrents, expected matrix or vector of vectors"
     end
     delete!(dict, "coilCurrents")
   end
@@ -72,16 +80,12 @@ function _init(protocol::PorridgeProtocol)
     throw(IllegalStateException("Protocol requires coil current sequences in the TOML configuration"))
   end
   
-  # Verify all coil sequences have the same length
-  sequenceLengths = [length(values) for values in values(protocol.params.coilCurrents)]
-  if length(unique(sequenceLengths)) != 1
-    throw(IllegalStateException("All coil current sequences must have the same length"))
-  end
-  
-  protocol.sequenceLength = sequenceLengths[1]
+  # Get sequence length from matrix dimensions
+  protocol.sequenceLength = size(protocol.params.coilCurrents, 1)  # Number of rows = sequence steps
   protocol.totalSequences = protocol.sequenceLength
   
-  @info "Initialized Porridge protocol with $(protocol.totalSequences) sequence measurements"
+  nCoils = size(protocol.params.coilCurrents, 2)  # Number of columns = coils
+  @info "Initialized Porridge protocol with $(protocol.totalSequences) sequence measurements for $nCoils coils"
   
   protocol.done = false
   protocol.cancelled = false
@@ -100,8 +104,8 @@ function timeEstimate(protocol::PorridgeProtocol)
     seq = params.sequence
     framesPerSequence = acqNumFrames(seq) * acqNumFrameAverages(seq) * params.framesPerAmplitude
     samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    # Use the sequence length from coil currents
-    sequenceLength = length(first(values(params.coilCurrents)))
+    # Use the sequence length from matrix dimensions
+    sequenceLength = size(params.coilCurrents, 1)
     totalFrames = framesPerSequence * sequenceLength + params.bgFrames
     totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
@@ -153,9 +157,9 @@ function performExperiment(protocol::PorridgeProtocol)
   protocol.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(protocol)
 
   try
-    # Measure background first
+    # Measure background first (step 0)
     @info "Measuring background with zero currents"
-    measureSequenceStep(protocol, 0) # Background measurement
+    performSingleMeasurement(protocol, 0)
     
     # Iterate through all sequence steps
     for step in 1:protocol.sequenceLength
@@ -167,7 +171,7 @@ function performExperiment(protocol::PorridgeProtocol)
       protocol.currentSequenceIndex = step
       @info "Measuring sequence step $step/$(protocol.sequenceLength)"
       
-      measureSequenceStep(protocol, step)
+      performSingleMeasurement(protocol, step)
       handleEvents(protocol)
     end
     
@@ -189,8 +193,8 @@ function performExperiment(protocol::PorridgeProtocol)
   end
 end
 
-function measureSequenceStep(protocol::PorridgeProtocol, step::Int)
-  """Measure magnetic field for a specific step in the current sequences"""
+function performSingleMeasurement(protocol::PorridgeProtocol, step::Int)
+  """Perform a single measurement for the given sequence step (similar to MagSphereProtocol)"""
   sequence = createSequenceForStep(protocol.params.sequence, protocol.params.coilCurrents, step)
   daq = getDAQ(protocol.scanner)
   
@@ -198,40 +202,46 @@ function measureSequenceStep(protocol::PorridgeProtocol, step::Int)
   startTx(daq)
   timing = getTiming(daq)
   
-  # Wait for sequence to complete or handle cancellation
+  # Handle events (copied from MagSphereProtocol logic)
   current = 0
-  finish = timing.finish
-  
-  while current < finish
-    current = currentWP(daq.rpc)
+  finish = timing.finish # time when the sequence is finished
+  while current < timing.finish # do as long as the sequence is not finished
+    current = currentWP(daq.rpc) # current write pointer
     handleEvents(protocol)
-    
-    if protocol.cancelled || protocol.stopped
+    if protocol.cancelled || protocol.stopped # in case the user want to stop the measurement even though the measurement is not yet finished
+      # TODO move to function of daq
+      execute!(daq.rpc) do batch
+        for idx in daq.rampingChannel
+          @add_batch batch enableRampDown!(daq.rpc, idx, true)
+        end
+      end
+      while !rampDownDone(daq.rpc)
+        handleEvents(protocol)
+      end
+      finish = current
       break
     end
-    
-    sleep(0.01)  # Small sleep to prevent busy waiting
   end
   
+  # TODO Do the following in finally block
   endSequence(daq, finish)
 end
 
-function createSequenceForStep(baseSequence::Sequence, coilCurrents::Dict{String, Vector{typeof(1.0u"A")}}, step::Int)
+function createSequenceForStep(baseSequence::Sequence, coilCurrents::Matrix{typeof(1.0u"A")}, step::Int)
   """Create a sequence with current values for the specified step
   
   Step 0 = background (all currents zero)
-  Step 1-N = use the step-th value from each coil's current sequence
+  Step 1-N = use the step-th row from the current matrix
   """
   @debug "Creating sequence for step $step"
   
   if step == 0
     @debug "Background step - all currents zero"
   else
-    currentValues = Dict{String, typeof(1.0u"A")}()
-    for (coilName, currents) in coilCurrents
-      currentValues[coilName] = currents[step]
-    end
-    @debug "Step $step current values: $(length(currentValues)) coils configured"
+    # Get current values for this step (row from matrix)
+    stepCurrents = coilCurrents[step, :]
+    nCoils = length(stepCurrents)
+    @debug "Step $step current values: $nCoils coils configured"
   end
   
   # TODO: Implement proper sequence modification when needed
@@ -249,8 +259,6 @@ function asyncConsumer(protocol::PorridgeProtocol)
     end
     sleep(0.01)  # take more often that data is produced
   end
-
-
 end
 
 function cleanup(protocol::PorridgeProtocol)
@@ -299,24 +307,19 @@ function handleEvent(protocol::PorridgeProtocol, event::FileStorageRequestEvent)
     write(file,"/calibrationOffset", magSphere.calibrationOffset)		# calibration data from toml (size(N,3))
     write(file,"/calibrationRotation", magSphere.calibrationRotation)		# calibration data from toml (size(N,3,3))
     
-    # Store sequence information for ML training data
+    # Store sequence information for ML training data (PorridgeProtocol extension)
     if !isempty(protocol.params.coilCurrents)
       write(file, "/totalSequences", protocol.sequenceLength)
       write(file, "/framesPerAmplitude", protocol.params.framesPerAmplitude)
       
-      # Create a matrix of current sequences: (sequence_step, coil_number)
-      coilNames = sort(collect(keys(protocol.params.coilCurrents)))
-      sequenceMatrix = zeros(Float64, protocol.sequenceLength, length(coilNames))
-      
-      for (coilIndex, coilName) in enumerate(coilNames)
-        currents = protocol.params.coilCurrents[coilName]
-        for step in 1:length(currents)
-          sequenceMatrix[step, coilIndex] = ustrip(u"A", currents[step])
-        end
-      end
-      
-      write(file, "/coilNames", coilNames)
+      # Store the current sequences matrix directly
+      sequenceMatrix = ustrip.(u"A", protocol.params.coilCurrents)
       write(file, "/currentSequences", sequenceMatrix)
+      
+      # Generate coil names for reference
+      nCoils = size(protocol.params.coilCurrents, 2)
+      coilNames = ["coil$i" for i in 1:nCoils]
+      write(file, "/coilNames", coilNames)
     end
     
     # write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO only works for LakeShore460 atm
