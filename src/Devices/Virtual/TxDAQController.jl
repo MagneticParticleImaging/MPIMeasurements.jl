@@ -574,7 +574,11 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     @debug "Cached calibration result:" chId f finalCalibration[res]
   end
 
-  txCont.lastDCResults = cont.dcSearch[end-1:end]
+  if length(cont.dcSearch) >= 2
+    txCont.lastDCResults = cont.dcSearch[end-1:end]
+  else
+    txCont.lastDCResults = nothing
+  end
   txCont.lastChannelIDs = channelIDs
   
   @debug "Cached DC result" txCont.lastDCResults
