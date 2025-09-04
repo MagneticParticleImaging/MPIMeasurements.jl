@@ -199,8 +199,6 @@ Base.@kwdef struct MPIScannerGeneral
   gradient::Union{typeof(1u"T/m"), Nothing} = nothing
   "Path of the dataset store."
   datasetStore::String = ""
-  "Default sequence of the scanner."
-  defaultSequence::String = ""
   "Default protocol of the scanner."
   defaultProtocol::String = ""
   "Thread ID of the producer thread."
@@ -447,9 +445,6 @@ scannerGradient(scanner::MPIScanner) = scanner.generalParams.gradient
 
 "Path of the dataset store."
 scannerDatasetStore(scanner::MPIScanner) = scanner.generalParams.datasetStore
-
-"Default sequence of the scanner."
-defaultSequence(scanner::MPIScanner) = scanner.generalParams.defaultSequence
 
 "Default protocol of the scanner."
 defaultProtocol(scanner::MPIScanner) = scanner.generalParams.defaultProtocol

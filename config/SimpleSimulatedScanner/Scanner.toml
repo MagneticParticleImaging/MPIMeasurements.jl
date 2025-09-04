@@ -6,7 +6,6 @@ name = "SimpleSimulatedScanner"
 topology = "FFL" # Of course ;)
 gradient = "42T/m" # Note: This is later parsed with Unitful
 datasetStore = "/home/foerger/Documents/DatasetStores/store1"
-defaultSequence = "1DSequence"
 defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
 consumerThreadID = 3

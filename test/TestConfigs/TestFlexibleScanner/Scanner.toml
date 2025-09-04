@@ -6,7 +6,6 @@ name = "TestFlexibleScanner"
 topology = "FFL"
 gradient = "42T/m"
 datasetStore = "./tmp/TestFlexibleScannerStore"
-defaultSequence = ""
 
 [Devices]
 initializationOrder = [
