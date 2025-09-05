@@ -1,6 +1,8 @@
 export MPSMeasurementProtocol, MPSMeasurementProtocolParams
 """
-Parameters for the MPSMeasurementProtocol
+Parameters for the `MPSMeasurementProtocol`
+
+  $FIELDS
 """
 Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -13,9 +15,9 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   measureBackground::Bool = false
   "Remember background measurement"
   rememberBGMeas::Bool = false
-  "Tracer that is being used for the measurement"
+  #"Tracer that is being used for the measurement"
   #tracer::Union{Tracer, Nothing} = nothing
-  "If the temperature should be safed or not"
+  "If the temperature should be saved or not"
   saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
@@ -23,9 +25,8 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   sortPatches::Bool = true
   "Flag if the measurement should be saved as a system matrix or not"
   saveInCalibFolder::Bool = false
-
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
-  dfPeriodsPerOffset::Integer = 2
+  dfPeriodsPerOffset::Integer = 50
   "If true all periods per offset are averaged"
   averagePeriodsPerOffset::Bool = true
 end

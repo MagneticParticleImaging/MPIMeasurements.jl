@@ -1,6 +1,8 @@
 export RobotMPIMeasurementProtocol, RobotMPIMeasurementProtocolParams
 """
-Parameters for the RobotMPIMeasurementProtocol
+Parameters for the `RobotMPIMeasurementProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct RobotMPIMeasurementProtocolParams <: ProtocolParams
   "Foreground position"

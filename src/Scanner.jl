@@ -183,6 +183,8 @@ end
 General description of the scanner.
 
 Note: The fields correspond to the root section of an MDF file.
+
+$FIELDS
 """
 Base.@kwdef struct MPIScannerGeneral
   "Bore size of the scanner."
@@ -215,6 +217,8 @@ end
     $(SIGNATURES)
 
 Basic description of a scanner.
+
+$(FIELDS)
 """
 mutable struct MPIScanner
   "Name of the scanner"

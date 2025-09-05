@@ -17,6 +17,8 @@
 - split `amplitudeAccuracy` and `fieldToVolDeviation` settings into relative and absolute values to improve flexibility, the two conditions are combined as OR
 - `phaseAccuracy` has a unit now
 - added caching of last control values to increase control speed of repeating measurements
+- feedback calibration is now handled as a complex valued, optionally frequency dependent transfer function
+- forward calibration of tx channels can now be a complex number to include a phase shift
 - removed `correctCrossCoupling` setting from TxDAQControllerParams, if any field sets decouple=true the controller will try to decouple it
 
 
@@ -42,3 +44,4 @@ Measures a (hybrid) system matrix that is defined by one `Sequence` per position
 - re-included implementation for fiber optical temperature sensor (FOTemp.jl)
 - small fixes regarding different Isel robot versions
 - renamed the `saveAsSystemMatrix` parameter to `saveInCalibFolder`
+- removed `defaultSequence` parameter from scanner as the sequence is always defined in the protocol

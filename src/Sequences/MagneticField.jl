@@ -5,6 +5,8 @@ Description of a magnetic field.
 The field can either be electromagnetically or mechanically changed.
 The mechanical movement of e.g. an iron yoke would be defined within
 two channels, one electrical and one mechanical.
+
+$FIELDS
 """
 Base.@kwdef struct MagneticField
   "Unique ID of the field description."

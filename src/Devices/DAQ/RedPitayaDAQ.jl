@@ -2,6 +2,11 @@ export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
 export RedPitayaDAQParams
+"""
+Parameters for a DAQ of type `RedPitayaDAQ`
+
+$(FIELDS)
+"""
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
@@ -21,6 +26,11 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
+"""
+Parameters for a TxChannel of type RedPitayaLUTChannel
+
+$(FIELDS)
+"""
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing

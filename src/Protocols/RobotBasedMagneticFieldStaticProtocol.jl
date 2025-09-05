@@ -1,5 +1,10 @@
 export RobotBasedMagneticFieldStaticProtocolParams, RobotBasedMagneticFieldStaticProtocol, measurement
 
+"""
+Parameter for the `RobotBasedMagneticFieldStaticProtocol`
+
+$FIELDS
+"""
 Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing

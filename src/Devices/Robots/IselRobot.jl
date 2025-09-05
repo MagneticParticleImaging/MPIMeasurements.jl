@@ -31,6 +31,11 @@ const iselErrorCodes = Dict(
 
 abstract type IselRobotParams <: DeviceParams end
 
+"""
+Parameters for a Robot of type `IselRobot` that is connected directly via a serial port
+
+$FIELDS
+"""
 Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
@@ -54,6 +59,11 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
 end
 IselRobotPortParams(dict::Dict) = params_from_dict(IselRobotPortParams, prepareRobotDict(dict))
 
+"""
+Parameters for a Robot of type `IselRobot` that is connected via a serial port pool
+
+$FIELDS
+"""
 Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"

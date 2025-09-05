@@ -1,6 +1,8 @@
 export MultiSequenceSystemMatrixProtocol, MultiSequenceSystemMatrixProtocolParams
 """
-Parameters for the MultiSequenceSystemMatrixProtocol
+Parameters for the `MultiSequenceSystemMatrixProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"
