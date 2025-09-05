@@ -40,6 +40,7 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -85,6 +86,7 @@ function _init(protocol::RobotMPIMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
 end
 
 function checkPositions(protocol::RobotMPIMeasurementProtocol)
@@ -265,7 +267,14 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEven
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 

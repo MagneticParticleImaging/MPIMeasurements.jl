@@ -35,7 +35,7 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
   @add_protocol_fields ContinousMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
-
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
 
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   latestBgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
@@ -69,7 +69,7 @@ function _init(protocol::ContinousMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.counter = 0
-
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
   return nothing
 end
 
@@ -226,9 +226,15 @@ function handleEvent(protocol::ContinousMeasurementProtocol, event::DataQueryEve
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
+  end  
+  
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
   end
-  mdf = prepareAsMDF(data, protocol.scanner, protocol.params.sequence)
-  put!(protocol.biChannel, DataAnswerEvent(mdf, event))
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 
