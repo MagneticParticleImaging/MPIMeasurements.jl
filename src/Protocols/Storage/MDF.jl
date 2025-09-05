@@ -85,7 +85,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	@debug isBackgroundFrame
 
-	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 	fillMDFCalibration(mdf, positions, deltaSampleSize = deltaSampleSize)
 
@@ -146,12 +146,21 @@ function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArra
 	method = "hybrid"
 	order = "xyz"
 
+	# a hybrid calibration assumes a homogenoeus gradient of 1 T/m in all directions
+  MPIFiles.acqGradient(mdf, reshape(Matrix(Diagonal(ones(3))),3,3,1,1))
+
 	calibsize = size(offsetFields)[1:end-1]
 	offsetFields = reshape(offsetFields, prod(calibsize), :)
+
+	# we assume a regular and aligned grid in all three Dimensions, this might not always be correct
+	fov = [maximum(offsetFields[:,i]) - minimum(offsetFields[:,i]) for i in 1:3]
+	fovCenter = [mean(extrema(offsetFields[:,i])) for i in 1:3]
 
 	mdf.calibration = MDFv2Calibration(;
 		deltaSampleSize = deltaSampleSize,
 		method = method,
+		fieldOfView = fov,
+		fieldOfViewCenter = fovCenter,
 		offsetFields = permutedims(offsetFields), # Switch dimensions since the MDF specifies Ox3 but Julia is column major
 		order = order,
 		size = collect(calibsize)
