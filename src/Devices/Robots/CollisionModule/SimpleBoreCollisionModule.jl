@@ -1,5 +1,10 @@
 export SimpleBoreCollisionModule, SimpleBoreCollisionModuleParams
 
+"""
+Parameters for a `SimpleBoreCollisionModule``
+
+$FIELDS
+"""
 Base.@kwdef struct SimpleBoreCollisionModuleParams <: DeviceParams
   "Diameter of scanner in the y-z plane"
   scannerDiameter::typeof(1.0u"mm")

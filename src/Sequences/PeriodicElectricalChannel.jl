@@ -2,7 +2,11 @@
 
 export PeriodicElectricalComponent, SweepElectricalComponent, PeriodicElectricalChannel, ArbitraryElectricalComponent
 
-"Component of an electrical channel with periodic base function."
+"""
+Component of an electrical channel with periodic base function.
+
+$FIELDS
+"""
 Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
@@ -15,9 +19,13 @@ Base.@kwdef mutable struct PeriodicElectricalComponent <: ElectricalComponent
   waveform::Waveform = WAVEFORM_SINE
 end
 
-"Sweepable component of an electrical channel with periodic base function.
+"""
+Sweepable component of an electrical channel with periodic base function.
 Note: Does not allow for changes in phase since this would make the switch
-between frequencies difficult."
+between frequencies difficult.
+
+$FIELDS
+"""
 Base.@kwdef mutable struct SweepElectricalComponent <: ElectricalComponent
   "Divider of the component."
   divider::Vector{Integer}
@@ -27,6 +35,11 @@ Base.@kwdef mutable struct SweepElectricalComponent <: ElectricalComponent
   waveform::Waveform = WAVEFORM_SINE
 end
 
+"""
+Arbitrary waveform component of an electrical channel with periodic base function defined by a vector of $(RedPitayaDAQServer._awgBufferSize) values.
+
+$FIELDS
+"""
 Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   id::AbstractString
   "Divider of the component."
@@ -39,8 +52,12 @@ Base.@kwdef mutable struct ArbitraryElectricalComponent <: ElectricalComponent
   values::Vector{Float64}
 end
 
-"""Electrical channel based on based on periodic base functions. Only the
-PeriodicElectricalChannel counts for the cycle length calculation"""
+"""
+Electrical channel based on based on periodic base functions. Only the
+PeriodicElectricalChannel counts for the cycle length calculation
+  
+$FIELDS
+"""
 Base.@kwdef mutable struct PeriodicElectricalChannel <: ElectricalTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString

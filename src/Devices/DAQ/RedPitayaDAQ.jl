@@ -2,6 +2,11 @@ export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
 export RedPitayaDAQParams
+"""
+Parameters for a DAQ of type `RedPitayaDAQ`
+
+$(FIELDS)
+"""
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
@@ -21,6 +26,11 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
+"""
+Parameters for a TxChannel of type RedPitayaLUTChannel
+
+$(FIELDS)
+"""
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
@@ -1116,7 +1126,9 @@ function startTx(daq::RedPitayaDAQ; isControlStep=false)
 end
 
 function stopTx(daq::RedPitayaDAQ)
-  masterTrigger!(daq.rpc, false)
+  if masterTrigger(daq.rpc)
+    masterTrigger!(daq.rpc, false) # only deactivate trigger if it is currently active
+  end
   execute!(daq.rpc) do batch
     @add_batch batch serverMode!(daq.rpc, CONFIGURATION)
     for channel in 1:2*length(daq.rpc)
@@ -1137,6 +1149,7 @@ function clearTx!(daq::RedPitayaDAQ)
       for comp = 1:4
         @add_batch batch amplitudeDAC!(daq.rpc, channel, comp, 0.0)
       end
+      @add_batch batch offsetDAC!(daq.rpc, channel, 0.0)
     end
   end
 end

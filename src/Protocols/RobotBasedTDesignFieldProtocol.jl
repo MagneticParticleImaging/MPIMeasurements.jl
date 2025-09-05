@@ -1,5 +1,10 @@
 export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement
 
+"""
+Parameters for the `RobotBasedTDesignFieldProtocol`
+
+$FIELDS
+"""
 Base.@kwdef mutable struct RobotBasedTDesignFieldProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   radius::typeof(1.0u"mm") = 0.0u"mm"

@@ -1,16 +1,30 @@
 export TxDAQControllerParams, TxDAQController, controlTx
 
+"""
+Parameters for a `TxDAQController``
+
+$FIELDS
+"""
 Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
+  "Angle, required, allowed deviation of the excitation phase"
   phaseAccuracy::typeof(1.0u"rad")
+  "Number, required, allowed relative deviation of the excitation amplitude"
   relativeAmplitudeAccuracy::Float64
+  "Magnetic field, default: 50µT, allowed absolute deviation of the excitation amplitude"
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
+  "Integer, default: 20, maximum number of steps to try to control the system"
   maxControlSteps::Int64 = 20
-  #fieldToVoltDeviation::Float64 = 0.2
+  "Bool, default: false, control the DC value of the excitation field (only posible for DC enabled DF amplifiers)"
   controlDC::Bool = false
+  "Float, default: 0.0, time in seconds to wait before the DF is stable after ramping"
   timeUntilStable::Float64 = 0.0
+  "Float, default: 0.002, time in seconds that the DF should be averaged during the control measurement"
   minimumStepDuration::Float64 = 0.002
+  "Float, default: 0.2, relative deviation allowed between forward calibration and actual system state"
   fieldToVoltRelDeviation::Float64 = 0.2
+  "Magnetic field, default: 5.0mT, absolute deviation allowed between forward calibration and actual system state"
   fieldToVoltAbsDeviation::typeof(1.0u"T") = 5.0u"mT"
+  "Magnetic field, default: 40mT, maximum field amplitude that the controller should allow"
   maxField::typeof(1.0u"T") = 40.0u"mT"
 end
 TxDAQControllerParams(dict::Dict) = params_from_dict(TxDAQControllerParams, dict)
@@ -574,7 +588,11 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     @debug "Cached calibration result:" chId f finalCalibration[res]
   end
 
-  txCont.lastDCResults = cont.dcSearch[end-1:end]
+  if length(cont.dcSearch) >= 2
+    txCont.lastDCResults = cont.dcSearch[end-1:end]
+  else
+    txCont.lastDCResults = nothing
+  end
   txCont.lastChannelIDs = channelIDs
   
   @debug "Cached DC result" txCont.lastDCResults

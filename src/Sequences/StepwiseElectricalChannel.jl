@@ -1,6 +1,10 @@
 export StepwiseElectricalChannel
 
-"Electrical channel with a stepwise definition of values."
+"""
+Electrical channel with a stepwise definition of values.
+
+$FIELDS
+"""
 Base.@kwdef mutable struct StepwiseElectricalChannel <: AcyclicElectricalTxChannel
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString

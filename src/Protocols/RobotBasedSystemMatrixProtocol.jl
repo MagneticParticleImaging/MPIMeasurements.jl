@@ -1,6 +1,8 @@
 export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 """
-Parameters for the RobotBasedSystemMatrixProtocol
+Parameters for the `RobotBasedSystemMatrixProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   "Minimum wait time between robot movements"

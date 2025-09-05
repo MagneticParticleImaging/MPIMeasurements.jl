@@ -1,6 +1,8 @@
 export MPIMeasurementProtocol, MPIMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the `MPIMeasurementProtocol`
+  
+$FIELDS
 """
 Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -83,7 +85,6 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
     totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
-    @show est
   end
   return est
 end

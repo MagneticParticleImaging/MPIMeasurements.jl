@@ -86,6 +86,11 @@ function createDAQChannels(::Type{DAQHBridge}, dict::Dict{String, Any})
   return DAQHBridge{N}(;splattingDict...)
 end
 
+"""
+Parameters for a general DAQTxChannel
+
+$FIELDS
+"""
 Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   channelIdx::Int64
   limitPeak::typeof(1.0u"V")
@@ -96,8 +101,15 @@ Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
+"""
+Parameters for a general DAQRxChannel
+  
+$FIELDS
+"""
 Base.@kwdef mutable struct DAQRxChannelParams <: RxChannelParams
+  "required, Integer, channel idx of the corresponding DAQ"
   channelIdx::Int64
+  "optional, can be either a filename to a .h5 file in the TransferFunctions folder or a single (complex) number"
   transferFunction::Union{TransferFunction, String, Nothing} = nothing
 end
 

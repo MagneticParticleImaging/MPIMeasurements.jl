@@ -44,7 +44,11 @@ function _init(sensor::ArduinoTemperatureSensor)
   @info "Connection to ArduinoTempBox established."        
   ard = SimpleArduino(;commandStart = params.commandStart, commandEnd = params.commandEnd, sd = sd)
   sensor.ard = ard
-  setMaximumTemps(sensor, params.maxTemps)
+  try 
+    setMaximumTemps(sensor, params.maxTemps)
+  catch e
+    @warn "Temperature Sensor does not support setMaximumTemps!" error=e
+  end
 end
 
 function initSerialDevice(sensor::ArduinoTemperatureSensor, params::ArduinoTemperatureSensorPortParams)

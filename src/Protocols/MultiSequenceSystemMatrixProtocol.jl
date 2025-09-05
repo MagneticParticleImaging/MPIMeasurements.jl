@@ -1,6 +1,8 @@
 export MultiSequenceSystemMatrixProtocol, MultiSequenceSystemMatrixProtocolParams
 """
-Parameters for the MultiSequenceSystemMatrixProtocol
+Parameters for the `MultiSequenceSystemMatrixProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"
@@ -15,7 +17,14 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocolParams <: ProtocolPa
   saveInCalibFolder::Bool = false
   "Seconds to wait between measurements"
   waitTime::Float64 = 0.0
+  "Maximum temperature the coils can be at to start the next measurement"
+  coolDownTo::Float64 = 100
+  "Sequence to use as a BG measurement"
+  bgSequence::Union{Sequence, Nothing} = nothing
+  "Number of BG measurements before and after the measurement"
+  numBGMeas::Int = 1
 end
+
 function MultiSequenceSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner)
   positions = nothing
   if haskey(dict, "Positions")
@@ -25,15 +34,21 @@ function MultiSequenceSystemMatrixProtocolParams(dict::Dict, scanner::MPIScanner
     delete!(dict, "Positions")
   end
 
-
-  sequence = nothing
   if haskey(dict, "sequences")
     sequences = Sequences(scanner, dict["sequences"])
     pop!(dict, "sequences")
   end
+  
+  if haskey(dict, "bgSequence")
+    bgSequence = Sequence(scanner, dict["bgSequence"])
+    pop!(dict, "bgSequence")
+  else
+    bgSequence = nothing
+  end
   params = params_from_dict(MultiSequenceSystemMatrixProtocolParams, dict)
   params.sequences = sequences
   params.positions = positions
+  params.bgSequence = bgSequence
   return params
 end
 MultiSequenceSystemMatrixProtocolParams(dict::Dict) = params_from_dict(MultiSequenceSystemMatrixProtocolParams, dict)
@@ -42,6 +57,7 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocol <: Protocol
   @add_protocol_fields MultiSequenceSystemMatrixProtocolParams
 
   systemMeasState::Union{SystemMatrixMeasState,Nothing} = nothing
+  allSequences::Union{Vector{Sequence}, Nothing} = nothing
 
   done::Bool = false
   cancelled::Bool = false
@@ -76,13 +92,31 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
     @warn "The MultiSequenceSystemMatrixProtocol has $(length(protocol.params.sequences)) sequences but you configured $(length(protocol.params.positions)) positions."
   end
 
+  if isnothing(getTemperatureSensor(protocol.scanner)) && protocol.params.coolDownTo < 100
+    throw(ProtocolConfigurationError("The Protocol requires cooling down to $(protocol.params.coolDownTo) °C between measurements, but no temperature sensor is present in the scanner!)"))
+  end
+
   protocol.systemMeasState = SystemMatrixMeasState()
-  numPos = length(protocol.params.sequences)
-  measIsBGPos = [false for i = 1:numPos]
+  numBGMeas = protocol.params.numBGMeas
+  if !isnothing(protocol.params.bgSequence)
+    protocol.allSequences = [repeat([protocol.params.bgSequence], numBGMeas); protocol.params.sequences; repeat([protocol.params.bgSequence], numBGMeas)]
+  else
+    protocol.allSequences = protocol.params.sequences
+  end
+  numPos = length(protocol.allSequences)
+
+  if numPos == 0 
+    throw(ProtocolConfigurationError("Protocol has no sequences configured!"))
+  end
+  measIsBGPos = zeros(Bool, numPos)
+  if !isnothing(protocol.params.bgSequence)
+    measIsBGPos[1:numBGMeas] .= true
+    measIsBGPos[end-numBGMeas+1:end] .= true
+  end
 
   framesPerPos = zeros(Int64, numPos)
   posToIdx = zeros(Int64, numPos)
-  for (i, seq) in enumerate(protocol.params.sequences)
+  for (i, seq) in enumerate(protocol.allSequences)
     framesPerPos[i] = acqNumFrames(seq)
   end
   numTotalFrames = sum(framesPerPos)
@@ -237,8 +271,25 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
       break
     end
 
+    tempSensor = getTemperatureSensor(protocol.scanner)
+    if !isnothing(tempSensor)
+      for i=1:60
+        T = getTemperature(tempSensor,1)
+        if T > protocol.params.coolDownTo
+          @info "Coils still cooling down: $T °C (goal: $(protocol.params.coolDownTo) °C)"
+          sleep(1)
+        else
+          @info "Coil temperature of $T °C is below goal of $(protocol.params.coolDownTo) °C. Starting next measurement..."
+          break
+        end
+        if i==60
+          error("Timeout while waiting for coils to cool down!")
+        end
+      end
+    end
+
     performMeasurement(protocol)
-    if protocol.systemMeasState.currPos > length(protocol.params.sequences)
+    if protocol.systemMeasState.currPos > length(protocol.allSequences)
       calib = protocol.systemMeasState
       daq = getDAQ(protocol.scanner)
       wait(calib.consumer)
@@ -262,10 +313,17 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   # Prepare
   calib = protocol.systemMeasState
   index = calib.currPos
-  @info "Measurement $index of $(length(protocol.params.sequences))" 
+  @info "Measurement $index of $(length(protocol.allSequences))"
+  if index == 1 || calib.measIsBGPos[index] != calib.measIsBGPos[index-1]
+    text = if calib.measIsBGPos[index]; "background" else "foreground" end
+    if askChoices(protocol, "Press continue when $text measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+  end
+      
   daq = getDAQ(protocol.scanner)
 
-  sequence = protocol.params.sequences[index]
+  sequence = protocol.allSequences[index]
   if protocol.params.controlTx
     sequence = controlTx(protocol.txCont, sequence)
   end
@@ -289,7 +347,7 @@ end
 #   calib = protocol.systemMeasState
 #   daq = getDAQ(protocol.scanner)
 
-#   sequence = protocol.params.sequences[calib.currPos]
+#   sequence = protocol.allSequences[calib.currPos]
 #   if protocol.params.controlTx
 #     if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
 #     sequence = controlTx(protocol.txCont, sequence)
@@ -313,7 +371,7 @@ function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProt
   calib = protocol.systemMeasState
   @info "readData"
   daq = getDAQ(protocol.scanner)
-  numFrames = acqNumFrames(protocol.params.sequences[index])
+  numFrames = acqNumFrames(protocol.allSequences[index])
   startIdx = calib.posToIdx[index]
   stopIdx = startIdx + numFrames - 1
 
@@ -358,6 +416,9 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   #params["temperatures"] = vec(sysObj.temperatures)
   params["sequences"] = toDict.(protocol.params.sequences)
+  if !isnothing(protocol.params.bgSequence)
+    params["bgSequence"] = toDict(protocol.params.bgSequence)
+  end
 
   filename = file(protocol, "meta.toml")
   filename_backup = file(protocol, "meta.toml.backup")
@@ -402,8 +463,14 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
-      seq = storedSeq
-      protocol.params.sequence
+      seq = storedSeq 
+      protocol.params.sequence # What is going on here?
+    end
+
+    if !isnothing(protocol.params.bgSequence)
+      protocol.allSequences = [protocol.params.bgSequence; protocol.params.sequences; protocol.params.bgSequence]
+    else
+      protocol.allSequences = protocol.params.sequences
     end
 
     # Drive Field
@@ -417,7 +484,7 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
 
     sysObj.signals = mmap(protocol, "signals.bin", Float32)
 
-    numTotalFrames = sum(acqNumFrames, seq)
+    numTotalFrames = sum(acqNumFrames, protocol.allSequences)
     numRxChannels = length(rxChannels(seq[1])) # kind of hacky, but actual rxChannels for RedPitaya are only set when setupRx is called
     rxNumSamplingPoints = rxNumSamplesPerPeriod(seq[1])
     numPeriods = acqNumPeriodsPerFrame(seq[1])
@@ -458,7 +525,7 @@ function cancel(protocol::MultiSequenceSystemMatrixProtocol)
 end
 
 function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::ProgressQueryEvent)
-  put!(protocol.biChannel, ProgressEvent(protocol.systemMeasState.currPos, length(protocol.params.sequences), "Position", event))
+  put!(protocol.biChannel, ProgressEvent(protocol.systemMeasState.currPos, length(protocol.allSequences), "Position", event))
 end
 
 function handleEvent(protocol::MultiSequenceSystemMatrixProtocol, event::DataQueryEvent)

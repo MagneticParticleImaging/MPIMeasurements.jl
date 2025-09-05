@@ -34,7 +34,7 @@ The `Scanner.toml` contains the configuration parameters of the `Scanner` and is
 ### General Section
 
 The general section contains the details of the scanner. The fields correspond to the `scanner` group of the [MPI data format (MDF)](https://github.com/MagneticParticleImaging/MDF) and are used when writing a measurement to disk.
-All fields that have units will be parsed with [Unitful](https://github.com/PainterQubits/Unitful.jl) and should therefore be denoted as strings with the unit attached without a space. This also applies to the [Devices section](@ref).
+All fields that have units will be parsed with [Unitful](https://github.com/PainterQubits/Unitful.jl) and should therefore be denoted as strings with the unit attached without a space. This also applies to the [Device Section](@ref).
 
 ```toml
 [General]
@@ -46,20 +46,17 @@ topology = "<FFP|FFL|MPS>"
 gradient = "XXT/m"
 ```
 
-### Runtime Section
-
-The protocol section contains hints for `Protocol`, scripts and GUI implementations, such as on which Julia threads to run certain threads or which default `Sequences` to display.
+In addition, the General section contains hints for `Protocol`, scripts and GUI implementations, such as on which Julia threads to run certain threads or which default `Sequences` to display.
 
 ```toml
-[Runtime]
 defaultProtocol = "<protocol X name>"
-transferFunction = "<file path>"
-dataStorage = "<file path">
+datasetStore = "<file path">
 # Which Julia threads to run common tasks on
+producerThreadID = 1
 protocolThreadID = 2
-producerThreadID = 3
-consumerThreadID = 4
-serialThreadID = 5
+
+consumerThreadID = 3
+serialThreadID = 4
 ```
 
 ### Device Section

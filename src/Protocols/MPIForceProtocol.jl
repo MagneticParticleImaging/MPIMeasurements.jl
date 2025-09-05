@@ -1,6 +1,8 @@
 export MPIForceProtocol, MPIForceProtocolParams
 """
-Parameters for the MPIForceProtocol
+Parameters for the `MPIForceProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MPIForceProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"

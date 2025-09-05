@@ -1,6 +1,8 @@
 export ContinousMeasurementProtocol, ContinousMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the `ContinousMeasurementProtocol``
+
+$FIELDS
 """
 Base.@kwdef mutable struct ContinousMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"

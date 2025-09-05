@@ -7,7 +7,6 @@ topology = "FFL"
 gradient = "42T/m"
 #datasetStore = "/opt/data/HeadScanner"
 datasetStore = "~/.mpi/Data"
-defaultSequence = "1DSequence"
 defaultProtocol = "MPIMeasurement"
 producerThreadID = 2
 consumerThreadID = 3

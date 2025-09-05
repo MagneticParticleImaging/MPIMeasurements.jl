@@ -76,6 +76,8 @@ function getSerialDevice(pool::SerialPortPool, description::String; kwargs...)
         @error e
       end
     end
+  else
+    throw(ScannerConfigurationError("No suitable SerialPort for `$description` found in SerialPortPool!"))
   end
   return nothing
 end
@@ -106,7 +108,7 @@ function initSerialDevice(device::Device, query::String, response::String)
     pool = dependency(device, SerialPortPool)
     sd = getSerialDevice(pool, query, response; serial_device_splatting(device.params)...)
     if isnothing(sd)
-      throw(ScannerConfigurationError("Device $(deviceID(device)) found no fitting serial port."))
+      throw(ScannerConfigurationError("Device $(deviceID(device)) failed to connect to serial port."))
     end
     return sd
   else
@@ -120,7 +122,7 @@ function initSerialDevice(device::Device, description::String)
     pool = dependency(device, SerialPortPool)
     sd = getSerialDevice(pool, description; serial_device_splatting(device.params)...)
     if isnothing(sd)
-      throw(ScannerConfigurationError("Device $(deviceID(device)) found no fitting serial port with description $description."))
+      throw(ScannerConfigurationError("Device $(deviceID(device)) failed to connect to serial port with description $description."))
     end
     return sd
   else

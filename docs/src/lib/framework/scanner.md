@@ -11,7 +11,6 @@ MPIMeasurements.scannerName
 MPIMeasurements.scannerTopology
 MPIMeasurements.scannerGradient
 MPIMeasurements.scannerDatasetStore
-MPIMeasurements.defaultSequence
 MPIMeasurements.defaultProtocol
 ```
 

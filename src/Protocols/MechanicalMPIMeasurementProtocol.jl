@@ -1,6 +1,8 @@
 export MechanicalMPIMeasurementProtocol, MechanicalMPIMeasurementProtocolParams
 """
-Parameters for the MechanicalMPIMeasurementProtocol
+Parameters for the `MechanicalMPIMeasurementProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MechanicalMPIMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
