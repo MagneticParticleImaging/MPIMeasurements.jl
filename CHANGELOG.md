@@ -3,7 +3,7 @@
 ## 0.6.0
 
 ### Most Important Breaking Changes
-- **Breaking**: There have been multiple changes to arguments in the Scanner.toml related to both devices and the scanner, please find a detailed migration guide [](here)
+- **Breaking**: There have been multiple changes to arguments in the Scanner.toml related to both devices and the scanner, please find a detailed migration guide [https://magneticparticleimaging.github.io/MPIMeasurements.jl/dev/config/upgrade.html#v0.5-to-v0.6](here)
 - **Breaking**: the receive transfer function is now defined per receive channel instead of per scanner, this allows the sequence to flexibly select receive channels and assemble the correct TF
 
 ### Improved support for arbitrary waveform components
@@ -31,7 +31,7 @@ New features include:
 - new algorithm ordering the channels to reduce total wait time
 - save data in proper system matrix format for hybrid reconstruction
 
-### New MultiSequenceSMProtocol
+### New MultiSequenceSystemMatrixProtocol
 Measures a (hybrid) system matrix that is defined by one `Sequence` per position, this can be used to flexibly vary any component of the field sequence like amplitudes, phases and offsets. The individual measurements will be saved together as frames in a joint MDF file. Between the individual measurements the system can be instructed to wait until the value of a temperature sensor is below a configurable threshhold.
 
 ### General Updates
@@ -45,3 +45,4 @@ Measures a (hybrid) system matrix that is defined by one `Sequence` per position
 - small fixes regarding different Isel robot versions
 - renamed the `saveAsSystemMatrix` parameter to `saveInCalibFolder`
 - removed `defaultSequence` parameter from scanner as the sequence is always defined in the protocol
+- small updates to documentation
