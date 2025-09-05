@@ -19,7 +19,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	fillMDFScanner(mdf, scanner)
 	fillMDFTracer(mdf)
 
-	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 
 	filename = getNewExperimentPath(study)

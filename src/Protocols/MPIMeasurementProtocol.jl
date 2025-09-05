@@ -38,6 +38,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
   
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -72,6 +73,7 @@ function _init(protocol::MPIMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.protocolMeasState = ProtocolMeasState()
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
   return nothing
 end
 
@@ -233,8 +235,14 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  mdf = prepareAsMDF(data, protocol.scanner, protocol.params.sequence)
-  put!(protocol.biChannel, DataAnswerEvent(mdf, event))
+
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 
