@@ -16,16 +16,7 @@ MPIMeasurements, but also from the outside.
   FlexibleDAQParams(dict::Dict) = params_from_dict(FlexibleDAQParams, dict)
 
   Base.@kwdef mutable struct FlexibleDAQ <: MPIMeasurements.AbstractDAQ
-    "Unique device ID for this device as defined in the configuration."
-    deviceID::String
-    "Parameter struct for this devices read from the configuration."
-    params::FlexibleDAQParams
-    "Flag if the device is optional."
-	  optional::Bool = false
-    "Flag if the device is present."
-	  present::Bool = false
-    "Vector of dependencies for this device."
-    dependencies::Dict{String, Union{Device, Missing}}
+    MPIMeasurements.@add_device_fields FlexibleDAQParams
   end
 
   function MPIMeasurements.init(daq::FlexibleDAQ)

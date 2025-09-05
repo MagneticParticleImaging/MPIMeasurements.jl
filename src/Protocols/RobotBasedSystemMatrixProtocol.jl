@@ -1,6 +1,8 @@
 export RobotBasedSystemMatrixProtocol, RobotBasedSystemMatrixProtocolParams
 """
-Parameters for the RobotBasedSystemMatrixProtocol
+Parameters for the `RobotBasedSystemMatrixProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct RobotBasedSystemMatrixProtocolParams <: RobotBasedProtocolParams
   "Minimum wait time between robot movements"
@@ -82,11 +84,11 @@ function SystemMatrixMeasState()
     RegularGridPositions([1,1,1],[0.0,0.0,0.0],[0.0,0.0,0.0]),
     1, Array{Float32,4}(undef,0,0,0,0), Array{Float32,4}(undef,0,0,0,0),
     Vector{Bool}(undef,0), Vector{Int64}(undef,0), Vector{Bool}(undef,0),
-    Matrix{Float64}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
+    Matrix{Float32}(undef,0,0), Array{ComplexF64,4}(undef,0,0,0,0), Array{ComplexF64,4}(undef,0,0,0,0))
 end
 
 function requiredDevices(protocol::RobotBasedSystemMatrixProtocol)
-  result = [AbstractDAQ, Robot, SurveillanceUnit]
+  result = [AbstractDAQ, Robot]
   if protocol.params.controlTx
     push!(result, TxDAQController)
   end
@@ -260,10 +262,10 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
       protocol.restored = false
     end
     if isempty(protocol.systemMeasState.drivefield)
-      len = length(keys(protocol.contSequence.simpleChannel))
-      drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      bufferShape = controlMatrixShape(protocol.contSequence)
+      drivefield = zeros(ComplexF64, bufferShape[1], bufferShape[2], size(calib.signals, 3), size(calib.signals, 4))
       calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
-      applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
+      applied = zeros(ComplexF64, bufferShape[1], bufferShape[2], size(calib.signals, 3), size(calib.signals, 4))
       calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
     end
     sequence = protocol.contSequence
@@ -271,7 +273,7 @@ function prepareDAQ(protocol::RobotBasedSystemMatrixProtocol)
   
   acqNumFrames(sequence, calib.measIsBGPos[calib.currPos] ? protocol.params.bgFrames : protocol.params.fgFrames)
   #acqNumFrameAverages(sequence, calib.measIsBGPos[calib.currPos] ? 1 : protocol.params.fgFrames)
-  acqNumFrameAverages(sequence, 1)
+  #acqNumFrameAverages(sequence, 1)
   setup(daq, sequence)
 end
 
@@ -289,7 +291,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     channelIdx = id.(vcat(acyclicElectricalTxChannels(protocol.params.sequence), periodicElectricalTxChannels(protocol.params.sequence)))
     amps = filter(amp -> in(channelId(amp), channelIdx), amps)
   end
-  enableACPower(su)
+  if !isnothing(su)
+    enableACPower(su)
+  end
   if tempControl != nothing
     disableControl(tempControl)
   end
@@ -326,7 +330,9 @@ function postMovement(protocol::RobotBasedSystemMatrixProtocol)
     if tempControl != nothing
       enableControl(tempControl)
     end
-    disableACPower(su)
+    if !isnothing(su)
+      disableACPower(su)
+    end
   end
 end
 
@@ -339,19 +345,30 @@ function asyncConsumer(channel::Channel, protocol::RobotBasedSystemMatrixProtoco
   stopIdx = startIdx + numFrames - 1
 
   # Prepare Buffer
-  deviceBuffer = DeviceBuffer[]
+  deviceBuffer = StorageBuffer[]
   if protocol.params.saveTemperatureData
     tempSensor = getTemperatureSensor(protocol.scanner)
     push!(deviceBuffer, TemperatureBuffer(view(calib.temperatures, :, startIdx:stopIdx), tempSensor))
   end
 
   sinks = StorageBuffer[]
-  push!(sinks, SimpleFrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx)))
+  buffer = FrameBuffer(1, view(calib.signals, :, :, :, startIdx:stopIdx))
+  if acqNumFrameAverages(protocol.params.sequence) > 1
+    buffer = AverageBuffer(buffer, protocol.params.sequence)
+  end
+  push!(sinks, buffer)
+
   sequence = protocol.params.sequence
   if protocol.params.controlTx
-    sequence = protocol.contSequence
-    push!(sinks, DriveFieldBuffer(1, view(calib.drivefield, :, :, :, startIdx:stopIdx), sequence))
-    push!(deviceBuffer, TxDAQControllerBuffer(1, view(calib.applied, :, :, :, startIdx:stopIdx), protocol.txCont))
+    contSeq = protocol.contSequence
+    dfBuffer = DriveFieldBuffer(1, view(calib.drivefield, :, :, :, startIdx:stopIdx), contSeq)
+    #controlBuffer = TxDAQControllerBuffer(1, view(calib.applied, :, :, :, startIdx:stopIdx), protocol.txCont)
+    if acqNumFrameAverages(protocol.params.sequence) > 1
+      dfBuffer = AverageBuffer(dfBuffer, rxNumSamplesPerPeriod(sequence), 2, acqNumPeriodsPerFrame(sequence), acqNumFrameAverages(sequence))
+      #controlBuffer = AverageBuffer(controlBuffer, rxNumSamplesPerPeriod(sequence), 2, acqNumPeriodsPerFrame(sequence), acqNumFrameAverages(sequence))
+    end
+    push!(sinks, dfBuffer)
+    #push!(deviceBuffer, controlBuffer)
   end
 
   sequenceBuffer = AsyncBuffer(FrameSplitterBuffer(daq, sinks), daq)
@@ -473,14 +490,14 @@ function restore(protocol::RobotBasedSystemMatrixProtocol)
 end
 
 
-function stop(protocol::RobotBasedSystemMatrixProtocol)
+function pause(protocol::RobotBasedSystemMatrixProtocol)
   calib = protocol.systemMeasState
   if calib.currPos <= length(calib.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.stopped = true
   else 
     # Stopped has no concept once all measurements are done
-    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(PauseEvent()))
   end
 end
 
@@ -502,7 +519,7 @@ end
 
 function handleEvent(protocol::RobotBasedSystemMatrixProtocol, event::DataQueryEvent)
   data = nothing
-  if event.message == "CURR"
+  if event.message == "SIGNAL"
     data = protocol.systemMeasState.currentSignal
   elseif event.message == "BG"
     sysObj = protocol.systemMeasState

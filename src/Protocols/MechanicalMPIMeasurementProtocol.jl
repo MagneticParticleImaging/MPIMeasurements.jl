@@ -1,6 +1,8 @@
 export MechanicalMPIMeasurementProtocol, MechanicalMPIMeasurementProtocolParams
 """
-Parameters for the MechanicalMPIMeasurementProtocol
+Parameters for the `MechanicalMPIMeasurementProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MechanicalMPIMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -36,6 +38,7 @@ Base.@kwdef mutable struct MechanicalMPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   done::Bool = false
@@ -76,6 +79,8 @@ function _init(protocol::MechanicalMPIMeasurementProtocol)
     protocol.mechCont = getDevice(protocol.scanner, MechanicsController)
     setup(protocol.mechCont, protocol.params.sequence)
   end
+  
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
 
   return nothing
 end
@@ -215,18 +220,6 @@ function asyncMeasurement(protocol::MechanicalMPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-function cleanup(protocol::MechanicalMPIMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::MechanicalMPIMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::MechanicalMPIMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::MechanicalMPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
@@ -254,7 +247,14 @@ function handleEvent(protocol::MechanicalMPIMeasurementProtocol, event::DataQuer
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 

@@ -65,8 +65,8 @@ Returns the averaged temperature of a channel.
 """
 function getAveragedTemperature(ft::FOTemp,channel::Char)
 	temp = query(ft.sd, "?01 $channel")
-	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
-        return parse(Float64,split(temp," ")[2]) / 10
+	#acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+  return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """
@@ -74,8 +74,8 @@ Returns the averaged temperature of all channel.
 """
 function getAveragedTemperature(ft::FOTemp)
 	temp = query(ft.sd, "?02")
-	acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
-        return parse(Float64,split(temp," ")[2]) / 10
+	#acq = readuntil(ft.sd.sp, '\n', ft.sd.timeout_ms)
+  return parse(Float64,split(temp," ")[2]) / 10
 end
 
 """

@@ -1,5 +1,0 @@
-# MPIMeasurementProtocol
-
-```@docs
-MPIMeasurements.MPIMeasurementProtocolParams
-```

@@ -31,6 +31,11 @@ const iselErrorCodes = Dict(
 
 abstract type IselRobotParams <: DeviceParams end
 
+"""
+Parameters for a Robot of type `IselRobot` that is connected directly via a serial port
+
+$FIELDS
+"""
 Base.@kwdef struct IselRobotPortParams <: IselRobotParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
@@ -54,6 +59,11 @@ Base.@kwdef struct IselRobotPortParams <: IselRobotParams
 end
 IselRobotPortParams(dict::Dict) = params_from_dict(IselRobotPortParams, prepareRobotDict(dict))
 
+"""
+Parameters for a Robot of type `IselRobot` that is connected via a serial port pool
+
+$FIELDS
+"""
 Base.@kwdef struct IselRobotPoolParams <: IselRobotParams
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,420],[0,420],[0,420]]u"mm"
   defaultVel::Vector{typeof(1.0u"mm/s")} = [10,10,10]u"mm/s"
@@ -151,22 +161,19 @@ function _enable(robot::IselRobot)
   robot.enableTime = time()
   _enable(robot, controllerVersion(robot))
 end
-function _enable(robot::IselRobot, version::IseliMCS8)
-  # NOP
+function _enable(robot::IselRobot, version)
+  _setMotorCurrent(robot, version, true)
 end
-function _enable(robot::IselRobot, version::IselC142)
-  _setMotorCurrent(robot, true)
+function _enable(robot::IselRobot, version::IseliMCS8)
+  _setMotorCurrent(robot, version, true)
 end
 
 function _disable(robot::IselRobot)
   writeIOOutput(robot, zeros(Bool, 8))
   _disable(robot, controllerVersion(robot))
 end
-function _disable(robot::IselRobot, version::IseliMCS8)
-  # NOP
-end
-function _disable(robot::IselRobot, version::IselC142)
-  _setMotorCurrent(robot, false)
+function _disable(robot::IselRobot, version)
+  _setMotorCurrent(robot, version, false)
 end
 
 
@@ -304,7 +311,12 @@ macro minimumISELversion(version::Int)
   end)
 end
 
-function _setMotorCurrent(rob::IselRobot, power::Bool)
+_setMotorCurrent(rob::IselRobot, power::Bool) = _setMotorCurrent(rob, controllerVersion(rob), power)
+function _setMotorCurrent(rob::IselRobot, ::IseliMCS8, power::Bool)
+  ret = queryIsel(rob, string("@0B3,", Int(power)))
+  checkIselError(ret)
+end
+function _setMotorCurrent(rob::IselRobot, ::IselC142, power::Bool)
   ret = queryIsel(rob, string("@0B65529,", Int(!power)))
   checkIselError(ret)
 end
@@ -327,7 +339,7 @@ function mm2steps(rob::IselRobot, len::Vector{<:Unitful.Velocity})
   return round.(Int64, temp .* rob.params.stepsPermm)
 end
 
-steps2mm(rob::IselRobot, steps::Vector{Integer}) = steps2mm(rob, Int64.(steps))
+steps2mm(rob::IselRobot, steps::Vector{<:Integer}) = steps2mm(rob, Int64.(steps))
 steps2mm(rob::IselRobot, steps::Vector{Int64}) = steps ./ rob.params.stepsPermm * u"mm"
 
 
@@ -342,7 +354,7 @@ function setRefVelocity(rob::IselRobot, vel::Vector{<:Unitful.Velocity})
       cmd = string("@0d", vel[1], ",", vel[2], ",", vel[3], ",", vel[3])
     else
       # TODO: check if this distinction is really necessary, both should be able to use @0d
-      cmd = string("@0Id", " ", vel[1], ",", vel[2], ",", vel[3], ",", vel[3])
+      cmd = string("@0Id", vel[1], ",", vel[2], ",", vel[3], ",", vel[3])
     end
     ret = queryIsel(rob, cmd)
     checkIselError(ret)

@@ -1,6 +1,8 @@
 export MPIForceProtocol, MPIForceProtocolParams
 """
-Parameters for the MPIForceProtocol
+Parameters for the `MPIForceProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct MPIForceProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"
@@ -166,17 +168,8 @@ function performExperiment(protocol::MPIForceProtocol)
   end
 end
 
-
-function cleanup(protocol::MPIForceProtocol)
-  # NOP
-end
-
-function stop(protocol::MPIForceProtocol)
+function pause(protocol::MPIForceProtocol)
   protocol.stopped = true
-end
-
-function resume(protocol::MPIForceProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
 end
 
 function cancel(protocol::MPIForceProtocol)

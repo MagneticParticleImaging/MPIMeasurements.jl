@@ -2,7 +2,7 @@
 boreSize = "1337mm"
 facility = "My awesome institute"
 manufacturer = "Me, Myself and I"
-name = "TestBrokenDeviceMissingParams"
+name = "TestBrokenDeviceMissingConfigFile"
 topology = "FFL"
 gradient = "42T/m"
 datasetStore = "./tmp/TestSimpleSimulatedScannerStore"
@@ -13,5 +13,5 @@ initializationOrder = [
 ]
 
 [Devices.testDevice]
-deviceType = "TestMissingParamsDevice"
+deviceType = "TestMissingConfigFileDevice"
 dependencies = []

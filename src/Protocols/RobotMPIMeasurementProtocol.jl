@@ -1,6 +1,8 @@
 export RobotMPIMeasurementProtocol, RobotMPIMeasurementProtocolParams
 """
-Parameters for the RobotMPIMeasurementProtocol
+Parameters for the `RobotMPIMeasurementProtocol`
+
+$FIELDS
 """
 Base.@kwdef mutable struct RobotMPIMeasurementProtocolParams <: ProtocolParams
   "Foreground position"
@@ -38,6 +40,7 @@ Base.@kwdef mutable struct RobotMPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -83,6 +86,7 @@ function _init(protocol::RobotMPIMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.bgMeas = zeros(Float32,0,0,0,0)
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
 end
 
 function checkPositions(protocol::RobotMPIMeasurementProtocol)
@@ -236,19 +240,6 @@ function asyncMeasurement(protocol::RobotMPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-
-function cleanup(protocol::RobotMPIMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::RobotMPIMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::RobotMPIMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::RobotMPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
@@ -276,7 +267,14 @@ function handleEvent(protocol::RobotMPIMeasurementProtocol, event::DataQueryEven
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 

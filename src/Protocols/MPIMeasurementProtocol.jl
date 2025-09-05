@@ -1,6 +1,8 @@
 export MPIMeasurementProtocol, MPIMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the `MPIMeasurementProtocol`
+  
+$FIELDS
 """
 Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -15,8 +17,8 @@ Base.@kwdef mutable struct MPIMeasurementProtocolParams <: ProtocolParams
   saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
-  "Remember background measurement"
-  rememberBGMeas::Bool = false
+  "Do not measure background but reuse the last BG measurement if suitable"
+  reuseLastBGMeas::Bool = false
 end
 function MPIMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence = nothing
@@ -36,6 +38,7 @@ Base.@kwdef mutable struct MPIMeasurementProtocol <: Protocol
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
   
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -70,6 +73,7 @@ function _init(protocol::MPIMeasurementProtocol)
     protocol.txCont = nothing
   end
   protocol.protocolMeasState = ProtocolMeasState()
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
   return nothing
 end
 
@@ -78,12 +82,11 @@ function timeEstimate(protocol::MPIMeasurementProtocol)
   if !isnothing(protocol.params.sequence)
     params = protocol.params
     seq = params.sequence
-    totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
+    totalFrames = (params.fgFrames + params.bgFrames*params.measureBackground*!params.reuseLastBGMeas) * acqNumFrameAverages(seq)
     samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
     totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
     time = totalTime * 1u"s"
     est = string(time)
-    @show est
   end
   return est
 end
@@ -114,7 +117,7 @@ function _execute(protocol::MPIMeasurementProtocol)
 end
 
 function performMeasurement(protocol::MPIMeasurementProtocol)
-  if (length(protocol.bgMeas) == 0 || !protocol.params.rememberBGMeas) && protocol.params.measureBackground
+  if (length(protocol.bgMeas) == 0 || !protocol.params.reuseLastBGMeas) && protocol.params.measureBackground
     if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
@@ -123,9 +126,9 @@ function performMeasurement(protocol::MPIMeasurementProtocol)
     @debug "Taking background measurement."
     protocol.unit = "BG Frames"
     measurement(protocol)
-    protocol.bgMeas = read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer))
     deviceBuffers = protocol.seqMeasState.deviceBuffers
     push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = true)
+    protocol.bgMeas = read(protocol.protocolMeasState, MeasurementBuffer)
     if askChoices(protocol, "Press continue when foreground measurement can be taken", ["Cancel", "Continue"]) == 1
       throw(CancelException())
     end
@@ -205,19 +208,6 @@ function asyncMeasurement(protocol::MPIMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-
-function cleanup(protocol::MPIMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::MPIMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
-end
-
-function resume(protocol::MPIMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
-end
-
 function cancel(protocol::MPIMeasurementProtocol)
   protocol.cancelled = true
   #put!(protocol.biChannel, OperationNotSupportedEvent(CancelEvent()))
@@ -245,7 +235,14 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 
@@ -269,6 +266,14 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DatasetStoreStorag
   mdf = event.mdf
   data = read(protocol.protocolMeasState, MeasurementBuffer)
   isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+  if protocol.params.reuseLastBGMeas
+    try
+      data = cat(data,protocol.bgMeas,dims=4)
+      isBGFrame = cat(isBGFrame,trues(size(protocol.bgMeas,4)), dims=1)
+    catch
+      @error "The last BG measurement is not compatible with your current measurement, cant write BG into file! Data is size $(size(data)), BG is size $(size(protocol.bgMeas))"
+    end
+  end
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)

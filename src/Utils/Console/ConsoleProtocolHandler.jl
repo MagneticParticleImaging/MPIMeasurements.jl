@@ -71,7 +71,7 @@ function initProtocol(cph::ConsoleProtocolHandler)
 end
 
 export startProtocol
-function startProtocol(cph::ConsoleProtocolHandler)
+function startProtocol(cph::ConsoleProtocolHandler; block=false)
   try 
     @info "Execute protocol with name `$(name(cph.protocol))`"
 
@@ -101,6 +101,17 @@ function startProtocol(cph::ConsoleProtocolHandler)
       cph.protocolState = PS_INIT
       @debug "Start event handler"
       cph.eventHandler = Timer(timer -> eventHandler(cph, timer), 0.0, interval=0.05)
+      if block
+        while (cph.protocolState != PS_FINISHED || isopen(cph.eventHandler))
+          #@info cph.protocolState isopen(cph.eventHandler)
+          if cph.protocolState==PS_FAILED
+            @error "Protocol failed!"
+            return false
+          end
+          sleep(0.5)
+        end
+        #@info cph.protocolState isopen(cph.eventHandler)
+      end
       return true
     end
   catch e
@@ -157,7 +168,7 @@ function eventHandler(cph::ConsoleProtocolHandler, timer::Timer)
     end
 
   catch ex
-    @error "The eventhandler catched an exception."
+    @error "The eventhandler caught an exception."
     confirmFinishedProtocol(cph)
     close(timer)
     #showError(ex)

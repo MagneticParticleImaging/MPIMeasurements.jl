@@ -1,3 +1,3 @@
-export FOTemp, gettemperature, gettemperatures, logtemperature, logtemperatures
+export FOTemp
 
 include("FOTempLowLevel.jl")

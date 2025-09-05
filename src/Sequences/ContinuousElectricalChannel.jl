@@ -1,7 +1,7 @@
 export ContinuousElectricalChannel
 
 "Electrical channel with a stepwise definition of values."
-Base.@kwdef struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # TODO: Why is this named continuous?
+Base.@kwdef mutable struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # TODO: Why is this named continuous?
   "ID corresponding to the channel configured in the scanner."
   id::AbstractString
   "Divider of sampling frequency."
@@ -13,10 +13,12 @@ Base.@kwdef struct ContinuousElectricalChannel <: AcyclicElectricalTxChannel # T
   "Phase of the component for each period of the field."
   phase::typeof(1.0u"rad")
   "Offset of the channel. If defined in Tesla, the calibration configured in the scanner will be used."
-  offset::Union{typeof(1.0u"T"), typeof(1.0u"A")} = 0.0u"T"
+  offset::Union{typeof(1.0u"T"), typeof(1.0u"V"), typeof(1.0u"A")} = 0.0u"T"
   "Waveform of the component."
   waveform::Waveform = WAVEFORM_SINE
 end
+
+unitIsTesla(chan::ContinuousElectricalChannel) = (dimension(chan.offset) == dimension(u"T")) && (dimension(chan.amplitude)==dimension(u"T"))
 
 channeltype(::Type{<:ContinuousElectricalChannel}) = StepwiseTxChannel()
 
@@ -51,7 +53,17 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Continu
   end
 
   if haskey(channelDict, "phase")
-    phase = uparse.(channelDict["phase"])
+    phaseDict = Dict("cosine"=>0.0u"rad", "cos"=>0.0u"rad","sine"=>pi/2u"rad", "sin"=>pi/2u"rad","-cosine"=>pi*u"rad", "-cos"=>pi*u"rad","-sine"=>-pi/2u"rad", "-sin"=>-pi/2u"rad")
+    
+    try
+      phase = uparse(channelDict["phase"])
+    catch
+      if haskey(phaseDict, channelDict["phase"])
+        phase = phaseDict[channelDict["phase"]]
+      else
+        error("The value $(channelDict["phase"]) for the phase could not be parsed. Use either a unitful value, or one of the predefined keywords ($(keys(phaseDict)))")
+      end
+    end     
   else
     phase = 0.0u"rad"  # Default phase
   end

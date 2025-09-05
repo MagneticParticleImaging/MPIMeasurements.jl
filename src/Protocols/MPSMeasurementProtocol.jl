@@ -1,6 +1,8 @@
 export MPSMeasurementProtocol, MPSMeasurementProtocolParams
 """
-Parameters for the MPSMeasurementProtocol
+Parameters for the `MPSMeasurementProtocol`
+
+  $FIELDS
 """
 Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -10,27 +12,23 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   "If set the tx amplitude and phase will be set with control steps"
   controlTx::Bool = false
   "If unset no background measurement will be taken"
-  measureBackground::Bool = true
+  measureBackground::Bool = false
   "Remember background measurement"
   rememberBGMeas::Bool = false
-  "Tracer that is being used for the measurement"
+  #"Tracer that is being used for the measurement"
   #tracer::Union{Tracer, Nothing} = nothing
-  "If the temperature should be safed or not"
+  "If the temperature should be saved or not"
   saveTemperatureData::Bool = false
   "Sequence to measure"
   sequence::Union{Sequence, Nothing} = nothing
-
-  # TODO: This is only for 1D MPS systems for now
-  "Start value of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetStart::typeof(1.0u"T") = -0.012u"T"
-  "Stop value of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetStop::typeof(1.0u"T") = 0.012u"T"
-  "Number of values of the MPS offset measurement. Overwrites parts of the sequence definition."
-  offsetNum::Integer = 101
+  "Sort patches"
+  sortPatches::Bool = true
+  "Flag if the measurement should be saved as a system matrix or not"
+  saveInCalibFolder::Bool = false
   "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
-  dfPeriodsPerOffset::Integer = 100
-  "Number of periods per offset which should be deleted. Acquired total number of periods is `dfPeriodsPerOffset + deletedDfPeriodsPerOffset`. Overwrites parts of the sequence definition."
-  deletedDfPeriodsPerOffset::Integer = 1
+  dfPeriodsPerOffset::Integer = 50
+  "If true all periods per offset are averaged"
+  averagePeriodsPerOffset::Bool = true
 end
 function MPSMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
   sequence_ = nothing
@@ -62,6 +60,11 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
   protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
 
+  sequence::Union{Sequence, Nothing} = nothing 
+  offsetfields::Union{Matrix{Float64}, Nothing} = nothing
+  patchPermutation::Vector{Union{Int64, Nothing}} = Union{Int64, Nothing}[]
+  calibsize::Vector{Int64} = Int64[]
+
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
   cancelled::Bool = false
@@ -80,9 +83,9 @@ function requiredDevices(protocol::MPSMeasurementProtocol)
 end
 
 function _init(protocol::MPSMeasurementProtocol)
-  if isnothing(sequence(protocol))
-    throw(IllegalStateException("Protocol requires a sequence"))
-  end
+  #if isnothing(sequence(protocol))
+  #  throw(IllegalStateException("Protocol requires a sequence"))
+  #end
   protocol.done = false
   protocol.cancelled = false
   protocol.finishAcknowledged = false
@@ -94,7 +97,32 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.bgMeas = zeros(Float32,0,0,0,0)
   protocol.protocolMeasState = ProtocolMeasState()
 
-  setupSequence(protocol)
+  #try
+    seq, perm, offsets, calibsize, numPeriodsPerFrame = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerOffset = protocol.params.dfPeriodsPerOffset)
+
+    # For each patch assign nothing if invalid or otherwise index in "proper" frame
+    patchPerm = Vector{Union{Int64, Nothing}}(nothing, numPeriodsPerFrame)
+    if !protocol.params.sortPatches
+      # perm is arranged in a way that the first offset dimension switches the fastest
+      # if the patches should be saved in the order they were measured, we need to sort perm
+      perm = sort(perm)
+    end
+     
+    # patchPerm contains the "target" for every patch that is measured, nothing for discarded patches, different indizes for non-averaged patches, identical indizes for averaged-patches
+    # Same target for all frames to be averaged
+    part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+    for (i, patches) in enumerate(Iterators.partition(perm, part))
+      patchPerm[patches] .= i
+    end
+
+    protocol.sequence = seq
+    protocol.patchPermutation = patchPerm
+    protocol.offsetfields = ustrip.(u"T", offsets) # TODO make robust
+    protocol.calibsize = calibsize
+    @debug "Prepared Protocol Sequence: $(length(patchPerm)) measured and $(length(perm)) valid patches in Permutation"
+  #catch e
+  #  throw(e)
+  #end
 
   return nothing
 end
@@ -103,13 +131,15 @@ function timeEstimate(protocol::MPSMeasurementProtocol)
   est = "Unknown"
   if !isnothing(sequence(protocol))
     params = protocol.params
-    seq = params.sequence
-    totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
-    samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
-    time = totalTime * 1u"s"
-    est = string(time)
-    @info "The estimated duration is $est s."
+    seq = sequence(protocol)
+    fgFrames = params.fgFrames * acqNumFrameAverages(seq)
+    bgFrames = params.measureBackground*params.bgFrames * acqNumFrameAverages(seq)
+    txSamplesPerFrame = lcm(dfDivider(seq)) * size(protocol.patchPermutation, 1)
+    fgTime = (txSamplesPerFrame * fgFrames) / txBaseFrequency(seq) |> u"s"
+    bgTime = (txSamplesPerFrame * bgFrames) / txBaseFrequency(seq) |> u"s"
+    perc_wait = round(Int,sum(isnothing.(protocol.patchPermutation))/size(protocol.patchPermutation,1)*100)
+    est = "FG: $(timeFormat(fgTime)) ($(perc_wait)% waiting)\nBG: $(timeFormat(bgTime))"
+    @info "The estimated duration is FG: $fgTime ($(perc_wait)% waiting), BG: $bgTime."
   end
   return est
 end
@@ -120,68 +150,9 @@ function enterExecute(protocol::MPSMeasurementProtocol)
   protocol.finishAcknowledged = false
 end
 
-function getRelevantDfDivider(protocol::MPSMeasurementProtocol)
-  sequence_ = sequence(protocol)
-
-  divider = nothing
-  offsetFieldIdx = nothing
-  offsetChannelIdx = nothing
-  for (fieldIdx, field) in enumerate(fields(sequence_))
-    for (channelIdx, channel) in enumerate(channels(field))
-      if channel isa PeriodicElectricalChannel
-        @warn "The protocol currently always uses the first component of $(id(channel)) for determining the divider."
-        divider = channel.components[1].divider
-      elseif channel isa ContinuousElectricalChannel
-        offsetFieldIdx = fieldIdx
-        offsetChannelIdx = channelIdx
-      end
-    end
-  end
-
-  if isnothing(divider)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a PeriodicElectricalChannel and thus a divider."))
-  end
-
-  if isnothing(offsetFieldIdx) || isnothing(offsetChannelIdx)
-    throw(ProtocolConfigurationError("The sequence `$(name(sequence_))` for the protocol `$(name(protocol))` does not define a ContinuousElectricalChannel and thus an offset field description."))
-  end
-
-  return divider, offsetFieldIdx, offsetChannelIdx
-end
-
-function createOffsetChannel(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
-  sequence_ = sequence(protocol)
-
-  divider, offsetFieldIdx, offsetChannelIdx = getRelevantDfDivider(protocol)
-
-  stepDivider = divider * (protocol.params.dfPeriodsPerOffset + deletedPeriodsPerOffset)
-  offsetDivider = stepDivider * protocol.params.offsetNum
-
-  chanOffset = (protocol.params.offsetStop + protocol.params.offsetStart) / 2
-  amplitude = abs(protocol.params.offsetStop - protocol.params.offsetStart) / 2
-  
-  oldChannel = sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx]
-  newChannel = ContinuousElectricalChannel(id=oldChannel.id, dividerSteps=stepDivider, divider=offsetDivider, amplitude=amplitude, phase=oldChannel.phase, offset=chanOffset, waveform=WAVEFORM_SAWTOOTH_RISING)
-
-  @info "Values used for the creation of the offset channel" divider stepDivider offsetDivider chanOffset amplitude
-
-  return newChannel, offsetFieldIdx, offsetChannelIdx
-end
-
-function setupSequence(protocol::MPSMeasurementProtocol; deletedPeriodsPerOffset=protocol.params.deletedDfPeriodsPerOffset)
-  sequence_ = sequence(protocol)
-  newChannel, offsetFieldIdx, offsetChannelIdx = createOffsetChannel(protocol, deletedPeriodsPerOffset=deletedPeriodsPerOffset)
-  
-  @info "Offset values used for the measurement" MPIMeasurements.values(newChannel)
-  
-  sequence_.fields[offsetFieldIdx].channels[offsetChannelIdx] = newChannel
-  protocol.params.sequence = sequence_
-end
-
 function _execute(protocol::MPSMeasurementProtocol)
   @debug "Measurement protocol started"
 
-  setupSequence(protocol)
   performMeasurement(protocol)
 
   put!(protocol.biChannel, FinishedNotificationEvent())
@@ -217,7 +188,7 @@ function performMeasurement(protocol::MPSMeasurementProtocol)
   acqNumFrames(sequence(protocol), protocol.params.fgFrames)
 
   @debug "Starting foreground measurement."
-  protocol.unit = "Frames"
+  protocol.unit = "Offsets"
   measurement(protocol)
   deviceBuffers = protocol.seqMeasState.deviceBuffers
   push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
@@ -267,38 +238,92 @@ function measurement(protocol::MPSMeasurementProtocol)
 end
 
 function asyncMeasurement(protocol::MPSMeasurementProtocol)
-  scanner_ = scanner(protocol)
-  sequence = protocol.params.sequence
-  daq = getDAQ(scanner_)
-  deviceBuffer = DeviceBuffer[]
-  if protocol.params.controlTx
-    sequence = controlTx(protocol.txCont, sequence)
-    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
-  end
-  setup(daq, sequence)
-  protocol.seqMeasState = SequenceMeasState(daq, sequence)
-  if protocol.params.saveTemperatureData
-    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
-  end
-  protocol.seqMeasState.deviceBuffers = deviceBuffer
+  scanner_ = scanner(protocol)    
+  sequence, protocol.seqMeasState = SequenceMeasState(protocol)
   protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
   bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
   protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
   return protocol.seqMeasState
 end
 
+function SequenceMeasState(protocol::MPSMeasurementProtocol)
+  sequence = protocol.sequence
+  daq = getDAQ(scanner(protocol))
+  deviceBuffer = DeviceBuffer[]
 
-function cleanup(protocol::MPSMeasurementProtocol)
-  # NOP
+
+  # Setup everything as defined per sequence
+  if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  setup(daq, sequence)
+  
+  # Now for the buffer chain we want to reinterpret periods to frames
+  # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
+  acqNumFrames(protocol.sequence, acqNumFrames(protocol.sequence) * periodsPerFrame(daq.rpc))
+  setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
+
+  numFrames = acqNumFrames(protocol.sequence)
+
+  # Prepare buffering structures:
+  # RedPitaya-> MPSBuffer -> Splitter --> FrameBuffer{Mmap}
+  #                                   |-> DriveFieldBuffer 
+  numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
+  averages = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+  numFrames = div(numValidPatches, averages)
+  bufferSize = (rxNumSamplingPoints(protocol.sequence), length(rxChannels(protocol.sequence)), 1, numFrames)
+  buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
+
+  # buffers = StorageBuffer[buffer]
+  # TODO: reenable DriveFieldBuffer
+  #if protocol.params.controlTx 
+    #len = length(keys(sequence.refIndices))
+  #  push!(buffers, DriveFieldBuffer(1, zeros(ComplexF64, controlMatrixShape(sequence)..., 1, numFrames), sequence))
+  #end
+
+  # buffer = FrameSplitterBuffer(daq, StorageBuffer[buffer])
+  buffer = MPSBuffer(buffer, protocol.patchPermutation, averages, 1, acqNumPeriodsPerFrame(protocol.sequence))
+
+  channel = Channel{channelType(daq)}(32)
+  deviceBuffer = DeviceBuffer[]
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner(protocol)), numFrames))
+  end
+
+  return sequence, SequenceMeasState(numFrames, channel, nothing, nothing, AsyncBuffer(buffer, daq), deviceBuffer, asyncMeasType(protocol.sequence))
 end
 
-function stop(protocol::MPSMeasurementProtocol)
-  put!(protocol.biChannel, OperationNotSupportedEvent(StopEvent()))
+mutable struct MPSBuffer <: IntermediateBuffer
+  target::StorageBuffer
+  permutation::Vector{Union{Int64, Nothing}}
+  average::Int64
+  counter::Int64
+  total::Int64
 end
-
-function resume(protocol::MPSMeasurementProtocol)
-   put!(protocol.biChannel, OperationNotSupportedEvent(ResumeEvent()))
+function push!(mpsBuffer::MPSBuffer, frames::Array{T,4}) where T
+  from = nothing
+  to = nothing
+  for i = 1:size(frames, 4)
+    frameIdx = div(mpsBuffer.counter - 1, mpsBuffer.total)
+    patchCounter = mod1(mpsBuffer.counter, mpsBuffer.total)
+    patchIdx = mpsBuffer.permutation[patchCounter]
+    if !isnothing(patchIdx)
+      if mpsBuffer.average > 1
+        to = insert!(+, mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i)./mpsBuffer.average)
+      else
+        to = insert!(mpsBuffer.target, frameIdx * mpsBuffer.total + patchIdx, view(frames, :, :, :, i:i))
+      end
+    end
+    mpsBuffer.counter += 1
+  end
+  if !isnothing(from) && !isnothing(to)
+    return (start = from, stop = to)
+  else
+    return nothing
+  end
 end
+sinks!(buffer::MPSBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
 
 function cancel(protocol::MPSMeasurementProtocol)
   protocol.cancelled = true
@@ -327,7 +352,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DataQueryEvent)
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  mdf = prepareAsMDF(data, protocol.scanner, protocol.params.sequence)
+  put!(protocol.biChannel, DataAnswerEvent(mdf, event))
 end
 
 
@@ -335,7 +361,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::ProgressQueryEvent
   reply = nothing
   if !isnothing(protocol.seqMeasState)
     framesTotal = protocol.seqMeasState.numFrames
-    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    measFramesDone = protocol.seqMeasState.sequenceBuffer.target.counter-1
+    framesDone = length(unique(protocol.patchPermutation[1:measFramesDone]))-1
     reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
   else
     reply = ProgressEvent(0, 0, "N/A", event)
@@ -348,30 +375,47 @@ handleEvent(protocol::MPSMeasurementProtocol, event::FinishedAckEvent) = protoco
 function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
   store = event.datastore
   scanner = protocol.scanner
+  sequence = protocol.sequence
   mdf = event.mdf
+
   data = read(protocol.protocolMeasState, MeasurementBuffer)
+  data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
+  acqNumFrames(sequence, size(data, 4))
+  
+  periodsPerOffset = size(protocol.patchPermutation,1)÷size(protocol.offsetfields,1)
 
-  if protocol.params.deletedDfPeriodsPerOffset > 0
-    numSamples_ = size(data, 1)
-    numChannels_ = size(data, 2)
-    numPeriods_ = size(data, 3)
-    numFrames_ = size(data, 4)
-
-    numPeriodsPerOffset_ = div(numPeriods_, protocol.params.offsetNum)
-
-    data = reshape(data, (numSamples_, numChannels_, numPeriodsPerOffset_, protocol.params.offsetNum, numFrames_))
-    data = data[:, :, protocol.params.deletedDfPeriodsPerOffset+1:end, :, :] # Kick out first N periods
-    data = reshape(data, (numSamples_, numChannels_, :, numFrames_))
-
-    # Reset sequence since the info is used for the MDF
-    setupSequence(protocol, deletedPeriodsPerOffset=0)
+  offsetPerm = zeros(Int64, size(data, 3))
+  for (index, patch) in enumerate(protocol.patchPermutation)
+    if !isnothing(patch)
+      offsetPerm[patch] = (index-1)÷periodsPerOffset + 1
+    end
   end
+  offsets = protocol.offsetfields[offsetPerm, :]
 
-  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+
+  isBGFrame = reduce(&, reshape(measIsBGFrame(protocol.protocolMeasState), size(data, 3), :), dims = 1)[1, :]
   drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
   appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
   temperature = read(protocol.protocolMeasState, TemperatureBuffer)
-  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+
+
+  filename = nothing
+
+  periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
+  isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
+  data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
+
+  # All periods in one frame (should) have same offset
+  offsets = reshape(offsets, (periodsPerOffset, :, size(offsets, 2)))[1, :, :]
+
+  # Pad zeros in z or z and y direction if the protocol uses less than 3 offset dimensions.
+  @assert size(offsets, 2) <= 3 "The number of offset dimensions must be below or equal to 3 since the MDF specifies Ox3 with directions in x, y and z."
+  offsets = hcat(offsets, zeros(eltype(offsets), (size(offsets, 1), 3 - size(offsets, 2))))
+
+  calibsize_ = vcat(protocol.calibsize, ones(eltype(protocol.calibsize), 3 - length(protocol.calibsize)))
+  offsets = reshape(offsets, (calibsize_..., :)) # make calib size "visible" to storing function
+  filename = saveasMDF(store, scanner, sequence, data, offsets, isBGFrame, mdf, storeAsSystemMatrix=protocol.params.saveInCalibFolder, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
@@ -379,4 +423,4 @@ end
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
 protocolMDFStudyUse(protocol::MPSMeasurementProtocol) = UsingMDFStudy()
 
-sequence(protocol::MPSMeasurementProtocol) = protocol.params.sequence
+sequence(protocol::MPSMeasurementProtocol) = protocol.sequence

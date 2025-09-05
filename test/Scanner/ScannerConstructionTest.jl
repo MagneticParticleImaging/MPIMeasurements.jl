@@ -6,6 +6,7 @@
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingOptional")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingPresent")
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingParams")
+    @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingConfigFile")
   end
 
   # Dependencies are checked correctly

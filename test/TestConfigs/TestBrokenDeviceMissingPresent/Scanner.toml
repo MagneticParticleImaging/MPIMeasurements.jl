@@ -6,7 +6,6 @@ name = "TestBrokenDeviceMissingPresent"
 topology = "FFL"
 gradient = "42T/m"
 datasetStore = "./tmp/TestSimpleSimulatedScannerStore"
-defaultSequence = "SimpleSimulatedSequence"
 
 [Devices]
 initializationOrder = [

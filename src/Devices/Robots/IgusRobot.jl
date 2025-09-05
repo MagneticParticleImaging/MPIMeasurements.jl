@@ -31,6 +31,11 @@ const MODES = Dict(
 "PROFILE_POSITION" => 1,
 "HOMING" => 6)
 
+"""
+Parameters for a Robot of type `IgusRobot`
+
+$FIELDS
+"""
 Base.@kwdef struct IgusRobotParams <: DeviceParams
   defaultVelocity::Vector{typeof(1.0u"mm/s")} = [10.0u"mm/s"]
   axisRange::Vector{Vector{typeof(1.0u"mm")}} = [[0,500.0]]u"mm"

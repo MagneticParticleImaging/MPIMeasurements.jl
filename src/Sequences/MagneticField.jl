@@ -5,6 +5,8 @@ Description of a magnetic field.
 The field can either be electromagnetically or mechanically changed.
 The mechanical movement of e.g. an iron yoke would be defined within
 two channels, one electrical and one mechanical.
+
+$FIELDS
 """
 Base.@kwdef struct MagneticField
   "Unique ID of the field description."
@@ -50,6 +52,14 @@ function getindex(field::MagneticField, index::String)
   throw(KeyError(index))
 end
 setindex!(field::MagneticField, txChannel::TxChannel, i::Integer) = channels(field)[i] = txChannel
+function setindex!(field::MagneticField, txChannel::TxChannel, i::String)
+  for (index, channel) in enumerate(channels(field))
+    if isequal(id(channel), i)
+      return setindex!(field, txChannel, index)
+    end
+  end
+  push!(field, txChannel)
+end
 firstindex(field::MagneticField) = start_(field)
 lastindex(field::MagneticField) = length(field)
 keys(field::MagneticField) = map(id, field)
@@ -86,7 +96,7 @@ safeEndInterval(field::MagneticField) = field.safeEndInterval
 export safeErrorInterval
 safeErrorInterval(field::MagneticField) = field.safeErrorInterval
 
-control(field::MagneticField) = field.control
+control(field::MagneticField) = field.control || field.decouple
 decouple(field::MagneticField) = field.decouple
 
 export electricalTxChannels
@@ -100,6 +110,9 @@ periodicElectricalTxChannels(field::MagneticField) = channels(field, PeriodicEle
 
 export acyclicElectricalTxChannels
 acyclicElectricalTxChannels(field::MagneticField) = channels(field, AcyclicElectricalTxChannel)
+
+export protocolTxChannels
+protocolTxChannels(field::MagneticField) = channels(field, ProtocolTxChannel)
 
 function toDict!(dict, field::MagneticField)
   for structField in [x for x in fieldnames(typeof(field)) if !in(x, [:id, :channels])]

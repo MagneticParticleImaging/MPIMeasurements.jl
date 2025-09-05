@@ -1,6 +1,8 @@
 export ContinousMeasurementProtocol, ContinousMeasurementProtocolParams
 """
-Parameters for the MPIMeasurementProtocol
+Parameters for the `ContinousMeasurementProtocol``
+
+$FIELDS
 """
 Base.@kwdef mutable struct ContinousMeasurementProtocolParams <: ProtocolParams
   "Foreground frames to measure. Overwrites sequence frames"
@@ -33,7 +35,7 @@ Base.@kwdef mutable struct ContinousMeasurementProtocol <: Protocol
   @add_protocol_fields ContinousMeasurementProtocolParams
 
   seqMeasState::Union{SequenceMeasState, Nothing} = nothing
-
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
 
   latestMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
   latestBgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
@@ -62,17 +64,12 @@ function _init(protocol::ContinousMeasurementProtocol)
   protocol.cancelled = false
   protocol.finishAcknowledged = false
   if protocol.params.controlTx
-    controllers = getDevices(protocol.scanner, TxDAQController)
-    if length(controllers) > 1
-      throw(IllegalStateException("Cannot unambiguously find a TxDAQController as the scanner has $(length(controllers)) of them"))
-    end
-    protocol.txCont = controllers[1]
-    protocol.txCont.currTx = nothing
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
   else
     protocol.txCont = nothing
   end
   protocol.counter = 0
-
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
   return nothing
 end
 
@@ -122,7 +119,7 @@ function _execute(protocol::ContinousMeasurementProtocol)
     while !measPauseOver || protocol.stopped
       handleEvents(protocol)
       if !notifiedStop && protocol.stopped
-        put!(protocol.biChannel, OperationSuccessfulEvent(StopEvent()))
+        put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
         notifiedStop = true
       end
       if notifiedStop && !protocol.stopped
@@ -198,11 +195,7 @@ function asyncMeasurement(protocol::ContinousMeasurementProtocol)
   return protocol.seqMeasState
 end
 
-function cleanup(protocol::ContinousMeasurementProtocol)
-  # NOP
-end
-
-function stop(protocol::ContinousMeasurementProtocol)
+function pause(protocol::ContinousMeasurementProtocol)
   protocol.stopped = true
 end
 
@@ -233,8 +226,15 @@ function handleEvent(protocol::ContinousMeasurementProtocol, event::DataQueryEve
   else
     put!(protocol.biChannel, UnknownDataQueryEvent(event))
     return
+  end  
+  
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    result = mdf
   end
-  put!(protocol.biChannel, DataAnswerEvent(data, event))
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
 end
 
 

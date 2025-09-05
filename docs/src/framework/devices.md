@@ -20,7 +20,7 @@ The fields of each `Device` can be grouped into three parts.
 ### Common Device Fields
 Every `Device` must have the fields `deviceID, params, present` and `dependencies`, as these are the fields used during automatic instantiation of a `Scanner`.
 
-The `deviceID` is the name of a specific `Device` instance and corresponds to the name/key used in the `Scanner.toml`. The `params` field contains the user provided configuration parameters (see [Device Parameter](@ref)). 
+The `deviceID` is the name of a specific `Device` instance and corresponds to the name/key used in the `Scanner.toml`. The `params` field contains the user provided configuration parameters (see [Device Parameter Field](@ref)). 
 
 Lastly the `present` field denotes if a `Device` was succesfully initialized and the `dependencies` field contains a `Dict` containing all the dependent `Devices` of the current `Device`. 
 

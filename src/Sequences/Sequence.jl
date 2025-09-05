@@ -53,6 +53,14 @@ function getindex(seq::Sequence, index::String)
   throw(KeyError(index))
 end
 setindex!(seq::Sequence, field::MagneticField, i::Integer) = fields(seq)[i] = field
+function setindex!(seq::Sequence, field::MagneticField, i::String)
+  for (index, f) in enumerate(fields(seq))
+    if id(f) == i
+      return setindex!(seq, field, index)
+    end
+  end
+  push!(seq, field)
+end
 firstindex(seq::Sequence) = start_(seq)
 lastindex(seq::Sequence) = length(seq)
 keys(seq::Sequence) = map(id, seq)
@@ -161,6 +169,12 @@ function fieldDictToFields(fieldsDict::Dict{String, Any})
     if haskey(fieldDict, "safeErrorInterval")
       splattingDict[:safeErrorInterval] = uparse(fieldDict["safeErrorInterval"])
     end
+    if haskey(splattingDict, :decouple) && splattingDict[:decouple]
+      if haskey(splattingDict, :control) && !splattingDict[:control]
+        throw(SequenceConfigurationError("A field that should be decoupled always needs to be controlled, please fix field \"$(fieldID)\""))
+      end
+      splattingDict[:control] = true
+    end
 
     field = MagneticField(;splattingDict...)
     push!(fields, field)
@@ -173,10 +187,9 @@ end
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
     type = pop!(channelDict, "type")
-    knownChannels = MPIFiles.concreteSubtypes(TxChannel)
-    index = findfirst(x -> x == type, string.(knownChannels))
-    if !isnothing(index) 
-      createFieldChannel(channelID, knownChannels[index], channelDict)
+    concreteType = getConcreteType(TxChannel, type)
+    if !isnothing(concreteType) 
+      createFieldChannel(channelID, concreteType, channelDict)
     else
       error("Channel $channelID has an unknown channel type `$type`.")
     end
@@ -277,6 +290,17 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
   end
 end
 
+export divider!
+function divider!(channel::PeriodicElectricalChannel, componentId::AbstractString, value::Union{Rational,Integer})
+  index = findfirst(x -> id(x) == componentId, channel.components)
+  if !isnothing(index)
+    divider!(channel.components[index], value)
+  else
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+  end
+end
+
+
 export acqGradient
 acqGradient(sequence::Sequence) = nothing # TODO: Implement
 
@@ -285,7 +309,7 @@ function acqNumPeriodsPerFrame(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     numPeriods = [div(c.divider, samplesPerCycle) for c in channels ]
 
     if minimum(numPeriods) != maximum(numPeriods)
@@ -303,7 +327,7 @@ function acqNumPeriodsPerPatch(sequence::Sequence)
   #TODO: We can't limit this to acyclic channels. What is the correct number of periods per frame with mechanical channels?
   if hasAcyclicElectricalTxChannels(sequence)
     channels = acyclicElectricalTxChannels(sequence)
-    samplesPerCycle = lcm(dfDivider(sequence))
+    samplesPerCycle = dfSamplesPerCycle(sequence)
     stepsPerCycle = [ typeof(c) <: StepwiseElectricalChannel ?
                               div(c.divider,length(c.values)*samplesPerCycle) :
                               div(c.dividerSteps,samplesPerCycle) for c in channels ]
@@ -323,13 +347,14 @@ export acqOffsetField
 function acqOffsetField(sequence::Sequence)
   # TODO: This is a hack for getting the required information for the MPSMeasurementProtocol. Can we find a generalized solution?
   if hasAcyclicElectricalTxChannels(sequence)
-    @warn "This is a hack for the MPSMeasurementProtocol. It might result in wrong MDF settings in other cases."
-    channels = acyclicElectricalTxChannels(sequence)
-    offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
-    values_ =  MPIMeasurements.values(offsetChannel)
-    values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
-    
-    return values3D
+    #@warn "This is a hack for the MPSMeasurementProtocol. It might result in wrong MDF settings in other cases."
+    #channels = acyclicElectricalTxChannels(sequence)
+    #offsetChannel = first([channel for channel in channels if channel isa ContinuousElectricalChannel])
+    #values_ =  MPIMeasurements.values(offsetChannel)
+    #values3D = reshape([values_ fill(0.0u"T", length(values_)) fill(0.0u"T", length(values_))], (length(values_), 1, 3))
+    #
+    #return values3D
+    return nothing
   else
     return nothing
   end
@@ -341,8 +366,11 @@ dfBaseFrequency(sequence::Sequence) = baseFrequency(sequence)
 export txBaseFrequency
 txBaseFrequency(sequence::Sequence) = dfBaseFrequency(sequence) # Alias, since this might not only concern the drivefield
 
+export dfSamplesPerCycle
+dfSamplesPerCycle(sequence::Sequence) = lcm(numerator.(dfDivider(sequence)))
+
 export dfCycle
-dfCycle(sequence::Sequence) = lcm(dfDivider(sequence))/dfBaseFrequency(sequence) |> u"s"
+dfCycle(sequence::Sequence) = dfSamplesPerCycle(sequence)/dfBaseFrequency(sequence) |> u"s"
 
 export txCycle
 txCycle(sequence::Sequence) = dfCycle(sequence) # Alias, since this might not only concern the drivefield
@@ -351,7 +379,7 @@ export dfDivider
 function dfDivider(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  result = zeros(Int64, (dfNumChannels(sequence), maxComponents))
+  result = ones(Rational{Int64}, (dfNumChannels(sequence), maxComponents)) # Otherwise the dfCycle is miscalculated in the case of a different amount of components
   
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
@@ -395,6 +423,11 @@ function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanic
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
       for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+        if strength isa Unitful.Voltage
+          # HACKY way to save Voltage DFs into the MDF -> use Tesla as mV (everything > 1 will be V)
+          @warn "Your DF is defined as a voltage! Will save $(uconvert(u"mV",strength)) as $(ustrip(u"mV", strength).*u"T")"
+          strength = ustrip(u"mV", strength).*u"T"
+        end
         result[periodIdx, channelIdx, componentIdx] = strength
       end
     end
@@ -456,11 +489,12 @@ rxNumChannels(sequence::Sequence) = length(rxChannels(sequence))
 export rxNumSamplingPoints
 function rxNumSamplingPoints(sequence::Sequence)
   result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
-  if !isinteger(result)
-    throw(ScannerConfigurationError("The selected combination of divider and decimation results in non-integer sampling points."))
+  if !(result≈round(result))
+    @debug "rxNumSamplingPoints" result≈round(result) rxSamplingRate(sequence) dfCycle(sequence)
+    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($(Int(baseFrequency(sequence)/rxSamplingRate(sequence)))) results in non-integer sampling points ($result)."))
   end
 
-  return Int64(result)
+  return round(Int64,result)
 end
 
 export rxNumSamplesPerPeriod
@@ -471,7 +505,7 @@ rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
-  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent]
+  StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent, ProtocolOffsetElectricalChannel]
   @eval begin
     @generated function ==(x::$T, y::$T)
       fieldEqualities = [:(x.$field == y.$field) for field in fieldnames($T)]

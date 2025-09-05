@@ -1,5 +1,10 @@
 export RobotBasedMagneticFieldStaticProtocolParams, RobotBasedMagneticFieldStaticProtocol, measurement
 
+"""
+Parameter for the `RobotBasedMagneticFieldStaticProtocol`
+
+$FIELDS
+"""
 Base.@kwdef mutable struct RobotBasedMagneticFieldStaticProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   positions::Union{GridPositions, Nothing} = nothing
@@ -169,13 +174,13 @@ function performMeasurement(protocol::RobotBasedMagneticFieldStaticProtocol)
   addMeasuredPosition(protocol.measurement, nextPosition(protocol).data, field=field_) #  fieldError=fieldError_, fieldFrequency=fieldFrequency_, timestamp=timestamp_, temperature=temperature_)
 end
 
-function stop(protocol::RobotBasedMagneticFieldStaticProtocol)
+function pause(protocol::RobotBasedMagneticFieldStaticProtocol)
   if protocol.currPos <= length(protocol.params.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.stopped = true
   else 
     # Stopped has no concept once all measurements are done
-    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(PauseEvent()))
   end
 end
 

@@ -6,7 +6,6 @@ name = "TestRedPitayaScanner"
 topology = "FFL"
 gradient = "42T/m"
 datasetStore = "./tmp/TestRedPitayaScannerStore"
-defaultSequence = ""
 
 [Devices]
 initializationOrder = [

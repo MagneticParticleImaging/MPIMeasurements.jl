@@ -1,5 +1,10 @@
 export RobotBasedTDesignFieldProtocolParams, RobotBasedTDesignFieldProtocol, measurement
 
+"""
+Parameters for the `RobotBasedTDesignFieldProtocol`
+
+$FIELDS
+"""
 Base.@kwdef mutable struct RobotBasedTDesignFieldProtocolParams <: RobotBasedProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   radius::typeof(1.0u"mm") = 0.0u"mm"
@@ -211,13 +216,13 @@ function finishMeasurement(protocol::RobotBasedTDesignFieldProtocol, gauss::Lake
   end
 end
 
-function stop(protocol::RobotBasedTDesignFieldProtocol)
+function pause(protocol::RobotBasedTDesignFieldProtocol)
   if protocol.currPos <= length(protocol.positions)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.stopped = true
   else 
     # Stopped has no concept once all measurements are done
-    put!(protocol.biChannel, OperationUnsuccessfulEvent(StopEvent()))
+    put!(protocol.biChannel, OperationUnsuccessfulEvent(PauseEvent()))
   end
 end
 
@@ -252,8 +257,5 @@ function handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::FileStorag
   put!(protocol.biChannel, StorageSuccessEvent(filename))
 end
 
-function cleanup(protocol::RobotBasedTDesignFieldProtocol)
- # NOP
-end
 
 protocolInteractivity(protocol::RobotBasedTDesignFieldProtocol) = Interactive()

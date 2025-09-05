@@ -19,7 +19,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	fillMDFScanner(mdf, scanner)
 	fillMDFTracer(mdf)
 
-	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 
 	filename = getNewExperimentPath(study)
@@ -58,7 +58,7 @@ end
 
 
 function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Positions, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+														positions::Union{Positions, AbstractArray}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -85,7 +85,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	@debug isBackgroundFrame
 
-	fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 	fillMDFAcquisition(mdf, scanner, sequence)
 	fillMDFCalibration(mdf, positions, deltaSampleSize = deltaSampleSize)
 
@@ -131,6 +131,39 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 		size = size,
 		snr = snr,
 		isMeanderingGrid = isMeanderingGrid
+	)
+
+	return
+end
+function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArray, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+
+	# /calibration/ subgroup
+
+	if !isnothing(deltaSampleSize)
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+	end
+
+	method = "hybrid"
+	order = "xyz"
+
+	# a hybrid calibration assumes a homogenoeus gradient of 1 T/m in all directions
+  MPIFiles.acqGradient(mdf, reshape(Matrix(Diagonal(ones(3))),3,3,1,1))
+
+	calibsize = size(offsetFields)[1:end-1]
+	offsetFields = reshape(offsetFields, prod(calibsize), :)
+
+	# we assume a regular and aligned grid in all three Dimensions, this might not always be correct
+	fov = [maximum(offsetFields[:,i]) - minimum(offsetFields[:,i]) for i in 1:3]
+	fovCenter = [mean(extrema(offsetFields[:,i])) for i in 1:3]
+
+	mdf.calibration = MDFv2Calibration(;
+		deltaSampleSize = deltaSampleSize,
+		method = method,
+		fieldOfView = fov,
+		fieldOfViewCenter = fovCenter,
+		offsetFields = permutedims(offsetFields), # Switch dimensions since the MDF specifies Ox3 but Julia is column major
+		order = order,
+		size = collect(calibsize)
 	)
 
 	return
@@ -216,7 +249,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
     bgdata::Nothing; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Nothing=nothing, bgTransmit::Nothing=nothing)
 	numFrames = acqNumFrames(sequence)
 	isBackgroundFrame = zeros(Bool, numFrames)
-	return fillMDFMeasurement(mdf, sequence, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	return fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
 end
 function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
 	bgdata::Union{Array{Float32}}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Union{Array{ComplexF64}, Nothing}=nothing, bgTransmit::Union{Array{ComplexF64}, Nothing}=nothing)
@@ -234,11 +267,11 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 	end
 	isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
 	numFrames = numFrames + numBGFrames
-	return fillMDFMeasurement(mdf, sequence, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
+	return fillMDFMeasurement(mdf, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
 	# /measurement/ subgroup
 	numFrames = size(data, 4)
 
@@ -275,9 +308,9 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	#acqGradient(mdf, acqGradient(sequence)) # TODO: Impelent in Sequence
 	#MPIFiles.acqGradient(mdf, ustrip.(u"T/m", scannerGradient(scanner)))
 
-	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence))
+	MPIFiles.acqNumAverages(mdf, acqNumAverages(sequence)*acqNumFrameAverages(sequence))
 	MPIFiles.acqNumFrames(mdf, length(measIsBackgroundFrame(mdf))) # important since we might have added BG frames
-	MPIFiles.acqNumPeriodsPerFrame(mdf, acqNumPeriodsPerFrame(sequence))
+	MPIFiles.acqNumPeriodsPerFrame(mdf, size(measData(mdf), 3)) # Hacky to support cases where periods of data != periods of sequence
 	offsetField_ = acqOffsetField(sequence)
 	MPIFiles.acqOffsetField(mdf, isnothing(offsetField_) || !all(x-> x isa Unitful.MagneticFlux, offsetField_) ? nothing : ustrip.(u"T", offsetField_))
 	MPIFiles.acqStartTime(mdf, Dates.unix2datetime(time())) #seqCont.startTime) # TODO as parameter, start time from protocol
@@ -285,7 +318,9 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	# /acquisition/drivefield/ subgroup
 	MPIFiles.dfBaseFrequency(mdf, ustrip(u"Hz", dfBaseFrequency(sequence)))
 	MPIFiles.dfCycle(mdf, ustrip(u"s", dfCycle(sequence)))
-	MPIFiles.dfDivider(mdf, dfDivider(sequence))
+	dividers = dfDivider(sequence)
+	dividers[.!isinteger.(dividers)] .= 0
+	MPIFiles.dfDivider(mdf, Int.(dividers))
 	MPIFiles.dfNumChannels(mdf, dfNumChannels(sequence))
 	MPIFiles.dfPhase(mdf, ustrip.(u"rad", dfPhase(sequence)))
 	MPIFiles.dfStrength(mdf, ustrip.(u"T", dfStrength(sequence)))
@@ -301,13 +336,19 @@ function fillMDFAcquisition(mdf::MDFv2InMemory, scanner::MPIScanner, sequence::S
 	MPIFiles.rxUnit(mdf, "V")
 
 	# transferFunction
-	if hasTransferFunction(scanner)
-		numFreq = div(numSamplingPoints_,2)+1
-		freq = collect(0:(numFreq-1))./(numFreq-1).*ustrip(u"Hz", rxBandwidth(sequence))
-		tf_ =  TransferFunction(scanner)
-		tf = tf_(freq,1:numRxChannels_)
-		MPIFiles.rxTransferFunction(mdf, tf)
-		MPIFiles.rxInductionFactor(mdf, tf_.inductionFactor)
+	if any(hasTransferFunction.([getDAQ(scanner)], id.(rxChannels(sequence))))
+		tfs = transferFunction.([getDAQ(scanner)], id.(rxChannels(sequence)))
+		tf = reduce((x,y)->MPIFiles.combine(x,y,interpolate=true), tfs)
+		sampledTF = ustrip.(sampleTF(tf, mdf))
+		MPIFiles.rxTransferFunction(mdf, sampledTF)
+		MPIFiles.rxInductionFactor(mdf, tf.inductionFactor)
 	end
 
+end
+
+function prepareAsMDF(data, scanner::MPIScanner, sequence::Sequence, isBackgroundFrame::Vector{Bool} = zeros(Bool, size(data, 4)))
+	mdf = MDFv2InMemory()
+  fillMDFMeasurement(mdf, data, isBackgroundFrame)
+  fillMDFAcquisition(mdf, scanner, sequence)
+	return mdf
 end

@@ -14,6 +14,7 @@ The general section contains a description string for the sequence, as well as t
 
 ```toml
 [General]
+name = "<Sequence Name>"
 description = "<Sequence Description>"
 targetScanner = "<ScannerName>"
 baseFrequency = "125MHz"

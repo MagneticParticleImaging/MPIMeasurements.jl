@@ -2,6 +2,11 @@ export RampingMode, NONE, HOLD, STARTUP
 @enum RampingMode NONE HOLD STARTUP
 
 export RedPitayaDAQParams
+"""
+Parameters for a DAQ of type `RedPitayaDAQ`
+
+$(FIELDS)
+"""
 Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   "All configured channels of this DAQ device."
   channels::Dict{String, DAQChannelParams}
@@ -21,74 +26,59 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   counterTriggerSourceChannel::DIOPins = DIO7_P
 end
 
-Base.@kwdef struct RedPitayaTxChannelParams <: TxChannelParams
-  channelIdx::Int64
-  limitPeak::typeof(1.0u"V")
-  sinkImpedance::SinkImpedance = SINK_HIGH
-  allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
-  feedback::Union{DAQFeedback, Nothing} = nothing
-  calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
-end
+"""
+Parameters for a TxChannel of type RedPitayaLUTChannel
 
+$(FIELDS)
+"""
 Base.@kwdef struct RedPitayaLUTChannelParams <: TxChannelParams
   channelIdx::Int64
   calibration::Union{typeof(1.0u"V/T"), typeof(1.0u"V/A"), Nothing} = nothing
+  range::TxValueRange = BOTH
+  hbridge::Union{DAQHBridge, Nothing} = nothing
+  switchTime::typeof(1.0u"s") = 0.0u"s"
+  switchEnable::Bool = true
+end
+
+calibration(dev::Device, channel::RedPitayaLUTChannelParams) = channel.calibration
+
+function createDAQChannel(::Type{RedPitayaLUTChannelParams}, dict::Dict{String, Any})
+  splattingDict = Dict{Symbol, Any}()
+  splattingDict[:channelIdx] = dict["channel"]
+  if haskey(dict, "calibration")
+    calib = uparse.(dict["calibration"])
+
+    if unit(upreferred(calib)) == upreferred(u"V/T")
+      calib = calib .|> u"V/T"
+    elseif unit(upreferred(calib)) == upreferred(u"V/A")
+      calib = calib .|> u"V/A"
+    else
+      error("The values have to be either given as a V/T or in V/A. You supplied the type `$(eltype(calib))`.")
+    end
+    splattingDict[:calibration] = calib
+  end
+
+  if haskey(dict, "hbridge")
+    splattingDict[:hbridge] = createDAQChannels(DAQHBridge, dict["hbridge"])
+  end
+
+  if haskey(dict, "range")
+    splattingDict[:range] = dict["range"]
+  end
+
+  if haskey(dict, "switchTime")
+    splattingDict[:switchTime] = uparse(dict["switchTime"])
+  end
+
+  if haskey(dict, "switchEnable")
+    splattingDict[:switchEnable] = dict["switchEnable"]
+  end
+  return RedPitayaLUTChannelParams(; splattingDict...)
 end
 
 "Create the params struct from a dict. Typically called during scanner instantiation."
 function RedPitayaDAQParams(dict::Dict{String, Any})
   return createDAQParams(RedPitayaDAQParams, dict)
-end
-
-function createDAQChannels(::Type{RedPitayaDAQParams}, dict::Dict{String, Any})
-  # TODO This is mostly copied from createDAQChannels, maybe manage to get rid of the duplication
-  channels = Dict{String, DAQChannelParams}()
-  for (key, value) in dict
-    splattingDict = Dict{Symbol, Any}()
-    if value["type"] == "tx"
-      splattingDict[:channelIdx] = value["channel"]
-      splattingDict[:limitPeak] = uparse(value["limitPeak"])
-
-      if haskey(value, "sinkImpedance")
-        splattingDict[:sinkImpedance] = value["sinkImpedance"] == "FIFTY_OHM" ? SINK_FIFTY_OHM : SINK_HIGH
-      end
-
-      if haskey(value, "allowedWaveforms")
-        splattingDict[:allowedWaveforms] = toWaveform.(value["allowedWaveforms"])
-      end
-
-      if haskey(value, "feedback")
-        channelID=value["feedback"]["channelID"]
-        calibration=uparse(value["feedback"]["calibration"])
-
-        splattingDict[:feedback] = DAQFeedback(channelID=channelID, calibration=calibration)
-      end
-
-      if haskey(value, "calibration")
-        splattingDict[:calibration] = uparse.(value["calibration"])
-      end
-
-      channels[key] = RedPitayaTxChannelParams(;splattingDict...)
-    elseif value["type"] == "rx"
-      channels[key] = DAQRxChannelParams(channelIdx=value["channel"])
-    elseif value["type"] == "txSlow"
-      calib = nothing
-      if haskey(value, "calibration")
-        calib = uparse.(value["calibration"])
-
-        if unit(upreferred(calib)) == upreferred(u"V/T")
-          calib = calib .|> u"V/T"
-        elseif unit(upreferred(calib)) == upreferred(u"V/A")
-          calib = calib .|> u"V/A"
-        else
-          error("The values have to be either given as a V/t or in V/A. You supplied the type `$(eltype(calib))`.")
-        end
-      end
-      channels[key] = RedPitayaLUTChannelParams(channelIdx=value["channel"], calibration = calib)
-    end
-  end
-
-  return channels
 end
 
 export RedPitayaDAQ
@@ -120,6 +110,15 @@ Base.@kwdef mutable struct RedPitayaDAQ <: AbstractDAQ
 end
 
 function _init(daq::RedPitayaDAQ)
+  # force all calibration transfer functions to be read from disk
+  for channelID in keys(daq.params.channels)
+    if isa(channel(daq, channelID), DAQTxChannelParams)
+      calibration(daq, channelID)
+    elseif isa(channel(daq, channelID), DAQRxChannelParams)
+      transferFunction(daq, channelID)
+    end
+  end
+
   # Restart the DAQ if necessary
   try
     daq.rpc = RedPitayaCluster(daq.params.ips, triggerMode = daq.params.triggerMode)
@@ -162,6 +161,8 @@ optionalDependencies(::RedPitayaDAQ) = [TxDAQController, SurveillanceUnit]
 
 Base.close(daq::RedPitayaDAQ) = daq.rpc
 
+channel(daq::RedPitayaDAQ, channelID::AbstractString) = daq.params.channels[channelID]
+
 export usesCounterTrigger
 usesCounterTrigger(daq::RedPitayaDAQ) = daq.params.useCounterTrigger
 
@@ -200,7 +201,7 @@ function setRampingParams(daq::RedPitayaDAQ, sequence::Sequence)
   for channel in txChannels
     m = nothing
     idx = channel[2].channelIdx
-    if channel[2] isa RedPitayaTxChannelParams
+    if channel[2] isa DAQTxChannelParams
       m = idx
     elseif channel[2] isa RedPitayaLUTChannelParams
       # Map to fast DAC
@@ -308,9 +309,8 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     @debug "There are no LUTs to set."
   end
 
-  @info "Set sequence params"
-
   stepsPerRepetition = div(periodsPerFrame(daq.rpc), daq.acqPeriodsPerPatch)
+  @debug "Set sequence params" samplesPerStep=div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition)
   result = execute!(daq.rpc) do batch
     @add_batch batch samplesPerStep!(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
     @add_batch batch clearSequence!(daq.rpc)
@@ -380,12 +380,7 @@ function createLUT!(lut::Array{Float32}, start, channelMapping)
   lutValues = []
   lutIdx = []
   for (lutChannel, seqChannel) in channelMapping
-    tempValues = values(seqChannel)
-    if !isnothing(lutChannel.calibration)
-      tempValues = tempValues.*lutChannel.calibration
-    end
-    tempValues = ustrip.(u"V", tempValues)
-    push!(lutValues, tempValues)
+    push!(lutValues, ustrip.(u"V", values(seqChannel)))
     push!(lutIdx, lutChannel.channelIdx)
   end
 
@@ -443,6 +438,408 @@ function getTiming(daq::RedPitayaDAQ)
   sampleTiming = (start=timing.start * daq.samplesPerStep, down=timing.down * daq.samplesPerStep, finish=timing.finish * daq.samplesPerStep)
   return sampleTiming
 end
+
+
+function prepareProtocolSequences(base::Sequence, daq::RedPitayaDAQ; numPeriodsPerOffset::Int64 = 1)
+  cpy = deepcopy(base)
+
+  # Prepare offset sequences
+  offsetVector = ProtocolOffsetElectricalChannel[]
+  fieldMap = Dict{ProtocolOffsetElectricalChannel, MagneticField}()
+  calibsize = Int64[]
+  for field in cpy
+    for channel in channels(field, ProtocolOffsetElectricalChannel)
+      push!(offsetVector, channel)
+      fieldMap[channel] = field
+      push!(calibsize, length(values(channel)))
+    end
+  end
+
+  stepfreq = 125e6/lcm(dfDivider(cpy))
+  if stepfreq > 10e3
+    if stepfreq/numPeriodsPerOffset > 10e3
+      error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50 and at least $(ceil(stepfreq/10e3/50)*50)!")
+    else
+      if (numPeriodsPerOffset/50 != numPeriodsPerOffset÷50)
+        error("One period of the configured drivefield is only $(round(1/stepfreq*1e6,digits=4)) us long. To ensure that the RP can keep up with the offsets, please use a number of periods per offset that is a multiple of 50!")
+      else
+        # if the DF period is shorter than 0.1ms (10kHz) we use 50 DF periods for every step, this allows us to use DF periods of up to 10kHz*50=500kHz and results in a worst case wait time inefficiency of 0.1ms*50 = 5ms
+        # it would be poossible to use other numbers for periodsPerStep, but this will probably work best for both extremes
+        periodsPerStep = 50
+        stepfreq = stepfreq/periodsPerStep
+      end
+    end
+  else
+    # if a DF period is longer than 0.1ms we can just use a single step for every period, ensuring most efficient use of waittimes
+    periodsPerStep = 1
+  end
+
+  stepsPerOffset = numPeriodsPerOffset÷periodsPerStep
+
+  # Compute step duration
+  stepduration = (1/stepfreq)
+
+  @debug "prepareProtocolSequences: Stepduration: $stepduration, Stepfreq: $stepfreq"
+  allSteps = nothing
+  enables = nothing
+  hbridges = nothing
+  if any(x -> requireHBridge(x, daq), offsetVector)
+    offsets, allSteps, enables, hbridges, permutation = prepareHSwitchedOffsets(offsetVector, daq, cpy, stepduration)
+  else
+    offsets, allSteps, enables, hbridges, permutation = prepareOffsets(offsetVector, daq, cpy, stepduration)
+  end
+  
+  numOffsets = length(first(allSteps)[2])
+  df = lcm(dfDivider(cpy))
+  
+  numMeasOffsets = length(permutation)
+  numWaitOffsets = numOffsets-numMeasOffsets
+  numPeriodsPerFrame = (numMeasOffsets * stepsPerOffset + numWaitOffsets) * periodsPerStep
+
+  divider = df * numPeriodsPerFrame
+
+  # offsets and permutation refer to offsets without multiple df per period and include every offset only once
+  # We need to perform two operations:
+  # 1. build an index mask that handles the repetition of offsets, such that offsets[mask] contains the desired repetitions of offsets (not the wait times)
+  stepRepetition = collect(1:numOffsets)
+  if numPeriodsPerOffset > 1
+
+    stepRepetition = Int[]
+    for i in 1:numOffsets
+      if i in permutation # if offset i is a offset that should be saved
+        append!(stepRepetition, repeat([i],stepsPerOffset)) # we have to repeat it by the amount of steps per Offset
+      else
+        push!(stepRepetition, i) # otherwise we just output it once
+      end
+    end
+
+    # apply step repetition to permutation, every valid step is repeated stepsPerOffset times
+    updatedPermutation = repeat(permutation, inner=stepsPerOffset)
+    # to remove the repeated values, add 1 to all indizes starting from each value that is identical to its previous neighbor
+    sortedIdx = sortperm(updatedPermutation)
+    for i=2:length(updatedPermutation)
+      if updatedPermutation[sortedIdx[i]] == updatedPermutation[sortedIdx[i-1]]
+        updatedPermutation[sortedIdx[i:end]] .+= 1 
+      end
+    end
+   
+    offsets = offsets[stepRepetition,:]
+
+    permutation = Int64[]
+    for patch in updatedPermutation
+      idx = (patch-1)*periodsPerStep+1:patch*periodsPerStep
+      append!(permutation, idx)
+    end
+
+  end
+  @debug "prepareProtocolSequences: Permutation after update" permutation offsets
+
+  # Generate actual StepwiseElectricalChannel
+  for (ch, steps) in allSteps
+    stepwise = StepwiseElectricalChannel(id = id(ch), divider = divider, values = identity.(steps)[stepRepetition], enable = enables[ch][stepRepetition])
+    fieldMap[ch][id(stepwise)] = stepwise
+
+    # Generate H-Bridge channels
+    if haskey(hbridges, ch)
+      offsetChannel = channel(daq, id(ch))
+      hbridgeChannels = id(offsetChannel.hbridge)
+      hbridgeValues = hbridges[ch]
+      for (i, hbridgeChannel) in enumerate(hbridgeChannels)
+        hsteps = map(x -> x[i], hbridgeValues)
+        hbridgeStepwise = StepwiseElectricalChannel(id = hbridgeChannel, divider = divider, values = hsteps[stepRepetition], enable = fill(true, length(stepRepetition)))
+        fieldMap[ch][hbridgeChannel] = hbridgeStepwise
+      end
+    end
+  end
+
+  return cpy, permutation, offsets, calibsize, numPeriodsPerFrame
+end
+
+function prepareHSwitchedOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
+  switchingIndices = findall(x->requireHBridge(x,daq), offsetVector)
+  switchingChannel = offsetVector[switchingIndices]
+  regularChannel = isempty(switchingChannel) ? offsetVector : offsetVector[filter(!in(switchingIndices), 1:length(offsetVector))]
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  allEnables = Dict{ProtocolOffsetElectricalChannel, Vector{Union{Bool, Missing}}}()
+  validSteps = Union{Bool, Missing}[]
+
+  # Prepare values with missing for h-bridge switch
+  # Permute patches by considering quadrants. Use lower bits of number to encode permutations
+  # for example 011 means channel 1 is disabled, channel 2 and 3 h-bridge is enabled
+  for comb in 0:2^length(switchingChannel)-1
+    quadrant = map(Bool, digits(comb, base = 2, pad=length(switchingChannel)))
+
+    offsets = Vector{Vector{Any}}()
+
+    # Same order here as in Iterators.flatten below
+    for ch in regularChannel
+      push!(offsets, values(ch))
+    end
+    for (i, isPositive) in enumerate(quadrant)
+      push!(offsets, values(switchingChannel[i], isPositive))
+    end
+
+    orderedChannel = collect(Iterators.flatten((regularChannel, switchingChannel)))
+
+    # For each quadrant we can generate the offsets individually
+    quadrantSteps, couldPause, anySwitching, perm = prepareOffsetSwitches(offsets, orderedChannel, daq, stepduration)
+
+    for (i, ch) in enumerate(orderedChannel[perm])
+      steps = get(allSteps, ch, [])
+      enables = get(allEnables, ch, Union{Bool, Missing}[])
+      push!(steps, quadrantSteps[i]...)
+      push!(enables, map(x-> channel(daq, id(ch)).switchEnable ? true : !x, couldPause[i])...)
+
+      # If not at the end then add missing, here H-bridge switches will be inserted later
+      if comb != 2^length(switchingChannel)-1
+        push!(steps, missing)
+        push!(enables, missing)
+      end
+
+      allSteps[ch] = steps
+      allEnables[ch] = enables
+    end
+
+    # Steps are valid if no channel has a switch pause
+    push!(validSteps, map(!, anySwitching)...)
+    if comb != 2^length(switchingChannel)-1
+      push!(validSteps, missing)
+    end
+  end
+
+  # Compute switch timing
+  deadTimes = map(x-> x.hbridge.deadTime, filter(x-> x.range == HBRIDGE, map(x->channel(daq, id(x)), offsetVector)))
+  maxTime = maximum(map(ustrip, deadTimes))
+  numSwitchPeriods = Int64(ceil(maxTime/stepduration))
+
+  hbridges = prepareHBridgeLevels(allSteps, daq, numSwitchPeriods)
+
+  # Set enable to false during hbridge switching
+  for (ch, enables) in allEnables
+    temp = Bool[]
+    foreach(x-> ismissing(x) ? push!(temp, fill(false, numSwitchPeriods)...) : push!(temp, x), enables)
+    allEnables[ch] = temp
+  end
+
+  # Likewise set valid to false during hbridge switching
+  tempValid = Bool[]
+  foreach(x-> ismissing(x) ? push!(tempValid, fill(false, numSwitchPeriods)...) : push!(tempValid, x), validSteps)
+  validSteps = tempValid
+
+  # Prepare H-Bridge pauses
+  for (ch, steps) in allSteps
+    temp = []
+    # Add numSwitchPeriods 0 for every missing value
+    foreach(x-> ismissing(x) ? push!(temp, fill(zero(eltype(steps[1])), numSwitchPeriods)...) : push!(temp, x), steps)
+    allSteps[ch] = temp
+  end
+
+  # Generate offsets without permutation
+  offsets = map(values, offsetVector)
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  # Map each offset combination to its original index
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Permute offsets
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> validSteps[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Pause/switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, validSteps))]
+
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
+
+  return permoffsets, allSteps, allEnables, hbridges, patchPermutation
+end
+
+function prepareOffsets(offsetVector::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, seq::Sequence, stepduration)
+  allSteps = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  enables = Dict{ProtocolOffsetElectricalChannel, Vector{Bool}}()
+  
+  offsets = map(values, offsetVector)
+  steps, couldPause, anySwitching, perm = prepareOffsetSwitches(offsets, offsetVector, daq, stepduration)
+  validSteps = map(!, anySwitching)
+  for (i, ch) in enumerate(offsetVector[perm])
+    allSteps[ch] = steps[i]
+    enables[ch] = map(x-> channel(daq, id(ch)).switchEnable ? true : !x, couldPause[i])
+  end
+
+  # Map each offset combination to its original index
+  offsets = hcat(prepareOffsets(offsets, daq)...)
+  offsetDict = Dict{Vector, Int64}()
+  for (i, row) in enumerate(eachrow(offsets))
+    offsetDict[row] = i
+  end
+
+  # Permute offsets
+  # Sort patches according to their value in the index dictionary
+  permoffsets = hcat(map(x-> allSteps[x], offsetVector)...)
+  patchPermutation = sortperm(map(pair -> validSteps[pair[1]] ? offsetDict[identity(pair[2])] : typemax(Int64), enumerate(eachrow(permoffsets))))
+  # Switching patches are sorted to the end and need to be removed
+  patchPermutation = patchPermutation[1:end-length(filter(!identity, validSteps))]
+  
+  hbridges = prepareHBridgeLevels(allSteps, daq)
+  # Remove (negative) sign from all channels with an h-bridge
+  for (ch, steps) in filter(x->haskey(hbridges, x[1]), allSteps)
+    allSteps[ch] = abs.(steps)
+  end
+  
+  return permoffsets, allSteps, enables, hbridges, patchPermutation
+end
+
+function prepareHBridgeLevels(allSteps, daq::RedPitayaDAQ, switchSteps::Int64 = 0)
+  hbridges = Dict{ProtocolOffsetElectricalChannel, Vector{Any}}()
+  for ch in filter(ch -> channel(daq, id(ch)).range == HBRIDGE , keys(allSteps))
+    offsetChannel = channel(daq, id(ch))
+    steps = allSteps[ch]
+    hsteps = []
+    for (i, step) in enumerate(steps)
+      if ismissing(step) # Assumes only one missing per switch and no missing at last index
+        push!(hsteps, fill(level(offsetChannel.hbridge, steps[i + 1]), switchSteps)...)
+      else
+        push!(hsteps, level(offsetChannel.hbridge, step))
+      end
+    end
+    hbridges[ch] = hsteps
+  end
+  return hbridges
+end
+
+function requireHBridge(offsetChannel::ProtocolOffsetElectricalChannel{T}, daq::RedPitayaDAQ) where T
+  offsets = values(offsetChannel)
+  ch = channel(daq, id(offsetChannel))
+  if ch.range == BOTH
+    return false
+  elseif ch.range == HBRIDGE
+    # Assumption protocol offset channel can only produce one sign change
+    # Consider 0 to be "positive"
+    first = offsets[1]
+    last = offsets[end]
+    return signbit(first) != signbit(last) && (!iszero(first) && !iszero(last))
+  else
+    error("Unexpected channel range")
+  end
+end
+
+function prepareOffsetSwitches(offsets::Vector{Vector{T}}, channels::Vector{ProtocolOffsetElectricalChannel}, daq::RedPitayaDAQ, stepduration::Float64) where T
+  switchSteps = Dict{ProtocolOffsetElectricalChannel, Int64}()
+  for ch in channels
+    daqChannel = channel(daq, id(ch))
+    if !iszero(daqChannel.switchTime)
+      switchSteps[ch] = Int64(ceil(ustrip(u"s", daqChannel.switchTime/stepduration)))
+    end
+  end
+
+  if isempty(switchSteps)
+    offsets = prepareOffsets(offsets, daq)
+    return offsets, [fill(false, length(first(offsets))) for ch in channels], fill(false, length(first(offsets))), 1:length(channels)
+  end
+
+  # Sorting is not optimal, but allows us in the next step to consider pauses individually and not have to take max of all possible pauses at a point
+  perm = sortperm(map(x-> haskey(switchSteps, x) ? switchSteps[x] : 0, channels))
+
+
+  # The idea is to realize the following pattern for n-channel (shown with three: x, y, z)
+  # A switch S_x means the next "proper" offset value is to be repeated S_x times, the amount of switch steps x requires
+  # x_i means the i'th value of the x offsets
+  # ()_i means loop the pattern in the bracket i times 
+
+  # i = number of x offsets, j = # y offsets , k = # z offsets
+  # x: (S_z - S_y (S_y - S_ x (S_x, x_i)_i)_j)_k 
+  # x: (S_z - S_y (S_y - S_ x (S_x, y_j)_i)_j)_k
+  # x: (S_z - S_y (S_y - S_ x (S_x, z_k)_i)_j)_k
+
+  sortedOffsets = offsets[perm]
+  sortedChannels = channels[perm]
+  sortedSwitchSteps = map(ch -> get(switchSteps, ch, 0), sortedChannels)
+
+  sortedOffsetsWithSwitches = []
+  sortedCouldPause = []
+  anyChannelSwitching = Bool[]
+
+  # Each channel will add the same switch "pauses"
+  # This array contains the precomputed S_x, S_y - S_x, ...,
+  sortedLoopSteps = zeros(Int64, size(sortedSwitchSteps))
+  previous = 0
+  for (i, pause) in enumerate(sortedSwitchSteps)
+    sortedLoopSteps[i] = pause - previous
+    previous = pause
+  end
+
+  # The pattern will be constructed with a "nested" for loop.
+  # However, the nesting depth depends on the number of channels. To make this generic to n-channel we will use CartesianIndices
+  iterations = map(length, sortedOffsets)
+  loop = CartesianIndices(Tuple(iterations))
+
+  # Here we want to have a loop as follows (but generic for n-channels):
+  # for ch in channels
+  #   for k = 1:length(z)
+  #     for j = 1:length(y)
+  #       for i = 1:length(x)
+  #         # ... create pattern
+  for (channelIdx, channel) in enumerate(sortedChannels)
+    offsetVec = sortedOffsets[channelIdx]
+    resultOffsets = eltype(offsetVec)[] # Store the offsets of the current channel
+    resultCouldPause = Bool[] # Store when the current channel doesn't need to send (i.e others switch and he doesn't yet)
+    resultAnySwitching = Bool[] # Store when any channel is switching
+
+    previous = CartesianIndex(Tuple(fill(-1, length(iterations)))) # This will be used to detect which index is currently "running"/changing
+    for indices in loop
+      value = offsetVec[indices[channelIdx]]
+
+      # Apply (loop) switch steps for each changing index, i.e. an index that is not equal to its previous iteration value
+      requiredSwitches = map(!, iszero.(Tuple(indices - previous)))
+
+      # Compute how many switching "pauses" are to be inserted
+      switches = 0
+      switchIndices = findall(requiredSwitches)
+      if !isempty(switchIndices)
+        switches = sum(sortedLoopSteps[findall(requiredSwitches)])
+      end
+      # If the current channel is switching, we need to subtract that from couldPause
+      ownSwitches = in(channelIdx, switchIndices) ? sortedSwitchSteps[channelIdx] : 0
+
+      # + 1 is for the actual offset
+      push!(resultOffsets, fill(value, 1 + switches)...)
+      push!(resultCouldPause, vcat(fill(true, switches - ownSwitches), fill(false, 1 + ownSwitches))...)
+
+      # anySwitching only needs to be computed once
+      if isempty(anyChannelSwitching)
+        push!(resultAnySwitching, push!(fill(true, switches), false)...)
+      end
+
+      previous = indices
+    end
+    
+    push!(sortedOffsetsWithSwitches, resultOffsets)
+    push!(sortedCouldPause, resultCouldPause)
+    if isempty(anyChannelSwitching)
+      anyChannelSwitching = resultAnySwitching
+    end
+  end
+
+  return sortedOffsetsWithSwitches, sortedCouldPause, anyChannelSwitching, perm
+end
+
+function prepareOffsets(offsetVectors::Vector{Vector{T}}, daq::RedPitayaDAQ) where T
+  result = Vector{Vector{Any}}()
+  inner = 1
+  numOffsets = prod(length.(offsetVectors))
+  for offsets in offsetVectors
+    outer = div(numOffsets, inner * length(offsets))
+    steps = repeat(offsets, inner = inner, outer = outer)
+    inner*=length(offsets)
+    push!(result, steps)
+  end
+  return map(x -> identity.(x), result) # Improve typing from Vector{Vector{Any}}
+end
+
 
 #### Producer/Consumer ####
 mutable struct RedPitayaAsyncBuffer <: AsyncBuffer
@@ -506,7 +903,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControl
   # Start pipeline
   @debug "Pipeline started"
   try
-    @debug currentWP(daq.rpc)
+    @debug "Producer:" currentWP(daq.rpc)
     readSamples(rpu, startSample, samplesToRead, channel, chunkSize = chunkSize)
   catch e
     @info "Attempting reconnect to reset pipeline"
@@ -573,18 +970,22 @@ end
 function setup(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
   setupRx(daq, sequence)
-  setupTx(daq, sequence)
-  prepareTx(daq, sequence)
-  setSequenceParams(daq, sequence)
+  sequenceVolt = applyForwardCalibration(sequence, daq)
+  setupTx(daq, sequenceVolt)
+  prepareTx(daq, sequenceVolt)
+  setSequenceParams(daq, sequenceVolt)
 end
 
 function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   @debug "Setup tx"
+  
   periodicChannels = periodicElectricalTxChannels(sequence)
 
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
+    
+  @debug "SetupTx: Outputting the following offsets" offsets=[offset(chan) for chan in periodicChannels]
 
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
@@ -601,11 +1002,19 @@ function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, b
 end
 function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-  offsetVolts = offset(channel)*calibration(daq, id(channel))
-  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offsetVolts))
-  for (idx, component) in enumerate(components(channel))
+  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offset(channel)))
+
+  for (idx, component) in enumerate(periodicElectricalComponents(channel)) # in the future add the SweepElectricalComponents as well
     setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
   end
+  
+  awgComps = arbitraryElectricalComponents(channel) 
+  if length(awgComps) > 1
+    throw(SequenceConfigurationError("The channel with the ID $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
+  elseif length(awgComps) == 1
+    setupTxComponent!(batch, daq, channel, awgComps[1], 0, baseFreq)
+  end
+
 end
 
 function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component, componentIdx, baseFreq)
@@ -615,7 +1024,7 @@ function setupTxComponent(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel,
 end
 function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, component::Union{PeriodicElectricalComponent, SweepElectricalComponent}, componentIdx, baseFreq)
   if componentIdx > 3
-    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform is a fourth is necessary."))
+    throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` defines more than three fixed waveform components, this is more than what the RedPitaya offers. Use an arbitrary waveform if a fourth is necessary."))
   end
   channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
   freq = ustrip(u"Hz", baseFreq) / divider(component)
@@ -623,7 +1032,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   @add_batch batch signalTypeDAC!(daq.rpc, channelIdx_, componentIdx, waveform_)
 end
@@ -635,7 +1044,7 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   waveform_ = uppercase(fromWaveform(waveform(component)))
   if !isWaveformAllowed(daq, id(channel), waveform(component))
     throw(SequenceConfigurationError("The channel with the ID `$(id(channel))` "*
-                                   "defines a waveforms of $waveform_, but the scanner channel does not allow this."))
+                                   "defines a waveform of $waveform_, but the scanner channel does not allow this."))
   end
   # Waveform is set together with amplitudes for arbitrary waveforms
 end
@@ -651,9 +1060,9 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
-  # The decimation can only be a power of 2 beginning with 8
+  # The decimation has to be divisible by 2 and must be 8 or larger
   decimation_ = upreferred(txBaseFrequency(sequence)/rxSamplingRate(sequence))
-  if decimation_ in [2^n for n in 3:8]
+  if iseven(decimation_) &&  decimation_ >= 8
     daq.decimation = decimation_
   else
     throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
@@ -672,14 +1081,14 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
 
   # TODO possibly move some of this into abstract daq
   daq.refChanIDs = []
-  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa RedPitayaTxChannelParams]
-  daq.refChanIDs = unique([tx.feedback.channelID for tx in txChannels if !isnothing(tx.feedback)])
+  txChannels = [channel[2] for channel in daq.params.channels if channel[2] isa DAQTxChannelParams]
+  daq.refChanIDs = unique(filter!(!isnothing, feedbackChannelID.(txChannels)))
 
   # Construct view to save bandwidth
   rxIDs = sort(union(channelIdx(daq, daq.rxChanIDs), channelIdx(daq, daq.refChanIDs)))
   selection = [false for i = 1:length(daq.rpc)]
   for i in map(x->div(x -1, 2) + 1, rxIDs)
-    @debug i
+    @debug "setupRx: Adding RP id $i to cluster view"
     selection[i] = true
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
@@ -717,7 +1126,9 @@ function startTx(daq::RedPitayaDAQ; isControlStep=false)
 end
 
 function stopTx(daq::RedPitayaDAQ)
-  masterTrigger!(daq.rpc, false)
+  if masterTrigger(daq.rpc)
+    masterTrigger!(daq.rpc, false) # only deactivate trigger if it is currently active
+  end
   execute!(daq.rpc) do batch
     @add_batch batch serverMode!(daq.rpc, CONFIGURATION)
     for channel in 1:2*length(daq.rpc)
@@ -738,6 +1149,7 @@ function clearTx!(daq::RedPitayaDAQ)
       for comp = 1:4
         @add_batch batch amplitudeDAC!(daq.rpc, channel, comp, 0.0)
       end
+      @add_batch batch offsetDAC!(daq.rpc, channel, 0.0)
     end
   end
 end
@@ -749,38 +1161,31 @@ end
 
 function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   stopTx(daq)
-  @debug "Preparing amplitude and phase"
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
-  for channel in periodicElectricalTxChannels(sequence)
+    for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
-    amps = []
-    phases = []
-    wave = nothing
-    for comp in periodicElectricalComponents(channel)
-      # Lengths check == 1 happens in setupTx already
-      amp = amplitude(comp)
-      if dimension(amp) == dimension(1.0u"T")
-        amp = (amp * calibration(daq, name))
-      end
-      push!(amps, amp)
-      push!(phases, phase(comp))
+    # This should set all unused components to zero, but what about unused channels?
+    amps = zeros(typeof(1.0u"V"), 3)
+    phases = zeros(typeof(1.0u"rad"), 3)
+    wave = zeros(typeof(1.0u"V"), 2^14)
+    for (i,comp) in enumerate(periodicElectricalComponents(channel))
+      # Length check < 3 happens in setupTx already
+      amps[i] = amplitude(comp)
+      phases[i] = phase(comp)
     end
+    # Length check < 1 happens in setupTx already
     comps = arbitraryElectricalComponents(channel)
-    if length(comps) > 2
-      throw(ScannerConfigurationError("Channel $(id(channel)) defines more than one arbitrary electrical component, which is not supported."))
-    elseif length(comps) == 1
-      wave = values(comps[1])
-      if dimension(wave[1]) != dimension(1.0u"V")
-        wave = wave.*calibration(daq, name)
-      end
-      allAwg[name] = wave
+    if length(comps)==1
+      wave = scaledValues(comps[1])
     end
 
+    allAwg[name] = wave
     allAmps[name] = amps
     allPhases[name] = phases
   end
+  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases awg=lineplot(1:2^14,ustrip.(u"V",hcat(collect(Base.values(allAwg))...)),ylabel="AWG / V", name=collect(Base.keys(allAwg)), canvas=DotCanvas, border=:ascii, height=10, xlim=(1,2^14))
 
   setTxParams(daq, allAmps, allPhases, allAwg)
 end
@@ -909,7 +1314,7 @@ numTxChannelsActive(daq::RedPitayaDAQ) = numChan(daq.rpc) #TODO: Currently, all 
 numRxChannelsActive(daq::RedPitayaDAQ) = numRxChannelsReference(daq)+numRxChannelsMeasurement(daq)
 numRxChannelsReference(daq::RedPitayaDAQ) = length(daq.refChanIDs)
 numRxChannelsMeasurement(daq::RedPitayaDAQ) = length(daq.rxChanIDs)
-numComponentsMax(daq::RedPitayaDAQ) = 3
+numComponentsMax(daq::RedPitayaDAQ) = 4
 canPostpone(daq::RedPitayaDAQ) = true
 canConvolute(daq::RedPitayaDAQ) = false
 

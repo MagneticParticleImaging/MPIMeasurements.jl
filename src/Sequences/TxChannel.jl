@@ -8,11 +8,12 @@ abstract type TxMechanicalMovementType end
 struct RotationTxChannel <: TxMechanicalMovementType end
 struct TranslationTxChannel <: TxMechanicalMovementType end
 
-export TxChannel, ElectricalTxChannel, AcyclicElectricalTxChannel, MechanicalTxChannel, ElectricalComponent
+export TxChannel, ElectricalTxChannel, AcyclicElectricalTxChannel, MechanicalTxChannel, ProtocolTxChannel, ElectricalComponent
 abstract type TxChannel end
 abstract type ElectricalTxChannel <: TxChannel end
 abstract type AcyclicElectricalTxChannel <: ElectricalTxChannel end
 abstract type MechanicalTxChannel <: TxChannel end
+abstract type ProtocolTxChannel <: TxChannel end
 
 abstract type ElectricalComponent end
 
@@ -51,6 +52,9 @@ cycleDuration(::T, var) where T <: TxChannel = error("The method has not been im
 export id
 id(channel::TxChannel) = channel.id
 
+export unitIsTesla
+unitIsTesla(channel::ElectricalTxChannel) = false #default fallback
+
 function toDict!(dict, channel::TxChannel)
   for field in [x for x in fieldnames((typeof(channel))) if x != :id]
     dict[String(field)] = toDictValue(getproperty(channel, field))
@@ -66,3 +70,4 @@ include("ContinuousMechanicalTranslationChannel.jl")
 include("StepwiseMechanicalTranslationChannel.jl")
 include("StepwiseMechanicalRotationChannel.jl")
 include("ContinuousMechanicalRotationChannel.jl")
+include("ProtocolOffsetElectricalChannel.jl")
