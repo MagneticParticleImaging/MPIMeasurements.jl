@@ -3,8 +3,11 @@ This page should give you hints on what to change in your configuration files wh
 
 ## v0.5 to v0.6
 ### Scanner and Devices
+- the `defaultSequence` parameter in the [General] section has been removed without replacement, the sequence is defined by the protocol
 - the `transferFunction` parameter is no longer in the [General] section, but is now a per-channel parameter attached to each `DAQRxChannelParams`. Use `transferFunction = "tfFile.h5:2"` to select channel 2 out of the file containing multilpe channels
 - the `feedback` group is removed from the tx channels and replaced by two other parameters: `feedback.channelID` is replaced by `feedbackChannelID` in the tx channel directly and `feedback.calibration` is replaced by the `transferFunction` parameter in the corresponding receive channel. The `transferFunction` parameter can correctly parse a single (complex) value with units
+- the `limitPeak` parameter has been removed from rx channels, it is only defined for tx channels
+
 
 ### TxDAQController
 
