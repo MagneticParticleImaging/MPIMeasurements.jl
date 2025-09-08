@@ -240,6 +240,8 @@ function handleEvent(protocol::MPIMeasurementProtocol, event::DataQueryEvent)
   if !isnothing(data)
     mdf = deepcopy(protocol.mdfTemplate)
     fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    acqNumPeriodsPerFrame(mdf, size(data,3))
+    acqNumFrames(mdf, size(data,4))
     result = mdf
   end
   put!(protocol.biChannel, DataAnswerEvent(result, event))
