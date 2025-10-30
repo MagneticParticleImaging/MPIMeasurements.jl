@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+### Improvements for MultiSequenceSystemMatrixProtocol
+- fix reloading of protocol with more than one BG measurement
+- improve performance by not writing sequences to file every iteration
+- change protocol to be able to turn on/off amplifiers for necessary coil channels
+
 ## 0.6.0
 
 ### Most Important Breaking Changes
