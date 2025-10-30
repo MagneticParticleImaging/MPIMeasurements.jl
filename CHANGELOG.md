@@ -6,6 +6,9 @@
 - improve performance by not writing sequences to file every iteration
 - change protocol to be able to turn on/off amplifiers for necessary coil channels
 
+### Improvements for TxDAQController
+- fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
+
 ## 0.6.0
 
 ### Most Important Breaking Changes

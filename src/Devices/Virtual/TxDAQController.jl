@@ -564,7 +564,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
           txCont.controlResults[channelIds[i]] = Dict{Float64,typeof(1.0im*u"V/T")}()
         end
         txCont.controlResults[channelIds[i]][frequencies[i]] = finalCalibration[i]*u"V/T"
-        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
+        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz" maxlog=10
       end
   end
   
@@ -584,8 +584,10 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     if !haskey(txCont.controlResults, chId)
       txCont.controlResults[chId] = Dict{Float64,typeof(1.0im*u"V/T")}()
     end
-    txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
-    @debug "Cached calibration result:" chId f finalCalibration[res]
+    if !isnan(finalCalibration[res]) && !iszero(finalCalibration[res])
+      txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
+      @debug "Cached control result:" chId f finalCalibration[res] maxlog=10
+    end
   end
 
   if length(cont.dcSearch) >= 2
@@ -707,6 +709,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
     updateControlSequence!(cont, newTx)
     return true
   else
+    @info "Checks" validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) checkVoltLimits(newTx, cont) 
     error("The new tx values are not allowed! Either your forward calibration is inaccurate or the system can not produce the requested field strength!")
     return false
   end
@@ -733,19 +736,28 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # For now we completely ignore coupling and hope that it can find good values anyways
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = oldTx./Γ.*Ω
+  if any(isnan.(newTx))
+    @warn "There were zeros in the reference signal!" any(iszero.(Γ)) findall(iszero.(Γ))
+    newTx[isnan.(newTx)] .= 0.0
+  end
 
   # handle DC separately:
   if txCont.params.controlDC
     push!(cont.dcSearch, (V=oldTx[:,1], B=Γ[:,1]))
+    @debug "History of dcSearch" cont.dcSearch
     if length(cont.dcSearch)==1
       my_sign(x) = if x<0; -1 else 1 end
       testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
       newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
     else
-      @debug "History of dcSearch" cont.dcSearch
       last = cont.dcSearch[end]
       previous = cont.dcSearch[end-1]
-      newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      if any(abs.(last.B.-previous.B) .< 0.005*real.(Ω[:,1])) # if the last two DC search steps are too close together (especially when close to zero) the next step might produce wrong results
+        @info "Restarting DC Search"
+        newTx[:,1] = ustrip.(u"V", real.(Ω[:,1])*u"T".*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
+      else
+        newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      end
     end
   end
 
@@ -933,6 +945,7 @@ function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
   N = rxNumSamplingPoints(cont.currSequence)
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
+  @debug "calcExpectedField" any(calibFieldToVoltEstimate.==0) any(isnan.(tx))
   B_fw = tx ./ calibFieldToVoltEstimate
   return B_fw
 end
