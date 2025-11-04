@@ -395,18 +395,8 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     disableControl(tempControl)
   end
 
-  amps = []
-  if hasDependency(txCont, Amplifier)
-    amps = dependencies(txCont, Amplifier)
-  end
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(vcat(acyclicElectricalTxChannels(control.targetSequence), periodicElectricalTxChannels(control.targetSequence)))
-    amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
-  end
+  amps = getRequiredAmplifiers(txCont, control.currSequence)
+  turnOn(amps)
 
   # Hacky solution
   controlPhaseDone = false

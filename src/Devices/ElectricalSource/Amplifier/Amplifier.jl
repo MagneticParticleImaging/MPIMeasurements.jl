@@ -49,6 +49,14 @@ Base.close(amp::Amplifier) = nothing
 @mustimplement temperature(amp::Amplifier)::typeof(1.0u"°C")
 @mustimplement channelId(amp::Amplifier)
 
+function turnOn(amps::Vector{<:Amplifier})
+  if !isempty(amps)
+    @sync for amp in amps
+      @async turnOn(amp)
+    end
+  end
+end
+
 export getAmplifiers
 getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
 
@@ -64,7 +72,7 @@ function getRequiredAmplifiers(device::Device, sequence::Sequence)
   end
   return []
 end
-function getRequiredAmplifiers(amps::Vector{Amplifier}, sequence::Sequence)
+function getRequiredAmplifiers(amps::Vector{<:Amplifier}, sequence::Sequence)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
