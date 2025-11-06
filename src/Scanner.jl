@@ -252,6 +252,12 @@ mutable struct MPIScanner
   end
 end
 
+function Base.show(io::IO, sc::MPIScanner)
+    println(io, "MPIScanner:         $(sc.name)")
+    println(io, "  Config File:      ", sc.configFile)
+    println(io, "  Loaded Devices:   $(String.(keys(sc.devices)))")
+end
+
 function findConfigDir(name::AbstractString)
   for path in scannerConfigurationPath
     configDir = joinpath(path, name)
