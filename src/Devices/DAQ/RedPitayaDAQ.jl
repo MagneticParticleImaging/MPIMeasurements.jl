@@ -984,8 +984,6 @@ function setupTx(daq::RedPitayaDAQ, sequence::Sequence)
   if any([length(component.amplitude) > 1 for channel in periodicChannels for component in periodicElectricalComponents(channel)])
     error("The Red Pitaya DAQ cannot work with more than one period in a frame or frequency sweeps yet.")
   end
-    
-  @debug "SetupTx: Outputting the following offsets" offsets=[offset(chan) for chan in periodicChannels]
 
   # Iterate over sequence(!) channels
   execute!(daq.rpc) do batch
@@ -1001,8 +999,6 @@ function setupTxChannel(daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, b
   end
 end
 function setupTxChannel!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::PeriodicElectricalChannel, baseFreq)
-  channelIdx_ = channelIdx(daq, id(channel)) # Get index from scanner(!) channel
-  @add_batch batch offsetDAC!(daq.rpc, channelIdx_, ustrip(u"V", offset(channel)))
 
   for (idx, component) in enumerate(periodicElectricalComponents(channel)) # in the future add the SweepElectricalComponents as well
     setupTxComponent!(batch, daq, channel, component, idx, baseFreq)
@@ -1164,7 +1160,8 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
   allAmps  = Dict{String, Vector{typeof(1.0u"V")}}()
   allPhases = Dict{String, Vector{typeof(1.0u"rad")}}()
   allAwg = Dict{String, Vector{typeof(1.0u"V")}}()
-    for channel in periodicElectricalTxChannels(sequence)
+  allOffsets = Dict{String, typeof(1.0u"V")}()
+  for channel in periodicElectricalTxChannels(sequence)
     name = id(channel)
     # This should set all unused components to zero, but what about unused channels?
     amps = zeros(typeof(1.0u"V"), 3)
@@ -1184,10 +1181,10 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
     allAwg[name] = wave
     allAmps[name] = amps
     allPhases[name] = phases
+    allOffsets[name] = offset(channel)
   end
-  @debug "prepareTx: Outputting the following amplitudes and phases:" allAmps allPhases awg=lineplot(1:2^14,ustrip.(u"V",hcat(collect(Base.values(allAwg))...)),ylabel="AWG / V", name=collect(Base.keys(allAwg)), canvas=DotCanvas, border=:ascii, height=10, xlim=(1,2^14))
-
-  setTxParams(daq, allAmps, allPhases, allAwg)
+  @debug "prepareTx: Outputting the following offsets, amplitudes and phases:" allOffsets allAmps allPhases awg=lineplot(1:2^14,ustrip.(u"V",hcat(collect(Base.values(allAwg))...)),ylabel="AWG / V", name=collect(Base.keys(allAwg)), canvas=DotCanvas, border=:ascii, height=10, xlim=(1,2^14))
+  setTxParams(daq, allOffsets, allAmps, allPhases, allAwg)
 end
 
 """
@@ -1197,12 +1194,29 @@ Note: `amplitudes` and `phases` are defined as a dictionary of
 vectors, since every channel referenced by the dict's key could
 have a different amount of components.
 """
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
-  setTxParamsAmplitudes(daq, amplitudes)
-  setTxParamsPhases(daq, phases)
+function setTxParams(daq::RedPitayaDAQ, offsets::Dict{String,Float32},amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
+  execute!(daq.rpc) do batch
+    setTxParamsOffsets(daq, batch, offsets)
+    setTxParamsAmplitudes(daq, batch, amplitudes)
+    setTxParamsPhases(daq, batch, phases)
+  end
   setTxParamsArbitrary(daq, awg)
 end
-function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
+
+function setTxParamsOffsets(daq::RedPitayaDAQ, batch::ScpiBatch, offsets::Dict{String, Float32})
+  for (channelID, offset) in offsets
+    if offset >= ustrip(u"V", limitPeak(daq, channelID))
+      error("This should never happen!!! \nTx offset voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
+    end
+  end
+  
+  for (channelID, offset) in offsets
+    @add_batch batch offsetDAC!(daq.rpc, channelIdx(daq, channelID), offset)
+  end
+  
+end
+
+function setTxParamsAmplitudes(daq::RedPitayaDAQ, batch::ScpiBatch, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
   # Determine the worst case voltage per channel
   # Note: this would actually need a fourier synthesis with the given signal type,
   # but I don't think this is necessary
@@ -1219,34 +1233,28 @@ function setTxParamsAmplitudes(daq::RedPitayaDAQ, amplitudes::Dict{String, Vecto
     end
   end
 
-  execute!(daq.rpc) do batch
-    for (channelID, components_) in amplitudes
-      for (componentIdx, amplitude_) in enumerate(components_)
-        if !isnothing(amplitude_)
-          @add_batch batch amplitudeDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, amplitude_)
-        end
+  for (channelID, components_) in amplitudes
+    for (componentIdx, amplitude_) in enumerate(components_)
+      if !isnothing(amplitude_)
+        @add_batch batch amplitudeDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, amplitude_)
       end
     end
   end
 end
-function setTxParamsPhases(daq::RedPitayaDAQ, phases::Dict{String, Vector{Union{Float32, Nothing}}})
-  execute!(daq.rpc) do batch
-    for (channelID, components_) in phases
-      for (componentIdx, phase_) in enumerate(components_)
-        if !isnothing(phase_)
-          @add_batch batch phaseDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, phase_)
-        end
+function setTxParamsPhases(daq::RedPitayaDAQ, batch::ScpiBatch, phases::Dict{String, Vector{Union{Float32, Nothing}}})
+  for (channelID, components_) in phases
+    for (componentIdx, phase_) in enumerate(components_)
+      if !isnothing(phase_)
+        @add_batch batch phaseDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, phase_)
       end
     end
   end
 end
-function setTxParamsFrequencies(daq::RedPitayaDAQ, freqs::Dict{String, Vector{Union{Float32, Nothing}}})
-  execute!(daq.rpc) do batch
-    for (channelID, components_) in freqs
-      for (componentIdx, freq_) in enumerate(components_)
-        if !isnothing(freq_)
-          @add_batch batch frequencyDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, freq_)
-        end
+function setTxParamsFrequencies(daq::RedPitayaDAQ, batch::ScpiBatch, freqs::Dict{String, Vector{Union{Float32, Nothing}}})
+  for (channelID, components_) in freqs
+    for (componentIdx, freq_) in enumerate(components_)
+      if !isnothing(freq_)
+        @add_batch batch frequencyDAC!(daq.rpc, channelIdx(daq, channelID), componentIdx, freq_)
       end
     end
   end
@@ -1260,10 +1268,14 @@ function setTxParamsArbitrary(daq::RedPitayaDAQ, awg::Nothing)
   # NOP
 end
 
-function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{typeof(1.0u"V")}}, Nothing} = nothing; convolute=true)
+function setTxParams(daq::RedPitayaDAQ, offsets::Dict{String, typeof(1.0u"V")},amplitudes::Dict{String, Vector{typeof(1.0u"V")}}, phases::Dict{String, Vector{typeof(1.0u"rad")}}, awg::Union{Dict{String, Vector{typeof(1.0u"V")}}, Nothing} = nothing; convolute=true)
   amplitudesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
   phasesFloat = Dict{String, Vector{Union{Float32, Nothing}}}()
+  offsetsFloat = Dict{String, Float32}()
   awgFloat = nothing
+  for (id, offset) in offsets
+    offsetsFloat[id] = ustrip(u"V", offset)
+  end
   for (id, amps) in amplitudes
     amplitudesFloat[id] = map(x-> isnothing(x) ? nothing : ustrip(u"V", x), amps)
   end
@@ -1276,7 +1288,7 @@ function setTxParams(daq::RedPitayaDAQ, amplitudes::Dict{String, Vector{typeof(1
       awgFloat[id] = map(x-> ustrip(u"V", x), wave)
     end
   end
-  setTxParams(daq, amplitudesFloat, phasesFloat, awgFloat)
+  setTxParams(daq, offsetsFloat, amplitudesFloat, phasesFloat, awgFloat)
 end
 
 currentFrame(daq::RedPitayaDAQ) = RedPitayaDAQServer.currentFrame(daq.rpc)
