@@ -9,6 +9,9 @@
 ### Improvements for TxDAQController
 - fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
 
+### Other
+- improved error messages during device creation
+
 ## 0.6.0
 
 ### Most Important Breaking Changes
