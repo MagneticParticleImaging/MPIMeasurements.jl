@@ -9,6 +9,15 @@
 ### Improvements for TxDAQController
 - fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
 
+### Improvements for HubertAmplifier
+- **.toml update required**: added differentiation for A1110E and A1110QE amplifiers, configure by adding the `model` keyword to the parameters
+- renamed AmplifierVoltageMode to AmplifierPowerSupplyMode to avoid confusion with voltage and current modes, deprecating the related function names
+- **.toml update required**: renamed `voltageMode` to `powerSupplyMode` in HubertAmplifierParams
+- implemented getters for powerSupplyMode and mode
+- added monitoring of powerloss for A1110E
+- do not override startup parameters on every init
+- improved parsing of amplifier status
+
 ### Other
 - improved error messages during device creation
 

@@ -1,25 +1,54 @@
-export HubertAmplifier, HubertAmplifierParams
+export HubertAmplifier, HubertAmplifierParams, HubertAmplifierPoolParams, HubertAmplifierPortParams
 abstract type HubertAmplifierParams <: DeviceParams end
 
+@enum HubertVersion begin
+	A1110E
+	A1110QE
+end
+
+function convert(::Type{HubertVersion}, x::String)
+  if lowercase(x) == "a1110e"
+    return A1110E
+  elseif  lowercase(x) == "a1110qe"
+    return A1110QE
+  else
+    throw(ScannerConfigurationError("The given amplifier model `$x` for is not valid. Please use `A1110E` or `A1110QE`."))
+  end
+end
+
 Base.@kwdef struct HubertAmplifierPortParams <: HubertAmplifierParams
+	"ID of the tx channel this amplifier is connected to"
 	channelID::String
+	"Serial port address of the amplifier"
 	port::String
 	@add_serial_device_fields nothing
 	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
-	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
+	"Power supply level the amplifier should be initialized with, must contain `low`, `mid` or `high`"
+	powerSupplyMode::AmplifierPowerSupplyMode = AMP_LOW_POWER_SUPPLY # This should be the safe default
+	"Idx of the matching network to use in current mode"
 	matchingNetwork::Integer = 1
+	"Delay in s to wait after enabling the output"
 	warmUpDelay::Float64 = 0.2
+	"Model of the amplifier, either `A1110E` or `A1110QE`"
+	model::HubertVersion
 end
 HubertAmplifierPortParams(dict::Dict) = params_from_dict(HubertAmplifierPortParams, dict)
 
 Base.@kwdef struct HubertAmplifierPoolParams <: HubertAmplifierParams
+	"string, required, ID of the tx channel this amplifier is connected to"
 	channelID::String
+	"string, required, Description of the amps serial port to find in pool"
 	description::String
 	@add_serial_device_fields nothing
 	mode::AmplifierMode = AMP_VOLTAGE_MODE # This should be the safe default
-	voltageMode::AmplifierVoltageMode = AMP_LOW_VOLTAGE_MODE # This should be the safe default
+	"Power supply level the amplifier should be initialized with, must contain `low`, `mid` or `high`"
+	powerSupplyMode::AmplifierPowerSupplyMode = AMP_LOW_POWER_SUPPLY # This should be the safe default
+	"Idx of the matching network to use in current mode"
 	matchingNetwork::Integer = 1
+	"Delay in s to wait after enabling the output"
 	warmUpDelay::Float64 = 0.2
+	"Model of the amplifier, either `A1110E` or `A1110QE`"
+	model::HubertVersion
 end
 HubertAmplifierPoolParams(dict::Dict) = params_from_dict(HubertAmplifierPoolParams, dict)
 
@@ -30,16 +59,42 @@ Base.@kwdef mutable struct HubertAmplifier <: Amplifier
   driver::Union{SerialDevice, Missing} = missing
 end
 
+_hubertModel(amp::HubertAmplifier) = amp.params.model
+
+struct HubertStatus
+	ready::Bool
+	overload::Bool
+	overtemperature::Bool
+	interlockActive::Bool
+	supplyVoltage::Union{Missing,AmplifierPowerSupplyMode}
+	on::Bool
+	function HubertStatus(state::UInt8, model::HubertVersion=A1110QE)
+		if model == A1110E
+			supplyVoltage = AmplifierPowerSupplyMode((state&(0b11 << 5))>>5)
+		else
+			supplyVoltage = missing
+		end
+		new(state&(0x1 << 0) != 0, state&(0x1 << 1)!= 0, state&(0x1 << 2)!= 0, state&(0x1 << 4)!= 0,supplyVoltage, state&(0x1 << 7)!= 0)
+	end
+end
+status_symbol(status::Bool, positive::Bool=true)= if status&&positive; styled"{green:✔}" elseif status&&!positive; styled"{red,bold:!}" elseif !status&&positive; styled"{red:✘}" else styled"{green,bold:-}" end
+
+function Base.show(io::IO, st::HubertStatus)
+    println(io, "HubertStatus:")
+    println(io, "  Ready:             ", status_symbol(st.ready))
+    println(io, "  Overload:          ", status_symbol(st.overload, false))
+    println(io, "  Overtemperature:   ", status_symbol(st.overtemperature,false))
+    println(io, "  Interlock Active:  ", status_symbol(st.interlockActive,false))
+    println(io, "  Supply Voltage:    ", st.supplyVoltage)  # Keine Farbformatierung
+    println(io, "  On:                ", status_symbol(st.on))
+end
+
 function _init(amp::HubertAmplifier)
-	@warn "The code for the Hubert amplifier has not yet been tested within MPIMeasurements!"
-
 	amp.driver = initSerialDevice(amp, amp.params)
-
-	_hubertSetStartupParameters(amp)
 
 	# Set values given by configuration
 	mode(amp, amp.params.mode)
-	voltageMode(amp, amp.params.voltageMode)
+	powerSupplyMode(amp, amp.params.powerSupplyMode)
 	matchingNetwork(amp, amp.params.matchingNetwork)
 end
 
@@ -97,10 +152,28 @@ function _hubertSetStartupParameters(amp::HubertAmplifier)
 	return nothing
 end
 
+function _hubertGetSettings(amp::HubertAmplifier)
+	input = UInt8[0x02, 0x38]
+	output = zeros(UInt8, 10)
+	return _hubertSerial!(amp, input, output)
+end
+
+function _hubertGetStartupSettings(amp::HubertAmplifier)
+	input = UInt8[0x02, 0x22]
+	output = zeros(UInt8, 1)
+	return _hubertSerial!(amp, input, output)
+end
+
+function _hubertGetExtendedStartupSettings(amp::HubertAmplifier)
+	input = UInt8[0x02, 0x2F]
+	output = zeros(UInt8, 8)
+	return _hubertSerial!(amp, input, output)
+end
+
 function state(amp::HubertAmplifier)
 	input = UInt8[0x02, 0x10]
 	output = zeros(UInt8, 1)
-	return _hubertSerial!(amp, input, output)
+	return HubertStatus(_hubertSerial!(amp, input, output)[], _hubertModel(amp))
 end
 
 function turnOn(amp::HubertAmplifier)
@@ -121,7 +194,16 @@ function turnOff(amp::HubertAmplifier)
 	return nothing
 end
 
-mode(amp::HubertAmplifier) = @error "Getting the current amplifier mode is not yet supported."
+function mode(amp::HubertAmplifier)
+	res = _hubertSerial!(amp, UInt8[0x02,0x38], zeros(UInt8,3))
+	if res[3] == 0x00
+		return AMP_VOLTAGE_MODE
+	elseif res[3] == 0x01
+		return AMP_CURRENT_MODE
+	else
+		error("Unknown response from Hubert: $(res[3])")
+	end
+end
 
 function mode(amp::HubertAmplifier, mode::AmplifierMode)
 	#Mode: voltage 00, current 01
@@ -141,22 +223,49 @@ function mode(amp::HubertAmplifier, mode::AmplifierMode)
 	return nothing
 end
 
-voltageMode(amp::HubertAmplifier) = @error "Getting the current amplifier voltage mode is not yet supported."
-
-function voltageMode(amp::HubertAmplifier, mode::AmplifierVoltageMode)
-	#high is required, may set to low for below 15mt [??? toDo: after cal]
-	#9. Betriebsspann. mid: 05, high: 09 - do not use auto (01)!
-	if mode == AMP_HIGH_VOLTAGE_MODE
-		input = UInt8[0x03, 0x54, 0x09]
-	elseif mode == AMP_LOW_VOLTAGE_MODE
-		input = UInt8[0x03, 0x54, 0x05]
-	else
-		throw(ScannerConfigurationError("Unsupported voltage mode for Hubert amplifier: $mode."))
+function powerSupplyMode(amp::HubertAmplifier)
+	if _hubertModel(amp) == A1110E
+		return state(amp).supplyVoltage
+	elseif _hubertModel(amp) == A1110QE
+		res = _hubertSerial!(amp, UInt8[0x02,0x38], zeros(UInt8,12))
+		if res[12] == 0x05
+			return AMP_LOW_POWER_SUPPLY
+		elseif res[12] == 0x09
+			return AMP_HIGH_POWER_SUPPLY
+		else
+			error("Amplifier seems to be in auto mode or has different supply voltages configured for + and - (code: $(res[12])). This is not supported by MPIMeasurements!")
+		end
 	end
+end
 
-	ack = UInt8[0x54]
-	_hubertSerial(amp, input, ack)
+function powerSupplyMode(amp::HubertAmplifier, mode::AmplifierPowerSupplyMode)
+	if _hubertModel(amp) == A1110QE
+		#high is required, may set to low for below 15mt [??? toDo: after cal]
+		#9. Betriebsspann. mid: 05, high: 09 - do not use auto (01)!
+		if mode == AMP_HIGH_POWER_SUPPLY
+			input = UInt8[0x03, 0x54, 0x09]
+		elseif mode == AMP_LOW_POWER_SUPPLY
+			input = UInt8[0x03, 0x54, 0x05]
+		else
+			throw(ScannerConfigurationError("Unsupported voltage mode for Hubert amplifier $(_hubertModel(amp)): $mode."))
+		end
 
+		ack = UInt8[0x54]
+		_hubertSerial(amp, input, ack)
+	elseif _hubertModel(amp) == A1110E
+		orig_timeout = amp.driver.timeout_ms
+		amp.driver.timeout_ms = 10000 # changing the power supply takes a moment on the A1110E Huberts
+		if mode==AMP_HIGH_POWER_SUPPLY
+			_hubertSerial(amp, UInt8[0x02, 0x05], UInt8[0x05])
+		elseif mode==AMP_MID_POWER_SUPPLY
+			_hubertSerial(amp, UInt8[0x02, 0x27], UInt8[0x27])
+		elseif mode==AMP_LOW_POWER_SUPPLY
+			_hubertSerial(amp, UInt8[0x02, 0x06], UInt8[0x06])
+		else
+			throw(ScannerConfigurationError("Unsupported voltage mode for Hubert amplifier $(_hubertModel(amp)): $mode."))
+		end
+		amp.driver.timeout_ms = orig_timeout
+	end
 	return nothing
 end
 
@@ -179,7 +288,16 @@ function temperature(amp::HubertAmplifier)
 	input = UInt8[0x02, 0x04]
 	output = zeros(UInt8, 1)
 	hex = _hubertSerial!(amp, input, output)
-	return Int(hex[1])
+	return Int(hex[1])*u"°C"
+end
+
+function currentPowerLossPercent(amp::HubertAmplifier)
+	if _hubertModel(amp) == A1110QE
+		@warn "The A1110-QE does not support power loss monitoring!"
+		return 0
+	end
+	hex = _hubertSerial!(amp, UInt8[0x02,0x0E], UInt8[0x0])
+	return Int(hex[1])/250*100
 end
 
 channelId(amp::HubertAmplifier) = amp.params.channelID
