@@ -18,6 +18,8 @@ Base.@kwdef mutable struct RedPitayaDAQParams <: DAQParams
   resetWaittime::typeof(1.0u"s") = 45u"s"
   rampingMode::RampingMode = HOLD
   rampingFraction::Float32 = 1.0
+  "Allow the RP sequence steps to be shortened to avoid wasted time with short ramp times and long steps"
+  allowRampTimeOptimization::Bool = false
   "Flag for using the counter trigger"
   useCounterTrigger::Bool = false
   "Source type of the counter trigger"
@@ -292,7 +294,7 @@ function setAcyclicParams(daq, seqChannels::Vector{AcyclicElectricalTxChannel})
   setSequenceParams(daq, luts, enableLuts)
 end
 
-function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{Float64}}}, enableLuts::Vector{Union{Nothing, Array{Bool}}})
+function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{<:Union{Nothing, Array{Float64}}}, enableLuts::Vector{<:Union{Nothing, Array{Bool}}}, stepsPerRepetition::Int = div(periodsPerFrame(daq.rpc), daq.acqPeriodsPerPatch))
   if length(luts) != length(daq.rpc)
     throw(DimensionMismatch("$(length(luts)) LUTs do not match $(length(daq.rpc)) RedPitayas"))
   end
@@ -309,7 +311,6 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     @debug "There are no LUTs to set."
   end
 
-  stepsPerRepetition = div(periodsPerFrame(daq.rpc), daq.acqPeriodsPerPatch)
   @debug "Set sequence params" samplesPerStep=div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition)
   result = execute!(daq.rpc) do batch
     @add_batch batch samplesPerStep!(daq.rpc, div(samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc), stepsPerRepetition))
@@ -331,6 +332,10 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
     timePerStep = daq.samplesPerStep/samplingRate
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
+    if daq.params.allowRampTimeOptimization && (timePerStep-rampTime)>0.1
+      @warn "The configured sequence steps would waste $(timePerStep-rampTime)s per ramp up/down, decreasing the step size by a factor of 10!" maxlog=10
+      return setSequenceParams(daq, repeat.(luts,inner=(1,10)), repeat.(enableLuts,inner=(1,10)), 10stepsPerRepetition)
+    end
   end
 
   acqSeq = Array{AbstractSequence}(undef, length(daq.rpc))

@@ -9,6 +9,9 @@
 ### Improvements for TxDAQController
 - fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
 
+### Improvements to RedPitayaDAQ
+- added ramp time optimization feature which can be enabled in the Scanner.toml, this can optimize (i.e. reduce) the step size of a RedPitaya sequence to waste less time during the ramping phase, since before a minimum of one step was at least used for ramping, even though it might be shorter
+
 ### Improvements for HubertAmplifier
 - **.toml update required**: added differentiation for A1110E and A1110QE amplifiers, configure by adding the `model` keyword to the parameters
 - renamed AmplifierVoltageMode to AmplifierPowerSupplyMode to avoid confusion with voltage and current modes, deprecating the related function names
