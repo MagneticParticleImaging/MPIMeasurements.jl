@@ -59,6 +59,8 @@ mutable struct AWControlSequence <: ControlSequence
   @ControlSequence_fields
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
+  maxIndex::Int
+  cachedTFs::Array{ComplexF64,2}
   #lutMap::Dict{String, Dict{AcyclicElectricalTxChannel, Int}} # for every field ID contain a dict of removed LUTChannels together with the corresponding channel
 end
 
@@ -186,8 +188,18 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
     end
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
+    if size(rfftIndices,3)>100000
+      maxIndex = min(round(Int,max(findlast(.|(eachslice(rfftIndices, dims=(1,2))...))*1.1,65537)),size(rfftIndices,3))
+      if iseven(maxIndex); maxIndex+=1 end
+    else
+      maxIndex = size(rfftIndices,3)
+    end
     
-    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [])
+    N = rxNumSamplingPoints(currSeq)
+    frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(currSeq)))
+    fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in refTFs]))
+
+    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [], maxIndex, fbTF)
 
     ## Apply last DC result
     if !isnothing(txCont.lastDCResults) && (txCont.lastChannelIDs == id.(seqControlledChannels))
@@ -247,7 +259,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
       elseif isa(comp, ArbitraryElectricalComponent)
         # the frequency samples have a spacing dfCyclesPerPeriod in the spectrum, only use a maximum number of 2^13+1 points, since the waveform has a buffer length of 2^14 (=> rfft 2^13+1)
         N_harmonics = findlast(x->x>1e-8, abs.(rfft(values(comp)/0.5length(values(comp)))))
-        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod+1)] .= true
+        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod)] .= true
         @debug "createRFFTindices: AWG component" divider(comp) sum(index_mask[i,j,:]) N_harmonics
       end
     end
@@ -679,7 +691,7 @@ function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, 
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
-  @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @debug "fieldAccuracyReached" diff=lineplot(1:size(diff,1),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
   @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
@@ -794,12 +806,11 @@ end
 function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   N = rxNumSamplingPoints(cont.currSequence)
   # do rfft channel wise and correct with the transfer function, return as (num control channels x len rfft x periods x frames) Matrix, the selection of [:,:,1,1] is done in controlTx
-  spectrum = rfft(uRef, 1)/0.5N
+  spectrum = rfft(uRef[:, cont.refIndices, :, :], 1)
+  spectrum ./= 0.5N
   spectrum[1,:,:,:] ./= 2
-  sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
-  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in cont.refTFs]))
-  return sortedSpectrum./fbTF
+  sortedSpectrum = permutedims(spectrum, (2,1,3,4))
+  return sortedSpectrum./cont.cachedTFs
 end
 
 function _calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::CrossCouplingControlSequence, uRef, ::SortedRef)
@@ -971,9 +982,13 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
 end
 
 function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
-  N = rxNumSamplingPoints(cont.currSequence)
+  if cont.maxIndex == size(cont.rfftIndices,3)
+    N = rxNumSamplingPoints(cont.currSequence)
+  else
+    N = 2cont.maxIndex-2
+  end
 
-  spectrum = copy(newTx)*0.5N
+  spectrum = copy(newTx[:,1:cont.maxIndex])*0.5N
   spectrum[:,1] .*= 2
   testSignalTime = irfft(spectrum, N, 2)
 
