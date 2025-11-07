@@ -84,6 +84,7 @@ function calibration(txCont::TxDAQController, channelID::AbstractString)
 end
 
 function calibration(txCont::TxDAQController, channelID::AbstractString, frequency::Real)
+  frequency = round(frequency,digits=3)
   if haskey(txCont.controlResults, channelID) && txCont.controlResults[channelID] isa Dict && haskey(txCont.controlResults[channelID],frequency)
     return txCont.controlResults[channelID][frequency]
   else
@@ -547,7 +548,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
   finalCalibration = diag(calcControlMatrix(cont) ./ calcDesiredField(cont))
   channelIds = id.(getControlledChannels(cont))
   dividers = divider.(MPIMeasurements.getPrimaryComponents(cont))
-  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  frequencies = round.(ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers, digits=3)
   for i in axes(finalCalibration, 1)
       if !isnan(finalCalibration[i])
         if !haskey(txCont.controlResults, channelIds[i])
@@ -570,7 +571,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     
   for res in calibrationResults
     chId = channelIDs[res[1]]
-    f = freqAxis[res[2]]
+    f = round(freqAxis[res[2]],digits=3)
     if !haskey(txCont.controlResults, chId)
       txCont.controlResults[chId] = Dict{Float64,typeof(1.0im*u"V/T")}()
     end
