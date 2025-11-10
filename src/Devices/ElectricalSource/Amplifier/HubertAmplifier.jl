@@ -6,16 +6,6 @@ abstract type HubertAmplifierParams <: DeviceParams end
 	A1110QE
 end
 
-function convert(::Type{HubertVersion}, x::String)
-  if lowercase(x) == "a1110e"
-    return A1110E
-  elseif  lowercase(x) == "a1110qe"
-    return A1110QE
-  else
-    throw(ScannerConfigurationError("The given amplifier model `$x` for is not valid. Please use `A1110E` or `A1110QE`."))
-  end
-end
-
 Base.@kwdef struct HubertAmplifierPortParams <: HubertAmplifierParams
 	"ID of the tx channel this amplifier is connected to"
 	channelID::String
@@ -29,10 +19,16 @@ Base.@kwdef struct HubertAmplifierPortParams <: HubertAmplifierParams
 	matchingNetwork::Integer = 1
 	"Delay in s to wait after enabling the output"
 	warmUpDelay::Float64 = 0.2
-	"Model of the amplifier, either `A1110E` or `A1110QE`"
-	model::HubertVersion
 end
-HubertAmplifierPortParams(dict::Dict) = params_from_dict(HubertAmplifierPortParams, dict)
+
+function HubertAmplifierPortParams(dict::Dict)
+	if haskey(dict, "voltageMode")
+		@warn "The parameter `voltageMode` for the Hubert amplifiers is deprecated, please use `powerSupplyMode` instead!"
+		dict["powerSupplyMode"] = dict["voltageMode"]
+		pop!(dict, "voltageMode")
+	end
+	return params_from_dict(HubertAmplifierPortParams, dict)
+end
 
 Base.@kwdef struct HubertAmplifierPoolParams <: HubertAmplifierParams
 	"string, required, ID of the tx channel this amplifier is connected to"
@@ -47,19 +43,35 @@ Base.@kwdef struct HubertAmplifierPoolParams <: HubertAmplifierParams
 	matchingNetwork::Integer = 1
 	"Delay in s to wait after enabling the output"
 	warmUpDelay::Float64 = 0.2
-	"Model of the amplifier, either `A1110E` or `A1110QE`"
-	model::HubertVersion
 end
-HubertAmplifierPoolParams(dict::Dict) = params_from_dict(HubertAmplifierPoolParams, dict)
 
+function HubertAmplifierPoolParams(dict::Dict)
+	if haskey(dict, "voltageMode")
+		@warn "The parameter `voltageMode` for the Hubert amplifiers is deprecated, please use `powerSupplyMode` instead!"
+		dict["powerSupplyMode"] = dict["voltageMode"]
+		pop!(dict, "voltageMode")
+	end
+	return params_from_dict(HubertAmplifierPoolParams, dict)
+end
 
 Base.@kwdef mutable struct HubertAmplifier <: Amplifier
 	@add_device_fields HubertAmplifierParams
 
   driver::Union{SerialDevice, Missing} = missing
+	model::Union{HubertVersion, Missing} = missing
 end
 
-_hubertModel(amp::HubertAmplifier) = amp.params.model
+function _hubertModel(amp::HubertAmplifier)
+	# Undocumented command, suggested by Hubert support via E-Mail
+	answer = String(_hubertSerial(amp, UInt8[0x02,0x50]))
+	if answer == "P111MAIN"
+		return A1110E
+	elseif answer == "P111MAINQE"
+		return A1110QE
+	else
+		error("Unknown hubert model $(answer)! This should not happen...")
+	end
+end
 
 struct HubertStatus
 	ready::Bool
@@ -91,6 +103,7 @@ end
 
 function _init(amp::HubertAmplifier)
 	amp.driver = initSerialDevice(amp, amp.params)
+	amp.model = _hubertModel(amp)
 
 	# Set values given by configuration
 	mode(amp, amp.params.mode)
@@ -129,6 +142,20 @@ end
 function _hubertSerial!(amp::HubertAmplifier, input::Array{UInt8}, output::Array{UInt8}) #for querys
 	query!(amp.driver, input, output)
 	return output
+end
+
+function _hubertSerial(amp::HubertAmplifier, input::Array{UInt8})
+	lock(amp.driver.sdLock)
+	try
+		sp_flush(amp.driver.sp, SP_BUF_INPUT)
+		send(amp.driver,input)
+		sleep(0.1)
+		res = nonblocking_read(amp.driver.sp)
+		sp_flush(amp.driver.sp, SP_BUF_INPUT)
+		return res
+	finally
+		unlock(amp.driver.sdLock)
+	end
 end
 
 function _hubertSetStartupParameters(amp::HubertAmplifier)
@@ -298,6 +325,12 @@ function currentPowerLossPercent(amp::HubertAmplifier)
 	end
 	hex = _hubertSerial!(amp, UInt8[0x02,0x0E], UInt8[0x0])
 	return Int(hex[1])/250*100
+end
+
+hubertId(amp::HubertAmplifier) = String(_hubertSerial(amp, UInt8[0x02,0x51])) 
+function hubertId!(amp::HubertAmplifier, newID::String) 
+	_hubertSerial(amp, [UInt8[0x82,0x52]; Vector{UInt8}(newID); repeat(UInt8[0x0], 128-length(newID))], UInt8[0x52])
+	return hubertId(amp)
 end
 
 channelId(amp::HubertAmplifier) = amp.params.channelID

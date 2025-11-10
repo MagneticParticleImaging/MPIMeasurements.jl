@@ -15,13 +15,14 @@
 - added ramp time optimization feature which can be enabled in the Scanner.toml, this can optimize (i.e. reduce) the step size of a RedPitaya sequence to waste less time during the ramping phase, since before a minimum of one step was at least used for ramping, even though it might be shorter
 
 ### Improvements for HubertAmplifier
-- **.toml update required**: added differentiation for A1110E and A1110QE amplifiers, configure by adding the `model` keyword to the parameters
+- added differentiation for A1110E and A1110QE amplifiers, model will be automatically detected
 - renamed AmplifierVoltageMode to AmplifierPowerSupplyMode to avoid confusion with voltage and current modes, deprecating the related function names
-- **.toml update required**: renamed `voltageMode` to `powerSupplyMode` in HubertAmplifierParams
+- renamed `voltageMode` to `powerSupplyMode` in HubertAmplifierParams, .toml parsing still works with the old parameter, but outputs a deprecation warning
 - implemented getters for powerSupplyMode and mode
 - added monitoring of powerloss for A1110E
 - do not override startup parameters on every init
 - improved parsing of amplifier status
+- implemented setting and getting of amplifier ID
 
 ### Other
 - improved error messages during device creation
