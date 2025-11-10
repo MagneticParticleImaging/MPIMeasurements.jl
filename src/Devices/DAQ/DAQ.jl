@@ -339,7 +339,7 @@ function applyForwardCalibration!(seq::Sequence, device::Device)
         if comp isa ArbitraryElectricalComponent
           N = length(values(comp))
           f_awg = rfftfreq(N, f_comp*N)
-          calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
           calib = ustrip.(NoUnits, calib)
           values!(comp, irfft(rfft(values(comp)).*calib, N))
         end

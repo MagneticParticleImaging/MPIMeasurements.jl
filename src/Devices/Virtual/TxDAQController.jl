@@ -59,6 +59,8 @@ mutable struct AWControlSequence <: ControlSequence
   @ControlSequence_fields
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
+  maxIndex::Int
+  cachedTFs::Array{ComplexF64,2}
   #lutMap::Dict{String, Dict{AcyclicElectricalTxChannel, Int}} # for every field ID contain a dict of removed LUTChannels together with the corresponding channel
 end
 
@@ -84,6 +86,7 @@ function calibration(txCont::TxDAQController, channelID::AbstractString)
 end
 
 function calibration(txCont::TxDAQController, channelID::AbstractString, frequency::Real)
+  frequency = round(frequency,digits=3)
   if haskey(txCont.controlResults, channelID) && txCont.controlResults[channelID] isa Dict && haskey(txCont.controlResults[channelID],frequency)
     return txCont.controlResults[channelID][frequency]
   else
@@ -185,8 +188,18 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
     end
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
+    if size(rfftIndices,3)>100000
+      maxIndex = min(round(Int,max(findlast(.|(eachslice(rfftIndices, dims=(1,2))...))*1.1,65537)),size(rfftIndices,3))
+      if iseven(maxIndex); maxIndex+=1 end
+    else
+      maxIndex = size(rfftIndices,3)
+    end
     
-    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [])
+    N = rxNumSamplingPoints(currSeq)
+    frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(currSeq)))
+    fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in refTFs]))
+
+    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [], maxIndex, fbTF)
 
     ## Apply last DC result
     if !isnothing(txCont.lastDCResults) && (txCont.lastChannelIDs == id.(seqControlledChannels))
@@ -246,7 +259,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
       elseif isa(comp, ArbitraryElectricalComponent)
         # the frequency samples have a spacing dfCyclesPerPeriod in the spectrum, only use a maximum number of 2^13+1 points, since the waveform has a buffer length of 2^14 (=> rfft 2^13+1)
         N_harmonics = findlast(x->x>1e-8, abs.(rfft(values(comp)/0.5length(values(comp)))))
-        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod+1)] .= true
+        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod)] .= true
         @debug "createRFFTindices: AWG component" divider(comp) sum(index_mask[i,j,:]) N_harmonics
       end
     end
@@ -395,18 +408,8 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     disableControl(tempControl)
   end
 
-  amps = []
-  if hasDependency(txCont, Amplifier)
-    amps = dependencies(txCont, Amplifier)
-  end
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(vcat(acyclicElectricalTxChannels(control.targetSequence), periodicElectricalTxChannels(control.targetSequence)))
-    amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
-  end
+  amps = getRequiredAmplifiers(txCont, control.currSequence)
+  turnOn(amps)
 
   # Hacky solution
   controlPhaseDone = false
@@ -557,14 +560,14 @@ function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
   finalCalibration = diag(calcControlMatrix(cont) ./ calcDesiredField(cont))
   channelIds = id.(getControlledChannels(cont))
   dividers = divider.(MPIMeasurements.getPrimaryComponents(cont))
-  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  frequencies = round.(ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers, digits=3)
   for i in axes(finalCalibration, 1)
       if !isnan(finalCalibration[i])
         if !haskey(txCont.controlResults, channelIds[i])
           txCont.controlResults[channelIds[i]] = Dict{Float64,typeof(1.0im*u"V/T")}()
         end
         txCont.controlResults[channelIds[i]][frequencies[i]] = finalCalibration[i]*u"V/T"
-        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
+        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz" maxlog=10
       end
   end
   
@@ -580,12 +583,14 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     
   for res in calibrationResults
     chId = channelIDs[res[1]]
-    f = freqAxis[res[2]]
+    f = round(freqAxis[res[2]],digits=3)
     if !haskey(txCont.controlResults, chId)
       txCont.controlResults[chId] = Dict{Float64,typeof(1.0im*u"V/T")}()
     end
-    txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
-    @debug "Cached calibration result:" chId f finalCalibration[res]
+    if !isnan(finalCalibration[res]) && !iszero(finalCalibration[res])
+      txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
+      @debug "Cached control result:" chId f finalCalibration[res] maxlog=10
+    end
   end
 
   if length(cont.dcSearch) >= 2
@@ -686,7 +691,7 @@ function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, 
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
-  @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @debug "fieldAccuracyReached" diff=lineplot(1:size(diff,1),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
   @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
   amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
   return all(amplitude_ok)
@@ -707,6 +712,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
     updateControlSequence!(cont, newTx)
     return true
   else
+    @info "Checks" validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) checkVoltLimits(newTx, cont) 
     error("The new tx values are not allowed! Either your forward calibration is inaccurate or the system can not produce the requested field strength!")
     return false
   end
@@ -733,19 +739,28 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # For now we completely ignore coupling and hope that it can find good values anyways
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = oldTx./Γ.*Ω
+  if any(isnan.(newTx))
+    @warn "There were zeros in the reference signal!" any(iszero.(Γ)) findall(iszero.(Γ))
+    newTx[isnan.(newTx)] .= 0.0
+  end
 
   # handle DC separately:
   if txCont.params.controlDC
     push!(cont.dcSearch, (V=oldTx[:,1], B=Γ[:,1]))
+    @debug "History of dcSearch" cont.dcSearch
     if length(cont.dcSearch)==1
       my_sign(x) = if x<0; -1 else 1 end
       testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
       newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
     else
-      @debug "History of dcSearch" cont.dcSearch
       last = cont.dcSearch[end]
       previous = cont.dcSearch[end-1]
-      newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      if any(abs.(last.B.-previous.B) .< 0.005*real.(Ω[:,1])) # if the last two DC search steps are too close together (especially when close to zero) the next step might produce wrong results
+        @info "Restarting DC Search"
+        newTx[:,1] = ustrip.(u"V", real.(Ω[:,1])*u"T".*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
+      else
+        newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      end
     end
   end
 
@@ -791,12 +806,11 @@ end
 function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   N = rxNumSamplingPoints(cont.currSequence)
   # do rfft channel wise and correct with the transfer function, return as (num control channels x len rfft x periods x frames) Matrix, the selection of [:,:,1,1] is done in controlTx
-  spectrum = rfft(uRef, 1)/0.5N
+  spectrum = rfft(uRef[:, cont.refIndices, :, :], 1)
+  spectrum ./= 0.5N
   spectrum[1,:,:,:] ./= 2
-  sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
-  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in cont.refTFs]))
-  return sortedSpectrum./fbTF
+  sortedSpectrum = permutedims(spectrum, (2,1,3,4))
+  return sortedSpectrum./cont.cachedTFs
 end
 
 function _calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::CrossCouplingControlSequence, uRef, ::SortedRef)
@@ -933,6 +947,7 @@ function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
   N = rxNumSamplingPoints(cont.currSequence)
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
+  @debug "calcExpectedField" any(calibFieldToVoltEstimate.==0) any(isnan.(tx))
   B_fw = tx ./ calibFieldToVoltEstimate
   return B_fw
 end
@@ -967,9 +982,13 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
 end
 
 function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
-  N = rxNumSamplingPoints(cont.currSequence)
+  if cont.maxIndex == size(cont.rfftIndices,3)
+    N = rxNumSamplingPoints(cont.currSequence)
+  else
+    N = 2cont.maxIndex-2
+  end
 
-  spectrum = copy(newTx)*0.5N
+  spectrum = copy(newTx[:,1:cont.maxIndex])*0.5N
   spectrum[:,1] .*= 2
   testSignalTime = irfft(spectrum, N, 2)
 
