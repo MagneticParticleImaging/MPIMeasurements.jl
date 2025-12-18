@@ -503,6 +503,10 @@ rxNumSamplesPerPeriod(sequence::Sequence) = rxNumSamplingPoints(sequence)
 export rxChannels
 rxChannels(sequence::Sequence) = rxChannels(sequence.acquisition)
 
+export rxNumFrequencies
+rxNumFrequencies(sequence::Sequence) = rxNumSamplingPoints(sequence)÷2+1
+
+
 for T in [Sequence, GeneralSettings, AcquisitionSettings, MagneticField, TxChannel, ContinuousElectricalChannel, ContinuousMechanicalRotationChannel,
   ContinuousMechanicalTranslationChannel, PeriodicElectricalChannel, PeriodicElectricalComponent, SweepElectricalComponent, StepwiseElectricalChannel, 
   StepwiseMechanicalRotationChannel, StepwiseMechanicalTranslationChannel, ArbitraryElectricalComponent, ProtocolOffsetElectricalChannel]
