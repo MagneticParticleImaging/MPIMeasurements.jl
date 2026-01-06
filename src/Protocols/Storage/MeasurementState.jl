@@ -1,3 +1,6 @@
+# Export buffer abstract types for testing and extension
+export StorageBuffer, IntermediateBuffer, SinkBuffer, SequenceBuffer, DeviceBuffer
+
 abstract type MeasurementState end
 
 abstract type StorageBuffer end
