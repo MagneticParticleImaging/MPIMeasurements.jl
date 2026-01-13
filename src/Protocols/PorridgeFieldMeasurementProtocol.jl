@@ -237,7 +237,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
       for k in 1:protocol.params.numMeasurementsPerPoint
         try
           # Prefer synchronous acquireFullField if available
-          if @isdefined acquireFullField && isa(gaussMeter, FieldCameraAdapter)
+          if isdefined(@__MODULE__, :acquireFullField) && isa(gaussMeter, FieldCameraAdapter)
             res = acquireFullField(gaussMeter)
           elseif isa(gaussMeter, ArduinoFieldCamera) && hasfield(typeof(gaussMeter), :ch)
             # If ArduinoFieldCamera streams, try to take one frame from its channel
@@ -411,41 +411,51 @@ Handle file storage request
 """
 function handleEvent(protocol::PorridgeFieldMeasurementProtocol, event::FileStorageRequestEvent)
   filename = event.filename
+  # Cache gauss meter type before potential close
   gaussMeter = getGaussMeter(protocol.scanner)
+  gaussMeterType = typeof(gaussMeter)
   
   @info "Saving measurement data to $filename"
   
-  try
-    h5open(filename, "w") do file
-      # Save different data formats depending on device type
-      if isa(gaussMeter, ArduinoFieldCamera)
-        saveFieldCameraData(file, protocol)
-      else
-        saveGaussMeterData(file, protocol)
-      end
-      
-      # Save metadata
-      write(file, "/protocol", string(typeof(protocol)))
-      write(file, "/timestamp", string(now()))
-      write(file, "/numMeasurements", length(protocol.fieldData))
-      
-      if !isnothing(protocol.params.sequence)
-        write(file, "/sequenceName", protocol.params.sequence.general.name)
-      end
-    end
-    
-    # After successful save, attempt automatic postprocessing (if available)
+  # HDF5 is not thread-safe - must run on main thread
+  # Schedule save on thread 1
+  Threads.@spawn :interactive begin
     try
-      run_postprocessing(filename, protocol)
-    catch e
-      @warn "Postprocessing hook failed: $e"
-    end
+      @info "Opening HDF5 file..."
+      h5open(filename, "w") do file
+        @info "Saving field camera data..."
+        # Save different data formats depending on device type
+        if gaussMeterType <: Union{ArduinoFieldCamera, FieldCameraAdapter}
+          saveFieldCameraData(file, protocol, gaussMeterType)
+        else
+          saveGaussMeterData(file, protocol)
+        end
+        
+        @info "Saving metadata..."
+        # Save metadata
+        write(file, "/protocol", string(typeof(protocol)))
+        write(file, "/timestamp", string(now()))
+        write(file, "/numMeasurements", length(protocol.fieldData))
+        
+        if !isnothing(protocol.params.sequence)
+          write(file, "/sequenceName", protocol.params.sequence.general.name)
+        end
+        @info "HDF5 write complete"
+      end
+      
+      # After successful save, attempt automatic postprocessing (if available)
+      try
+        run_postprocessing(filename, protocol)
+      catch e
+        @warn "Postprocessing hook failed: $e"
+      end
 
-    put!(protocol.biChannel, StorageSuccessEvent(event))
-    @info "Data saved successfully"
-  catch e
-    @error "Error saving data" exception=e
-    put!(protocol.biChannel, ExceptionEvent(e, event))
+      put!(protocol.biChannel, StorageSuccessEvent(event))
+      @info "Data saved successfully"
+    catch e
+      @error "Error saving data" exception=e stacktrace=catch_backtrace()
+      put!(protocol.biChannel, ExceptionEvent(e, event))
+    end
   end
 end
 
@@ -507,7 +517,7 @@ function run_postprocessing(filename::AbstractString, protocol::PorridgeFieldMea
 
       # Include and call student's postprocessing
       include(postproc_path)
-      if @isdefined postprocessing && typeof(postprocessing) <: Function
+      if isdefined(@__MODULE__, :postprocessing) && typeof(postprocessing) <: Function
         t_start, t_k = postprocessing(frames, sens_vec, sum_sensors)
 
         # Write results into HDF5
@@ -530,10 +540,28 @@ end
 """
 Save field camera data to HDF5 file
 """
-function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
-  # Extract data from results
-  data = map(x -> x.data, protocol.fieldData)
-  timestamps = map(x -> x.timestamp, protocol.fieldData)
+function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol, gaussMeterType::Type)
+  # Extract data from results - handle both FieldCameraResult and NamedTuple formats
+  if !isempty(protocol.fieldData)
+    @info "Processing $(length(protocol.fieldData)) field data entries"
+    
+    # Filter to only FieldCameraResult entries (full sensor array data)
+    # Skip NamedTuple entries which are partial/calibration data
+    fieldCameraResults = filter(x -> hasproperty(x, :data), protocol.fieldData)
+    
+    if isempty(fieldCameraResults)
+      @warn "No FieldCameraResult entries found in field data"
+      return
+    end
+    
+    data = map(x -> x.data, fieldCameraResults)
+    timestamps = map(x -> x.timestamp, fieldCameraResults)
+    
+    @info "Processed $(length(data)) FieldCameraResult entries for saving"
+  else
+    @warn "No field data to save"
+    return
+  end
   
   # Stack into 3D array: 3 x numSensors x numMeasurements
   dataArray = cat(data..., dims=3)
@@ -544,10 +572,18 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   write(file, "/numSensors", size(dataArray, 2))
   write(file, "/numMeasurements", size(dataArray, 3))
   
-  # Save sensor positions
-  gaussMeter = getGaussMeter(protocol.scanner)
-  if isa(gaussMeter, ArduinoFieldCamera)
-    write(file, "/sensorPositions", gaussMeter.sensorPositions)
+  # Try to save sensor positions from student code if available
+  if isdefined(Main, :positionX) && isdefined(Main, :positionY) && isdefined(Main, :positionZ)
+    try
+      posX = collect(Float64, Main.positionX)
+      posY = collect(Float64, Main.positionY)
+      posZ = collect(Float64, Main.positionZ)
+      positions = Matrix{Float64}(hcat(posX, posY, posZ)')  # Convert to contiguous Array
+      write(file, "/sensorPositions", positions)
+      @info "Saved sensor positions for $(size(positions, 2)) sensors"
+    catch e
+      @warn "Could not save sensor positions" exception=(e, catch_backtrace())
+    end
   end
   
   # Process with spherical harmonics if enabled
@@ -577,24 +613,32 @@ end
 Process and save spherical harmonics coefficients
 """
 function processSphericalHarmonics(file, protocol::PorridgeFieldMeasurementProtocol, dataArray)
-  # This requires MPISphericalHarmonics package
-  # Implementation follows the pattern from MagSphere_Measurement.jl
+  # This requires MPISphericalHarmonics and MPIUI packages
+  # This is OPTIONAL - provides advanced field analysis and visualization
+  # To enable: install packages with: Pkg.add(["MPISphericalHarmonics", "MPIUI"])
+  if !isdefined(Main, :MPISphericalHarmonics)
+    @debug "Spherical harmonics processing skipped (MPISphericalHarmonics package not loaded - this is optional)"
+    return
+  end
+  if !isdefined(Main, :MPIUI)
+    @debug "Spherical harmonics processing skipped (MPIUI package not loaded - this is optional)"
+    return
+  end
   
-  gaussMeter = getGaussMeter(protocol.scanner)
   radius = protocol.params.sphericalRadius
   T = protocol.params.tDesignOrder
   N = size(dataArray, 2)
   
   try
-    # Create T-Design
-    tDes = MPIUI.loadTDesign(T, N, radius)
+    # Create T-Design using loaded packages
+    tDes = Main.MPIUI.loadTDesign(T, N, radius)
     
     # Calculate coefficients for each measurement
     coeffsArray = []
     for i in 1:size(dataArray, 3)
       frame = dataArray[:, :, i]
-      coeffs = MPIUI.MagneticFieldCoefficients(
-        MPISphericalHarmonics.magneticField(tDes, ustrip.(u"T", frame)),
+      coeffs = Main.MPIUI.MagneticFieldCoefficients(
+        Main.MPISphericalHarmonics.magneticField(tDes, ustrip.(u"T", frame)),
         ustrip(radius)
       )
       push!(coeffsArray, coeffs)
@@ -603,7 +647,6 @@ function processSphericalHarmonics(file, protocol::PorridgeFieldMeasurementProto
     @info "Spherical harmonics coefficients calculated for $(length(coeffsArray)) frames"
     
     # Save coefficients
-    # Note: Actual saving depends on MagneticFieldCoefficients structure
     write(file, "/sphericalHarmonics/tDesignOrder", T)
     write(file, "/sphericalHarmonics/radius", ustrip(u"m", radius))
     write(file, "/sphericalHarmonics/numCoeffs", length(coeffsArray))

@@ -15,7 +15,7 @@ serialThreadID = 4
 
 [Devices]
 initializationOrder = [
-	"serial_pool",
+	# "serial_pool",
 	"rp_cluster",
 	"field_camera"
 ]
@@ -57,6 +57,7 @@ type = "tx"
 channel = 1
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil2]
@@ -69,6 +70,7 @@ type = "tx"
 channel = 2
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil3]
@@ -81,6 +83,7 @@ type = "tx"
 channel = 3
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil4]
@@ -93,6 +96,7 @@ type = "tx"
 channel = 4
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil5]
@@ -105,6 +109,7 @@ type = "tx"
 channel = 5
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil6]
@@ -117,6 +122,7 @@ type = "tx"
 channel = 6
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil7]
@@ -129,6 +135,7 @@ type = "tx"
 channel = 7
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil8]
@@ -141,6 +148,7 @@ type = "tx"
 channel = 8
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil9]
@@ -153,6 +161,7 @@ type = "tx"
 channel = 9
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil10]
@@ -165,6 +174,7 @@ type = "tx"
 channel = 10
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil11]
@@ -177,6 +187,7 @@ type = "tx"
 channel = 11
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 [Devices.rp_cluster.coil12]
@@ -189,24 +200,103 @@ type = "tx"
 channel = 12
 limitPeak = "0.98V"
 sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil13]
+type = "txSlow"
+channel = 37
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil13_fast]
+type = "tx"
+channel = 13
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil14]
+type = "txSlow"
+channel = 38
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil14_fast]
+type = "tx"
+channel = 14
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil15]
+type = "txSlow"
+channel = 43
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil15_fast]
+type = "tx"
+channel = 15
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil16]
+type = "txSlow"
+channel = 44
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil16_fast]
+type = "tx"
+channel = 16
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil17]
+type = "txSlow"
+channel = 49
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil17_fast]
+type = "tx"
+channel = 17
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
+calibration = "1.0V/T"
+
+[Devices.rp_cluster.coil18]
+type = "txSlow"
+channel = 50
+calibration = "1.0V/A"
+
+[Devices.rp_cluster.coil18_fast]
+type = "tx"
+channel = 18
+limitPeak = "0.98V"
+sinkImpedance = "HIGH"
+#allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
 ## Arduino Field Camera Device
 [Devices.field_camera]
 deviceType = "FieldCameraAdapter"
-dependencies = ["serial_pool"]
-sensorFolder = "C:/Users/Philip Suskin/Documents/repos/Julia/spericalsensor_ba-janne_hamann/communicationSerialWithArduino"
-portAddress = "COM3"  # Adjust to your system (e.g., COM3 on Windows, /dev/ttyUSB0 on Linux)
+# dependencies = ["serial_pool"]
+sensorFolder = "/home/mpi/repos/spericalsensor_ba-janne_hamann/communicationSerialWithArduino"
+portAddress = "/dev/ttyACM0"  # Adjust to your system (e.g., COM3 on Windows, /dev/ttyUSB0 on Linux)
 bufferSize = 2048
 numSensors = 37
-radius = "37mm"
-tDesign = 8
-calibrationFile = ""  # Path to calibration file (optional)
+# radius = "37mm"
+# tDesign = 8
+# calibrationFile = ""  # Path to calibration file (optional)
 measurementRange = 150  # Options: 75, 150, or 300 (in mT)
 delim_read = "\r"
 delim_write = "\r"
-baudrate = 115200
+baudrate = 74880  # Must match Arduino baudrate
 ndatabits = 8
-parity = "SP_PARITY_NONE"
+# parity = "SP_PARITY_NONE"
 nstopbits = 1
-timeout_ms = 1000
+timeout_ms = 2000  # Increased timeout for sensor responses

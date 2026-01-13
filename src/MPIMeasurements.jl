@@ -8,6 +8,7 @@ using ThreadPools
 using Sockets
 using DataStructures
 using Dates
+using Statistics: mean
 using Unitful
 using TOML
 using ProgressMeter
@@ -19,6 +20,7 @@ using DocStringExtensions
 using MacroTools
 using LibSerialPort
 using LinearAlgebra
+using HDF5
 
 using ReplMaker
 import REPL

@@ -13,7 +13,7 @@ println()
 
 # Check 1: Scanner configuration
 println("✓ Checking scanner configuration...")
-try
+#try
     scanner = MPIScanner("PorridgeFieldCamera", robust=false)
     println("  ✓ Scanner 'PorridgeFieldCamera' found")
     
@@ -36,20 +36,20 @@ try
     end
     
     close(scanner)
-catch e
-    println("  ✗ Scanner configuration error: $e")
-    println()
-    println("To fix:")
-    println("  1. Check that config/PorridgeFieldCamera/Scanner.toml exists")
-    println("  2. Verify the file has correct syntax")
-    exit(1)
-end
+#catch e
+#    println("  ✗ Scanner configuration error: $e")
+#    println()
+#    println("To fix:")
+#    println("  1. Check that config/PorridgeFieldCamera/Scanner.toml exists")
+#    println("  2. Verify the file has correct syntax")
+#    exit(1)
+#end
 
 println()
 
 # Check 2: Protocol configuration
 println("✓ Checking protocol configuration...")
-try
+#try
     scanner = MPIScanner("PorridgeFieldCamera", robust=false)
     protocol = Protocol("PorridgeFieldMeasurement", scanner)
     println("  ✓ Protocol 'PorridgeFieldMeasurement' found")
@@ -57,16 +57,16 @@ try
     if !isnothing(protocol.params.sequence)
         println("    - Sequence: $(protocol.params.sequence.general.name)")
     end
-    println("    - Measurements per point: $(protocol.params.numMeasurementsPerPoint)")
+    #println("    - Measurements per point: $(protocol.params.numMeasurementsPerPoint)")
     close(scanner)
-catch e
-    println("  ✗ Protocol configuration error: $e")
-    println()
-    println("To fix:")
-    println("  1. Check that config/PorridgeFieldCamera/Protocols/PorridgeFieldMeasurement.toml exists")
-    println("  2. Verify sequence file exists if specified")
-    exit(1)
-end
+#catch e
+#    println("  ✗ Protocol configuration error: $e")
+#    println()
+#    println("To fix:")
+#    println("  1. Check that config/PorridgeFieldCamera/Protocols/PorridgeFieldMeasurement.toml exists")
+#    println("  2. Verify sequence file exists if specified")
+#    exit(1)
+#end
 
 println()
 
@@ -108,6 +108,4 @@ println()
 println("Next steps:")
 println("  1. If all checks passed: Run example/PorridgeFieldMeasurementExample.jl")
 println("  2. If device connection failed: Connect hardware and update COM port")
-println("  3. For quick start: See QUICKSTART_FIELD_MEASUREMENTS.md")
-println("  4. For full documentation: See docs/PorridgeFieldMeasurement.md")
 println()

@@ -37,15 +37,22 @@ while true
         elseif isa(event, FinishedNotificationEvent)
             println("\n✓ Measurement complete!")
             
-            # Save
-            filename = "measurement_$(Dates.format(now(), "yyyymmdd_HHMMSS")).h5"
+            # Save to configured datasetStore location
+            storePath = scanner.generalParams.datasetStore
+            mkpath(expanduser(storePath))  # Ensure directory exists
+            filename = joinpath(expanduser(storePath), "measurement_$(Dates.format(now(), "yyyymmdd_HHMMSS")).h5")
             put!(biChannel, FileStorageRequestEvent(filename))
             
             # Wait for save confirmation
             saveEvent = take!(biChannel)
             if isa(saveEvent, StorageSuccessEvent)
                 println("✓ Saved to: $filename")
+            elseif isa(saveEvent, ExceptionEvent)
+                println("✗ Save error: $(saveEvent.exception)")
             end
+            
+            # Give async save task extra time to flush
+            sleep(2.0)
             
             # Acknowledge
             put!(biChannel, FinishedAckEvent())
