@@ -1,0 +1,32 @@
+[General]
+name = "TwoCoilTest"
+description = "Simple two-coil on/off test for verifying field camera alignment and timing."
+targetScanner = "Porridge"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.cage1]
+safeStartInterval = "0.5s"
+safeEndInterval = "0.5s"
+safeErrorInterval = "0.5s"
+control = true
+decouple = false
+
+[Fields.cage1.coil1]
+type = "StepwiseElectricalChannel"
+divider = 12480
+values = ["0.0A", "0.5A", "0.0A"]
+
+[Fields.cage1.coil2]
+type = "StepwiseElectricalChannel"
+divider = 12480
+values = ["0.0A", "0.5A", "0.0A"]
+
+[Acquisition]
+channels = ["rx_main"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 1
+numFrames = 3
+numAverages = 1
+numFrameAverages = 1
