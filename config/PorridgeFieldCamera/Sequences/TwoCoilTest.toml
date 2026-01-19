@@ -1,7 +1,7 @@
 [General]
 name = "TwoCoilTest"
 description = "Simple two-coil on/off test for verifying field camera alignment and timing."
-targetScanner = "Porridge"
+targetScanner = "PorridgeFieldCamera"
 baseFrequency = "125.0MHz"
 
 [Fields]
