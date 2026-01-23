@@ -56,23 +56,11 @@ end
 
 function sortPositions(protocol::RobotBasedTDesignFieldProtocol, tDesign::SphericalTDesign)
   robot = getRobot(protocol.scanner)
-  current = getPositionScannerCoords(robot)
-  return sortPositions(tDesign, current)
-end
-
-function sortPositions(tDesign::SphericalTDesign, start)
-  current = start
-  tempPositions = collect(tDesign)
-  greedyPositions = ScannerCoords[]
-  indices = Int64[]
-  while length(greedyPositions) != length(tDesign)
-    (val, idx) = findmin(map(x-> norm(x - current), tempPositions))
-    current = tempPositions[idx]
-    push!(greedyPositions, ScannerCoords(uconvert.(Unitful.mm, current)))
-    push!(indices, idx)
-    tempPositions[idx] = [Inf, Inf, Inf] .* 1.0u"mm"
-  end
-  return (greedyPositions, indices)
+  start = getPositionScannerCoords(robot)
+  sortedtDesign = SortedPositions(tDesign, start.data)
+  scannerPos = map(pos -> ScannerCoords(uconvert.(Unitful.mm, pos)), collect(sortedtDesign))
+  indices = parentindices(sortedtDesign)
+  return (scannerPos, indices)
 end
 
 function enterExecute(protocol::RobotBasedTDesignFieldProtocol)
