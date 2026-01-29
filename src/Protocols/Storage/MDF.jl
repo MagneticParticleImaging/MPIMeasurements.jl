@@ -95,8 +95,8 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 end
 
 
-
-function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
+# TODO: Positions should mutate an existing MDFv2Calibration for positions and co.
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions{T}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing) where {T <: Unitful.Length}
 
 	# /calibration/ subgroup
 
@@ -117,7 +117,10 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 	method = "robot"
 	offsetFields = nothing
 	order = "xyz"
-	positions = nothing
+	positions = nothing 
+	if !(isa(subgrid, MeanderingGridPositions) || isa(subgrid, RegularGridPositions))
+		positions = Float64.(ustrip.(uconvert.(Unitful.m, stack(collect(subgrid)))))
+	end
 	snr = nothing
 
 	mdf.calibration = MDFv2Calibration(;
@@ -168,8 +171,6 @@ function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArra
 
 	return
 end
-fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing) = @warn  "Storing positions of type $(typeof(positions)) in MDF is not implemented"
-
 
 
 
