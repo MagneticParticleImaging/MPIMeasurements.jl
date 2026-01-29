@@ -4,6 +4,7 @@ abstract type DeviceCoords{T<:Unitful.Length} <: AbstractVector{T} end
 struct ScannerCoords{T<:Unitful.Length} <: AbstractVector{T}
   data::Vector{T}
 end
+ScannerCoords(other::AbstractVector) = ScannerCoords(Vector(other))
 
 struct ScannerCoordinateSystem
   """Matrix defining the axes of the scanner coordinate system, the first column is the scanner x axis in robot coordinates"""
