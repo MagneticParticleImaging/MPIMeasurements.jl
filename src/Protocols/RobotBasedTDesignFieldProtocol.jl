@@ -247,7 +247,7 @@ function handleEvent(protocol::RobotBasedTDesignFieldProtocol, event::FileStorag
     write(file,"/positions/tDesign/N", protocol.params.N)		# number of points of the t-design
     write(file,"/positions/tDesign/t", protocol.params.T)		# t of the t-design
     write(file,"/positions/tDesign/center", ustrip.(u"m", protocol.params.center.data))	# center of the measured ball
-    write(file, "/positions/tDesign/positions", ustrip.(u"m", protocol.params.positions))	# actual positions that were measured
+    write(file, "/positions/tDesign/positions", stack((ustrip.(u"m",p.data) for p in protocol.positions)))    # actual positions that were measured
     write(file, "/sensor/correctionTranslation", getGaussMeter(protocol.scanner).params.sensorCorrectionTranslation) # TODO only works for LakeShore460 atm
   end
   put!(protocol.biChannel, StorageSuccessEvent(filename))
