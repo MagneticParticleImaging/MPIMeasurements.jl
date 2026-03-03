@@ -5,18 +5,10 @@ export FieldCameraAdapter, FieldCameraAdapterParams, FieldCameraResult
 abstract type FieldCameraAdapterParams <: DeviceParams end
 
 Base.@kwdef struct FieldCameraAdapterDirectParams <: FieldCameraAdapterParams
-  "Path to the spericalsensor communication folder"
-  sensorFolder::String
-  "COM port or serial device path"
-  portAddress::String = "COM3"
-  "Measurement range (mT)"
+  portAddress::String = "/dev/ttyACM0"
   measurementRange::Int64 = 150
-  "Number of sensors"
   numSensors::Int64 = 37
-  "Buffer size for streaming (not used for full-frame acquisition)"
-  bufferSize::Int64 = 1
-  "Coordinate transformation matrix"
-  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I,(3,3))
+  coordinateTransformation::Matrix{Float64} = Matrix{Float64}(I, (3, 3))
   @add_serial_device_fields "\r" 8 SP_PARITY_NONE
 end
 
@@ -24,263 +16,251 @@ FieldCameraAdapterDirectParams(dict::Dict) = params_from_dict(FieldCameraAdapter
 
 struct FieldCameraResult
   timestamp::Float64
-  data::Matrix{typeof(1.0u"T")} # 3 x numSensors
-  filename::Union{String, Nothing}
+  data::Matrix{typeof(1.0u"T")}  # 3 × numSensors
+  reading_id::Int                 # Arduino trigger counter, -1 if unavailable
+  arduino_millis::Int             # millis() from Arduino, -1 if unavailable
+  sensor_read_ms::Int             # sensor read time reported by Arduino, -1 if unavailable
+  total_isr_ms::Int               # total ISR time reported by Arduino, -1 if unavailable
 end
+
+FieldCameraResult(timestamp::Float64, data::Matrix{typeof(1.0u"T")}) =
+  FieldCameraResult(timestamp, data, -1, -1, -1, -1)
 
 Base.@kwdef mutable struct FieldCameraAdapter <: GaussMeter
   @add_device_fields FieldCameraAdapterParams
   sd::Union{SerialDevice, Nothing} = nothing
-  ch::Channel{FieldCameraResult} = Channel{FieldCameraResult}(1)
-  task::Union{Nothing, Task} = nothing
   lock::ReentrantLock = ReentrantLock()
-  sensorFolder::String = ""
-  currentRange::Int64 = 0
+  lastReading::Int = -1
 end
 
 neededDependencies(::FieldCameraAdapter) = []
 optionalDependencies(::FieldCameraAdapter) = [SerialPortPool]
 
+const FC_SENSORS = [
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+  22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+  35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 34
+]
+
+const FC_BOTTOM = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 43, 44, 45, 46]
+const FC_BOTTOM_IDX = [findfirst(==(s), FC_SENSORS) for s in FC_BOTTOM]
+
+const FC_POS_X = [
+  23.17546, 1.64737, -1.64737, 11.3194, -10.5912, 9.01035, -18.77659, -9.01053, -27.39906,
+  -23.17546, -29.80074, -11.3294, -23.17546, -29.80074, -35.41345, -27.39906, -18.77659, 1.64737,
+  -11.3294, -35.41345, -10.5912, -9.01053, 23.17546, 9.01053, 11.3294, 10.5912, 27.39906,
+  35.41345, 29.80074, 35.41345, -1.64737, 18.77659, 29.80074, 18.77659, 10.5912, 27.39906, 0.0
+]
+const FC_POS_Y = [
+  -9.01053, -10.5912, -10.5912, -29.80074, -35.41345, -27.39906, -11.3294, -27.39906, -23.17546,
+  -9.01053, -18.77659, -29.80074, 9.01053, 18.77659, -1.64737, 23.17546, 11.3294, 10.5912,
+  29.80074, 1.64737, 35.41345, 27.39906, 9.01053, 27.39906, 29.80074, 35.41345, 23.17546,
+  1.64737, 18.77659, -1.64737, 10.5912, 11.3294, -18.77659, -11.3294, -35.41345, -23.17546, 0.0
+]
+const FC_POS_Z = [
+  -27.39906, -35.41345, 35.41345, 18.77659, 1.64737, -23.17546, -29.80074, 23.17546, 9.01053,
+  27.39906, -11.3294, -18.77659, -27.39906, 11.3294, 10.5912, -9.01053, 29.80074, 35.41345,
+  18.77659, -10.5912, -1.64737, -23.17546, 27.39906, 23.17546, -18.77659, 1.64737, 9.01053,
+  10.5912, -11.3294, -10.5912, -35.41345, -29.80074, 11.3294, 29.80074, -1.64737, -9.01053, 0.0
+]
+
+const FC_OFFSETS = Dict{Int, NamedTuple{(:x,:y,:z), Tuple{Vector{Float64},Vector{Float64},Vector{Float64}}}}(
+  300 => (
+    x = [-0.14, -0.27, -0.11, -0.41, -0.18, -0.38, -0.26, -0.28, -0.27, -0.47,
+         -0.23, -0.32, -0.37, -0.65, -0.44, -0.27, -0.50, -0.48, -0.19, -0.42,
+         -0.36, -0.27, -0.29, -0.50, -0.45, -0.28, -0.13, -0.27, -0.42, -0.55,
+         -0.46, -0.33, -0.25, -0.11, -0.02, -0.20, -0.29],
+    y = [-0.28, -0.26, -0.51, -0.41, -0.24, -0.25, -0.40, -0.04,  0.09, -0.42,
+         -0.47, -0.29, -0.29, -0.31, -0.52, -0.32, -0.40, -0.39, -0.56, -0.22,
+         -0.34, -0.18, -0.58, -0.33, -0.52, -0.19, -0.14, -0.48, -0.36, -0.55,
+         -0.41, -0.31, -0.28, -0.24, -0.30,  0.08, -0.45],
+    z = [-0.52, -0.38, -0.33, -0.41, -0.38, -0.45, -0.27, -0.42, -0.19, -0.35,
+         -0.25, -0.30, -0.30, -0.42, -0.29, -0.32, -0.31, -0.53, -0.68, -0.42,
+         -0.42, -0.43, -0.39, -0.47, -0.50, -0.41, -0.24, -0.39, -0.47, -0.50,
+         -0.35, -0.41, -0.30, -0.21, -0.31, -0.14, -0.33],
+  ),
+  150 => (
+    x = [ 0.24,  0.06,  0.20,  0.03,  0.05,  0.00,  0.03,  0.04, -0.08,  0.03,
+          0.12,  0.08, -0.14, -0.20,  0.07,  0.10, -0.12, -0.02,  0.03, -0.08,
+          0.02,  0.04,  0.16,  0.00,  0.04,  0.05, -0.01,  0.16,  0.04,  0.00,
+         -0.03, -0.03,  0.10,  0.06,  0.22, -0.03,  0.03],
+    y = [ 0.06,  0.14, -0.18,  0.06,  0.06,  0.13,  0.02,  0.21,  0.34, -0.09,
+         -0.01,  0.04,  0.02,  0.07,  0.03,  0.03,  0.02,  0.14,  0.07,  0.08,
+          0.01,  0.12, -0.17,  0.09,  0.00,  0.11,  0.02, -0.11,  0.08, -0.03,
+         -0.01, -0.01,  0.10,  0.07,  0.01,  0.16, -0.14],
+    z = [-0.21,  0.01,  0.02, -0.03, -0.01, -0.06,  0.02, -0.11, -0.03,  0.10,
+          0.02,  0.02, -0.01,  0.01,  0.01,  0.02,  0.04, -0.04, -0.08, -0.09,
+         -0.02, -0.11, -0.01, -0.01, -0.04, -0.09, -0.07, -0.22, -0.06, -0.03,
+         -0.01, -0.11,  0.02, -0.05,  0.02, -0.01, -0.02],
+  ),
+  75 => (
+    x = [ 0.25,  0.11,  0.27,  0.04,  0.09,  0.01,  0.06,  0.05, -0.04,  0.09,
+          0.15,  0.12, -0.14, -0.16,  0.01,  0.12, -0.08,  0.00,  0.05, -0.04,
+          0.06,  0.09,  0.23,  0.05,  0.04,  0.08,  0.02,  0.21,  0.08,  0.05,
+          0.05,  0.01,  0.15,  0.07,  0.24,  0.01,  0.06],
+    y = [ 0.14,  0.18, -0.13,  0.07,  0.12,  0.13,  0.05,  0.23,  0.37, -0.05,
+          0.03,  0.08,  0.03,  0.11, -0.02,  0.06,  0.05,  0.16,  0.10,  0.10,
+          0.04,  0.16, -0.15,  0.14,  0.06,  0.15,  0.07, -0.10,  0.12, -0.02,
+          0.01,  0.02,  0.13,  0.09,  0.05,  0.20, -0.11],
+    z = [-0.16,  0.05,  0.06,  0.00,  0.05, -0.03,  0.05, -0.08,  0.00,  0.15,
+          0.05,  0.05,  0.01,  0.05,  0.06,  0.04,  0.07, -0.01, -0.05, -0.07,
+          0.01, -0.08,  0.03,  0.03, -0.01, -0.07, -0.05,  0.02, -0.03,  0.01,
+          0.03, -0.07,  0.06, -0.03,  0.04,  0.03,  0.02],
+  ),
+)
+
+const FC_ERRORS = Set(["F$i" for i in 2:28])
+
+"Parse sensor readings in `*x<y>z#` format into 3×N matrix."
+function parseSensorBlock(data::String, numSensors::Int)
+  stars = findall("*", data)
+  hashes = findall("#", data)
+  n = min(length(stars), length(hashes), numSensors)
+  values = zeros(3, numSensors)
+  for i in 1:n
+    try
+      segment = SubString(data, stars[i][1]+1, hashes[i][1]-1)
+      lt = findfirst('<', segment)
+      gt = findfirst('>', segment)
+      (isnothing(lt) || isnothing(gt)) && continue
+      values[1, i] = parse(Float64, segment[1:lt-1])
+      values[2, i] = parse(Float64, segment[lt+1:gt-1])
+      values[3, i] = parse(Float64, segment[gt+1:end])
+    catch
+      continue
+    end
+  end
+  return values
+end
+
+"Apply calibration offsets for the given measurement range."
+function applyOffsets!(values::Matrix{Float64}, range::Int)
+  off = get(FC_OFFSETS, range, nothing)
+  isnothing(off) && error("Invalid measurement range: $range mT")
+  values[1, :] .-= off.x
+  values[2, :] .-= off.y
+  values[3, :] .-= off.z
+  return values
+end
+
+function invertBottom!(values::Matrix{Float64})
+  for idx in FC_BOTTOM_IDX
+    values[3, idx] *= -1
+  end
+  return values
+end
+
+"Return 3×37 sensor positions matrix in mm."
+function getSensorPositions()
+  return Matrix{Float64}(hcat(FC_POS_X, FC_POS_Y, FC_POS_Z)')
+end
+
 function _init(cam::FieldCameraAdapter)
   params = cam.params
-  # Expand tilde in path
-  sensorFolder = expanduser(params.sensorFolder)
-  cam.sensorFolder = sensorFolder
-  
-  # Try to load student code for sensor positions and advanced functions
-  # Only load serialCommunicationDeviceArduino.jl (skip messungSensorarray.jl which has dependencies)
-  serialFile = joinpath(sensorFolder, "serialCommunicationDeviceArduino.jl")
-  
-  if isfile(serialFile)
-    try
-      cd(sensorFolder) do
-        # Load in a way that avoids type conflicts
-        Main.eval(:(
-          begin
-            # Prevent Device type conflict by checking if already defined
-            if !@isdefined(Device)
-              abstract type Device end
-            end
-            include($serialFile)
-          end
-        ))
-      end
-      @info "Student sensor positions loaded from serialCommunicationDeviceArduino.jl"
-    catch e
-      @info "Student code not loaded (positions will not be saved): $(sprint(showerror, e))"
-    end
-  end
-
-  # Use the student's serial device if available, otherwise create our own
-  try
-    if isdefined(Main, :mySphericalSensor) && hasfield(typeof(Main.mySphericalSensor), :sd)
-      cam.sd = Main.mySphericalSensor.sd
-      @info "Using student's serial device at $(params.portAddress)"
-    else
-      sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
-      cam.sd = sd
-      @info "Field camera serial connected at $(params.portAddress)"
-    end
-  catch e
-    @warn "Could not open serial device: $e"
-  end
-
-  # Initialize sensors to desired range
-  initializeSensors = try
-    # The student's code defines initializeSensors! or similar; if present use it
-    isdefined(@__MODULE__, :initializeSensors!)
-  catch
-    false
-  end
-
-  # Try to initialize using our local helper if available
-  #try
-  #  # Prefer the adapter's initializeSensors! if defined in included file
-  #  if @isdefined initializeSensors! && typeof(initializeSensors!) <: Function
-  #    # call as needed later via acquireFullField
-  #    nothing
-  #  end
-  #catch
-  #  nothing
-  #end
-
-  cam.currentRange = params.measurementRange
+  cam.sd = SerialDevice(params.portAddress; serial_device_splatting(params)...)
+  @info "FieldCameraAdapter connected at $(params.portAddress)"
 end
 
-"""Acquire a full-frame measurement using the student's measurement routine.
-Returns FieldCameraResult containing timestamp, 3 x N matrix (Tesla), and filename if data was saved.
-"""
+"On-demand full-frame acquisition via ALLSENSORSARDUINO command."
 function acquireFullField(cam::FieldCameraAdapter)
   lock(cam.lock) do
-    timestamp = time()
-    filename = nothing
-    numSensors = cam.params.numSensors
+    rangeHex = cam.params.measurementRange == 75 ? "1" :
+               cam.params.measurementRange == 150 ? "0" : "2"
+    cmd = "\"*ALLSENSORSARDUINO?>0x$(rangeHex)|0x0#\""
+    data = query(cam.sd, cmd)
+    data in FC_ERRORS && error("ALLSENSORSARDUINO error: $data")
 
-    # The student's function saveAllValuesArduino expects a display-range string and an int
-    # We'll try to call it if available. Otherwise, fallback to querying individual sensors.
-    if isdefined(Main, :saveAllValuesArduino) && typeof(Main.saveAllValuesArduino) <: Function
-      try
-        # Use input string for display name (e.g., "150") and second arg 0 as in messungSensorarray.jl
-        displayStr = string(cam.params.measurementRange)
-        res = Main.saveAllValuesArduino(displayStr, 0)
-        # saveAllValuesArduino returns a path string on success in their code
-        if isa(res, AbstractString)
-          filename = res
-          # Try to parse saved CSV if it exists
-          if isfile(res)
-            # Attempt to read CSV into matrix: student's CSV format may vary; try DelimitedFiles
-            try
-              raw = readdlm(res, ',', Float64; skipstart=0)
-              # raw likely includes header; assume columns map to sensor data; best-effort
-              # Attempt to reshape into (numSensors, 3) per file — if fails, return nothing for data
-              if size(raw, 2) >= 3
-                data = zeros(typeof(1.0u"T"), 3, numSensors)
-                # naive mapping: take first numSensors rows
-                for i in 1:min(numSensors, size(raw,1))
-                  data[:, i] = (raw[i, 1:3] .* 1.0) * 1u"mT"
-                end
-                return FieldCameraResult(timestamp, data, filename)
-              end
-            catch e
-              @warn "Could not parse saved measurement CSV: $e"
-            end
-          end
-        end
-      catch e
-        @warn "saveAllValuesArduino failed: $e"
-      end
-    end
+    values = parseSensorBlock(data, cam.params.numSensors)
+    applyOffsets!(values, cam.params.measurementRange)
+    invertBottom!(values)
 
-    # Fallback: attempt to query sensors one-by-one using student's GETFIELD command if query() exists
-    if isdefined(Main, :query) && typeof(Main.query) <: Function && !isnothing(cam.sd)
-      data = zeros(typeof(1.0u"T"), 3, numSensors)
-      crcErrorCount = 0
-      # Attempt to reuse sensor pin order from student's file if available
-      sensorPins = try
-        isdefined(Main, :sensors) ? Main.sensors : nothing
-      catch
-        nothing
-      end
-      if sensorPins === nothing
-        # Default ascending pins 1..numSensors
-        sensorPins = collect(1:numSensors)
-      end
-      for (idx, pin) in enumerate(sensorPins)
-        # Select the chip first
-        pinHex = string(pin, base=16)
-        selectCmd = "*SELECTCHIP!>0x$(pinHex)#"
-        # Query the field values
-        queryCmd = "*GETFIELDVALUEXYZ?#"
-        
-        try
-          # Select sensor
-          selectResp = Main.query(cam.sd, selectCmd)
-          if isnothing(selectResp) || occursin("ERROR", uppercase(string(selectResp)))
-            @debug "Failed to select pin $pin: $selectResp"
-            continue
-          end
-          
-          # Read field values
-          resp = Main.query(cam.sd, queryCmd)
-          respStr = strip(string(resp))
-          
-          # Check for CRC errors
-          if occursin("CRC ERROR", respStr)
-            crcErrorCount += 1
-            data[:, idx] .= 0.0u"mT"
-          elseif !occursin("ERROR", respStr)
-            # Parse format: *X<Y>Z#
-            m = match(r"\*([^<]+)<([^>]+)>([^#]+)#", respStr)
-            if !isnothing(m)
-              data[1, idx] = parse(Float64, m.captures[1]) * 1u"mT"
-              data[2, idx] = parse(Float64, m.captures[2]) * 1u"mT"
-              data[3, idx] = parse(Float64, m.captures[3]) * 1u"mT"
-            else
-              @debug "Could not parse response for pin $pin: $resp"
-            end
-          else
-            @debug "Bad response for pin $pin: $resp"
-          end
-        catch e
-          @debug "Error querying pin $pin: $e"
-        end
-      end
-      
-      # Summary warning if many CRC errors occurred
-      if crcErrorCount > 0
-        @warn "CRC errors occurred for $crcErrorCount sensors ($(round(crcErrorCount/length(sensors)*100, digits=1))%)"
-      end
-      
-      return FieldCameraResult(timestamp, data, nothing)
-    end
-
-    # If everything failed, return empty zeros
-    data = zeros(typeof(1.0u"T"), 3, cam.params.numSensors)
-    return FieldCameraResult(timestamp, data, nothing)
+    return FieldCameraResult(time(), values .* 1u"mT")
   end
 end
 
-# GaussMeter interface implementations
-function getXValue(cam::FieldCameraAdapter)
-  r = acquireFullField(cam)
-  return mean(r.data[1, :])
-end
-function getYValue(cam::FieldCameraAdapter)
-  r = acquireFullField(cam)
-  return mean(r.data[2, :])
-end
-function getZValue(cam::FieldCameraAdapter)
-  r = acquireFullField(cam)
-  return mean(r.data[3, :])
-end
+getXValue(cam::FieldCameraAdapter)    = mean(acquireFullField(cam).data[1, :])
+getYValue(cam::FieldCameraAdapter)    = mean(acquireFullField(cam).data[2, :])
+getZValue(cam::FieldCameraAdapter)    = mean(acquireFullField(cam).data[3, :])
+getTemperature(::FieldCameraAdapter)  = 0.0u"°C"
+getFrequency(::FieldCameraAdapter)    = 0.0u"Hz"
+calculateFieldError(::FieldCameraAdapter, ::Vector{<:Unitful.BField}) = 0.0u"T"
+
 function getXYZValues(cam::FieldCameraAdapter)
   r = acquireFullField(cam)
   return [mean(r.data[1, :]), mean(r.data[2, :]), mean(r.data[3, :])]
 end
-function getTemperature(cam::FieldCameraAdapter)
-  return 0.0u"°C"
-end
-function getFrequency(cam::FieldCameraAdapter)
-  return 0.0u"Hz"
-end
-function calculateFieldError(cam::FieldCameraAdapter, magneticField::Vector{<:Unitful.BField})
-  return 0.0u"T"
-end
 
 function Base.close(cam::FieldCameraAdapter)
-  try
-    if !isnothing(cam.sd)
-      close(cam.sd)
-      cam.sd = nothing
-    end
-  catch
-    nothing
+  if !isnothing(cam.sd)
+    close(cam.sd)
+    cam.sd = nothing
   end
   @info "FieldCameraAdapter closed"
 end
 
-function enable(gauss::FieldCameraAdapter)
-  lock(gauss.lock) do
-    disable(gauss)
-    gauss.ch = Channel{FieldCameraResult}(gauss.params.bufferSize)
-    gauss.task = Threads.@spawn readData(gauss)
-    bind(gauss.ch, gauss.task)
+function enable(cam::FieldCameraAdapter)
+  cam.lastReading = -1
+  isnothing(cam.sd) && return
+  lock(cam.lock) do
+    while true
+      nbytes, _ = LibSerialPort.sp_blocking_read(cam.sd.sp.ref, 4096, 100)
+      nbytes == 0 && break
+    end
   end
+
+  # Async reading of triggered fields
 end
 
-function disable(gauss::FieldCameraAdapter)
-  lock(gauss.lock) do
-    try
-      if !isnothing(gauss.task) && !istaskdone(gauss.task)
-        close(gauss.ch)
-        # Give task time to finish
-        for i in 1:10
-          istaskdone(gauss.task) && break
-          sleep(0.1)
+function disable(cam::FieldCameraAdapter)
+  nothing
+end
+
+"Read all buffered serial data and parse every complete measurement block."
+function readAllTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=500)
+  lock(cam.lock) do
+    rawbuf = UInt8[]
+    while true
+      nbytes, chunk = LibSerialPort.sp_blocking_read(cam.sd.sp.ref, 8192, timeout_ms)
+      nbytes == 0 && break
+      append!(rawbuf, @view chunk[1:nbytes])
+    end
+    isempty(rawbuf) && return FieldCameraResult[]
+
+    results = FieldCameraResult[]
+    i = 0
+    blockLength = 37 * 8 + 1
+    blocks = div(length(rawbuf), blockLength)
+    for b in 1:blocks
+      field = reinterpret(Int16, rawbuf[i+1:i+blockLength-1])
+      field *= 150 / 2^15  # scale to mT
+      reading = UInt8(rawbuf[i+blockLength])
+
+      if !isnothing(reading) && reading != cam.lastReading && reading <= 65535
+        cam.lastReading = reading
+
+        # Read bytes
+        values = zeros(3, cam.params.numSensors)
+        for s in 1:cam.params.numSensors
+          idx = (s-1)*3 + 1
+          values[1, s] = field[idx]
+          values[2, s] = field[idx+1]
+          values[3, s] = field[idx+2]
         end
+
+        validSensors = count(j -> any(values[:, j] .!= 0.0), 1:cam.params.numSensors)
+        if validSensors < cam.params.numSensors
+          @warn "Sensor block incomplete: $validSensors/$(cam.params.numSensors) sensors"
+        end
+
+        #applyOffsets!(values, cam.params.measurementRange)
+        #invertBottom!(values)
+
+        push!(results, FieldCameraResult(
+          time(), values .* 1u"mT", reading, 0, 0, 0))
       end
-    catch e
-      @debug "Error disabling FieldCameraAdapter: $e"
-    end 
+      i += blockLength
+    end
+
+    return results
   end
 end

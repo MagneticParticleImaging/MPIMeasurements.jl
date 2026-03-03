@@ -52,6 +52,12 @@ type = "txSlow"
 channel = 1
 calibration = "1.0V/A"
 
+# Trigger Channel
+[Devices.rp_cluster.trigger]
+type = "txSlow"
+channel = 3
+calibration = "1.0V/A"
+
 [Devices.rp_cluster.coil1_fast]
 type = "tx"
 channel = 1
@@ -281,22 +287,15 @@ sinkImpedance = "HIGH"
 #allowedWaveforms = ["sine"]
 calibration = "1.0V/T"
 
-## Arduino Field Camera Device
+## Arduino Field Camera (37 TMAG5170 sensors, trigger-based acquisition)
 [Devices.field_camera]
 deviceType = "FieldCameraAdapter"
-# dependencies = ["serial_pool"]
-sensorFolder = "/home/mpi/repos/spericalsensor_ba-janne_hamann/communicationSerialWithArduino"
-portAddress = "/dev/ttyACM0"  # Adjust to your system (e.g., COM3 on Windows, /dev/ttyUSB0 on Linux)
-bufferSize = 2048
+portAddress = "/dev/ttyACM0"
 numSensors = 37
-# radius = "37mm"
-# tDesign = 8
-# calibrationFile = ""  # Path to calibration file (optional)
-measurementRange = 150  # Options: 75, 150, or 300 (in mT)
+measurementRange = 150  # Options: 75, 150, 300 (mT)
 delim_read = "\r"
 delim_write = "\r"
-baudrate = 74880  # Must match Arduino baudrate
+baudrate = 250000
 ndatabits = 8
-# parity = "SP_PARITY_NONE"
 nstopbits = 1
-timeout_ms = 2000  # Increased timeout for sensor responses
+timeout_ms = 2000

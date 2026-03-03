@@ -1,15 +1,9 @@
-"""
-Minimal Working Example: Porridge Field Measurement
-
-This is the absolute minimal code to run a field measurement.
-For more features, see PorridgeFieldMeasurementExample.jl
-"""
+# Minimal example: Porridge field measurement
 
 using MPIMeasurements
 using Dates
 
 println("Starting Porridge field measurement...")
-println("Time: $(now())")
 
 # 1. Initialize
 scanner = MPIScanner("PorridgeFieldCamera", robust=true)
@@ -17,7 +11,7 @@ protocol = Protocol("PorridgeFieldMeasurement", scanner)
 init(protocol)
 
 # 2. Execute
-println("\nStarting measurement...")
+println("Starting measurement...")
 biChannel = execute(protocol, 3)
 
 # 3. Wait for completion
@@ -26,7 +20,7 @@ while true
     
     # Check status
     put!(biChannel, ProgressQueryEvent())
-    
+
     if isready(biChannel)
         event = take!(biChannel)
         
@@ -35,7 +29,7 @@ while true
             println("Progress: $pct% ($(event.done)/$(event.total))")
             
         elseif isa(event, FinishedNotificationEvent)
-            println("\n✓ Measurement complete!")
+            println("Measurement complete!")
             
             # Save to configured datasetStore location
             storePath = scanner.generalParams.datasetStore
@@ -43,23 +37,26 @@ while true
             filename = joinpath(expanduser(storePath), "measurement_$(Dates.format(now(), "yyyymmdd_HHMMSS")).h5")
             put!(biChannel, FileStorageRequestEvent(filename))
             
-            # Wait for save confirmation
-            saveEvent = take!(biChannel)
-            if isa(saveEvent, StorageSuccessEvent)
-                println("✓ Saved to: $filename")
-            elseif isa(saveEvent, ExceptionEvent)
-                println("✗ Save error: $(saveEvent.exception)")
+            # Wait for save confirmation (drain any stale ProgressEvents)
+            saveEvent = nothing
+            while true
+                saveEvent = take!(biChannel)
+                isa(saveEvent, ProgressEvent) || break
             end
-            
-            # Give async save task extra time to flush
-            sleep(2.0)
+            if isa(saveEvent, StorageSuccessEvent)
+                println("Saved to: $filename")
+            elseif isa(saveEvent, ExceptionEvent)
+                println("Save error: $(saveEvent.exception)")
+            else
+                println("⚠ Unexpected event: $(typeof(saveEvent))")
+            end
             
             # Acknowledge
             put!(biChannel, FinishedAckEvent())
             break
             
         elseif isa(event, ExceptionEvent)
-            println("✗ Error: $(event.exception)")
+            println("Error: $(event.exception)")
             break
         end
     end
