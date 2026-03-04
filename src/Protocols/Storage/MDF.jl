@@ -138,6 +138,45 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions{T}; deltaSa
 
 	return
 end
+function fillMDFCalibration(mdf::MDFv2InMemory, positions::Positions{T}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing) where {T <: Unitful.BField}
+
+	# /calibration/ subgroup
+	
+	subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
+
+	# TODO: THIS NEEDS TO BE DEFINED IN THE MDF! we otherwise cannot store these grids
+	isMeanderingGrid = isa(subgrid,MeanderingGridPositions)
+	@info "Meandering = $(isMeanderingGrid)"
+
+	method = "hybrid"
+	order = "xyz"
+
+	# a hybrid calibration assumes a homogenoeus gradient of 1 T/m in all directions
+  MPIFiles.acqGradient(mdf, reshape(Matrix(Diagonal(ones(3))),3,3,1,1))
+
+	fov = Float64.(ustrip.(uconvert.(Unitful.mT, fieldOfView(subgrid))))
+	fovCenter = Float64.(ustrip.(uconvert.(Unitful.mT, fieldOfViewCenter(subgrid))))
+	size = shape(subgrid)
+
+	positions = nothing 
+	offsetFields = Float64.(ustrip.(uconvert.(Unitful.mT, stack(collect(subgrid)))))
+	snr = nothing
+
+	mdf.calibration = MDFv2Calibration(;
+		deltaSampleSize = nothing,
+		fieldOfView = fov,
+		fieldOfViewCenter = fovCenter,
+		method = method,
+		offsetFields = offsetFields,
+		order = order,
+		positions = positions,
+		size = size,
+		snr = snr,
+		isMeanderingGrid = isMeanderingGrid
+	)
+
+	return
+end
 function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArray, Nothing}; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
 	# /calibration/ subgroup
