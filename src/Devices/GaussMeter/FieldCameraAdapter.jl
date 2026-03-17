@@ -42,6 +42,12 @@ const FC_SENSORS = [
   35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 34
 ]
 
+const FC_TDESIGN_REORDER = [
+  34, 19, 17, 29, 25, 33,  4, 11, 12, 14, 32,  7,
+   1,  8, 13, 16,  6,  9, 24, 36, 22, 27, 23, 10,
+  21, 30, 35,  3, 15, 31, 20, 18, 28,  2,  5, 26
+]
+
 const FC_BOTTOM = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 43, 44, 45, 46]
 const FC_BOTTOM_IDX = [findfirst(==(s), FC_SENSORS) for s in FC_BOTTOM]
 
@@ -145,6 +151,7 @@ end
 
 function invertBottom!(values::Matrix{Float64})
   for idx in FC_BOTTOM_IDX
+    values[1, idx] *= -1
     values[3, idx] *= -1
   end
   return values
@@ -232,6 +239,7 @@ function readAllTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=500)
     blocks = div(length(rawbuf), blockLength)
     for b in 1:blocks
       field = reinterpret(Int16, rawbuf[i+1:i+blockLength-1])
+      @info field
       field *= 150 / 2^15  # scale to mT
       reading = UInt8(rawbuf[i+blockLength])
 
@@ -241,10 +249,14 @@ function readAllTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=500)
         # Read bytes
         values = zeros(3, cam.params.numSensors)
         for s in 1:cam.params.numSensors
-          idx = (s-1)*3 + 1
+          idx = (s-1)*4 + 1
           values[1, s] = field[idx]
           values[2, s] = field[idx+1]
           values[3, s] = field[idx+2]
+        end
+
+        for s in 1:cam.params.numSensors
+          println("Sensor $s: X=$(values[1, s]) mT, Y=$(values[2, s]) mT, Z=$(values[3, s]) mT")
         end
 
         validSensors = count(j -> any(values[:, j] .!= 0.0), 1:cam.params.numSensors)
@@ -252,8 +264,8 @@ function readAllTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=500)
           @warn "Sensor block incomplete: $validSensors/$(cam.params.numSensors) sensors"
         end
 
-        #applyOffsets!(values, cam.params.measurementRange)
-        #invertBottom!(values)
+        applyOffsets!(values, cam.params.measurementRange)
+        invertBottom!(values)
 
         push!(results, FieldCameraResult(
           time(), values .* 1u"mT", reading, 0, 0, 0))

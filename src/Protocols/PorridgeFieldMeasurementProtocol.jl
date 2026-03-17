@@ -1,5 +1,64 @@
 export PorridgeFieldMeasurementProtocol, PorridgeFieldMeasurementProtocolParams
 
+function plotFieldDiagnostics(fields::Matrix{Float64}, positions::Matrix{Float64};
+                              filename::Union{String,Nothing}=nothing)
+  N = size(fields, 2)
+  @assert size(fields, 1) == 3
+  @assert size(positions) == (3, N)
+
+  Bmag = [norm(fields[:, i]) for i in 1:N]  # field magnitude per sensor
+  pos_mm = positions  # assumed in mm
+
+  fig = Figure(size=(1400, 1000), fontsize=14)
+
+  # ── Panel 1: field magnitude at each sensor position (3 projections) ──
+  projections = [("XY plane", 1, 2), ("XZ plane", 1, 3), ("YZ plane", 2, 3)]
+  for (k, (title, ax1, ax2)) in enumerate(projections)
+    ax = Axis(fig[1, k]; title, xlabel="$(["x","y","z"][ax1]) / mm",
+              ylabel="$(["x","y","z"][ax2]) / mm", aspect=DataAspect())
+    sc = scatter!(ax, pos_mm[ax1, :], pos_mm[ax2, :]; color=Bmag .* 1e3,
+                  colormap=:viridis, markersize=14)
+    # Draw field arrows (scaled for visibility)
+    scale = 0.4 * maximum(abs.(pos_mm)) / maximum(Bmag .+ eps())
+    arrows!(ax, pos_mm[ax1, :], pos_mm[ax2, :],
+            fields[ax1, :] .* scale, fields[ax2, :] .* scale;
+            color=:white, linewidth=1.5, arrowsize=6)
+    Colorbar(fig[1, k+3]; colormap=:viridis, limits=extrema(Bmag .* 1e3),
+             label="|B| / mT", vertical=true, width=12)
+    k < 3 && hideydecorations!(ax; label=false, ticklabels=false)
+  end
+
+  # ── Panel 2: Bx, By, Bz per sensor index ──
+  ax2 = Axis(fig[2, 1:3]; xlabel="Sensor index", ylabel="B / mT",
+             title="Field components per sensor")
+  barplot!(ax2, 1:N, fields[1, :] .* 1e3; color=:steelblue, label="Bx",
+           dodge=repeat([1], N), width=0.25, offset=-0.25)
+  barplot!(ax2, 1:N, fields[2, :] .* 1e3; color=:forestgreen, label="By",
+           dodge=repeat([2], N), width=0.25, offset=0.0)
+  barplot!(ax2, 1:N, fields[3, :] .* 1e3; color=:goldenrod, label="Bz",
+           dodge=repeat([3], N), width=0.25, offset=0.25)
+  axislegend(ax2; position=:rt)
+  hlines!(ax2, [0.0]; color=:gray50, linestyle=:dash)
+
+  # ── Panel 3: |B| vs radial angle from x-axis ──
+  ax3 = Axis(fig[3, 1:3]; xlabel="Angle from +x axis / °", ylabel="|B| / mT",
+             title="Field magnitude vs angle from +x (expect V-shape for FFP along x)")
+  angles = [acosd(pos_mm[1, i] / norm(pos_mm[:, i])) for i in 1:N]
+  scatter!(ax3, angles, Bmag .* 1e3; color=:steelblue, markersize=10)
+  # Also show components projected onto radial direction
+  Bradial = [dot(fields[:, i], pos_mm[:, i]) / norm(pos_mm[:, i]) for i in 1:N]
+  scatter!(ax3, angles, abs.(Bradial) .* 1e3; color=:tomato, markersize=8,
+           marker=:utriangle, label="|B_radial|")
+  axislegend(ax3; position=:rt)
+
+  if !isnothing(filename)
+    save(filename, fig; px_per_unit=2)
+    @info "Diagnostic plot saved to $filename"
+  end
+
+  return fig
+end
+
 Base.@kwdef mutable struct PorridgeFieldMeasurementProtocolParams <: ProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
   enableSphericalHarmonics::Bool = true
@@ -261,80 +320,25 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   isempty(protocol.fieldData) && (@warn "No field data to save"; return)
 
   data = map(r -> r.data, protocol.fieldData)
-  timestamps = map(r -> r.timestamp, protocol.fieldData)
-
   dataArray = cat(data..., dims=3)
 
-  write(file, "/sensorData", ustrip.(u"T", dataArray))
-  write(file, "/timestamps", timestamps)
-  write(file, "/numSensors", size(dataArray, 2))
-  write(file, "/numMeasurements", size(dataArray, 3))
+  # Drop the center sensor (37th)
+  #fields = ustrip.(u"T", dataArray[:, 1:36, :])
+  #positions_mm = getSensorPositions()[:, 1:36]*0.001/0.037
+  fields = ustrip.(u"T", dataArray[:, FC_TDESIGN_REORDER, :])
+  positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER]*0.001/0.037
 
-  if !isempty(protocol.frameMetadata)
-    try
-      frameIndices = [m["frameIndex"] for m in protocol.frameMetadata]
-      write(file, "/frameIndices", frameIndices)
-
-      if haskey(protocol.frameMetadata[1], "patchIndex")
-        patchIndices = [m["patchIndex"] for m in protocol.frameMetadata]
-        write(file, "/patchIndices", patchIndices)
-      end
-
-      coilNames = sort(collect(keys(protocol.frameMetadata[1]["coilCurrents"])))
-      numCoils = length(coilNames)
-      coilMatrix = zeros(Float64, length(protocol.frameMetadata), numCoils)
-      for (i, m) in enumerate(protocol.frameMetadata)
-        for (j, name) in enumerate(coilNames)
-          coilMatrix[i, j] = get(m["coilCurrents"], name, 0.0)
-        end
-      end
-      write(file, "/coilCurrents", coilMatrix)
-      write(file, "/coilNames", coilNames)
-    catch e
-      @warn "Could not save frame metadata" exception = e
-    end
+  # Transformation from sensor/field axis to position axis
+  R = [-1 0 0; 0 0 1; 0 -1 0]
+  for k in axes(fields, 3)
+   fields[:, :, k] .= R * fields[:, :, k]
   end
 
-  try
-    write(file, "/sensorPositions", getSensorPositions())
-  catch e
-    @warn "Could not save sensor positions" exception = e
-  end
-
-  if protocol.params.enableSphericalHarmonics
-    processSphericalHarmonics(file, protocol, dataArray)
-  end
-end
-
-function processSphericalHarmonics(file, protocol::PorridgeFieldMeasurementProtocol, dataArray)
-  if !isdefined(Main, :MPISphericalHarmonics) || !isdefined(Main, :MPIUI)
-    @debug "Spherical harmonics skipped (MPISphericalHarmonics / MPIUI not loaded)"
-    return
-  end
-
-  try
-    radius = protocol.params.sphericalRadius
-    T = protocol.params.tDesignOrder
-    N = size(dataArray, 2)
-
-    tDes = Main.MPIUI.loadTDesign(T, N, radius)
-
-    coeffsArray = []
-    for i in 1:size(dataArray, 3)
-      frame = dataArray[:, :, i]
-      coeffs = Main.MPIUI.MagneticFieldCoefficients(
-        Main.MPISphericalHarmonics.magneticField(tDes, ustrip.(u"T", frame)),
-        ustrip(radius),
-      )
-      push!(coeffsArray, coeffs)
-    end
-
-    write(file, "/sphericalHarmonics/tDesignOrder", T)
-    write(file, "/sphericalHarmonics/radius", ustrip(u"m", radius))
-    write(file, "/sphericalHarmonics/numCoeffs", length(coeffsArray))
-
-    @info "Spherical harmonics: $(length(coeffsArray)) frames processed"
-  catch e
-    @warn "Spherical harmonics processing failed" exception = e
-  end
+  write(file, "/fields", fields)
+  write(file, "/positions/tDesign/radius", 0.037)
+  write(file, "/positions/tDesign/N", 36)
+  write(file, "/positions/tDesign/t", 8)
+  write(file, "/positions/tDesign/center", [0.0, 0.0, 0.0])
+  write(file, "/positions/tDesign/positions", positions_mm)
+  write(file, "/sensor/correctionTranslation", [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0])
 end
