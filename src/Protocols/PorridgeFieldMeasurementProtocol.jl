@@ -95,6 +95,7 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   frameMetadata::Vector{Dict{String,Any}} = Dict{String,Any}[]
   currentFrameNum::Int64 = 0
   totalFrames::Int64 = 0
+  lastReadingId::Int64 = -1
 end
 
 
@@ -108,6 +109,7 @@ function _init(protocol::PorridgeFieldMeasurementProtocol)
   protocol.stopped = false
   protocol.finishAcknowledged = false
   protocol.currentFrameNum = 0
+  protocol.lastReadingId = -1
 end
 
 function timeEstimate(protocol::PorridgeFieldMeasurementProtocol)
@@ -124,11 +126,54 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   protocol.fieldData = FieldCameraResult[]
   protocol.frameMetadata = Dict{String,Any}[]
   protocol.currentFrameNum = 0
+  protocol.lastReadingId = -1
   if !isnothing(protocol.params.sequence)
     seq = protocol.params.sequence
     triggerPatches = computeTriggerPatches(seq)
     repetitions = acqNumFrames(seq) * acqNumFrameAverages(seq)
     protocol.totalFrames = length(triggerPatches) * repetitions
+  end
+end
+
+function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
+                                sequence::Sequence,
+                                triggerPatches::Vector{Int},
+                                results::Vector{FieldCameraResult})
+  for result in results
+    protocol.currentFrameNum >= protocol.totalFrames && break
+
+    delta = 1
+    if protocol.lastReadingId >= 0 && result.reading_id >= 0
+      delta = mod(result.reading_id - protocol.lastReadingId, 256)
+      if delta == 0
+        continue
+      elseif delta > 1
+        @warn "Dropped triggered readings detected" missing=(delta - 1) previous=protocol.lastReadingId current=result.reading_id
+      end
+    end
+
+    frameIndex = protocol.currentFrameNum + max(delta, 1)
+    frameIndex > protocol.totalFrames && break
+
+    triggerIdx = mod1(frameIndex, length(triggerPatches))
+    patchIdx = triggerPatches[triggerIdx]
+    metadata = Dict{String,Any}(
+      "frameIndex"     => frameIndex,
+      "patchIndex"     => patchIdx,
+      "coilCurrents"   => getCoilCurrentsForPatch(sequence, patchIdx),
+      "timestamp"      => result.timestamp,
+      "reading_id"     => result.reading_id,
+      "arduino_millis" => result.arduino_millis,
+      "sensor_read_ms" => result.sensor_read_ms,
+      "total_isr_ms"   => result.total_isr_ms,
+    )
+
+    push!(protocol.fieldData, result)
+    push!(protocol.frameMetadata, metadata)
+    protocol.currentFrameNum = frameIndex
+    protocol.lastReadingId = result.reading_id
+
+    @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id patch=patchIdx
   end
 end
 
@@ -209,9 +254,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
       numVals = length(ch.values)
       baseFreq = ustrip(u"Hz", txBaseFrequency(sequence))
       stepTime_ms = ch.divider / (numVals * baseFreq) * 1000
-      gapMs = 2 * stepTime_ms
-      @info "Trigger timing" step_ms=round(stepTime_ms, digits=1) gap_ms=round(gapMs, digits=1)
-      gapMs < 175 && @warn "Trigger gap $(round(gapMs, digits=1)) ms < 175 ms minimum"
+      @info "Trigger timing" step_ms=round(stepTime_ms, digits=1)
       break
     end
   end
@@ -228,6 +271,8 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
 
   finish = timing.finish
   while currentWP(daq.rpc) < finish
+    appendTriggeredResults!(protocol, sequence, triggerPatches,
+                            pollTriggeredFields(cam; timeout_ms=5, maxReads=2))
     handleEvents(protocol)
     if protocol.cancelled || protocol.stopped
       execute!(daq.rpc) do batch
@@ -247,31 +292,16 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   endSequence(daq, finish)
   !isempty(su) && disableACPower(su[1])
 
-  sleep(0.5)
-  results = readAllTriggeredFields(cam)
-
-  for result in results
-    length(protocol.fieldData) >= protocol.totalFrames && break
-    triggerIdx = mod1(length(protocol.fieldData) + 1, length(triggerPatches))
-    patchIdx = triggerPatches[triggerIdx]
-    metadata = Dict{String,Any}(
-      "frameIndex"     => length(protocol.fieldData) + 1,
-      "patchIndex"     => patchIdx,
-      "coilCurrents"   => getCoilCurrentsForPatch(sequence, patchIdx),
-      "timestamp"      => result.timestamp,
-      "reading_id"     => result.reading_id,
-      "arduino_millis" => result.arduino_millis,
-      "sensor_read_ms" => result.sensor_read_ms,
-      "total_isr_ms"   => result.total_isr_ms,
-    )
-    push!(protocol.fieldData, result)
-    push!(protocol.frameMetadata, metadata)
-    protocol.currentFrameNum = length(protocol.fieldData)
-    @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id patch=patchIdx
+  idlePolls = 0
+  while protocol.currentFrameNum < protocol.totalFrames && idlePolls < 40
+    before = protocol.currentFrameNum
+    appendTriggeredResults!(protocol, sequence, triggerPatches,
+                            pollTriggeredFields(cam; timeout_ms=50, maxReads=1))
+    idlePolls = protocol.currentFrameNum == before ? idlePolls + 1 : 0
   end
 
-  if length(protocol.fieldData) < protocol.totalFrames
-    @warn "Captured $(length(protocol.fieldData))/$(protocol.totalFrames) measurements"
+  if protocol.currentFrameNum < protocol.totalFrames
+    @warn "Captured $(length(protocol.fieldData)) results for $(protocol.currentFrameNum)/$(protocol.totalFrames) expected trigger indices"
   end
 
   disable(cam)

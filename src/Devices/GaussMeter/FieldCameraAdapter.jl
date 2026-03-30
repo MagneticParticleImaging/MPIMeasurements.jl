@@ -31,6 +31,8 @@ Base.@kwdef mutable struct FieldCameraAdapter <: GaussMeter
   sd::Union{SerialDevice, Nothing} = nothing
   lock::ReentrantLock = ReentrantLock()
   lastReading::Int = -1
+  rawBuffer::Vector{UInt8} = UInt8[]
+  pendingResults::Vector{FieldCameraResult} = FieldCameraResult[]
 end
 
 neededDependencies(::FieldCameraAdapter) = []
@@ -207,6 +209,8 @@ end
 
 function enable(cam::FieldCameraAdapter)
   cam.lastReading = -1
+  empty!(cam.rawBuffer)
+  empty!(cam.pendingResults)
   isnothing(cam.sd) && return
   lock(cam.lock) do
     while true
@@ -222,57 +226,113 @@ function disable(cam::FieldCameraAdapter)
   nothing
 end
 
+function _readRawTriggeredBytes!(cam::FieldCameraAdapter; timeout_ms::Int=10, maxReads::Int=1)
+  isnothing(cam.sd) && return 0
+  bytesRead = 0
+  for _ in 1:maxReads
+    nbytes, chunk = LibSerialPort.sp_blocking_read(cam.sd.sp.ref, 8192, timeout_ms)
+    nbytes == 0 && break
+    append!(cam.rawBuffer, @view chunk[1:nbytes])
+    bytesRead += nbytes
+  end
+  return bytesRead
+end
+
+@inline function _wordHasExpectedHeader(word::UInt64)
+  ((word >> 48) & 0xFFFF) == 0x0000
+end
+
+@inline function _unpackSigned16(word::UInt64, shift::Int)
+  return reinterpret(Int16, UInt16((word >> shift) & 0xFFFF))
+end
+
+function _parseTriggeredFrames!(cam::FieldCameraAdapter)
+  numSensors = cam.params.numSensors
+  frameBytes = 8 * numSensors + 1
+  length(cam.rawBuffer) < frameBytes && return 0
+
+  scale = cam.params.measurementRange / 2.0^15
+  parsed = 0
+  droppedPrefixBytes = 0
+  idx = 1
+  buflen = length(cam.rawBuffer)
+
+  while idx + frameBytes - 1 <= buflen
+    aligned = true
+    for sensorIdx in 0:(numSensors - 1)
+      startByte = idx + sensorIdx * 8
+      packed = reinterpret(UInt64, cam.rawBuffer[startByte:startByte+7])[1]
+      if !_wordHasExpectedHeader(packed)
+        aligned = false
+        break
+      end
+    end
+
+    if !aligned
+      idx += 1
+      droppedPrefixBytes += 1
+      continue
+    end
+
+    reading = Int(cam.rawBuffer[idx + 8 * numSensors])
+    if reading == cam.lastReading
+      idx += frameBytes
+      continue
+    end
+
+    values = zeros(3, numSensors)
+    for sensorIdx in 0:(numSensors - 1)
+      startByte = idx + sensorIdx * 8
+      packed = reinterpret(UInt64, cam.rawBuffer[startByte:startByte+7])[1]
+      values[1, sensorIdx + 1] = _unpackSigned16(packed, 0) * scale
+      values[2, sensorIdx + 1] = _unpackSigned16(packed, 16) * scale
+      values[3, sensorIdx + 1] = _unpackSigned16(packed, 32) * scale
+    end
+
+    applyOffsets!(values, cam.params.measurementRange)
+    invertBottom!(values)
+
+    cam.lastReading = reading
+    push!(cam.pendingResults, FieldCameraResult(time(), values .* 1u"mT", reading, 0, 0, 0))
+
+    parsed += 1
+    idx += frameBytes
+  end
+
+  if idx > 1
+    cam.rawBuffer = cam.rawBuffer[idx:end]
+  end
+
+  if droppedPrefixBytes > 0
+    @warn "Resynchronized field-camera stream" dropped_bytes=droppedPrefixBytes remaining_buffer=length(cam.rawBuffer)
+  end
+
+  return parsed
+end
+
+"Poll serial stream, parse all complete triggered frames and return newly parsed results."
+function pollTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=10, maxReads::Int=1)
+  lock(cam.lock) do
+    _readRawTriggeredBytes!(cam; timeout_ms, maxReads)
+    _parseTriggeredFrames!(cam)
+
+    if isempty(cam.pendingResults)
+      return FieldCameraResult[]
+    end
+
+    out = copy(cam.pendingResults)
+    empty!(cam.pendingResults)
+    return out
+  end
+end
+
 "Read all buffered serial data and parse every complete measurement block."
 function readAllTriggeredFields(cam::FieldCameraAdapter; timeout_ms::Int=500)
-  lock(cam.lock) do
-    rawbuf = UInt8[]
-    while true
-      nbytes, chunk = LibSerialPort.sp_blocking_read(cam.sd.sp.ref, 8192, timeout_ms)
-      nbytes == 0 && break
-      append!(rawbuf, @view chunk[1:nbytes])
-    end
-    isempty(rawbuf) && return FieldCameraResult[]
-
-    results = FieldCameraResult[]
-    i = 0
-    blockLength = 37 * 8 + 1
-    blocks = div(length(rawbuf), blockLength)
-    for b in 1:blocks
-      field = reinterpret(Int16, rawbuf[i+1:i+blockLength-1])
-      @info field
-      field *= 150 / 2^15  # scale to mT
-      reading = UInt8(rawbuf[i+blockLength])
-
-      if !isnothing(reading) && reading != cam.lastReading && reading <= 65535
-        cam.lastReading = reading
-
-        # Read bytes
-        values = zeros(3, cam.params.numSensors)
-        for s in 1:cam.params.numSensors
-          idx = (s-1)*4 + 1
-          values[1, s] = field[idx]
-          values[2, s] = field[idx+1]
-          values[3, s] = field[idx+2]
-        end
-
-        for s in 1:cam.params.numSensors
-          println("Sensor $s: X=$(values[1, s]) mT, Y=$(values[2, s]) mT, Z=$(values[3, s]) mT")
-        end
-
-        validSensors = count(j -> any(values[:, j] .!= 0.0), 1:cam.params.numSensors)
-        if validSensors < cam.params.numSensors
-          @warn "Sensor block incomplete: $validSensors/$(cam.params.numSensors) sensors"
-        end
-
-        applyOffsets!(values, cam.params.measurementRange)
-        invertBottom!(values)
-
-        push!(results, FieldCameraResult(
-          time(), values .* 1u"mT", reading, 0, 0, 0))
-      end
-      i += blockLength
-    end
-
-    return results
+  results = FieldCameraResult[]
+  while true
+    batch = pollTriggeredFields(cam; timeout_ms, maxReads=1)
+    isempty(batch) && break
+    append!(results, batch)
   end
+  return results
 end
