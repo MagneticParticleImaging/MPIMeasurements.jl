@@ -15,14 +15,17 @@ serialThreadID = 4
 
 [Devices]
 initializationOrder = [
-	# "serial_pool",
+	"serial_pool",
 	"rp_cluster",
+	"su_temp",
+	#"surveillance",
 	"field_camera"
 ]
 
 [Devices.serial_pool]
 deviceType = "SerialPortPool"
 dependencies = []
+addressPool = ["/dev/ttyACM1"]
 
 [Devices.rp_cluster]
 deviceType = "RedPitayaDAQ"
@@ -299,3 +302,24 @@ baudrate = 250000
 ndatabits = 8
 nstopbits = 1
 timeout_ms = 2000
+
+#[Devices.surveillance]
+#deviceType = "ArduinoSurveillanceUnitExternalTemp"
+#dependencies = ["su_temp"]
+#portAddress = "/dev/ttyACM1"
+#baudrate = 9600
+
+[Devices.su_temp]
+deviceType = "ArduinoTemperatureSensor"
+dependencies = ["serial_pool"]
+portAddress = "/dev/ttyACM1"
+# description = "ttyACM0 - 85036313330351E0D0D1"
+baudrate = 9600
+numSensors = 18
+timeout_ms=5000
+maxTemps = [65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65]
+selectSensors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
+#selectSensors = [4,6,10,11,12]
+groupSensors = [1,1,2,1,1,1,1,1,1,2,2,2,2,2,1,2,2,2]
+#groupSensors = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+nameSensors = ["Coil 1","Coil 2","Coil 3","Coil 4","Coil 5","Coil 6","Coil 7","Coil 8","Coil 9","Coil 10","Coil 11","Coil 12","Coil 13","Coil 14","Coil 15","Coil 16","Coil 17","Coil 18"]

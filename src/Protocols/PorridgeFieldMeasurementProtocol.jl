@@ -93,13 +93,14 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
 
   fieldData::Vector{FieldCameraResult} = FieldCameraResult[]
   frameMetadata::Vector{Dict{String,Any}} = Dict{String,Any}[]
+  coilTemperatureData::Vector{Vector{Float64}} = Vector{Float64}[]
   currentFrameNum::Int64 = 0
   totalFrames::Int64 = 0
   lastReadingId::Int64 = -1
 end
 
 
-requiredDevices(::PorridgeFieldMeasurementProtocol) = [AbstractDAQ, GaussMeter]
+requiredDevices(::PorridgeFieldMeasurementProtocol) = [AbstractDAQ, GaussMeter, TemperatureSensor]
 
 function _init(protocol::PorridgeFieldMeasurementProtocol)
   isnothing(protocol.params.sequence) &&
@@ -125,6 +126,7 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   protocol.finishAcknowledged = false
   protocol.fieldData = FieldCameraResult[]
   protocol.frameMetadata = Dict{String,Any}[]
+  protocol.coilTemperatureData = Vector{Float64}[]
   protocol.currentFrameNum = 0
   protocol.lastReadingId = -1
   if !isnothing(protocol.params.sequence)
@@ -138,7 +140,8 @@ end
 function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
                                 sequence::Sequence,
                                 triggerPatches::Vector{Int},
-                                results::Vector{FieldCameraResult})
+                                results::Vector{FieldCameraResult};
+                                coilTemperatures::Vector{Float64}=Float64[])
   for result in results
     protocol.currentFrameNum >= protocol.totalFrames && break
 
@@ -166,10 +169,12 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
       "arduino_millis" => result.arduino_millis,
       "sensor_read_ms" => result.sensor_read_ms,
       "total_isr_ms"   => result.total_isr_ms,
+      "coil_temperatures" => coilTemperatures,
     )
 
     push!(protocol.fieldData, result)
     push!(protocol.frameMetadata, metadata)
+    push!(protocol.coilTemperatureData, copy(coilTemperatures))
     protocol.currentFrameNum = frameIndex
     protocol.lastReadingId = result.reading_id
 
@@ -235,6 +240,92 @@ function getCoilCurrentsForPatch(sequence::Sequence, patchIdx::Int)
   return currents
 end
 
+function _temperatureToCelsius(value)
+  try
+    return ustrip(u"°C", value)
+  catch
+    try
+      return Float64(value)
+    catch
+      return NaN
+    end
+  end
+end
+
+function readCoilTemperatures(sensor::TemperatureSensor)
+  temps = try
+    getTemperatures(sensor)
+  catch e
+    throw(IllegalStateException("Failed to read coil temperatures from TemperatureSensor: $(typeof(e))"))
+  end
+
+  isempty(temps) && throw(IllegalStateException("TemperatureSensor returned zero coil temperature channels"))
+
+  values = Float64[]
+  for t in temps
+    push!(values, _temperatureToCelsius(t))
+  end
+
+  maxTemps = try
+    Float64.(sensor.params.maxTemps)
+  catch
+    Float64[]
+  end
+
+  n = min(length(values), length(maxTemps))
+  for idx in 1:n
+    if values[idx] > maxTemps[idx]
+      return values, true, idx, values[idx], maxTemps[idx]
+    end
+  end
+
+  return values, false, 0, NaN, NaN
+end
+
+function coilTemperatureMatrix(trace::Vector{Vector{Float64}})
+  isempty(trace) && return fill(NaN, 0, 0)
+  maxChannels = maximum(length, trace)
+  maxChannels == 0 && throw(IllegalStateException("No coil temperature channels captured; cannot save coil temperature matrix"))
+  numFrames = length(trace)
+  mat = fill(NaN, maxChannels, numFrames)
+  for frame in 1:numFrames
+    vals = trace[frame]
+    for ch in eachindex(vals)
+      mat[ch, frame] = vals[ch]
+    end
+  end
+  return mat
+end
+
+function coilCurrentMatrix(frameMetadata::Vector{Dict{String,Any}})
+  isempty(frameMetadata) && return String[], fill(NaN, 0, 0)
+
+  channelNames = String[]
+  for meta in frameMetadata
+    currents = get(meta, "coilCurrents", Dict{String,Float64}())
+    for key in keys(currents)
+      startswith(key, "coil") && push!(channelNames, key)
+    end
+  end
+
+  channelNames = unique(sort(channelNames))
+  isempty(channelNames) && return String[], fill(NaN, 0, length(frameMetadata))
+
+  indexByChannel = Dict(name => idx for (idx, name) in enumerate(channelNames))
+  mat = fill(NaN, length(channelNames), length(frameMetadata))
+
+  for (frameIdx, meta) in enumerate(frameMetadata)
+    currents = get(meta, "coilCurrents", Dict{String,Float64}())
+    for (channel, value) in currents
+      startswith(channel, "coil") || continue
+      channelIdx = indexByChannel[channel]
+      mat[channelIdx, frameIdx] = Float64(value)
+    end
+  end
+
+  return channelNames, mat
+end
+
 function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   protocol.measuring = true
 
@@ -260,19 +351,41 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   end
 
   setup(daq, sequence)
-
-  su = getSurveillanceUnits(scanner_)
-  !isempty(su) && enableACPower(su[1])
+  tempSensor = getTemperatureSensor(scanner_)
 
   enable(cam)
+
+  coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
+  if overheat
+    @error "Overheat detected before sequence start" coil=overheatCoil temperature=overheatTemp max=overheatMax
+    disable(cam)
+    protocol.measuring = false
+    return
+  end
 
   startTx(daq)
   timing = getTiming(daq)
 
   finish = timing.finish
   while currentWP(daq.rpc) < finish
+    coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
+    if overheat
+      @error "Overheat detected, stopping protocol early" coil=overheatCoil temperature=overheatTemp max=overheatMax
+      execute!(daq.rpc) do batch
+        for idx in daq.rampingChannel
+          @add_batch batch enableRampDown!(daq.rpc, idx, true)
+        end
+      end
+      while !rampDownDone(daq.rpc)
+        handleEvents(protocol)
+      end
+      finish = currentWP(daq.rpc)
+      break
+    end
+
     appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=5, maxReads=2))
+                            pollTriggeredFields(cam; timeout_ms=5, maxReads=2);
+                            coilTemperatures)
     handleEvents(protocol)
     if protocol.cancelled || protocol.stopped
       execute!(daq.rpc) do batch
@@ -290,13 +403,19 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   end
 
   endSequence(daq, finish)
-  !isempty(su) && disableACPower(su[1])
 
   idlePolls = 0
   while protocol.currentFrameNum < protocol.totalFrames && idlePolls < 40
     before = protocol.currentFrameNum
+    coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
+    if overheat
+      @error "Overheat detected during tail capture, stopping capture" coil=overheatCoil temperature=overheatTemp max=overheatMax
+      break
+    end
+
     appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=50, maxReads=1))
+                            pollTriggeredFields(cam; timeout_ms=50, maxReads=1);
+                            coilTemperatures)
     idlePolls = protocol.currentFrameNum == before ? idlePolls + 1 : 0
   end
 
@@ -349,26 +468,30 @@ end
 function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   isempty(protocol.fieldData) && (@warn "No field data to save"; return)
 
-  data = map(r -> r.data, protocol.fieldData)
-  dataArray = cat(data..., dims=3)
-
-  # Drop the center sensor (37th)
-  #fields = ustrip.(u"T", dataArray[:, 1:36, :])
-  #positions_mm = getSensorPositions()[:, 1:36]*0.001/0.037
-  fields = ustrip.(u"T", dataArray[:, FC_TDESIGN_REORDER, :])
+  nFrames = length(protocol.fieldData)
+  nSensors = length(FC_TDESIGN_REORDER)
   positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER]*0.001/0.037
 
-  # Transformation from sensor/field axis to position axis
-  R = [-1 0 0; 0 0 1; 0 -1 0]
-  for k in axes(fields, 3)
-   fields[:, :, k] .= R * fields[:, :, k]
-  end
+  currentChannelNames, currentMatrix = coilCurrentMatrix(protocol.frameMetadata)
 
-  write(file, "/fields", fields)
   write(file, "/positions/tDesign/radius", 0.037)
   write(file, "/positions/tDesign/N", 36)
   write(file, "/positions/tDesign/t", 8)
   write(file, "/positions/tDesign/center", [0.0, 0.0, 0.0])
   write(file, "/positions/tDesign/positions", positions_mm)
   write(file, "/sensor/correctionTranslation", [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0])
+  write(file, "/currents/coil/channel_names", currentChannelNames)
+  write(file, "/currents/coil/value", currentMatrix)
+  write(file, "/temperature/coil/value", coilTemperatureMatrix(protocol.coilTemperatureData))
+  write(file, "/temperature/unit", "°C")
+
+  fields = Array{Float64}(undef, 3, nSensors, nFrames)
+  R = [-1.0 0.0 0.0; 0.0 0.0 1.0; 0.0 -1.0 0.0]
+  @info "Converting field frames for HDF5" frames=nFrames
+  for frameIdx in 1:nFrames
+    raw = ustrip.(u"T", protocol.fieldData[frameIdx].data[:, FC_TDESIGN_REORDER])
+    fields[:, :, frameIdx] .= R * raw
+  end
+
+  write(file, "/fields", fields)
 end

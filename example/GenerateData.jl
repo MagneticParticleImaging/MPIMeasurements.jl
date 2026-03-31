@@ -13,46 +13,84 @@ function alternating_trigger_values(numMeasurements::Int)
     return vals .* u"A"
 end
 
-function line_currents_coil12_coil15(numMeasurements::Int;
-                                     maxCurrent_A::Float64=0.95,
-                                     sortByCurrentJumps::Bool=false)
-    x_line = sortByCurrentJumps ?
-        collect(range(-0.04, 0.04; length=numMeasurements)) :
-        vcat(collect(range(-0.04, 0.04; length=fld(numMeasurements, 2))),
-             collect(range(0.04, -0.04; length=numMeasurements - fld(numMeasurements, 2))))
+function random_independent_pairs(numPairs::Int; maxCurrent_A::Float64=0.95)
+    i12 = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
+    i15 = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
+    return i12, i15
+end
 
-    total = zeros(Float64, numMeasurements)
-    if sortByCurrentJumps
-        for i in 2:numMeasurements
-            total[i] = clamp(total[i-1] + 0.06 * randn(), -1.0, 1.0)
+function nested_grid_random_outer_pairs(numPairs::Int;
+                                        maxCurrent_A::Float64=0.95,
+                                        innerSteps::Int=100,
+                                        outerSteps::Int=100)
+    innerVals = collect(range(-maxCurrent_A, maxCurrent_A; length=innerSteps))
+    outerVals = collect(range(-maxCurrent_A, maxCurrent_A; length=outerSteps))
+    outerOrder = randperm(outerSteps)
+
+    i12 = Float64[]
+    i15 = Float64[]
+    sizehint!(i12, numPairs)
+    sizehint!(i15, numPairs)
+
+    for outerIdx in outerOrder
+        outerCurrent = outerVals[outerIdx]
+        for innerCurrent in innerVals
+            push!(i12, innerCurrent)
+            push!(i15, outerCurrent)
+            if length(i12) == numPairs
+                return i12, i15
+            end
         end
-        total .*= maxCurrent_A
-    else
-        total .= (2 .* rand(numMeasurements) .- 1) .* maxCurrent_A
     end
 
-    alpha = (x_line .+ 0.04) ./ 0.08
-    i12 = (1 .- alpha) .* total
-    i15 = alpha .* total
+    throw(ArgumentError("Requested $numPairs pairs exceeds available nested-grid samples $(innerSteps * outerSteps)"))
+end
 
-    return i12 .* u"A", i15 .* u"A"
+function build_current_pairs(mode::Symbol, numPairs::Int; maxCurrent_A::Float64=0.95)
+    if mode == :random_independent
+        return random_independent_pairs(numPairs; maxCurrent_A)
+    elseif mode == :nested_grid_random_outer
+        return nested_grid_random_outer_pairs(numPairs; maxCurrent_A, innerSteps=100, outerSteps=100)
+    else
+        throw(ArgumentError("Unknown mode=$mode. Use :random_independent or :nested_grid_random_outer"))
+    end
+end
+
+function expand_pairs_to_measurements(i12Pairs::Vector{Float64}, i15Pairs::Vector{Float64}; repeatsPerPair::Int=10)
+    i12 = repeat(i12Pairs, inner=repeatsPerPair)
+    i15 = repeat(i15Pairs, inner=repeatsPerPair)
+    return i12, i15
+end
+
+function add_background_measurements(i12::Vector{Float64}, i15::Vector{Float64}; backgroundMeasurements::Int=50)
+    bg = zeros(Float64, backgroundMeasurements)
+    i12All = vcat(bg, i12, bg)
+    i15All = vcat(bg, i15, bg)
+    return i12All, i15All
 end
 
 function expand_per_trigger_step(values)
     return repeat(values, inner=2)
 end
 
-function build_random_line_sequence(scanner::MPIScanner;
-                                    numMeasurements::Int=10_000,
-                                    sortedCurrentPath::Bool=false,
-                                    measurementRate_Hz::Float64=10.0)
+function build_coil_pair_sequence(scanner::MPIScanner;
+                                  mode::Symbol=:random_independent,
+                                  numCurrentPairs::Int=1_000,
+                                  repeatsPerPair::Int=10,
+                                  backgroundMeasurements::Int=50,
+                                  maxCurrent_A::Float64=0.95,
+                                  measurementRate_Hz::Float64=10.0)
     baseFreq = 125.0u"MHz"
 
-    triggerVals = alternating_trigger_values(numMeasurements)
-    coil12PerMeas, coil15PerMeas = line_currents_coil12_coil15(
-        numMeasurements;
-        sortByCurrentJumps=sortedCurrentPath,
-    )
+    i12Pairs, i15Pairs = build_current_pairs(mode, numCurrentPairs; maxCurrent_A)
+    i12Meas, i15Meas = expand_pairs_to_measurements(i12Pairs, i15Pairs; repeatsPerPair)
+    i12All, i15All = add_background_measurements(i12Meas, i15Meas; backgroundMeasurements)
+
+    totalMeasurements = length(i12All)
+    triggerVals = alternating_trigger_values(totalMeasurements)
+
+    coil12PerMeas = i12All .* u"A"
+    coil15PerMeas = i15All .* u"A"
     coil12Vals = expand_per_trigger_step(coil12PerMeas)
     coil15Vals = expand_per_trigger_step(coil15PerMeas)
 
@@ -106,8 +144,8 @@ function build_random_line_sequence(scanner::MPIScanner;
 
     return Sequence(
         general=GeneralSettings(
-            name="RandomLine10k",
-            description="10k triggered measurements on x-line with random coil12/15 currents",
+            name="CoilPairSequence",
+            description="mode=$(mode), pairs=$(numCurrentPairs), repeats=$(repeatsPerPair), bg=$(backgroundMeasurements)",
             targetScanner=name(scanner),
             baseFrequency=baseFreq,
         ),
@@ -136,12 +174,14 @@ end
 # 1. Initialize
 scanner = MPIScanner("PorridgeFieldCamera", robust=true)
 protocol = Protocol("PorridgeFieldMeasurement", scanner)
-if false
-    protocol.params.sequence = build_random_line_sequence(
+if true
+    protocol.params.sequence = build_coil_pair_sequence(
         scanner;
-        numMeasurements=100,
-        sortedCurrentPath=true,
-        measurementRate_Hz=50.0,
+        mode=:random_independent,
+        numCurrentPairs=1_000,
+        repeatsPerPair=10,
+        backgroundMeasurements=50,
+        measurementRate_Hz=20.0,
     )
 end
 init(protocol)
