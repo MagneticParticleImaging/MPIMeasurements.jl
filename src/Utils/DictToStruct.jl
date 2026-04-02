@@ -56,6 +56,18 @@ function parse_into_tf(value::String)
   return calibration_tf
 end
 
+function parse_into_tf(value::Dict)
+  calibValues = uparse.(values(value))
+  calibValues = uconvert.(unit(first(calibValues)), calibValues)
+  frequencies = parse.(Float64, keys(value)) # TODO: This will not work with e.g. 25000.2 kHz
+  sortedIdx = sortperm(frequencies)
+
+  calibValues = calibValues[sortedIdx]
+  frequencies = frequencies[sortedIdx]
+  calibration_tf = TransferFunction(frequencies, ComplexF64.(ustrip.(calibValues)), units=[unit(first(calibValues))])
+  return calibration_tf
+end
+
 function dict_to_splatting(dict::Dict)
   splattingDict = Dict{Symbol, Any}()
   for (key, value) in dict
