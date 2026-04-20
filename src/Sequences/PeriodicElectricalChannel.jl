@@ -285,7 +285,7 @@ phase(component::SweepElectricalComponent, trigger::Integer=1) = 0.0u"rad"
 export values, values!
 values(component::ArbitraryElectricalComponent) = component.values
 values!(component::ArbitraryElectricalComponent, values::Vector{Float64}) = component.values = values
-scaledValues(component::ArbitraryElectricalComponent) = amplitude(component) .* circshift(values(component), round(Int,phase(component)/(2π*u"rad")*length(values(component))))
+scaledValues(component::ArbitraryElectricalComponent) = amplitude(component) .* circshift(values(component), -round(Int,phase(component)/(2π*u"rad")*length(values(component))))
 
 
 export waveform, waveform!
