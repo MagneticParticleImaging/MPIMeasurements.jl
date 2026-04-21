@@ -142,22 +142,8 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
                                 triggerPatches::Vector{Int},
                                 results::Vector{FieldCameraResult};
                                 coilTemperatures::Vector{Float64}=Float64[])
-  for result in results
-    protocol.currentFrameNum >= protocol.totalFrames && break
 
-    delta = 1
-    if protocol.lastReadingId >= 0 && result.reading_id >= 0
-      delta = mod(result.reading_id - protocol.lastReadingId, 256)
-      if delta == 0
-        continue
-      elseif delta > 1
-        @warn "Dropped triggered readings detected" missing=(delta - 1) previous=protocol.lastReadingId current=result.reading_id
-      end
-    end
-
-    frameIndex = protocol.currentFrameNum + max(delta, 1)
-    frameIndex > protocol.totalFrames && break
-
+  function appendFrame!(result::FieldCameraResult, frameIndex::Int; dropped::Bool=false)
     triggerIdx = mod1(frameIndex, length(triggerPatches))
     patchIdx = triggerPatches[triggerIdx]
     metadata = Dict{String,Any}(
@@ -170,15 +156,56 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
       "sensor_read_ms" => result.sensor_read_ms,
       "total_isr_ms"   => result.total_isr_ms,
       "coil_temperatures" => coilTemperatures,
+      "dropped"        => dropped,
     )
 
     push!(protocol.fieldData, result)
     push!(protocol.frameMetadata, metadata)
     push!(protocol.coilTemperatureData, copy(coilTemperatures))
     protocol.currentFrameNum = frameIndex
+  end
+
+  nanDataTemplate = fill(NaN, 3, 0) .* u"T"
+
+  for result in results
+    protocol.currentFrameNum >= protocol.totalFrames && break
+
+    nanDataTemplate = result.data
+
+    delta = 1
+    if protocol.lastReadingId >= 0 && result.reading_id >= 0
+      delta = mod(result.reading_id - protocol.lastReadingId, 256)
+      if delta == 0
+        continue
+      elseif delta > 1
+        @warn "Dropped triggered readings detected" missing=(delta - 1) previous=protocol.lastReadingId current=result.reading_id
+
+        for missingIdx in 1:(delta - 1)
+          frameIndex = protocol.currentFrameNum + 1
+          frameIndex > protocol.totalFrames && break
+
+          expectedReadingId = mod(protocol.lastReadingId + 1, 256)
+          missingResult = FieldCameraResult(
+            NaN,
+            fill(NaN, size(nanDataTemplate)) .* u"T",
+            expectedReadingId,
+            -1,
+            -1,
+            -1,
+          )
+          appendFrame!(missingResult, frameIndex; dropped=true)
+          protocol.lastReadingId = expectedReadingId
+        end
+      end
+    end
+
+    frameIndex = protocol.currentFrameNum + 1
+    frameIndex > protocol.totalFrames && break
+
+    appendFrame!(result, frameIndex; dropped=false)
     protocol.lastReadingId = result.reading_id
 
-    @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id patch=patchIdx
+    @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id dropped=false
   end
 end
 
