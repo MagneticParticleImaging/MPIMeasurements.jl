@@ -246,10 +246,19 @@ end
   return reinterpret(Int16, UInt16((word >> shift) & 0xFFFF))
 end
 
+@inline function _xorChecksum(buffer::Vector{UInt8}, startIdx::Int, endIdx::Int)
+  checksum = UInt8(0)
+  for idx in startIdx:endIdx
+    checksum = xor(checksum, buffer[idx])
+  end
+  return checksum
+end
+
 function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   numSensors = cam.params.numSensors
-  frameBytes = 8 * numSensors + 1
-  length(cam.rawBuffer) < frameBytes && return 0
+  legacyFrameBytes = 8 * numSensors + 1
+  framedFrameBytes = 2 + legacyFrameBytes + 1
+  length(cam.rawBuffer) < legacyFrameBytes && return 0
 
   scale = cam.params.measurementRange / 2.0^15
   parsed = 0
@@ -257,10 +266,26 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   idx = 1
   buflen = length(cam.rawBuffer)
 
-  while idx + frameBytes - 1 <= buflen
+  while idx + legacyFrameBytes - 1 <= buflen
+    useFramed = idx + framedFrameBytes - 1 <= buflen &&
+                cam.rawBuffer[idx] == 0xA5 && cam.rawBuffer[idx + 1] == 0x5A
+
+    payloadStart = useFramed ? idx + 2 : idx
+    readingPos = payloadStart + 8 * numSensors
+    checksumPos = readingPos + 1
+
+    if useFramed
+      expectedChecksum = _xorChecksum(cam.rawBuffer, payloadStart, readingPos)
+      if expectedChecksum != cam.rawBuffer[checksumPos]
+        idx += 1
+        droppedPrefixBytes += 1
+        continue
+      end
+    end
+
     aligned = true
     for sensorIdx in 0:(numSensors - 1)
-      startByte = idx + sensorIdx * 8
+      startByte = payloadStart + sensorIdx * 8
       packed = reinterpret(UInt64, cam.rawBuffer[startByte:startByte+7])[1]
       if !_wordHasExpectedHeader(packed)
         aligned = false
@@ -274,15 +299,15 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
       continue
     end
 
-    reading = Int(cam.rawBuffer[idx + 8 * numSensors])
+    reading = Int(cam.rawBuffer[readingPos])
     if reading == cam.lastReading
-      idx += frameBytes
+      idx += useFramed ? framedFrameBytes : legacyFrameBytes
       continue
     end
 
     values = zeros(3, numSensors)
     for sensorIdx in 0:(numSensors - 1)
-      startByte = idx + sensorIdx * 8
+      startByte = payloadStart + sensorIdx * 8
       packed = reinterpret(UInt64, cam.rawBuffer[startByte:startByte+7])[1]
       values[1, sensorIdx + 1] = _unpackSigned16(packed, 0) * scale
       values[2, sensorIdx + 1] = _unpackSigned16(packed, 16) * scale
@@ -296,7 +321,7 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
     push!(cam.pendingResults, FieldCameraResult(time(), values .* 1u"mT", reading, 0, 0, 0))
 
     parsed += 1
-    idx += frameBytes
+    idx += useFramed ? framedFrameBytes : legacyFrameBytes
   end
 
   if idx > 1
