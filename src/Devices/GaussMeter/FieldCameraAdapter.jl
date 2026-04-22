@@ -33,6 +33,7 @@ Base.@kwdef mutable struct FieldCameraAdapter <: GaussMeter
   lastReading::Int = -1
   rawBuffer::Vector{UInt8} = UInt8[]
   pendingResults::Vector{FieldCameraResult} = FieldCameraResult[]
+  useFramedPackets::Bool = false
 end
 
 neededDependencies(::FieldCameraAdapter) = []
@@ -209,6 +210,7 @@ end
 
 function enable(cam::FieldCameraAdapter)
   cam.lastReading = -1
+  cam.useFramedPackets = false
   empty!(cam.rawBuffer)
   empty!(cam.pendingResults)
   isnothing(cam.sd) && return
@@ -254,6 +256,20 @@ end
   return checksum
 end
 
+@inline function _hasFrameMarkerAt(buffer::Vector{UInt8}, idx::Int)
+  idx + 1 <= length(buffer) || return false
+  return buffer[idx] == 0xA5 && buffer[idx + 1] == 0x5A
+end
+
+function _findFrameMarker(buffer::Vector{UInt8}, startIdx::Int)
+  maxIdx = length(buffer) - 1
+  startIdx > maxIdx && return 0
+  for idx in startIdx:maxIdx
+    _hasFrameMarkerAt(buffer, idx) && return idx
+  end
+  return 0
+end
+
 function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   numSensors = cam.params.numSensors
   legacyFrameBytes = 8 * numSensors + 1
@@ -266,9 +282,34 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   idx = 1
   buflen = length(cam.rawBuffer)
 
+  if !cam.useFramedPackets
+    markerIdx = _findFrameMarker(cam.rawBuffer, idx)
+    if markerIdx > 0
+      cam.useFramedPackets = true
+      if markerIdx > idx
+        droppedPrefixBytes += markerIdx - idx
+      end
+      idx = markerIdx
+    end
+  end
+
   while idx + legacyFrameBytes - 1 <= buflen
-    useFramed = idx + framedFrameBytes - 1 <= buflen &&
-                cam.rawBuffer[idx] == 0xA5 && cam.rawBuffer[idx + 1] == 0x5A
+    if cam.useFramedPackets
+      if idx + framedFrameBytes - 1 > buflen
+        break
+      end
+
+      if !_hasFrameMarkerAt(cam.rawBuffer, idx)
+        markerIdx = _findFrameMarker(cam.rawBuffer, idx + 1)
+        if markerIdx == 0
+          break
+        end
+        droppedPrefixBytes += markerIdx - idx
+        idx = markerIdx
+      end
+    end
+
+    useFramed = cam.useFramedPackets
 
     payloadStart = useFramed ? idx + 2 : idx
     readingPos = payloadStart + 8 * numSensors
