@@ -315,6 +315,9 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
     readingPos = payloadStart + 8 * numSensors
     checksumPos = readingPos + 1
 
+    readingPos > buflen && break
+    useFramed && checksumPos > buflen && break
+
     if useFramed
       expectedChecksum = _xorChecksum(cam.rawBuffer, payloadStart, readingPos)
       if expectedChecksum != cam.rawBuffer[checksumPos]
@@ -327,6 +330,10 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
     aligned = true
     for sensorIdx in 0:(numSensors - 1)
       startByte = payloadStart + sensorIdx * 8
+      if startByte + 7 > buflen
+        aligned = false
+        break
+      end
       packed = reinterpret(UInt64, cam.rawBuffer[startByte:startByte+7])[1]
       if !_wordHasExpectedHeader(packed)
         aligned = false
@@ -366,7 +373,11 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   end
 
   if idx > 1
-    cam.rawBuffer = cam.rawBuffer[idx:end]
+    if idx <= buflen
+      cam.rawBuffer = cam.rawBuffer[idx:buflen]
+    else
+      empty!(cam.rawBuffer)
+    end
   end
 
   if droppedPrefixBytes > 0

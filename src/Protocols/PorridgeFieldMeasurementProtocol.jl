@@ -209,6 +209,54 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
   end
 end
 
+function appendMissingTailResults!(protocol::PorridgeFieldMeasurementProtocol,
+                                   sequence::Sequence,
+                                   triggerPatches::Vector{Int},
+                                   numSensors::Int;
+                                   coilTemperatures::Vector{Float64}=Float64[])
+  missingFrames = protocol.totalFrames - protocol.currentFrameNum
+  missingFrames <= 0 && return 0
+
+  for _ in 1:missingFrames
+    frameIndex = protocol.currentFrameNum + 1
+    triggerIdx = mod1(frameIndex, length(triggerPatches))
+    patchIdx = triggerPatches[triggerIdx]
+
+    expectedReadingId = protocol.lastReadingId >= 0 ? mod(protocol.lastReadingId + 1, 256) : -1
+    missingResult = FieldCameraResult(
+      NaN,
+      fill(NaN, 3, numSensors) .* u"T",
+      expectedReadingId,
+      -1,
+      -1,
+      -1,
+    )
+
+    metadata = Dict{String,Any}(
+      "frameIndex"        => frameIndex,
+      "patchIndex"        => patchIdx,
+      "coilCurrents"      => getCoilCurrentsForPatch(sequence, patchIdx),
+      "timestamp"         => missingResult.timestamp,
+      "reading_id"        => missingResult.reading_id,
+      "arduino_millis"    => missingResult.arduino_millis,
+      "sensor_read_ms"    => missingResult.sensor_read_ms,
+      "total_isr_ms"      => missingResult.total_isr_ms,
+      "coil_temperatures" => coilTemperatures,
+      "dropped"           => true,
+      "tail_fill"         => true,
+    )
+
+    push!(protocol.fieldData, missingResult)
+    push!(protocol.frameMetadata, metadata)
+    push!(protocol.coilTemperatureData, copy(coilTemperatures))
+    protocol.currentFrameNum = frameIndex
+    protocol.lastReadingId = expectedReadingId
+  end
+
+  @warn "Tail frames missing from stream; filled with NaN placeholders" missing=missingFrames
+  return missingFrames
+end
+
 function _execute(protocol::PorridgeFieldMeasurementProtocol)
   try
     performFieldMeasurement(protocol)
@@ -447,7 +495,8 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   end
 
   if protocol.currentFrameNum < protocol.totalFrames
-    @warn "Captured $(length(protocol.fieldData)) results for $(protocol.currentFrameNum)/$(protocol.totalFrames) expected trigger indices"
+    appendMissingTailResults!(protocol, sequence, triggerPatches, cam.params.numSensors;
+                              coilTemperatures)
   end
 
   disable(cam)
