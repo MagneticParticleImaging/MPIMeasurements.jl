@@ -23,6 +23,23 @@ Base.@kwdef mutable struct DiagStats
     asciiBytes::Int = 0
     nonAsciiBytes::Int = 0
     maxBufferBytes::Int = 0
+    asciiDigitLines::Int = 0
+    asciiLinesTotal::Int = 0
+end
+
+function count_numeric_ascii_lines(bytes::Vector{UInt8})
+    isempty(bytes) && return 0, 0
+    s = String(Char.(bytes))
+    lines = split(replace(s, "\r" => ""), '\n')
+    total = 0
+    numeric = 0
+    for line in lines
+        t = strip(line)
+        isempty(t) && continue
+        total += 1
+        all(isdigit, t) && (numeric += 1)
+    end
+    return numeric, total
 end
 
 @inline function xor_checksum(buffer::Vector{UInt8}, startIdx::Int, endIdx::Int)
@@ -100,6 +117,7 @@ function print_summary(stats::DiagStats, frameTimes::Vector{Float64}, durationS:
     println("Bytes read:           ", stats.bytesRead)
     println("ASCII bytes:          ", stats.asciiBytes)
     println("Non-ASCII bytes:      ", stats.nonAsciiBytes)
+    println("Numeric ASCII lines:  ", stats.asciiDigitLines, "/", stats.asciiLinesTotal)
     println("SOF 0xA5 hits:        ", stats.sof1Hits)
     println("SOF pair A5 5A hits:  ", stats.sofPairs)
     println("Valid frames:         ", stats.validFrames)
@@ -129,8 +147,14 @@ function print_summary(stats::DiagStats, frameTimes::Vector{Float64}, durationS:
     if stats.bytesRead == 0
         println("No stream: received zero bytes. Check COM port selection, device reset state, and diagnostic mode.")
     elseif stats.sofPairs == 0
+        numericRatio = stats.asciiLinesTotal > 0 ? stats.asciiDigitLines / stats.asciiLinesTotal : 0.0
         if stats.asciiBytes > stats.nonAsciiBytes
-            println("ASCII-like stream without framed packets. You are likely reading text output, not binary framed packets.")
+            if numericRatio > 0.8 && stats.asciiLinesTotal >= 5
+                println("Numeric ASCII line stream detected (e.g., debug println values). This is not the framed packet stream.")
+                println("Likely causes: wrong firmware flashed, wrong diagnostic mode, wrong serial port, or active debug prints.")
+            else
+                println("ASCII-like stream without framed packets. You are likely reading text output, not binary framed packets.")
+            end
         else
             println("Binary/noisy stream without SOF pairs. Likely wrong baud/port/firmware mode or severe corruption.")
         end
@@ -207,6 +231,8 @@ function main()
     finally
         close(sp)
     end
+
+    stats.asciiDigitLines, stats.asciiLinesTotal = count_numeric_ascii_lines(allBytes)
 
     preview_bytes(allBytes, previewN)
     print_summary(stats, frameTimes, time() - tStart, expectedHz)
