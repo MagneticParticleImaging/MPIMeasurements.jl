@@ -25,6 +25,7 @@ Base.@kwdef mutable struct DiagStats
     maxBufferBytes::Int = 0
     asciiDigitLines::Int = 0
     asciiLinesTotal::Int = 0
+    warmupBytesDiscarded::Int = 0
 end
 
 function count_numeric_ascii_lines(bytes::Vector{UInt8})
@@ -114,6 +115,7 @@ end
 
 function print_summary(stats::DiagStats, frameTimes::Vector{Float64}, durationS::Float64, expectedHz::Union{Nothing,Float64})
     println("\n=== Serial Diagnostic Summary ===")
+    println("Warmup bytes dropped: ", stats.warmupBytesDiscarded)
     println("Bytes read:           ", stats.bytesRead)
     println("ASCII bytes:          ", stats.asciiBytes)
     println("Non-ASCII bytes:      ", stats.nonAsciiBytes)
@@ -185,8 +187,8 @@ end
 
 function main()
     if length(ARGS) < 1
-        println("Usage: julia --project=. example/SerialByteLossDiagnostics.jl <PORT> [BAUD=250000] [DURATION_S=30] [EXPECTED_HZ] [PREVIEW_BYTES=64]")
-        println("Example: julia --project=. example/SerialByteLossDiagnostics.jl COM7 250000 30 50 64")
+        println("Usage: julia --project=. example/SerialByteLossDiagnostics.jl <PORT> [BAUD=250000] [DURATION_S=30] [EXPECTED_HZ] [PREVIEW_BYTES=64] [WARMUP_S=1.5]")
+        println("Example: julia --project=. example/SerialByteLossDiagnostics.jl COM7 250000 30 50 64 1.5")
         return
     end
 
@@ -195,6 +197,7 @@ function main()
     durationS = length(ARGS) >= 3 ? parse(Float64, ARGS[3]) : 30.0
     expectedHz = length(ARGS) >= 4 ? parse(Float64, ARGS[4]) : nothing
     previewN = length(ARGS) >= 5 ? parse(Int, ARGS[5]) : 64
+    warmupS = length(ARGS) >= 6 ? parse(Float64, ARGS[6]) : 1.5
 
     println("Opening ", port, " at ", baud, " baud")
     sp = SerialPort(port)
@@ -207,6 +210,15 @@ function main()
     frameTimes = Float64[]
     buffer = UInt8[]
     allBytes = UInt8[]
+
+    # Discard startup/reset chatter (e.g. boot prints or setup traffic) before measuring.
+    warmupDeadline = time() + warmupS
+    while time() < warmupDeadline
+        nbytes, _ = LibSerialPort.sp_blocking_read(sp.ref, 8192, 100)
+        if nbytes > 0
+            stats.warmupBytesDiscarded += nbytes
+        end
+    end
 
     tStart = time()
     deadline = tStart + durationS
