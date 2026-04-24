@@ -28,6 +28,17 @@ Base.@kwdef mutable struct DiagStats
     warmupBytesDiscarded::Int = 0
 end
 
+Base.@kwdef mutable struct LockedStats
+    bestOffset::Int = 1
+    slotCount::Int = 0
+    validFrames::Int = 0
+    markerFailures::Int = 0
+    checksumFailures::Int = 0
+    duplicateIds::Int = 0
+    missingIds::Int = 0
+    validRate::Float64 = 0.0
+end
+
 function count_numeric_ascii_lines(bytes::Vector{UInt8})
     isempty(bytes) && return 0, 0
     s = String(Char.(bytes))
@@ -113,7 +124,81 @@ function parse_frames(buffer::Vector{UInt8}, stats::DiagStats, frameTimes::Vecto
     return UInt8[]
 end
 
-function print_summary(stats::DiagStats, frameTimes::Vector{Float64}, durationS::Float64, expectedHz::Union{Nothing,Float64})
+function analyze_locked_frames(bytes::Vector{UInt8})
+    n = length(bytes)
+    n < FRAME_BYTES && return LockedStats(slotCount=0)
+
+    best = LockedStats(validRate=-1.0)
+    maxOffset = min(FRAME_BYTES, n - FRAME_BYTES + 1)
+
+    for offset in 1:maxOffset
+        idx = offset
+        slots = 0
+        valid = 0
+        markerFail = 0
+        checksumFail = 0
+        duplicate = 0
+        missing = 0
+        havePrev = false
+        prevId = -1
+
+        while idx + FRAME_BYTES - 1 <= n
+            slots += 1
+            if bytes[idx] != SOF1 || bytes[idx + 1] != SOF2
+                markerFail += 1
+                idx += FRAME_BYTES
+                continue
+            end
+
+            payloadStart = idx + 2
+            readingPos = payloadStart + PAYLOAD_BYTES
+            checksumPos = readingPos + 1
+
+            expectedChecksum = xor_checksum(bytes, payloadStart, readingPos)
+            if expectedChecksum != bytes[checksumPos]
+                checksumFail += 1
+                idx += FRAME_BYTES
+                continue
+            end
+
+            readingId = Int(bytes[readingPos])
+            if havePrev
+                delta = mod(readingId - prevId, 256)
+                if delta == 0
+                    duplicate += 1
+                elseif delta > 1
+                    missing += delta - 1
+                end
+            end
+            prevId = readingId
+            havePrev = true
+            valid += 1
+            idx += FRAME_BYTES
+        end
+
+        rate = slots > 0 ? valid / slots : 0.0
+        if rate > best.validRate
+            best = LockedStats(
+                bestOffset=offset,
+                slotCount=slots,
+                validFrames=valid,
+                markerFailures=markerFail,
+                checksumFailures=checksumFail,
+                duplicateIds=duplicate,
+                missingIds=missing,
+                validRate=rate,
+            )
+        end
+    end
+
+    return best
+end
+
+function print_summary(stats::DiagStats,
+                       frameTimes::Vector{Float64},
+                       durationS::Float64,
+                       expectedHz::Union{Nothing,Float64},
+                       locked::LockedStats)
     println("\n=== Serial Diagnostic Summary ===")
     println("Warmup bytes dropped: ", stats.warmupBytesDiscarded)
     println("Bytes read:           ", stats.bytesRead)
@@ -166,6 +251,28 @@ function print_summary(stats::DiagStats, frameTimes::Vector{Float64}, durationS:
         println("Healthy framed stream for this interval.")
     else
         println("Framed stream present with losses/corruption. Use mode comparison (1 vs 2 vs 0) to localize stage.")
+    end
+
+    println("\n=== Frame-Locked Analysis (Best Alignment) ===")
+    if locked.slotCount == 0
+        println("Insufficient bytes for locked analysis.")
+    else
+        println("Best offset:          ", locked.bestOffset)
+        println("Frame slots checked:  ", locked.slotCount)
+        println("Locked valid frames:  ", locked.validFrames)
+        println("Locked valid rate:    ", round(locked.validRate * 100, digits=2), "%")
+        println("Locked marker fails:  ", locked.markerFailures)
+        println("Locked checksum fail: ", locked.checksumFailures)
+        println("Locked missing IDs:   ", locked.missingIds)
+        println("Locked duplicate IDs: ", locked.duplicateIds)
+
+        if locked.validRate > 0.95
+            println("Verdict: transport looks healthy; previous low counts likely came from scanner resync artifacts.")
+        elseif locked.validRate > 0.70
+            println("Verdict: moderate corruption/loss present on stream.")
+        else
+            println("Verdict: severe corruption/loss present on stream.")
+        end
     end
 
     println("\n=== Interpretation Hints ===")
@@ -245,9 +352,10 @@ function main()
     end
 
     stats.asciiDigitLines, stats.asciiLinesTotal = count_numeric_ascii_lines(allBytes)
+    locked = analyze_locked_frames(allBytes)
 
     preview_bytes(allBytes, previewN)
-    print_summary(stats, frameTimes, time() - tStart, expectedHz)
+    print_summary(stats, frameTimes, time() - tStart, expectedHz, locked)
 end
 
 main()
