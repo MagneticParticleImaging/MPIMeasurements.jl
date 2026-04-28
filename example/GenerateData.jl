@@ -178,10 +178,10 @@ if true
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
         mode=:random_independent,
-        numCurrentPairs=1_000,
-        repeatsPerPair=10,
+        numCurrentPairs=10,
+        repeatsPerPair=50,
         backgroundMeasurements=50,
-        measurementRate_Hz=20.0,
+        measurementRate_Hz=50.0,
     )
 end
 init(protocol)

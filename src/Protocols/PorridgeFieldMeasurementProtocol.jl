@@ -459,7 +459,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
     end
 
     appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=5, maxReads=2);
+                            pollTriggeredFields(cam; timeout_ms=2, maxReads=8);
                             coilTemperatures)
     handleEvents(protocol)
     if protocol.cancelled || protocol.stopped
@@ -489,7 +489,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
     end
 
     appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=50, maxReads=1);
+                            pollTriggeredFields(cam; timeout_ms=10, maxReads=8);
                             coilTemperatures)
     idlePolls = protocol.currentFrameNum == before ? idlePolls + 1 : 0
   end

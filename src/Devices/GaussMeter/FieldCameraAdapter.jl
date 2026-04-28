@@ -240,6 +240,8 @@ function _readRawTriggeredBytes!(cam::FieldCameraAdapter; timeout_ms::Int=10, ma
   return bytesRead
 end
 
+const FC_FRAME_MARKER = UInt8[0xA5, 0x5A, 0xC3, 0x3C]
+
 @inline function _wordHasExpectedHeader(word::UInt64)
   ((word >> 48) & 0xFFFF) == 0x0000
 end
@@ -257,12 +259,15 @@ end
 end
 
 @inline function _hasFrameMarkerAt(buffer::Vector{UInt8}, idx::Int)
-  idx + 1 <= length(buffer) || return false
-  return buffer[idx] == 0xA5 && buffer[idx + 1] == 0x5A
+  idx + length(FC_FRAME_MARKER) - 1 <= length(buffer) || return false
+  for off in eachindex(FC_FRAME_MARKER)
+    buffer[idx + off - 1] == FC_FRAME_MARKER[off] || return false
+  end
+  return true
 end
 
 function _findFrameMarker(buffer::Vector{UInt8}, startIdx::Int)
-  maxIdx = length(buffer) - 1
+  maxIdx = length(buffer) - length(FC_FRAME_MARKER) + 1
   startIdx > maxIdx && return 0
   for idx in startIdx:maxIdx
     _hasFrameMarkerAt(buffer, idx) && return idx
@@ -273,7 +278,7 @@ end
 function _parseTriggeredFrames!(cam::FieldCameraAdapter)
   numSensors = cam.params.numSensors
   legacyFrameBytes = 8 * numSensors + 1
-  framedFrameBytes = 2 + legacyFrameBytes + 1
+  framedFrameBytes = length(FC_FRAME_MARKER) + legacyFrameBytes + 1
   length(cam.rawBuffer) < legacyFrameBytes && return 0
 
   scale = cam.params.measurementRange / 2.0^15
@@ -311,7 +316,7 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
 
     useFramed = cam.useFramedPackets
 
-    payloadStart = useFramed ? idx + 2 : idx
+    payloadStart = useFramed ? idx + length(FC_FRAME_MARKER) : idx
     readingPos = payloadStart + 8 * numSensors
     checksumPos = readingPos + 1
 
@@ -380,7 +385,10 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
     end
   end
 
-  if droppedPrefixBytes > 0
+  # Only warn when we failed to recover any complete frame in this buffer.
+  # If at least one frame was recovered and reading IDs stay continuous,
+  # prefix skipping is just stream re-alignment noise, not a data loss event.
+  if droppedPrefixBytes > 0 && parsed == 0
     @warn "Resynchronized field-camera stream" dropped_bytes=droppedPrefixBytes remaining_buffer=length(cam.rawBuffer)
   end
 
