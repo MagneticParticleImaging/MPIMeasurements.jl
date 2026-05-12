@@ -19,6 +19,16 @@ function random_independent_pairs(numPairs::Int; maxCurrent_A::Float64=0.95)
     return i12, i15
 end
 
+function random_independent_right_coils(numPairs::Int; maxCurrent_A::Float64=0.95)
+    # Active coils: 17, 3, 18, 14, 12, 16, 10, 1, 13
+    coilIDs = [1, 3, 10, 12, 13, 14, 16, 17, 18]
+    coilCurrents = Dict{Int, Vector{Float64}}()
+    for coilID in coilIDs
+        coilCurrents[coilID] = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
+    end
+    return coilCurrents
+end
+
 function nested_grid_random_outer_pairs(numPairs::Int;
                                         maxCurrent_A::Float64=0.95,
                                         innerSteps::Int=100,
@@ -51,8 +61,10 @@ function build_current_pairs(mode::Symbol, numPairs::Int; maxCurrent_A::Float64=
         return random_independent_pairs(numPairs; maxCurrent_A)
     elseif mode == :nested_grid_random_outer
         return nested_grid_random_outer_pairs(numPairs; maxCurrent_A, innerSteps=100, outerSteps=100)
+    elseif mode == :random_independent_right_coils
+        return random_independent_right_coils(numPairs; maxCurrent_A)
     else
-        throw(ArgumentError("Unknown mode=$mode. Use :random_independent or :nested_grid_random_outer"))
+        throw(ArgumentError("Unknown mode=$mode. Use :random_independent, :nested_grid_random_outer, or :random_independent_right_coils"))
     end
 end
 
@@ -60,6 +72,14 @@ function expand_pairs_to_measurements(i12Pairs::Vector{Float64}, i15Pairs::Vecto
     i12 = repeat(i12Pairs, inner=repeatsPerPair)
     i15 = repeat(i15Pairs, inner=repeatsPerPair)
     return i12, i15
+end
+
+function expand_pairs_to_measurements(coilCurrents::Dict{Int, Vector{Float64}}; repeatsPerPair::Int=10)
+    expandedCurrents = Dict{Int, Vector{Float64}}()
+    for (coilID, currents) in coilCurrents
+        expandedCurrents[coilID] = repeat(currents, inner=repeatsPerPair)
+    end
+    return expandedCurrents
 end
 
 function add_background_measurements(i12::Vector{Float64}, i15::Vector{Float64}; backgroundMeasurements::Int=50)
@@ -82,17 +102,32 @@ function build_coil_pair_sequence(scanner::MPIScanner;
                                   measurementRate_Hz::Float64=10.0)
     baseFreq = 125.0u"MHz"
 
-    i12Pairs, i15Pairs = build_current_pairs(mode, numCurrentPairs; maxCurrent_A)
-    i12Meas, i15Meas = expand_pairs_to_measurements(i12Pairs, i15Pairs; repeatsPerPair)
-    i12All, i15All = add_background_measurements(i12Meas, i15Meas; backgroundMeasurements)
-
-    totalMeasurements = length(i12All)
+    currentPairs = build_current_pairs(mode, numCurrentPairs; maxCurrent_A)
+    isRightCoilsMode = mode == :random_independent_right_coils
+    
+    if isRightCoilsMode
+        coilCurrentsMeas = expand_pairs_to_measurements(currentPairs; repeatsPerPair)
+        coilCurrentsAll = Dict{Int, Vector{Float64}}()
+        bg = zeros(Float64, backgroundMeasurements)
+        for (coilID, currents) in coilCurrentsMeas
+            coilCurrentsAll[coilID] = vcat(bg, currents, bg)
+        end
+        totalMeasurements = length(coilCurrentsAll[first(keys(coilCurrentsAll))])
+    else
+        i12Pairs, i15Pairs = currentPairs
+        i12Meas, i15Meas = expand_pairs_to_measurements(i12Pairs, i15Pairs; repeatsPerPair)
+        i12All, i15All = add_background_measurements(i12Meas, i15Meas; backgroundMeasurements)
+        totalMeasurements = length(i12All)
+    end
+    
     triggerVals = alternating_trigger_values(totalMeasurements)
 
-    coil12PerMeas = i12All .* u"A"
-    coil15PerMeas = i15All .* u"A"
-    coil12Vals = expand_per_trigger_step(coil12PerMeas)
-    coil15Vals = expand_per_trigger_step(coil15PerMeas)
+    if !isRightCoilsMode
+        coil12PerMeas = i12All .* u"A"
+        coil15PerMeas = i15All .* u"A"
+        coil12Vals = expand_per_trigger_step(coil12PerMeas)
+        coil15Vals = expand_per_trigger_step(coil15PerMeas)
+    end
 
     valuesPerCycle = length(triggerVals)
     stepTime_s = 1.0 / (2.0 * measurementRate_Hz)
@@ -105,9 +140,11 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     channels_cage2 = TxChannel[]
     for coil in 10:18
         coilID = "coil$(coil)"
-        vals = if coil == 12
+        vals = if isRightCoilsMode && haskey(coilCurrentsAll, coil)
+            expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
+        elseif coil == 12 && !isRightCoilsMode
             coil12Vals
-        elseif coil == 15
+        elseif coil == 15 && !isRightCoilsMode
             coil15Vals
         else
             zeros(length(triggerVals)) .* u"A"
@@ -130,11 +167,16 @@ function build_coil_pair_sequence(scanner::MPIScanner;
 
     channels_cage1 = TxChannel[periodicCoil1]
     for coil in 1:9
+        vals = if isRightCoilsMode && haskey(coilCurrentsAll, coil)
+            expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
+        else
+            zeros(length(triggerVals)) .* u"A"
+        end
         push!(channels_cage1,
               StepwiseElectricalChannel(
                   id="coil$(coil)",
                   divider=divider,
-                  values=zeros(length(triggerVals)) .* u"A",
+                  values=vals,
                   enable=Bool[],
               ))
     end
@@ -177,9 +219,9 @@ protocol = Protocol("PorridgeFieldMeasurement", scanner)
 if true
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
-        mode=:random_independent,
-        numCurrentPairs=10,
-        repeatsPerPair=50,
+        mode=:random_independent_right_coils,
+        numCurrentPairs=1000,
+        repeatsPerPair=250,
         backgroundMeasurements=50,
         measurementRate_Hz=50.0,
     )
