@@ -1,5 +1,59 @@
 export PorridgeFieldMeasurementProtocol, PorridgeFieldMeasurementProtocolParams
 
+const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
+const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
+
+const RIGHT_COIL_POSITIONS = Dict(coil => pos for (pos, coil) in enumerate(RIGHT_COIL_ORDER))
+const LEFT_COIL_POSITIONS = Dict(coil => pos for (pos, coil) in enumerate(LEFT_COIL_ORDER))
+
+function coilChannelLabel(coilID::Int)
+  if haskey(RIGHT_COIL_POSITIONS, coilID)
+    return "coil$(coilID)_R$(RIGHT_COIL_POSITIONS[coilID])"
+  elseif haskey(LEFT_COIL_POSITIONS, coilID)
+    return "coil$(coilID)_L$(LEFT_COIL_POSITIONS[coilID])"
+  else
+    return "coil$(coilID)"
+  end
+end
+
+function coilChannelSortKey(name::AbstractString)
+  m = match(r"^coil(\d+)$", name)
+  if isnothing(m)
+    return typemax(Int)
+  end
+  return parse(Int, m.captures[1])
+end
+
+function labeledCoilChannelName(name::AbstractString)
+  m = match(r"^coil(\d+)$", name)
+  if isnothing(m)
+    return String(name)
+  end
+  return coilChannelLabel(parse(Int, m.captures[1]))
+end
+
+function waitForCoilCooling(sensor::TemperatureSensor, overheatCoilIdx::Int; cooldownTemp::Float64=50.0, maxWaitTime_s::Float64=3600.0)
+  startTime = time()
+  while time() - startTime < maxWaitTime_s
+    try
+      temps = getTemperatures(sensor)
+      if overheatCoilIdx <= length(temps)
+        coilTemp = _temperatureToCelsius(temps[overheatCoilIdx])
+        if coilTemp < cooldownTemp
+          @info "Coil cooldown complete" coil_label=coilChannelLabel(overheatCoilIdx) temperature=round(coilTemp, digits=1)
+          return true
+        end
+        @info "Waiting for coil cooldown" coil_label=coilChannelLabel(overheatCoilIdx) current_temp=round(coilTemp, digits=1) target_temp=cooldownTemp elapsed_s=round(time() - startTime, digits=1)
+      end
+    catch e
+      @warn "Error reading temperature during cooldown wait" exception=e
+    end
+    sleep(5.0)  # Check every 5 seconds
+  end
+  @warn "Cooldown wait timeout reached" coil_label=coilChannelLabel(overheatCoilIdx) max_wait_s=maxWaitTime_s
+  return false
+end
+
 function plotFieldDiagnostics(fields::Matrix{Float64}, positions::Matrix{Float64};
                               filename::Union{String,Nothing}=nothing)
   N = size(fields, 2)
@@ -97,6 +151,13 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   currentFrameNum::Int64 = 0
   totalFrames::Int64 = 0
   lastReadingId::Int64 = -1
+  
+  overheatOccurred::Bool = false
+  overheatFrame::Int64 = -1
+  overheatCoilID::Int64 = -1
+  overheatFrames::Vector{Int64} = Int64[]
+  overheatCoilIDs::Vector{Int64} = Int64[]
+  overheatTemps::Vector{Float64} = Float64[]
 end
 
 
@@ -129,12 +190,27 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   protocol.coilTemperatureData = Vector{Float64}[]
   protocol.currentFrameNum = 0
   protocol.lastReadingId = -1
+  protocol.overheatOccurred = false
+  protocol.overheatFrame = -1
+  protocol.overheatCoilID = -1
+  empty!(protocol.overheatFrames)
+  empty!(protocol.overheatCoilIDs)
+  empty!(protocol.overheatTemps)
   if !isnothing(protocol.params.sequence)
     seq = protocol.params.sequence
     triggerPatches = computeTriggerPatches(seq)
     repetitions = acqNumFrames(seq) * acqNumFrameAverages(seq)
     protocol.totalFrames = length(triggerPatches) * repetitions
   end
+end
+
+function recordOverheat!(protocol::PorridgeFieldMeasurementProtocol, frame::Int64, coilID::Int64, temp::Float64)
+  protocol.overheatOccurred = true
+  protocol.overheatFrame = frame
+  protocol.overheatCoilID = coilID
+  push!(protocol.overheatFrames, frame)
+  push!(protocol.overheatCoilIDs, coilID)
+  push!(protocol.overheatTemps, temp)
 end
 
 function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
@@ -157,6 +233,9 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
       "total_isr_ms"   => result.total_isr_ms,
       "coil_temperatures" => coilTemperatures,
       "dropped"        => dropped,
+      "overheat_occurred" => protocol.overheatOccurred,
+      "overheat_frame"    => protocol.overheatFrame,
+      "overheat_coil"     => protocol.overheatCoilID,
     )
 
     push!(protocol.fieldData, result)
@@ -244,6 +323,9 @@ function appendMissingTailResults!(protocol::PorridgeFieldMeasurementProtocol,
       "coil_temperatures" => coilTemperatures,
       "dropped"           => true,
       "tail_fill"         => true,
+      "overheat_occurred" => protocol.overheatOccurred,
+      "overheat_frame"    => protocol.overheatFrame,
+      "overheat_coil"     => protocol.overheatCoilID,
     )
 
     push!(protocol.fieldData, missingResult)
@@ -383,7 +465,8 @@ function coilCurrentMatrix(frameMetadata::Vector{Dict{String,Any}})
     end
   end
 
-  channelNames = unique(sort(channelNames))
+  channelNames = unique(channelNames)
+  sort!(channelNames; by=coilChannelSortKey)
   isempty(channelNames) && return String[], fill(NaN, 0, length(frameMetadata))
 
   indexByChannel = Dict(name => idx for (idx, name) in enumerate(channelNames))
@@ -432,7 +515,8 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
 
   coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
   if overheat
-    @error "Overheat detected before sequence start" coil=overheatCoil temperature=overheatTemp max=overheatMax
+    recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
+    @error "Overheat detected before sequence start" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax
     disable(cam)
     protocol.measuring = false
     return
@@ -445,7 +529,8 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   while currentWP(daq.rpc) < finish
     coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
     if overheat
-      @error "Overheat detected, stopping protocol early" coil=overheatCoil temperature=overheatTemp max=overheatMax
+      recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
+      @error "Overheat detected, stopping protocol early" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax
       execute!(daq.rpc) do batch
         for idx in daq.rampingChannel
           @add_batch batch enableRampDown!(daq.rpc, idx, true)
@@ -484,8 +569,20 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
     before = protocol.currentFrameNum
     coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
     if overheat
-      @error "Overheat detected during tail capture, stopping capture" coil=overheatCoil temperature=overheatTemp max=overheatMax
-      break
+      @warn "Overheat detected during tail capture, pausing measurement" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax frame=protocol.currentFrameNum
+      recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
+      
+      @info "Initiating cooldown wait for $(coilChannelLabel(overheatCoil))..."
+      cooledDown = waitForCoilCooling(tempSensor, overheatCoil)
+      
+      if cooledDown
+        @info "Resuming measurement after cooldown"
+        idlePolls = 0  # Reset idle counter
+        continue
+      else
+        @warn "Cooldown timeout, stopping measurement"
+        break
+      end
     end
 
     appendTriggeredResults!(protocol, sequence, triggerPatches,
@@ -556,10 +653,24 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   write(file, "/positions/tDesign/center", [0.0, 0.0, 0.0])
   write(file, "/positions/tDesign/positions", positions_mm)
   write(file, "/sensor/correctionTranslation", [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0])
-  write(file, "/currents/coil/channel_names", currentChannelNames)
+  write(file, "/currents/coil/channel_names", labeledCoilChannelName.(currentChannelNames))
   write(file, "/currents/coil/value", currentMatrix)
   write(file, "/temperature/coil/value", coilTemperatureMatrix(protocol.coilTemperatureData))
   write(file, "/temperature/unit", "°C")
+  
+  # Save overheat information
+  if protocol.overheatOccurred
+    write(file, "/measurement/overheat_occurred", true)
+    write(file, "/measurement/overheat_frame", protocol.overheatFrame)
+    write(file, "/measurement/overheat_coil_id", protocol.overheatCoilID)
+    write(file, "/measurement/overheat_coil_label", coilChannelLabel(protocol.overheatCoilID))
+    write(file, "/measurement/overheat_frames", protocol.overheatFrames)
+    write(file, "/measurement/overheat_coil_ids", protocol.overheatCoilIDs)
+    write(file, "/measurement/overheat_temps", protocol.overheatTemps)
+    write(file, "/measurement/overheat_coil_labels", coilChannelLabel.(protocol.overheatCoilIDs))
+  else
+    write(file, "/measurement/overheat_occurred", false)
+  end
 
   fields = Array{Float64}(undef, 3, nSensors, nFrames)
   R = [-1.0 0.0 0.0; 0.0 0.0 1.0; 0.0 -1.0 0.0]
