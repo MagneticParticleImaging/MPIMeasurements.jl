@@ -85,7 +85,7 @@ end
 
 function acquire(cam, frame)
     TEST_MODE && return syntheticField(frame)
-    raw = ustrip.(u"T", acquireFullField(cam).data[:, REORDER])
+    raw = ustrip.(u"T", MPIMeasurements.acquireFullField(cam).data[:, REORDER])
     return FIELD_CORRECTION * raw
 end
 
