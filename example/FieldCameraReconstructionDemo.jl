@@ -17,7 +17,7 @@ default(
     titlefont = font(10),
 )
 
-const TEST_MODE      = true
+const TEST_MODE      = false
 const SCANNER_NAME   = "PorridgeFieldCamera"
 const RADIUS_MM      = 37.0
 const R              = RADIUS_MM / 1000

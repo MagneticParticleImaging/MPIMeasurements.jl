@@ -15,9 +15,9 @@ serialThreadID = 4
 
 [Devices]
 initializationOrder = [
-	"serial_pool",
-	"rp_cluster",
-	"su_temp",
+	#"serial_pool",
+	#"rp_cluster",
+	#"su_temp",
 	#"surveillance",
 	"field_camera"
 ]
@@ -293,7 +293,7 @@ calibration = "1.0V/T"
 ## Arduino Field Camera (37 TMAG5170 sensors, trigger-based acquisition)
 [Devices.field_camera]
 deviceType = "FieldCameraAdapter"
-portAddress = "/dev/ttyACM0"
+portAddress = "/dev/cu.usbmodem1113401" #"/dev/ttyACM0"
 numSensors = 37
 measurementRange = 150  # Options: 75, 150, 300 (mT)
 delim_read = "\r"
