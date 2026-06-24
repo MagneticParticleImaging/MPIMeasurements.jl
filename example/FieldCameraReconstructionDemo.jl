@@ -85,8 +85,14 @@ end
 
 function acquire(cam, frame)
     TEST_MODE && return syntheticField(frame)
-    raw = ustrip.(u"T", MPIMeasurements.acquireFullField(cam).data[:, REORDER])
-    return FIELD_CORRECTION * raw
+    try
+        raw = ustrip.(u"T", MPIMeasurements.acquireFullField(cam).data[:, REORDER])
+        return FIELD_CORRECTION * raw
+    catch err
+        err isa InterruptException && rethrow()
+        @warn "Field read failed, skipping frame" exception = err
+        return nothing
+    end
 end
 
 function renderFrame(γ, frame)
@@ -124,8 +130,12 @@ function run_demo(; maxFrames = Inf)
     frame = 0
     try
         while frame < maxFrames
-            γ = coeffs(acquire(cam, frame))
-            display(renderFrame(γ, frame))
+            field = acquire(cam, frame)
+            if field === nothing
+                sleep(UPDATE_SECONDS)
+                continue
+            end
+            display(renderFrame(coeffs(field), frame))
             frame += 1
             sleep(UPDATE_SECONDS)
         end
