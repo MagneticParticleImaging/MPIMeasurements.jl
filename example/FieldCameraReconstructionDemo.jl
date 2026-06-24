@@ -24,7 +24,7 @@ const R              = RADIUS_MM / 1000
 const T_DESIGN       = 8
 const L              = T_DESIGN ÷ 2
 const GRID_N         = 81
-const UPDATE_SECONDS = 0.25
+const UPDATE_SECONDS = 0.1      # 10 Hz target
 const COLOR_LIM_MT   = (0.0, 2.5)
 
 const REORDER          = MPIMeasurements.FC_TDESIGN_REORDER
@@ -130,14 +130,13 @@ function run_demo(; maxFrames = Inf)
     frame = 0
     try
         while frame < maxFrames
+            t0 = time()
             field = acquire(cam, frame)
-            if field === nothing
-                sleep(UPDATE_SECONDS)
-                continue
+            if field !== nothing
+                display(renderFrame(coeffs(field), frame))
+                frame += 1
             end
-            display(renderFrame(coeffs(field), frame))
-            frame += 1
-            sleep(UPDATE_SECONDS)
+            sleep(max(0.0, UPDATE_SECONDS - (time() - t0)))
         end
     catch err
         err isa InterruptException || rethrow()
