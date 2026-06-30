@@ -30,6 +30,10 @@ function random_independent_left_coils(numPairs::Int; maxCurrent_A::Float64=0.95
     return random_independent_coils(LEFT_COIL_ORDER, numPairs; maxCurrent_A)
 end
 
+function random_independent_middle_coils(numPairs::Int; maxCurrent_A::Float64=0.95)
+    return random_independent_coils([RIGHT_COIL_ORDER[2], RIGHT_COIL_ORDER[5], RIGHT_COIL_ORDER[8], LEFT_COIL_ORDER[2], LEFT_COIL_ORDER[5], LEFT_COIL_ORDER[8]], numPairs; maxCurrent_A)
+end
+
 function random_independent_coils(coilIDs::AbstractVector{Int}, numPairs::Int; maxCurrent_A::Float64=0.95)
     coilCurrents = Dict{Int, Vector{Float64}}()
     for coilID in coilIDs
@@ -74,8 +78,10 @@ function build_current_pairs(mode::Symbol, numPairs::Int; maxCurrent_A::Float64=
         return random_independent_right_coils(numPairs; maxCurrent_A)
     elseif mode == :random_independent_left_coils
         return random_independent_left_coils(numPairs; maxCurrent_A)
+    elseif mode == :random_independent_middle_coils
+        return random_independent_middle_coils(numPairs; maxCurrent_A)
     else
-        throw(ArgumentError("Unknown mode=$mode. Use :random_independent, :nested_grid_random_outer, :random_independent_right_coils, or :random_independent_left_coils"))
+        throw(ArgumentError("Unknown mode=$mode. Use :random_independent, :nested_grid_random_outer, :random_independent_right_coils, :random_independent_left_coils, or :random_independent_middle_coils"))
     end
 end
 
@@ -125,8 +131,9 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     currentPairs = build_current_pairs(mode, numCurrentPairs; maxCurrent_A)
     isRightCoilsMode = mode == :random_independent_right_coils
     isLeftCoilsMode = mode == :random_independent_left_coils
+    isMiddleCoilsMode = mode == :random_independent_middle_coils
     
-    if isRightCoilsMode || isLeftCoilsMode
+    if isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode
         coilCurrentsMeas = expand_pairs_to_measurements(currentPairs; repeatsPerPair)
         coilCurrentsAll = add_background_measurements(coilCurrentsMeas; backgroundMeasurements)
         totalMeasurements = length(first(values(coilCurrentsAll)))
@@ -139,7 +146,7 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     
     triggerVals = alternating_trigger_values(totalMeasurements)
 
-    if !isRightCoilsMode
+    if !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
         coil12PerMeas = i12All .* u"A"
         coil15PerMeas = i15All .* u"A"
         coil12Vals = expand_per_trigger_step(coil12PerMeas)
@@ -156,11 +163,11 @@ function build_coil_pair_sequence(scanner::MPIScanner;
 
     channels_cage2 = TxChannel[]
     for coil in 10:18
-        vals = if (isRightCoilsMode || isLeftCoilsMode) && haskey(coilCurrentsAll, coil)
+        vals = if (isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode) && haskey(coilCurrentsAll, coil)
             expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
-        elseif coil == 12 && !isRightCoilsMode
+        elseif coil == 12 && !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
             coil12Vals
-        elseif coil == 15 && !isRightCoilsMode
+        elseif coil == 15 && !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
             coil15Vals
         else
             zeros(length(triggerVals)) .* u"A"
@@ -183,7 +190,7 @@ function build_coil_pair_sequence(scanner::MPIScanner;
 
     channels_cage1 = TxChannel[periodicCoil1]
     for coil in 1:9
-        vals = if (isRightCoilsMode || isLeftCoilsMode) && haskey(coilCurrentsAll, coil)
+        vals = if (isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode) && haskey(coilCurrentsAll, coil)
             expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
         else
             zeros(length(triggerVals)) .* u"A"
@@ -235,8 +242,8 @@ protocol = Protocol("PorridgeFieldMeasurement", scanner)
 if true
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
-        mode=:random_independent_right_coils,
-        numCurrentPairs=20_000,
+        mode=:random_independent_middle_coils,
+        numCurrentPairs=6_000,
         repeatsPerPair=50,
         backgroundMeasurements=50,
         measurementRate_Hz=50.0,
