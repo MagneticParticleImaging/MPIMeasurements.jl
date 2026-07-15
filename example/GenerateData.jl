@@ -5,6 +5,10 @@ using Dates
 using Random
 using Unitful
 
+# Make a single Ctrl+C throw InterruptException so the running measurement
+# can be stopped cleanly and the partial data can still be saved.
+Base.exit_on_sigint(false)
+
 println("Starting Porridge field measurement...")
 
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
@@ -242,8 +246,8 @@ protocol = Protocol("PorridgeFieldMeasurement", scanner)
 if true
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
-        mode=:random_independent_middle_coils,
-        numCurrentPairs=6_000,
+        mode=:random_independent_left_coils,
+        numCurrentPairs=10_000,
         repeatsPerPair=50,
         backgroundMeasurements=50,
         measurementRate_Hz=50.0,
@@ -255,20 +259,21 @@ init(protocol)
 println("Starting measurement...")
 biChannel = execute(protocol, 3)
 
-# 3. Wait for completion
+# 3. Wait for completion. Ctrl+C stops the measurement and still saves what was collected.
+stopping = false
 while true
-    sleep(2.0)
-    
-    # Check status
+  try
+    sleep(stopping ? 0.1 : 2.0)
+
     put!(biChannel, ProgressQueryEvent())
 
     if isready(biChannel)
         event = take!(biChannel)
-        
+
         if isa(event, ProgressEvent)
             pct = round(event.done / event.total * 100, digits=1)
             println("Progress: $pct% ($(event.done)/$(event.total))")
-            
+
         elseif isa(event, FinishedNotificationEvent)
             println("Measurement complete!")
             
@@ -301,6 +306,15 @@ while true
             break
         end
     end
+  catch e
+    if isa(e, InterruptException) && !stopping
+        println("\nStopping measurement, saving collected data...")
+        stopping = true
+        put!(biChannel, StopEvent())
+    else
+        rethrow(e)
+    end
+  end
 end
 
 # 4. Cleanup

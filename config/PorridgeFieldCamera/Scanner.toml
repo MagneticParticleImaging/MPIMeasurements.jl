@@ -25,7 +25,7 @@ initializationOrder = [
 [Devices.serial_pool]
 deviceType = "SerialPortPool"
 dependencies = []
-addressPool = ["/dev/ttyACM0"]
+addressPool = ["/dev/ttyACM1"]
 
 [Devices.rp_cluster]
 deviceType = "RedPitayaDAQ"
@@ -293,7 +293,7 @@ calibration = "1.0V/T"
 ## Arduino Field Camera (37 TMAG5170 sensors, trigger-based acquisition)
 [Devices.field_camera]
 deviceType = "FieldCameraAdapter"
-portAddress = "/dev/ttyACM1"
+portAddress = "/dev/ttyACM0"
 numSensors = 37
 measurementRange = 150  # Options: 75, 150, 300 (mT)
 delim_read = "\r"
@@ -306,17 +306,17 @@ timeout_ms = 2000
 #[Devices.surveillance]
 #deviceType = "ArduinoSurveillanceUnitExternalTemp"
 #dependencies = ["su_temp"]
-#portAddress = "/dev/ttyACM0"
+#portAddress = "/dev/ttyACM1"
 #baudrate = 9600
 
 [Devices.su_temp]
 deviceType = "ArduinoTemperatureSensor"
 dependencies = ["serial_pool"]
-portAddress = "/dev/ttyACM0"
+portAddress = "/dev/ttyACM1"
 baudrate = 9600
 numSensors = 18
 timeout_ms=5000
-maxTemps = [65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65]
+maxTemps = [55,55,55,55,55,55,55,55,55,55,55,55,55,55,55,55,55,55]
 selectSensors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]
 #selectSensors = [4,6,10,11,12]
 groupSensors = [1,1,2,1,1,1,1,1,1,2,2,2,2,2,1,2,2,2]
