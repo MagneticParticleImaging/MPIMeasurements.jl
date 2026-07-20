@@ -688,6 +688,19 @@ function parseFloatArrayString(value::AbstractString)
   return parse.(Float64, split(value, ";"))
 end
 
+function tDesignFieldMatrix(values::Vector{Float64})
+  nSensorsIn = div(length(values), 3)
+  nSensorsIn * 3 == length(values) ||
+    throw(ArgumentError("Expected a multiple of 3 field values, got $(length(values))"))
+
+  raw = reshape(values, 3, nSensorsIn)
+  maxTDesignIndex = maximum(FC_TDESIGN_REORDER)
+  nSensorsIn >= maxTDesignIndex ||
+    throw(ArgumentError("Field payload has $(nSensorsIn) sensors, but t-design reordering needs at least $(maxTDesignIndex)"))
+
+  return raw[:, FC_TDESIGN_REORDER]
+end
+
 function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   csvPath = protocol.streamCsvPath
   if isnothing(csvPath) || !isfile(csvPath)
@@ -733,11 +746,7 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   end
 
   nFrames = length(fieldValues)
-
-  nSensors = Int(length(first(fieldValues)) ÷ 3)
-  if nSensors == 0
-    nSensors = length(FC_TDESIGN_REORDER)
-  end
+  nSensors = length(FC_TDESIGN_REORDER)
   positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER] * 0.001 / 0.037
 
   currentChannelNames, currentMatrix = coilCurrentMatrix(frameMetadata)
@@ -772,14 +781,7 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   @info "Converting field frames for HDF5" frames=nFrames
   for frameIdx in 1:nFrames
     values = fieldValues[frameIdx]
-    if length(values) != 3 * nSensors
-      @warn "Unexpected field payload length" frame=frameIdx expected=3 * nSensors got=length(values)
-      continue
-    end
-    raw = reshape(values, 3, nSensors)
-    if size(raw, 2) == length(FC_TDESIGN_REORDER)
-      raw = raw[:, FC_TDESIGN_REORDER]
-    end
+    raw = tDesignFieldMatrix(values)
     fields[:, :, frameIdx] .= R * raw
   end
 
