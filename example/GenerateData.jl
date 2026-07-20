@@ -14,6 +14,13 @@ println("Starting Porridge field measurement...")
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
 const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
+const PRIMARY_BACKGROUND_MEASUREMENTS = 1_000
+const PRIMARY_RANDOM_PAIRS_PER_SIDE = 1_000
+const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 50 reps/pair" R+L block is repeated. 1 = single pass (right block once, left block once), as intended.
+const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
+const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
+const PRIMARY_RANDOM_REPEATS_PER_PAIR = 50
+
 # --- FFP circle trajectory (from magneticFieldEstimation work_circle6.jl) ----
 # 360 optimized current sets (one per degree) that move the FFP on a circle in
 # the yz plane, radius 0.02 m, centered at the origin. CSV columns I1..I6 are
@@ -83,24 +90,84 @@ function random_independent_pairs(numPairs::Int; maxCurrent_A::Float64=0.95)
     return i12, i15
 end
 
-function random_independent_right_coils(numPairs::Int; maxCurrent_A::Float64=0.95)
-    return random_independent_coils(RIGHT_COIL_ORDER, numPairs; maxCurrent_A)
+function random_independent_right_coils(numPairs::Int; maxCurrent_A::Float64=0.95, repeatsPerPair::Int=1)
+    return random_independent_coils(RIGHT_COIL_ORDER, numPairs; maxCurrent_A, repeatsPerPair)
 end
 
-function random_independent_left_coils(numPairs::Int; maxCurrent_A::Float64=0.95)
-    return random_independent_coils(LEFT_COIL_ORDER, numPairs; maxCurrent_A)
+function random_independent_left_coils(numPairs::Int; maxCurrent_A::Float64=0.95, repeatsPerPair::Int=1)
+    return random_independent_coils(LEFT_COIL_ORDER, numPairs; maxCurrent_A, repeatsPerPair)
 end
 
-function random_independent_middle_coils(numPairs::Int; maxCurrent_A::Float64=0.95)
-    return random_independent_coils([RIGHT_COIL_ORDER[2], RIGHT_COIL_ORDER[5], RIGHT_COIL_ORDER[8], LEFT_COIL_ORDER[2], LEFT_COIL_ORDER[5], LEFT_COIL_ORDER[8]], numPairs; maxCurrent_A)
+function random_independent_middle_coils(numPairs::Int; maxCurrent_A::Float64=0.95, repeatsPerPair::Int=1)
+    return random_independent_coils([RIGHT_COIL_ORDER[2], RIGHT_COIL_ORDER[5], RIGHT_COIL_ORDER[8], LEFT_COIL_ORDER[2], LEFT_COIL_ORDER[5], LEFT_COIL_ORDER[8]], numPairs; maxCurrent_A, repeatsPerPair)
 end
 
-function random_independent_coils(coilIDs::AbstractVector{Int}, numPairs::Int; maxCurrent_A::Float64=0.95)
+function random_independent_coils(coilIDs::AbstractVector{Int}, numPairs::Int; maxCurrent_A::Float64=0.95, repeatsPerPair::Int=1)
+    repeatsPerPair >= 1 || throw(ArgumentError("repeatsPerPair must be >= 1"))
     coilCurrents = Dict{Int, Vector{Float64}}()
     for coilID in coilIDs
-        coilCurrents[coilID] = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
+        baseValues = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
+        coilCurrents[coilID] = repeat(baseValues, inner=repeatsPerPair)
     end
     return coilCurrents
+end
+
+function all_coils_zero_currents(numMeasurements::Int)
+    return Dict(coilID => zeros(numMeasurements) for coilID in 1:18)
+end
+
+function append_currents_segment!(total::Dict{Int, Vector{Float64}}, segment::Dict{Int, Vector{Float64}})
+    nMeasurements = isempty(segment) ? 0 : length(first(values(segment)))
+    for coilID in 1:18
+        pushSegment = get(segment, coilID, zeros(nMeasurements))
+        append!(total[coilID], pushSegment)
+    end
+    return total
+end
+
+function single_coil_check_segment(; maxCurrent_A::Float64=PRIMARY_SINGLE_COIL_MAX_CURRENT_A)
+    segment = all_coils_zero_currents(18)
+    for coilID in 1:18
+        segment[coilID][coilID] = maxCurrent_A
+    end
+    return segment
+end
+
+function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKGROUND_MEASUREMENTS,
+                                      randomPairsPerSide::Int=PRIMARY_RANDOM_PAIRS_PER_SIDE,
+                                      randomCycles::Int=PRIMARY_RANDOM_CYCLES,
+                                      maxCurrent_A::Float64=PRIMARY_RANDOM_MAX_CURRENT_A,
+                                      singleCoilMaxCurrent_A::Float64=PRIMARY_SINGLE_COIL_MAX_CURRENT_A,
+                                      repeatsPerPair::Int=PRIMARY_RANDOM_REPEATS_PER_PAIR)
+    total = all_coils_zero_currents(0)
+
+    # Initial background.
+    append_currents_segment!(total, all_coils_zero_currents(backgroundMeasurements))
+
+    # Quick per-coil amplifier checks.
+    append_currents_segment!(total, single_coil_check_segment(; maxCurrent_A=singleCoilMaxCurrent_A))
+
+    # Right-side block, then left-side block: randomPairsPerSide base pairs, each held for
+    # repeatsPerPair consecutive measurements before moving to the next pair. With the default
+    # randomCycles=1 this runs exactly once per side (1000 pairs x 50 repeats = 50,000 frames/side).
+    for _ in 1:randomCycles
+        append_currents_segment!(total, random_independent_right_coils(randomPairsPerSide; maxCurrent_A, repeatsPerPair))
+        append_currents_segment!(total, random_independent_left_coils(randomPairsPerSide; maxCurrent_A, repeatsPerPair))
+    end
+
+    # Middle background before the combined 18-coil random block.
+    append_currents_segment!(total, all_coils_zero_currents(backgroundMeasurements))
+
+    # All 18 coils randomly driven together.
+    append_currents_segment!(total, random_independent_coils(collect(1:18), randomPairsPerSide; maxCurrent_A, repeatsPerPair))
+
+    # Final background.
+    append_currents_segment!(total, all_coils_zero_currents(backgroundMeasurements))
+
+    # Final per-coil amplifier checks.
+    append_currents_segment!(total, single_coil_check_segment(; maxCurrent_A=singleCoilMaxCurrent_A))
+
+    return total
 end
 
 function nested_grid_random_outer_pairs(numPairs::Int;
@@ -149,13 +216,13 @@ function build_current_pairs(mode::Symbol, numPairs::Int; maxCurrent_A::Float64=
     end
 end
 
-function expand_pairs_to_measurements(i12Pairs::Vector{Float64}, i15Pairs::Vector{Float64}; repeatsPerPair::Int=10)
+function expand_pairs_to_measurements(i12Pairs::Vector{Float64}, i15Pairs::Vector{Float64}; repeatsPerPair::Int=50)
     i12 = repeat(i12Pairs, inner=repeatsPerPair)
     i15 = repeat(i15Pairs, inner=repeatsPerPair)
     return i12, i15
 end
 
-function expand_pairs_to_measurements(coilCurrents::Dict{Int, Vector{Float64}}; repeatsPerPair::Int=10)
+function expand_pairs_to_measurements(coilCurrents::Dict{Int, Vector{Float64}}; repeatsPerPair::Int=50)
     expandedCurrents = Dict{Int, Vector{Float64}}()
     for (coilID, currents) in coilCurrents
         expandedCurrents[coilID] = repeat(currents, inner=repeatsPerPair)
@@ -183,10 +250,88 @@ function expand_per_trigger_step(values)
     return repeat(values, inner=2)
 end
 
+function build_coil_sequence_from_currents(scanner::MPIScanner,
+                                          coilCurrents::Dict{Int, Vector{Float64}};
+                                          measurementRate_Hz::Float64=10.0)
+    baseFreq = 125.0u"MHz"
+
+    totalMeasurements = length(first(values(coilCurrents)))
+    @assert all(length(currents) == totalMeasurements for currents in values(coilCurrents))
+    maxCurrent = isempty(coilCurrents) ? 0.0 : maximum(maximum(abs.(currents)) for currents in values(coilCurrents))
+
+    triggerVals = alternating_trigger_values(totalMeasurements)
+    valuesPerCycle = length(triggerVals)
+    stepTime_s = 1.0 / (2.0 * measurementRate_Hz)
+    divider = round(Int, stepTime_s * ustrip(u"Hz", baseFreq) * valuesPerCycle)
+
+    channels_trigger = TxChannel[
+        StepwiseElectricalChannel(id="trigger", divider=divider, values=triggerVals, enable=Bool[])
+    ]
+
+    channels_cage1 = TxChannel[]
+    for coil in LEFT_COIL_ORDER
+        vals = expand_per_trigger_step(get(coilCurrents, coil, zeros(totalMeasurements)) .* u"A")
+        push!(channels_cage1,
+              StepwiseElectricalChannel(id="coil$(coil)", divider=divider, values=vals, enable=Bool[]))
+    end
+
+    # `coil1_fast` is the dedicated fast channel for the first coil in the left cage.
+    periodicCoil1 = PeriodicElectricalChannel(
+        id="coil1_fast",
+        offset=0.0u"T",
+        components=[PeriodicElectricalComponent(
+            id="c1",
+            divider=12480,
+            amplitude=[0.0u"T"],
+            phase=[0.0u"rad"],
+            waveform="sine",
+        )],
+    )
+    insert!(channels_cage1, 1, periodicCoil1)
+
+    channels_cage2 = TxChannel[]
+    for coil in RIGHT_COIL_ORDER
+        vals = expand_per_trigger_step(get(coilCurrents, coil, zeros(totalMeasurements)) .* u"A")
+        push!(channels_cage2,
+              StepwiseElectricalChannel(id="coil$(coil)", divider=divider, values=vals, enable=Bool[]))
+    end
+
+    @assert all(length(ch.values) == length(triggerVals) for ch in channels_cage2 if ch isa StepwiseElectricalChannel)
+    @assert all(length(ch.values) == length(triggerVals) for ch in channels_cage1 if ch isa StepwiseElectricalChannel)
+
+    return Sequence(
+        general=GeneralSettings(
+            name="PorridgeFieldMeasurementPrimary",
+            description="background=$(PRIMARY_BACKGROUND_MEASUREMENTS), pairsPerSide=$(PRIMARY_RANDOM_PAIRS_PER_SIDE), repeatsPerPair=$(PRIMARY_RANDOM_REPEATS_PER_PAIR), randomCycles=$(PRIMARY_RANDOM_CYCLES), maxCurrent=$(round(maxCurrent, digits=3))",
+            targetScanner=name(scanner),
+            baseFrequency=baseFreq,
+        ),
+        fields=[
+            MagneticField(id="Trigger", channels=channels_trigger,
+                          safeStartInterval=0.0u"s", safeEndInterval=0.0u"s",
+                          safeErrorInterval=0.0u"s", control=false, decouple=false),
+            MagneticField(id="cage1", channels=channels_cage1,
+                          safeStartInterval=0.0u"s", safeEndInterval=0.0u"s",
+                          safeErrorInterval=0.0u"s", control=false, decouple=false),
+            MagneticField(id="cage2", channels=channels_cage2,
+                          safeStartInterval=0.0u"s", safeEndInterval=0.0u"s",
+                          safeErrorInterval=0.0u"s", control=false, decouple=false),
+        ],
+        acquisition=AcquisitionSettings(
+            channels=[RxChannel("rx1")],
+            bandwidth=0.9765625u"MHz",
+            numPeriodsPerFrame=1,
+            numFrames=1,
+            numAverages=1,
+            numFrameAverages=1,
+        ),
+    )
+end
+
 function build_coil_pair_sequence(scanner::MPIScanner;
                                   mode::Symbol=:random_independent,
                                   numCurrentPairs::Int=1_000,
-                                  repeatsPerPair::Int=10,
+                                  repeatsPerPair::Int=50,
                                   backgroundMeasurements::Int=50,
                                   maxCurrent_A::Float64=0.95,
                                   measurementRate_Hz::Float64=10.0)
@@ -303,28 +448,33 @@ end
 scanner = MPIScanner("PorridgeFieldCamera", robust=true)
 protocol = Protocol("PorridgeFieldMeasurement", scanner)
 if true
+    # Primary staged protocol:
+    #   1) 1000 background frames
+    #   2) 18 one-frame single-coil max-current checks
+    #   3) 1000 right-side pairs x 50 repeats (50,000 frames), then
+    #      1000 left-side pairs x 50 repeats (50,000 frames)
+    #   4) 1000 background frames
+    #   5) 1000 all-18-coils pairs x 50 repeats (50,000 frames)
+    #   6) 1000 background frames
+    #   7) 18 final one-frame single-coil max-current checks
+    primaryCurrents = build_primary_coil_currents()
+    protocol.params.sequence = build_coil_sequence_from_currents(
+        scanner,
+        primaryCurrents;
+        measurementRate_Hz=50.0,
+    )
+elseif false
     # FFP circle in the yz plane (r = 0.02 m), currents from CIRCLE6_CSV_FILE.
-    # numCurrentPairs = number of revolutions (360 points each), repeatsPerPair =
-    # measurements per trajectory point. This trajectory peaks at ~9.52 A — make
-    # sure the amplifiers can actually sustain that before running for real;
-    # lower it (e.g. by swapping to a CSV optimized with a smaller Imax) if not.
+    # This remains available for later use, but is not the primary run mode.
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
         mode=:circle6_yz,
         numCurrentPairs=1,
-        repeatsPerPair=10,
+        repeatsPerPair=50,
         backgroundMeasurements=50,
         maxCurrent_A=9.6,
         measurementRate_Hz=50.0,
     )
-    # protocol.params.sequence = build_coil_pair_sequence(
-    #     scanner;
-    #     mode=:random_independent_middle_coils,
-    #     numCurrentPairs=6_000,
-    #     repeatsPerPair=50,
-    #     backgroundMeasurements=50,
-    #     measurementRate_Hz=50.0,
-    # )
 end
 init(protocol)
 
