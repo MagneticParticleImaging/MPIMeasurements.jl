@@ -247,7 +247,7 @@ if true
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
         mode=:random_independent_left_coils,
-        numCurrentPairs=10_000,
+        numCurrentPairs=10,
         repeatsPerPair=50,
         backgroundMeasurements=50,
         measurementRate_Hz=50.0,
@@ -261,59 +261,67 @@ biChannel = execute(protocol, 3)
 
 # 3. Wait for completion. Ctrl+C stops the measurement and still saves what was collected.
 stopping = false
-while true
-  try
-    sleep(stopping ? 0.1 : 2.0)
+try
+  while true
+    try
+      sleep(stopping ? 0.1 : 2.0)
 
-    put!(biChannel, ProgressQueryEvent())
+      put!(biChannel, ProgressQueryEvent())
 
-    if isready(biChannel)
-        event = take!(biChannel)
+      if isready(biChannel)
+          event = take!(biChannel)
 
-        if isa(event, ProgressEvent)
-            pct = round(event.done / event.total * 100, digits=1)
-            println("Progress: $pct% ($(event.done)/$(event.total))")
+          if isa(event, ProgressEvent)
+              pct = round(event.done / event.total * 100, digits=1)
+              println("Progress: $pct% ($(event.done)/$(event.total))")
 
-        elseif isa(event, FinishedNotificationEvent)
-            println("Measurement complete!")
-            
-            # Save to configured datasetStore location
-            storePath = scanner.generalParams.datasetStore
-            mkpath(expanduser(storePath))  # Ensure directory exists
-            filename = joinpath(expanduser(storePath), "measurement_$(Dates.format(now(), "yyyymmdd_HHMMSS")).h5")
-            put!(biChannel, FileStorageRequestEvent(filename))
-            
-            # Wait for save confirmation (drain any stale ProgressEvents)
-            saveEvent = nothing
-            while true
-                saveEvent = take!(biChannel)
-                isa(saveEvent, ProgressEvent) || break
-            end
-            if isa(saveEvent, StorageSuccessEvent)
-                println("Saved to: $filename")
-            elseif isa(saveEvent, ExceptionEvent)
-                println("Save error: $(saveEvent.exception)")
-            else
-                println("⚠ Unexpected event: $(typeof(saveEvent))")
-            end
-            
-            # Acknowledge
-            put!(biChannel, FinishedAckEvent())
-            break
-            
-        elseif isa(event, ExceptionEvent)
-            println("Error: $(event.exception)")
-            break
-        end
+          elseif isa(event, FinishedNotificationEvent)
+              println("Measurement complete!")
+              
+              # Save to configured datasetStore location
+              storePath = scanner.generalParams.datasetStore
+              mkpath(expanduser(storePath))  # Ensure directory exists
+              filename = joinpath(expanduser(storePath), "measurement_$(Dates.format(now(), "yyyymmdd_HHMMSS")).h5")
+              put!(biChannel, FileStorageRequestEvent(filename))
+              
+              # Wait for save confirmation (drain any stale ProgressEvents)
+              saveEvent = nothing
+              while true
+                  saveEvent = take!(biChannel)
+                  isa(saveEvent, ProgressEvent) || break
+              end
+              if isa(saveEvent, StorageSuccessEvent)
+                  println("Saved to: $filename")
+              elseif isa(saveEvent, ExceptionEvent)
+                  println("Save error: $(saveEvent.exception)")
+              else
+                  println("⚠ Unexpected event: $(typeof(saveEvent))")
+              end
+              
+              # Acknowledge
+              put!(biChannel, FinishedAckEvent())
+              break
+              
+          elseif isa(event, ExceptionEvent)
+              println("Error: $(event.exception)")
+              break
+          end
+      end
+    catch e
+      if isa(e, InterruptException) && !stopping
+          println("\nStopping measurement, saving collected data...")
+          stopping = true
+          put!(biChannel, StopEvent())
+      else
+          rethrow(e)
+      end
     end
-  catch e
-    if isa(e, InterruptException) && !stopping
-        println("\nStopping measurement, saving collected data...")
-        stopping = true
-        put!(biChannel, StopEvent())
-    else
-        rethrow(e)
-    end
+  end
+catch e
+  if isa(e, InterruptException)
+    println("\nInterrupt received; attempting graceful shutdown...")
+  else
+    rethrow(e)
   end
 end
 
