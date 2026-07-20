@@ -1,5 +1,7 @@
 export PorridgeFieldMeasurementProtocol, PorridgeFieldMeasurementProtocolParams
 
+using DelimitedFiles
+
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
 const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
@@ -32,7 +34,7 @@ function labeledCoilChannelName(name::AbstractString)
   return coilChannelLabel(parse(Int, m.captures[1]))
 end
 
-function waitForCoilCooling(sensor::TemperatureSensor, overheatCoilIdx::Int; cooldownTemp::Float64=50.0, maxWaitTime_s::Float64=3600.0)
+function waitForCoilCooling(sensor::TemperatureSensor, overheatCoilIdx::Int; cooldownTemp::Float64=45.0, maxWaitTime_s::Float64=3600.0)
   startTime = time()
   while time() - startTime < maxWaitTime_s
     try
@@ -161,6 +163,7 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocolParams <: ProtocolPar
   enableSphericalHarmonics::Bool = true
   tDesignOrder::Int64 = 12
   sphericalRadius::typeof(1.0u"m") = 0.045u"m"
+  statusReportInterval::Int64 = 10_000
 end
 
 function PorridgeFieldMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
@@ -201,6 +204,10 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   overheatFrames::Vector{Int64} = Int64[]
   overheatCoilIDs::Vector{Int64} = Int64[]
   overheatTemps::Vector{Float64} = Float64[]
+
+  streamCsvPath::Union{String,Nothing} = nothing
+  streamCsvHandle::Union{IOStream,Nothing} = nothing
+  requestedOutputPath::Union{String,Nothing} = nothing
 end
 
 
@@ -215,12 +222,8 @@ function _init(protocol::PorridgeFieldMeasurementProtocol)
   protocol.finishAcknowledged = false
   protocol.currentFrameNum = 0
   protocol.lastReadingId = -1
-end
-
-function timeEstimate(protocol::PorridgeFieldMeasurementProtocol)
-  isnothing(protocol.params.sequence) && return "Unknown"
-  # ~100 ms per triggered frame is a reasonable estimate
-  return string(acqNumFrames(protocol.params.sequence) * 0.1 * 1u"s")
+  protocol.requestedOutputPath = nothing
+  closeStreamingCsv!(protocol)
 end
 
 function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
@@ -239,12 +242,23 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   empty!(protocol.overheatFrames)
   empty!(protocol.overheatCoilIDs)
   empty!(protocol.overheatTemps)
+  protocol.requestedOutputPath = nothing
+  closeStreamingCsv!(protocol)
   if !isnothing(protocol.params.sequence)
     seq = protocol.params.sequence
     triggerPatches = computeTriggerPatches(seq)
     repetitions = acqNumFrames(seq) * acqNumFrameAverages(seq)
     protocol.totalFrames = length(triggerPatches) * repetitions
+
+    # Reduce reallocations during very long runs.
+    sizehint!(protocol.fieldData, protocol.totalFrames)
+    sizehint!(protocol.frameMetadata, protocol.totalFrames)
+    sizehint!(protocol.coilTemperatureData, protocol.totalFrames)
+    sizehint!(protocol.overheatFrames, min(protocol.totalFrames, 16))
+    sizehint!(protocol.overheatCoilIDs, min(protocol.totalFrames, 16))
+    sizehint!(protocol.overheatTemps, min(protocol.totalFrames, 16))
   end
+  prepareStreamingCsv!(protocol)
 end
 
 function recordOverheat!(protocol::PorridgeFieldMeasurementProtocol, frame::Int64, coilID::Int64, temp::Float64)
@@ -265,25 +279,16 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
   function appendFrame!(result::FieldCameraResult, frameIndex::Int; dropped::Bool=false)
     triggerIdx = mod1(frameIndex, length(triggerPatches))
     patchIdx = triggerPatches[triggerIdx]
-    metadata = Dict{String,Any}(
-      "frameIndex"     => frameIndex,
-      "patchIndex"     => patchIdx,
-      "coilCurrents"   => getCoilCurrentsForPatch(sequence, patchIdx),
-      "timestamp"      => result.timestamp,
-      "reading_id"     => result.reading_id,
-      "arduino_millis" => result.arduino_millis,
-      "sensor_read_ms" => result.sensor_read_ms,
-      "total_isr_ms"   => result.total_isr_ms,
-      "coil_temperatures" => coilTemperatures,
-      "dropped"        => dropped,
-      "overheat_occurred" => protocol.overheatOccurred,
-      "overheat_frame"    => protocol.overheatFrame,
-      "overheat_coil"     => protocol.overheatCoilID,
-    )
-
-    push!(protocol.fieldData, result)
-    push!(protocol.frameMetadata, metadata)
-    push!(protocol.coilTemperatureData, copy(coilTemperatures))
+    coilCurrents = getCoilCurrentsForPatch(sequence, patchIdx)
+    appendFrameToStreamingCsv!(protocol, result, frameIndex;
+                                patchIdx,
+                                coilCurrents,
+                                coilTemperatures,
+                                dropped,
+                                tailFill=false,
+                                overheatOccurred=protocol.overheatOccurred,
+                                overheatFrame=protocol.overheatFrame,
+                                overheatCoil=protocol.overheatCoilID)
     protocol.currentFrameNum = frameIndex
   end
 
@@ -327,7 +332,10 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
     appendFrame!(result, frameIndex; dropped=false)
     protocol.lastReadingId = result.reading_id
 
-    @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id dropped=false
+    reportEvery = protocol.params.statusReportInterval
+    if reportEvery > 0 && protocol.currentFrameNum % reportEvery == 0
+      @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id dropped=false
+    end
   end
 end
 
@@ -354,26 +362,16 @@ function appendMissingTailResults!(protocol::PorridgeFieldMeasurementProtocol,
       -1,
     )
 
-    metadata = Dict{String,Any}(
-      "frameIndex"        => frameIndex,
-      "patchIndex"        => patchIdx,
-      "coilCurrents"      => getCoilCurrentsForPatch(sequence, patchIdx),
-      "timestamp"         => missingResult.timestamp,
-      "reading_id"        => missingResult.reading_id,
-      "arduino_millis"    => missingResult.arduino_millis,
-      "sensor_read_ms"    => missingResult.sensor_read_ms,
-      "total_isr_ms"      => missingResult.total_isr_ms,
-      "coil_temperatures" => coilTemperatures,
-      "dropped"           => true,
-      "tail_fill"         => true,
-      "overheat_occurred" => protocol.overheatOccurred,
-      "overheat_frame"    => protocol.overheatFrame,
-      "overheat_coil"     => protocol.overheatCoilID,
-    )
-
-    push!(protocol.fieldData, missingResult)
-    push!(protocol.frameMetadata, metadata)
-    push!(protocol.coilTemperatureData, copy(coilTemperatures))
+    coilCurrents = getCoilCurrentsForPatch(sequence, patchIdx)
+    appendFrameToStreamingCsv!(protocol, missingResult, frameIndex;
+                                patchIdx,
+                                coilCurrents,
+                                coilTemperatures,
+                                dropped=true,
+                                tailFill=true,
+                                overheatOccurred=protocol.overheatOccurred,
+                                overheatFrame=protocol.overheatFrame,
+                                overheatCoil=protocol.overheatCoilID)
     protocol.currentFrameNum = frameIndex
     protocol.lastReadingId = expectedReadingId
   end
@@ -397,7 +395,7 @@ function _execute(protocol::PorridgeFieldMeasurementProtocol)
   end
 end
 
-cleanup(protocol::PorridgeFieldMeasurementProtocol) = nothing
+cleanup(protocol::PorridgeFieldMeasurementProtocol) = closeStreamingCsv!(protocol)
 stop(protocol::PorridgeFieldMeasurementProtocol) = (protocol.stopped = true)
 cancel(protocol::PorridgeFieldMeasurementProtocol) = (protocol.cancelled = true)
 
@@ -575,6 +573,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
       if time() >= nextTempCheck
         nextTempCheck = time() + tempCheckInterval
         coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
+        #@info coilTemperatures tempSensor.params.maxTemps
         if overheat
           recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
           @warn "Overheat detected, ramping down to cool" coil_label=coilChannelLabel(overheatCoil) temperature=round(overheatTemp, digits=1) max=overheatMax frame=protocol.currentFrameNum
@@ -636,7 +635,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   end
   protocol.cancelled && throw(CancelException())
 
-  @info "Field measurement complete" measurements=length(protocol.fieldData) frames_acquired=protocol.currentFrameNum target=protocol.totalFrames
+  @info "Field measurement complete" measurements=protocol.currentFrameNum frames_acquired=protocol.currentFrameNum target=protocol.totalFrames
 end
 
 
@@ -651,8 +650,11 @@ end
 
 function handleEvent(protocol::PorridgeFieldMeasurementProtocol, event::FileStorageRequestEvent)
   filename = event.filename
+  protocol.requestedOutputPath = filename
   @info "Saving measurement data to $filename"
   try
+    prepareStreamingCsv!(protocol; requestedOutputPath=filename)
+    closeStreamingCsv!(protocol)
     h5open(filename, "w") do file
       saveFieldCameraData(file, protocol)
       write(file, "/protocol", string(typeof(protocol)))
@@ -670,14 +672,76 @@ function handleEvent(protocol::PorridgeFieldMeasurementProtocol, event::FileStor
 end
 
 
+function parseCoilCurrentsString(value::AbstractString)
+  currentDict = Dict{String,Float64}()
+  isempty(strip(value)) && return currentDict
+  for entry in split(value, ";")
+    isempty(strip(entry)) && continue
+    name, rawValue = split(entry, "="; limit=2)
+    currentDict[String(strip(name))] = parse(Float64, strip(rawValue))
+  end
+  return currentDict
+end
+
+function parseFloatArrayString(value::AbstractString)
+  isempty(strip(value)) && return Float64[]
+  return parse.(Float64, split(value, ";"))
+end
+
 function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
-  isempty(protocol.fieldData) && (@warn "No field data to save"; return)
+  csvPath = protocol.streamCsvPath
+  if isnothing(csvPath) || !isfile(csvPath)
+    @warn "No streamed CSV file available; nothing to save"
+    return
+  end
 
-  nFrames = length(protocol.fieldData)
-  nSensors = length(FC_TDESIGN_REORDER)
-  positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER]*0.001/0.037
+  data, header = readdlm(csvPath, ',', String; header=true, skipblanks=true)
+  if isempty(data)
+    @warn "No field data to save"
+    return
+  end
 
-  currentChannelNames, currentMatrix = coilCurrentMatrix(protocol.frameMetadata)
+  headerNames = vec(header)
+  colIndex = Dict(name => idx for (idx, name) in enumerate(headerNames))
+
+  frameMetadata = Dict{String,Any}[]
+  coilTemperatureTrace = Vector{Float64}[]
+  fieldValues = Vector{Vector{Float64}}()
+
+  nFrames = size(data, 1)
+  for rowIdx in 1:nFrames
+    row = vec(data[rowIdx, :])
+    fieldPayload = row[colIndex["field_values"]]
+    parsedFieldValues = parseFloatArrayString(fieldPayload)
+    if isempty(parsedFieldValues)
+      continue
+    end
+
+    fieldValuesRow = parsedFieldValues
+    push!(fieldValues, fieldValuesRow)
+
+    coilCurrents = parseCoilCurrentsString(row[colIndex["coil_currents"]])
+    push!(frameMetadata, Dict{String,Any}("coilCurrents" => coilCurrents))
+
+    temperatures = parseFloatArrayString(row[colIndex["coil_temperatures"]])
+    push!(coilTemperatureTrace, temperatures)
+  end
+
+  if isempty(fieldValues)
+    @warn "No field data rows found in streamed CSV"
+    return
+  end
+
+  nFrames = length(fieldValues)
+
+  nSensors = Int(length(first(fieldValues)) ÷ 3)
+  if nSensors == 0
+    nSensors = length(FC_TDESIGN_REORDER)
+  end
+  positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER] * 0.001 / 0.037
+
+  currentChannelNames, currentMatrix = coilCurrentMatrix(frameMetadata)
+  temperatureMatrix = coilTemperatureMatrix(coilTemperatureTrace)
 
   write(file, "/positions/tDesign/radius", 0.037)
   write(file, "/positions/tDesign/N", 36)
@@ -687,10 +751,9 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   write(file, "/sensor/correctionTranslation", [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0])
   write(file, "/currents/coil/channel_names", labeledCoilChannelName.(currentChannelNames))
   write(file, "/currents/coil/value", currentMatrix)
-  write(file, "/temperature/coil/value", coilTemperatureMatrix(protocol.coilTemperatureData))
+  write(file, "/temperature/coil/value", temperatureMatrix)
   write(file, "/temperature/unit", "°C")
-  
-  # Save overheat information
+
   if protocol.overheatOccurred
     write(file, "/measurement/overheat_occurred", true)
     write(file, "/measurement/overheat_frame", protocol.overheatFrame)
@@ -708,9 +771,137 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   R = [-1.0 0.0 0.0; 0.0 0.0 1.0; 0.0 -1.0 0.0]
   @info "Converting field frames for HDF5" frames=nFrames
   for frameIdx in 1:nFrames
-    raw = ustrip.(u"T", protocol.fieldData[frameIdx].data[:, FC_TDESIGN_REORDER])
+    values = fieldValues[frameIdx]
+    if length(values) != 3 * nSensors
+      @warn "Unexpected field payload length" frame=frameIdx expected=3 * nSensors got=length(values)
+      continue
+    end
+    raw = reshape(values, 3, nSensors)
+    if size(raw, 2) == length(FC_TDESIGN_REORDER)
+      raw = raw[:, FC_TDESIGN_REORDER]
+    end
     fields[:, :, frameIdx] .= R * raw
   end
 
   write(file, "/fields", fields)
+end
+
+function closeStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol)
+  if !isnothing(protocol.streamCsvHandle)
+    close(protocol.streamCsvHandle)
+    protocol.streamCsvHandle = nothing
+  end
+end
+
+function prepareStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol; requestedOutputPath::Union{String,Nothing}=nothing)
+  if !isnothing(protocol.streamCsvHandle)
+    return protocol.streamCsvPath
+  end
+
+  outputBasePath = if !isnothing(requestedOutputPath)
+    requestedOutputPath
+  elseif !isnothing(protocol.requestedOutputPath)
+    protocol.requestedOutputPath
+  else
+    nothing
+  end
+
+  outputDir = if !isnothing(outputBasePath)
+    dirname(abspath(expanduser(outputBasePath)))
+  else
+    store = expanduser(protocol.scanner.generalParams.datasetStore)
+    mkpath(store)
+    store
+  end
+  mkpath(outputDir)
+
+  timestamp = Dates.format(now(), "yyyymmdd_HHMMSS")
+  csvPath = joinpath(outputDir, "measurement_$(timestamp)_stream.csv")
+  protocol.streamCsvPath = csvPath
+  protocol.streamCsvHandle = open(csvPath, "a", lock=false)  # disable lock to avoid contention; single writer
+
+  header = [
+    "frameIndex",
+    "patchIndex",
+    "reading_id",
+    "timestamp",
+    "arduino_millis",
+    "sensor_read_ms",
+    "total_isr_ms",
+    "dropped",
+    "tail_fill",
+    "overheat_occurred",
+    "overheat_frame",
+    "overheat_coil",
+    "coil_currents",
+    "coil_temperatures",
+    "field_values",
+  ]
+  writedlm(protocol.streamCsvHandle, [header], ',')
+  flush(protocol.streamCsvHandle)  # ensure header is written immediately
+  return csvPath
+end
+
+function serializeCoilCurrents(currents)
+  isempty(currents) && return ""
+  parts = String[]
+  for (name, value) in sort(collect(currents); by = x -> coilChannelSortKey(x[1]))
+    push!(parts, "$(name)=$(value)")
+  end
+  return join(parts, ";")
+end
+
+function serializeCoilTemperatures(temperatures)
+  isempty(temperatures) && return ""
+  return join(string.(temperatures), ";")
+end
+
+function serializeFieldValues(data)
+  values = ustrip.(u"T", vec(data))
+  return join(string.(Float64.(values)), ";")
+end
+
+function appendFrameToStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol,
+                                     result::FieldCameraResult,
+                                     frameIndex::Int;
+                                     patchIdx::Int,
+                                     coilCurrents::Dict{String,Float64},
+                                     coilTemperatures::Vector{Float64}=Float64[],
+                                     dropped::Bool=false,
+                                     tailFill::Bool=false,
+                                     overheatOccurred::Bool=protocol.overheatOccurred,
+                                     overheatFrame::Int64=protocol.overheatFrame,
+                                     overheatCoil::Int64=protocol.overheatCoilID)
+  if isnothing(protocol.streamCsvHandle)
+    prepareStreamingCsv!(protocol; requestedOutputPath=protocol.requestedOutputPath)
+  end
+  if isnothing(protocol.streamCsvHandle)
+    return
+  end
+
+  row = Any[
+    frameIndex,
+    patchIdx,
+    result.reading_id,
+    result.timestamp,
+    result.arduino_millis,
+    result.sensor_read_ms,
+    result.total_isr_ms,
+    dropped,
+    tailFill,
+    overheatOccurred,
+    overheatFrame,
+    overheatCoil,
+    serializeCoilCurrents(coilCurrents),
+    serializeCoilTemperatures(coilTemperatures),
+    serializeFieldValues(result.data),
+  ]
+  writedlm(protocol.streamCsvHandle, [row], ',')
+  flush(protocol.streamCsvHandle)  # flush line-by-line to reduce memory pressure
+end
+
+function timeEstimate(protocol::PorridgeFieldMeasurementProtocol)
+  isnothing(protocol.params.sequence) && return "Unknown"
+  # ~100 ms per triggered frame is a reasonable estimate
+  return string(acqNumFrames(protocol.params.sequence) * 0.1 * 1u"s")
 end

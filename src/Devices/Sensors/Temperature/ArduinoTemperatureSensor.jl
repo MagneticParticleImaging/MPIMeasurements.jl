@@ -62,6 +62,7 @@ end
 function checkSerialDevice(sensor::ArduinoTemperatureSensor, sd::SerialDevice)
   try
     reply = query(sd, "!VERSION*")
+    @info reply
     if !(startswith(reply, "TEMPBOX:3"))
         close(sd)
         throw(ScannerConfigurationError(string("Connected to wrong Device ", reply)))
