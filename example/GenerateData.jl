@@ -10,6 +10,63 @@ println("Starting Porridge field measurement...")
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
 const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
+# --- FFP circle trajectory (from magneticFieldEstimation work_circle6.jl) ----
+# 360 optimized current sets (one per degree) that move the FFP on a circle in
+# the yz plane, radius 0.02 m, centered at the origin. CSV columns I1..I6 are
+# the 6 inputs of model6.bson (= 2026_07_07_initial_model.pt), one row per
+# degree (see the "degree,I1,I2,I3,I4,I5,I6" header in the file).
+#
+# ⚠ The mapping from CSV column to physical coil id below is NOT verified — it
+# depends on the column order of the model's training data. Candidates:
+#   ascending coil ids:            [2, 3, 6, 11, 12, 15]
+#   middle-coils definition order: [3, 12, 11, 6, 15, 2]  (right 3,12,11, then left 6,15,2)
+# Hint for resolving it: model input 3 is nearly dead (field response ~1000x
+# weaker than the other inputs). This trajectory confirms it again: column I3
+# stays well below 0.55 A over the whole circle while every other column
+# swings up to several amps. If one middle coil was broken or disconnected
+# during the training measurements, that coil is column 3.
+#
+# ⚠ This trajectory's peak current is ~9.52 A (close to the Imax=10 A used
+# during optimization) — far higher than the 0.95 A random-mode trainings and
+# the earlier R=0.045 circle. Confirm the amplifiers can sustain that before
+# running on hardware; maxCurrent_A must be raised to at least that value.
+const CIRCLE6_CSV_FILE = joinpath(@__DIR__, "circle6_R-0.02_T-360_Imax-10.0_dImax-5.0_B-0.0001_g-0.003_currents.csv")
+const CIRCLE6_COIL_ORDER = [2, 3, 6, 11, 12, 15]
+
+function read_circle6_csv(csvPath::AbstractString)
+    lines = readlines(csvPath)
+    isempty(lines) && throw(ArgumentError("Empty CSV file: $csvPath"))
+    header = split(lines[1], ",")
+    strip(header[1]) == "degree" ||
+        throw(ArgumentError("Unexpected CSV header in $csvPath: $(lines[1])"))
+    nCoilsInFile = length(header) - 1
+    trajectory = Vector{Vector{Float64}}()
+    for line in lines[2:end]
+        isempty(strip(line)) && continue
+        fields = split(line, ",")
+        push!(trajectory, parse.(Float64, fields[2:end]))
+    end
+    isempty(trajectory) && throw(ArgumentError("No current rows found in $csvPath"))
+    all(p -> length(p) == nCoilsInFile, trajectory) ||
+        throw(ArgumentError("Inconsistent current counts in $csvPath"))
+    return trajectory
+end
+
+function circle6_trajectory_coils(numLoops::Int; maxCurrent_A::Float64=0.95,
+                                  csvPath::AbstractString=CIRCLE6_CSV_FILE)
+    trajectory = read_circle6_csv(csvPath)
+    length(first(trajectory)) == length(CIRCLE6_COIL_ORDER) ||
+        throw(ArgumentError("CSV has $(length(first(trajectory))) coils, expected $(length(CIRCLE6_COIL_ORDER))"))
+    peak = maximum(p -> maximum(abs, p), trajectory)
+    peak <= maxCurrent_A ||
+        throw(ArgumentError("Trajectory peak current $(round(peak, digits=4)) A exceeds maxCurrent_A = $(maxCurrent_A) A; pass a larger maxCurrent_A only if the amplifiers allow it"))
+    coilCurrents = Dict{Int, Vector{Float64}}()
+    for (col, coilID) in enumerate(CIRCLE6_COIL_ORDER)
+        coilCurrents[coilID] = repeat([p[col] for p in trajectory], outer=numLoops)
+    end
+    return coilCurrents
+end
+
 function alternating_trigger_values(numMeasurements::Int)
     vals = zeros(Float64, 2 * numMeasurements)
     vals[1:2:end] .= 0.9
@@ -80,8 +137,11 @@ function build_current_pairs(mode::Symbol, numPairs::Int; maxCurrent_A::Float64=
         return random_independent_left_coils(numPairs; maxCurrent_A)
     elseif mode == :random_independent_middle_coils
         return random_independent_middle_coils(numPairs; maxCurrent_A)
+    elseif mode == :circle6_yz
+        # numPairs is reinterpreted as the number of revolutions around the 360-point circle (use numCurrentPairs=1 for a single loop).
+        return circle6_trajectory_coils(numPairs; maxCurrent_A)
     else
-        throw(ArgumentError("Unknown mode=$mode. Use :random_independent, :nested_grid_random_outer, :random_independent_right_coils, :random_independent_left_coils, or :random_independent_middle_coils"))
+        throw(ArgumentError("Unknown mode=$mode. Use :random_independent, :nested_grid_random_outer, :random_independent_right_coils, :random_independent_left_coils, :random_independent_middle_coils, or :circle6_yz"))
     end
 end
 
@@ -129,11 +189,9 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     baseFreq = 125.0u"MHz"
 
     currentPairs = build_current_pairs(mode, numCurrentPairs; maxCurrent_A)
-    isRightCoilsMode = mode == :random_independent_right_coils
-    isLeftCoilsMode = mode == :random_independent_left_coils
-    isMiddleCoilsMode = mode == :random_independent_middle_coils
-    
-    if isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode
+    isCoilDictMode = currentPairs isa Dict
+
+    if isCoilDictMode
         coilCurrentsMeas = expand_pairs_to_measurements(currentPairs; repeatsPerPair)
         coilCurrentsAll = add_background_measurements(coilCurrentsMeas; backgroundMeasurements)
         totalMeasurements = length(first(values(coilCurrentsAll)))
@@ -146,7 +204,7 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     
     triggerVals = alternating_trigger_values(totalMeasurements)
 
-    if !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
+    if !isCoilDictMode
         coil12PerMeas = i12All .* u"A"
         coil15PerMeas = i15All .* u"A"
         coil12Vals = expand_per_trigger_step(coil12PerMeas)
@@ -163,11 +221,11 @@ function build_coil_pair_sequence(scanner::MPIScanner;
 
     channels_cage2 = TxChannel[]
     for coil in 10:18
-        vals = if (isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode) && haskey(coilCurrentsAll, coil)
+        vals = if isCoilDictMode && haskey(coilCurrentsAll, coil)
             expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
-        elseif coil == 12 && !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
+        elseif coil == 12 && !isCoilDictMode
             coil12Vals
-        elseif coil == 15 && !isRightCoilsMode && !isLeftCoilsMode && !isMiddleCoilsMode
+        elseif coil == 15 && !isCoilDictMode
             coil15Vals
         else
             zeros(length(triggerVals)) .* u"A"
@@ -190,7 +248,7 @@ function build_coil_pair_sequence(scanner::MPIScanner;
 
     channels_cage1 = TxChannel[periodicCoil1]
     for coil in 1:9
-        vals = if (isRightCoilsMode || isLeftCoilsMode || isMiddleCoilsMode) && haskey(coilCurrentsAll, coil)
+        vals = if isCoilDictMode && haskey(coilCurrentsAll, coil)
             expand_per_trigger_step(coilCurrentsAll[coil] .* u"A")
         else
             zeros(length(triggerVals)) .* u"A"
@@ -210,7 +268,8 @@ function build_coil_pair_sequence(scanner::MPIScanner;
     return Sequence(
         general=GeneralSettings(
             name="CoilPairSequence",
-            description="mode=$(mode), pairs=$(numCurrentPairs), repeats=$(repeatsPerPair), bg=$(backgroundMeasurements), right=$(RIGHT_COIL_ORDER), left=$(LEFT_COIL_ORDER)",
+            description="mode=$(mode), pairs=$(numCurrentPairs), repeats=$(repeatsPerPair), bg=$(backgroundMeasurements), right=$(RIGHT_COIL_ORDER), left=$(LEFT_COIL_ORDER)" *
+                        (mode == :circle6_yz ? ", circle6order=$(CIRCLE6_COIL_ORDER)" : ""),
             targetScanner=name(scanner),
             baseFrequency=baseFreq,
         ),
@@ -240,14 +299,28 @@ end
 scanner = MPIScanner("PorridgeFieldCamera", robust=true)
 protocol = Protocol("PorridgeFieldMeasurement", scanner)
 if true
+    # FFP circle in the yz plane (r = 0.02 m), currents from CIRCLE6_CSV_FILE.
+    # numCurrentPairs = number of revolutions (360 points each), repeatsPerPair =
+    # measurements per trajectory point. This trajectory peaks at ~9.52 A — make
+    # sure the amplifiers can actually sustain that before running for real;
+    # lower it (e.g. by swapping to a CSV optimized with a smaller Imax) if not.
     protocol.params.sequence = build_coil_pair_sequence(
         scanner;
-        mode=:random_independent_middle_coils,
-        numCurrentPairs=6_000,
-        repeatsPerPair=50,
+        mode=:circle6_yz,
+        numCurrentPairs=1,
+        repeatsPerPair=10,
         backgroundMeasurements=50,
+        maxCurrent_A=9.6,
         measurementRate_Hz=50.0,
     )
+    # protocol.params.sequence = build_coil_pair_sequence(
+    #     scanner;
+    #     mode=:random_independent_middle_coils,
+    #     numCurrentPairs=6_000,
+    #     repeatsPerPair=50,
+    #     backgroundMeasurements=50,
+    #     measurementRate_Hz=50.0,
+    # )
 end
 init(protocol)
 
@@ -255,20 +328,21 @@ init(protocol)
 println("Starting measurement...")
 biChannel = execute(protocol, 3)
 
-# 3. Wait for completion
+# 3. Wait for completion. Ctrl+C stops the measurement and still saves what was collected.
+stopping = false
 while true
-    sleep(2.0)
-    
-    # Check status
+  try
+    sleep(stopping ? 0.1 : 2.0)
+
     put!(biChannel, ProgressQueryEvent())
 
     if isready(biChannel)
         event = take!(biChannel)
-        
+
         if isa(event, ProgressEvent)
             pct = round(event.done / event.total * 100, digits=1)
             println("Progress: $pct% ($(event.done)/$(event.total))")
-            
+
         elseif isa(event, FinishedNotificationEvent)
             println("Measurement complete!")
             
@@ -301,6 +375,15 @@ while true
             break
         end
     end
+  catch e
+    if isa(e, InterruptException) && !stopping
+        println("\nStopping measurement, saving collected data...")
+        stopping = true
+        put!(biChannel, StopEvent())
+    else
+        rethrow(e)
+    end
+  end
 end
 
 # 4. Cleanup

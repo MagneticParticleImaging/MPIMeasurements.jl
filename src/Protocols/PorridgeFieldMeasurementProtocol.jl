@@ -54,6 +54,49 @@ function waitForCoilCooling(sensor::TemperatureSensor, overheatCoilIdx::Int; coo
   return false
 end
 
+function sliceSequenceFromStep(sequence::Sequence, startStep::Int)
+  newFields = MagneticField[]
+  for field in fields(sequence)
+    newChannels = TxChannel[]
+    for channel in channels(field)
+      if isa(channel, StepwiseElectricalChannel)
+        slicedValues = channel.values[startStep:end]
+        slicedEnable = isempty(channel.enable) ? channel.enable : channel.enable[startStep:end]
+        push!(newChannels, StepwiseElectricalChannel(
+          id=channel.id,
+          divider=channel.divider,
+          values=slicedValues,
+          enable=slicedEnable,
+        ))
+      else
+        push!(newChannels, channel)
+      end
+    end
+    push!(newFields, MagneticField(
+      id=field.id,
+      channels=newChannels,
+      safeStartInterval=field.safeStartInterval,
+      safeTransitionInterval=field.safeTransitionInterval,
+      safeEndInterval=field.safeEndInterval,
+      safeErrorInterval=field.safeErrorInterval,
+      control=field.control,
+      decouple=field.decouple,
+    ))
+  end
+  return Sequence(general=sequence.general, fields=newFields, acquisition=sequence.acquisition)
+end
+
+function rampDownAndWait!(daq, protocol)
+  execute!(daq.rpc) do batch
+    for idx in daq.rampingChannel
+      @add_batch batch enableRampDown!(daq.rpc, idx, true)
+    end
+  end
+  while !rampDownDone(daq.rpc)
+    handleEvents(protocol)
+  end
+end
+
 function plotFieldDiagnostics(fields::Matrix{Float64}, positions::Matrix{Float64};
                               filename::Union{String,Nothing}=nothing)
   N = size(fields, 2)
@@ -508,90 +551,79 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
     end
   end
 
-  setup(daq, sequence)
-  tempSensor = getTemperatureSensor(scanner_)
+  if repetitions != 1
+    @warn "Overheat resume assumes a single sequence repetition" repetitions
+  end
 
+  tempSensor = getTemperatureSensor(scanner_)
   enable(cam)
 
-  coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
-  if overheat
-    recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
-    @error "Overheat detected before sequence start" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax
-    disable(cam)
-    protocol.measuring = false
-    return
-  end
+  coilTemperatures, _, _, _, _ = readCoilTemperatures(tempSensor)
+  tempCheckInterval = 0.2
+  outcome = :complete
 
-  startTx(daq)
-  timing = getTiming(daq)
+  while true
+    runSequence = protocol.currentFrameNum == 0 ? sequence :
+                  sliceSequenceFromStep(sequence, 2 * protocol.currentFrameNum + 1)
+    setup(daq, runSequence)
+    startTx(daq)
+    finish = getTiming(daq).finish
 
-  finish = timing.finish
-  while currentWP(daq.rpc) < finish
-    coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
-    if overheat
-      recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
-      @error "Overheat detected, stopping protocol early" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax
-      execute!(daq.rpc) do batch
-        for idx in daq.rampingChannel
-          @add_batch batch enableRampDown!(daq.rpc, idx, true)
+    overheated = false
+    nextTempCheck = time()
+    while currentWP(daq.rpc) < finish
+      if time() >= nextTempCheck
+        nextTempCheck = time() + tempCheckInterval
+        coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
+        if overheat
+          recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
+          @warn "Overheat detected, ramping down to cool" coil_label=coilChannelLabel(overheatCoil) temperature=round(overheatTemp, digits=1) max=overheatMax frame=protocol.currentFrameNum
+          rampDownAndWait!(daq, protocol)
+          finish = currentWP(daq.rpc)
+          overheated = true
+          break
         end
       end
-      while !rampDownDone(daq.rpc)
-        handleEvents(protocol)
-      end
-      finish = currentWP(daq.rpc)
-      break
-    end
 
-    appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=2, maxReads=8);
-                            coilTemperatures)
-    handleEvents(protocol)
-    if protocol.cancelled || protocol.stopped
-      execute!(daq.rpc) do batch
-        for idx in daq.rampingChannel
-          @add_batch batch enableRampDown!(daq.rpc, idx, true)
-        end
-      end
-      while !rampDownDone(daq.rpc)
-        handleEvents(protocol)
-      end
-      finish = currentWP(daq.rpc)
-      break
-    end
-    sleep(0.01)
-  end
-
-  endSequence(daq, finish)
-
-  idlePolls = 0
-  while protocol.currentFrameNum < protocol.totalFrames && idlePolls < 40
-    before = protocol.currentFrameNum
-    coilTemperatures, overheat, overheatCoil, overheatTemp, overheatMax = readCoilTemperatures(tempSensor)
-    if overheat
-      @warn "Overheat detected during tail capture, pausing measurement" coil_label=coilChannelLabel(overheatCoil) temperature=overheatTemp max=overheatMax frame=protocol.currentFrameNum
-      recordOverheat!(protocol, protocol.currentFrameNum, overheatCoil, overheatTemp)
-      
-      @info "Initiating cooldown wait for $(coilChannelLabel(overheatCoil))..."
-      cooledDown = waitForCoilCooling(tempSensor, overheatCoil)
-      
-      if cooledDown
-        @info "Resuming measurement after cooldown"
-        idlePolls = 0  # Reset idle counter
-        continue
-      else
-        @warn "Cooldown timeout, stopping measurement"
+      appendTriggeredResults!(protocol, sequence, triggerPatches,
+                              pollTriggeredFields(cam; timeout_ms=2, maxReads=8);
+                              coilTemperatures)
+      handleEvents(protocol)
+      if protocol.cancelled || protocol.stopped
+        rampDownAndWait!(daq, protocol)
+        finish = currentWP(daq.rpc)
+        outcome = :stopped
         break
       end
     end
 
-    appendTriggeredResults!(protocol, sequence, triggerPatches,
-                            pollTriggeredFields(cam; timeout_ms=10, maxReads=8);
-                            coilTemperatures)
-    idlePolls = protocol.currentFrameNum == before ? idlePolls + 1 : 0
+    endSequence(daq, finish)
+
+    idlePolls = 0
+    while protocol.currentFrameNum < protocol.totalFrames && idlePolls < 40
+      before = protocol.currentFrameNum
+      appendTriggeredResults!(protocol, sequence, triggerPatches,
+                              pollTriggeredFields(cam; timeout_ms=10, maxReads=8);
+                              coilTemperatures)
+      idlePolls = protocol.currentFrameNum == before ? idlePolls + 1 : 0
+    end
+
+    if outcome == :stopped || protocol.currentFrameNum >= protocol.totalFrames
+      break
+    elseif overheated
+      coil = coilChannelLabel(protocol.overheatCoilID)
+      @info "Waiting for $coil to cool down before resuming" frame=protocol.currentFrameNum
+      if !waitForCoilCooling(tempSensor, protocol.overheatCoilID)
+        outcome = :cooldownTimeout
+        break
+      end
+      @info "Resuming measurement" frame=protocol.currentFrameNum
+    else
+      break
+    end
   end
 
-  if protocol.currentFrameNum < protocol.totalFrames
+  if outcome == :complete && protocol.currentFrameNum < protocol.totalFrames
     appendMissingTailResults!(protocol, sequence, triggerPatches, cam.params.numSensors;
                               coilTemperatures)
   end
@@ -604,7 +636,7 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   end
   protocol.cancelled && throw(CancelException())
 
-  @info "Field measurement complete" measurements=length(protocol.fieldData)
+  @info "Field measurement complete" measurements=length(protocol.fieldData) frames_acquired=protocol.currentFrameNum target=protocol.totalFrames
 end
 
 
