@@ -23,8 +23,8 @@ struct FieldCameraResult
   total_isr_ms::Int               # total ISR time reported by Arduino, -1 if unavailable
 end
 
-FieldCameraResult(timestamp::Float64, data::Matrix{typeof(1.0u"T")}) =
-  FieldCameraResult(timestamp, data, -1, -1, -1, -1)
+FieldCameraResult(timestamp::Float64, data::AbstractMatrix{<:Unitful.BField}) =
+  FieldCameraResult(timestamp, Unitful.uconvert.(u"T", data), -1, -1, -1, -1)
 
 Base.@kwdef mutable struct FieldCameraAdapter <: GaussMeter
   @add_device_fields FieldCameraAdapterParams
