@@ -377,12 +377,12 @@ function _parseTriggeredFrames!(cam::FieldCameraAdapter)
     idx += useFramed ? framedFrameBytes : legacyFrameBytes
   end
 
+  # Compact in place (deleteat! shifts the tail down within the existing
+  # buffer) instead of slicing into a freshly allocated Vector. This function
+  # runs on every poll for the entire (multi-hour) measurement, so allocating
+  # a new buffer every call here was a steady, sustained source of heap churn.
   if idx > 1
-    if idx <= buflen
-      cam.rawBuffer = cam.rawBuffer[idx:buflen]
-    else
-      empty!(cam.rawBuffer)
-    end
+    deleteat!(cam.rawBuffer, 1:min(idx - 1, buflen))
   end
 
   # Only warn when we failed to recover any complete frame in this buffer.

@@ -208,6 +208,15 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   streamCsvPath::Union{String,Nothing} = nothing
   streamCsvHandle::Union{IOStream,Nothing} = nothing
   requestedOutputPath::Union{String,Nothing} = nothing
+
+  # Coil currents are constant for many consecutive frames (held per patch for
+  # repeatsPerPair repetitions); caching the serialized CSV field by patchIdx
+  # avoids rebuilding an identical Dict + String on every single frame.
+  coilCurrentsCache::Dict{Int,String} = Dict{Int,String}()
+
+  # Anchors for the periodic GC/heap diagnostic in appendTriggeredResults!.
+  runStartTimeNs::UInt64 = UInt64(0)
+  runStartGcTimeNs::UInt64 = UInt64(0)
 end
 
 
@@ -242,6 +251,9 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   empty!(protocol.overheatFrames)
   empty!(protocol.overheatCoilIDs)
   empty!(protocol.overheatTemps)
+  empty!(protocol.coilCurrentsCache)
+  protocol.runStartTimeNs = time_ns()
+  protocol.runStartGcTimeNs = Base.gc_time_ns()
   protocol.requestedOutputPath = nothing
   closeStreamingCsv!(protocol)
   if !isnothing(protocol.params.sequence)
@@ -276,14 +288,18 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
                                 results::Vector{FieldCameraResult};
                                 coilTemperatures::Vector{Float64}=Float64[])
 
+  # coilTemperatures is a single snapshot shared by every frame processed in
+  # this call; serialize it once instead of on every frame below.
+  coilTemperaturesSerialized = serializeCoilTemperatures(coilTemperatures)
+
   function appendFrame!(result::FieldCameraResult, frameIndex::Int; dropped::Bool=false)
     triggerIdx = mod1(frameIndex, length(triggerPatches))
     patchIdx = triggerPatches[triggerIdx]
-    coilCurrents = getCoilCurrentsForPatch(sequence, patchIdx)
+    coilCurrentsSerialized = cachedSerializedCoilCurrents!(protocol, sequence, patchIdx)
     appendFrameToStreamingCsv!(protocol, result, frameIndex;
                                 patchIdx,
-                                coilCurrents,
-                                coilTemperatures,
+                                coilCurrentsSerialized,
+                                coilTemperaturesSerialized,
                                 dropped,
                                 tailFill=false,
                                 overheatOccurred=protocol.overheatOccurred,
@@ -334,7 +350,10 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
 
     reportEvery = protocol.params.statusReportInterval
     if reportEvery > 0 && protocol.currentFrameNum % reportEvery == 0
-      @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id dropped=false
+      elapsedNs = time_ns() - protocol.runStartTimeNs
+      gcElapsedNs = Base.gc_time_ns() - protocol.runStartGcTimeNs
+      gcPercent = elapsedNs > 0 ? round(gcElapsedNs / elapsedNs * 100, digits=2) : 0.0
+      @info "Measurement $(protocol.currentFrameNum)/$(protocol.totalFrames)" reading_id=result.reading_id dropped=false gc_time_pct=gcPercent live_heap_mb=round(Base.gc_live_bytes() / 2^20, digits=1) rss_mb=round(Sys.maxrss() / 2^20, digits=1) rawbuffer_bytes=length(getGaussMeter(protocol.scanner).rawBuffer)
     end
   end
 end
@@ -346,6 +365,9 @@ function appendMissingTailResults!(protocol::PorridgeFieldMeasurementProtocol,
                                    coilTemperatures::Vector{Float64}=Float64[])
   missingFrames = protocol.totalFrames - protocol.currentFrameNum
   missingFrames <= 0 && return 0
+
+  # coilTemperatures is constant across this whole tail-fill; serialize once.
+  coilTemperaturesSerialized = serializeCoilTemperatures(coilTemperatures)
 
   for _ in 1:missingFrames
     frameIndex = protocol.currentFrameNum + 1
@@ -362,11 +384,11 @@ function appendMissingTailResults!(protocol::PorridgeFieldMeasurementProtocol,
       -1,
     )
 
-    coilCurrents = getCoilCurrentsForPatch(sequence, patchIdx)
+    coilCurrentsSerialized = cachedSerializedCoilCurrents!(protocol, sequence, patchIdx)
     appendFrameToStreamingCsv!(protocol, missingResult, frameIndex;
                                 patchIdx,
-                                coilCurrents,
-                                coilTemperatures,
+                                coilCurrentsSerialized,
+                                coilTemperaturesSerialized,
                                 dropped=true,
                                 tailFill=true,
                                 overheatOccurred=protocol.overheatOccurred,
@@ -436,6 +458,18 @@ function getCoilCurrentsForPatch(sequence::Sequence, patchIdx::Int)
     end
   end
   return currents
+end
+
+# Coil currents (and therefore their serialized CSV form) only change when
+# patchIdx changes, which happens once every repeatsPerPair frames, not every
+# frame. Recomputing the Dict + sorted/joined String on every single row was
+# pure allocation churn sustained for the whole (multi-hour, multi-hundred-
+# thousand-frame) run.
+function cachedSerializedCoilCurrents!(protocol::PorridgeFieldMeasurementProtocol,
+                                        sequence::Sequence, patchIdx::Int)
+  return get!(protocol.coilCurrentsCache, patchIdx) do
+    serializeCoilCurrents(getCoilCurrentsForPatch(sequence, patchIdx))
+  end
 end
 
 function _temperatureToCelsius(value)
@@ -867,8 +901,8 @@ function appendFrameToStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol,
                                      result::FieldCameraResult,
                                      frameIndex::Int;
                                      patchIdx::Int,
-                                     coilCurrents::Dict{String,Float64},
-                                     coilTemperatures::Vector{Float64}=Float64[],
+                                     coilCurrentsSerialized::String,
+                                     coilTemperaturesSerialized::String="",
                                      dropped::Bool=false,
                                      tailFill::Bool=false,
                                      overheatOccurred::Bool=protocol.overheatOccurred,
@@ -894,8 +928,8 @@ function appendFrameToStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol,
     overheatOccurred,
     overheatFrame,
     overheatCoil,
-    serializeCoilCurrents(coilCurrents),
-    serializeCoilTemperatures(coilTemperatures),
+    coilCurrentsSerialized,
+    coilTemperaturesSerialized,
     serializeFieldValues(result.data),
   ]
   writedlm(protocol.streamCsvHandle, [row], ',')
