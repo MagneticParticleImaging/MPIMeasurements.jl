@@ -20,6 +20,11 @@ const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 50 reps
 const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
 const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
 const PRIMARY_RANDOM_REPEATS_PER_PAIR = 50
+# A single-coil check only brackets the run at start/end, so a coil that fails partway
+# through leaves everything after it untrustworthy with no way to tell where the failure
+# happened. Re-running the 18-frame check every ~50,000 frames (~17 min at 50 Hz) bounds
+# that uncertainty window instead of covering the whole run. Set to 0 to disable.
+const PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES = 50_000
 
 # --- FFP circle trajectory (from magneticFieldEstimation work_circle6.jl) ----
 # 360 optimized current sets (one per degree) that move the FFP on a circle in
@@ -133,12 +138,34 @@ function single_coil_check_segment(; maxCurrent_A::Float64=PRIMARY_SINGLE_COIL_M
     return segment
 end
 
+# Insert an 18-frame single-coil check every `intervalFrames` frames throughout an
+# already-built sequence, so a coil that fails mid-run is caught within one interval
+# instead of only at the start/end checks. Checkpoints are computed against the
+# pre-insertion frame count and applied back-to-front so earlier insertions don't shift
+# the position of checkpoints still to be processed. The last `intervalFrames ÷ 4` frames
+# are left alone since the run's own final check segment already covers that region.
+function insert_periodic_single_coil_checks!(total::Dict{Int, Vector{Float64}}, intervalFrames::Int;
+                                              maxCurrent_A::Float64=PRIMARY_SINGLE_COIL_MAX_CURRENT_A)
+    intervalFrames <= 0 && return total
+    totalFrames = isempty(total) ? 0 : length(first(values(total)))
+    checkSegment = single_coil_check_segment(; maxCurrent_A)
+
+    checkpoints = intervalFrames:intervalFrames:(totalFrames - intervalFrames ÷ 4)
+    for checkpoint in Iterators.reverse(checkpoints)
+        for coilID in 1:18
+            splice!(total[coilID], (checkpoint + 1):checkpoint, checkSegment[coilID])
+        end
+    end
+    return total
+end
+
 function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKGROUND_MEASUREMENTS,
                                       randomPairsPerSide::Int=PRIMARY_RANDOM_PAIRS_PER_SIDE,
                                       randomCycles::Int=PRIMARY_RANDOM_CYCLES,
                                       maxCurrent_A::Float64=PRIMARY_RANDOM_MAX_CURRENT_A,
                                       singleCoilMaxCurrent_A::Float64=PRIMARY_SINGLE_COIL_MAX_CURRENT_A,
-                                      repeatsPerPair::Int=PRIMARY_RANDOM_REPEATS_PER_PAIR)
+                                      repeatsPerPair::Int=PRIMARY_RANDOM_REPEATS_PER_PAIR,
+                                      periodicCheckInterval_frames::Int=PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES)
     total = all_coils_zero_currents(0)
 
     # Initial background.
@@ -166,6 +193,10 @@ function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKG
 
     # Final per-coil amplifier checks.
     append_currents_segment!(total, single_coil_check_segment(; maxCurrent_A=singleCoilMaxCurrent_A))
+
+    # Bound how far a mid-run coil failure can spread before it's caught, instead of only
+    # checking at the very start/end.
+    insert_periodic_single_coil_checks!(total, periodicCheckInterval_frames; maxCurrent_A=singleCoilMaxCurrent_A)
 
     return total
 end
@@ -302,7 +333,7 @@ function build_coil_sequence_from_currents(scanner::MPIScanner,
     return Sequence(
         general=GeneralSettings(
             name="PorridgeFieldMeasurementPrimary",
-            description="background=$(PRIMARY_BACKGROUND_MEASUREMENTS), pairsPerSide=$(PRIMARY_RANDOM_PAIRS_PER_SIDE), repeatsPerPair=$(PRIMARY_RANDOM_REPEATS_PER_PAIR), randomCycles=$(PRIMARY_RANDOM_CYCLES), maxCurrent=$(round(maxCurrent, digits=3))",
+            description="background=$(PRIMARY_BACKGROUND_MEASUREMENTS), pairsPerSide=$(PRIMARY_RANDOM_PAIRS_PER_SIDE), repeatsPerPair=$(PRIMARY_RANDOM_REPEATS_PER_PAIR), randomCycles=$(PRIMARY_RANDOM_CYCLES), maxCurrent=$(round(maxCurrent, digits=3)), periodicCheckIntervalFrames=$(PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES)",
             targetScanner=name(scanner),
             baseFrequency=baseFreq,
         ),
@@ -457,6 +488,9 @@ if true
     #   5) 1000 all-18-coils pairs x 50 repeats (50,000 frames)
     #   6) 1000 background frames
     #   7) 18 final one-frame single-coil max-current checks
+    # Additionally, an 18-frame single-coil check is spliced in every
+    # PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES frames throughout the whole run (steps 3-6
+    # above), so a coil that fails mid-run doesn't silently invalidate everything after it.
     primaryCurrents = build_primary_coil_currents()
     protocol.params.sequence = build_coil_sequence_from_currents(
         scanner,
