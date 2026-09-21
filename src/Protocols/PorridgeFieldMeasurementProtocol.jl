@@ -5,6 +5,15 @@ using DelimitedFiles
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
 const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
+# The Arduino's trigger reading_id is an 8-bit counter (wraps mod 256). A new reading whose
+# id equals (mod 256) the previous one is ambiguous by construction: it's either a genuine
+# duplicate delivery of the same trigger (arrives ~immediately) or exactly a multiple of 256
+# triggered frames were silently lost (at a typical ~50 Hz run that's ~5.1 s or more). We
+# can't recover the true missing-frame count from an 8-bit counter alone, but we can tell
+# the two cases apart by elapsed wall-clock time; this threshold must sit well below the
+# ~5.1 s a full wraparound would take and well above genuine back-to-back delivery.
+const SUSPICIOUS_DUPLICATE_GAP_S = 1.0
+
 const RIGHT_COIL_POSITIONS = Dict(coil => pos for (pos, coil) in enumerate(RIGHT_COIL_ORDER))
 const LEFT_COIL_POSITIONS = Dict(coil => pos for (pos, coil) in enumerate(LEFT_COIL_ORDER))
 
@@ -197,7 +206,10 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   currentFrameNum::Int64 = 0
   totalFrames::Int64 = 0
   lastReadingId::Int64 = -1
-  
+  # Wall-clock timestamp of the last accepted triggered reading, used only to sanity-check
+  # the 8-bit reading_id wraparound in appendTriggeredResults! (see SUSPICIOUS_DUPLICATE_GAP_S).
+  lastAcceptedTimestamp::Float64 = 0.0
+
   overheatOccurred::Bool = false
   overheatFrame::Int64 = -1
   overheatCoilID::Int64 = -1
@@ -231,6 +243,7 @@ function _init(protocol::PorridgeFieldMeasurementProtocol)
   protocol.finishAcknowledged = false
   protocol.currentFrameNum = 0
   protocol.lastReadingId = -1
+  protocol.lastAcceptedTimestamp = 0.0
   protocol.requestedOutputPath = nothing
   closeStreamingCsv!(protocol)
 end
@@ -245,6 +258,7 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   protocol.coilTemperatureData = Vector{Float64}[]
   protocol.currentFrameNum = 0
   protocol.lastReadingId = -1
+  protocol.lastAcceptedTimestamp = 0.0
   protocol.overheatOccurred = false
   protocol.overheatFrame = -1
   protocol.overheatCoilID = -1
@@ -319,6 +333,10 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
     if protocol.lastReadingId >= 0 && result.reading_id >= 0
       delta = mod(result.reading_id - protocol.lastReadingId, 256)
       if delta == 0
+        gap_s = protocol.lastAcceptedTimestamp > 0 ? result.timestamp - protocol.lastAcceptedTimestamp : 0.0
+        if gap_s > SUSPICIOUS_DUPLICATE_GAP_S
+          @error "reading_id aliased back to the previous value after an implausibly long gap -- likely a multiple of 256 triggered frames was silently lost (8-bit counter wraparound cannot detect this); frame/coil-current alignment for the rest of this run may be off" gap_s=round(gap_s, digits=2) reading_id=result.reading_id previous_timestamp=protocol.lastAcceptedTimestamp
+        end
         continue
       elseif delta > 1
         @warn "Dropped triggered readings detected" missing=(delta - 1) previous=protocol.lastReadingId current=result.reading_id
@@ -347,6 +365,7 @@ function appendTriggeredResults!(protocol::PorridgeFieldMeasurementProtocol,
 
     appendFrame!(result, frameIndex; dropped=false)
     protocol.lastReadingId = result.reading_id
+    protocol.lastAcceptedTimestamp = result.timestamp
 
     reportEvery = protocol.params.statusReportInterval
     if reportEvery > 0 && protocol.currentFrameNum % reportEvery == 0
@@ -735,6 +754,20 @@ function tDesignFieldMatrix(values::Vector{Float64})
   return raw[:, FC_TDESIGN_REORDER]
 end
 
+# Extract the center sensor's (Arduino pin 34, raw index FC_CENTER_SENSOR_INDEX) field from a
+# raw per-frame field payload. Kept separate from tDesignFieldMatrix because the center sensor
+# is deliberately excluded from the tDesign array (see FC_CENTER_SENSOR_INDEX comment).
+function centerSensorField(values::Vector{Float64})
+  nSensorsIn = div(length(values), 3)
+  nSensorsIn * 3 == length(values) ||
+    throw(ArgumentError("Expected a multiple of 3 field values, got $(length(values))"))
+  nSensorsIn >= FC_CENTER_SENSOR_INDEX ||
+    throw(ArgumentError("Field payload has $(nSensorsIn) sensors, but the center sensor is expected at index $(FC_CENTER_SENSOR_INDEX)"))
+
+  raw = reshape(values, 3, nSensorsIn)
+  return raw[:, FC_CENTER_SENSOR_INDEX]
+end
+
 function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   csvPath = protocol.streamCsvPath
   if isnothing(csvPath) || !isfile(csvPath)
@@ -782,6 +815,7 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   nFrames = length(fieldValues)
   nSensors = length(FC_TDESIGN_REORDER)
   positions_mm = getSensorPositions()[:, FC_TDESIGN_REORDER] * 0.001 / 0.037
+  centerPosition_mm = getSensorPositions()[:, FC_CENTER_SENSOR_INDEX]
 
   currentChannelNames, currentMatrix = coilCurrentMatrix(frameMetadata)
   temperatureMatrix = coilTemperatureMatrix(coilTemperatureTrace)
@@ -791,6 +825,10 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   write(file, "/positions/tDesign/t", 8)
   write(file, "/positions/tDesign/center", [0.0, 0.0, 0.0])
   write(file, "/positions/tDesign/positions", positions_mm)
+  # 37th sensor (Arduino pin 34), mounted at the sphere center. Kept out of the 36-point
+  # tDesign array above -- the spherical-harmonics fit requires points strictly on the sphere
+  # -- but its field trace is captured every frame and saved separately here, see /fields_center.
+  write(file, "/positions/center/position_mm", centerPosition_mm)
   write(file, "/sensor/correctionTranslation", [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0])
   write(file, "/currents/coil/channel_names", labeledCoilChannelName.(currentChannelNames))
   write(file, "/currents/coil/value", currentMatrix)
@@ -811,15 +849,18 @@ function saveFieldCameraData(file, protocol::PorridgeFieldMeasurementProtocol)
   end
 
   fields = Array{Float64}(undef, 3, nSensors, nFrames)
+  fieldsCenter = Array{Float64}(undef, 3, nFrames)
   R = [-1.0 0.0 0.0; 0.0 0.0 1.0; 0.0 -1.0 0.0]
   @info "Converting field frames for HDF5" frames=nFrames
   for frameIdx in 1:nFrames
     values = fieldValues[frameIdx]
     raw = tDesignFieldMatrix(values)
     fields[:, :, frameIdx] .= R * raw
+    fieldsCenter[:, frameIdx] .= R * centerSensorField(values)
   end
 
   write(file, "/fields", fields)
+  write(file, "/fields_center", fieldsCenter)
 end
 
 function closeStreamingCsv!(protocol::PorridgeFieldMeasurementProtocol)

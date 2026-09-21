@@ -20,6 +20,10 @@ const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 50 reps
 const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
 const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
 const PRIMARY_RANDOM_REPEATS_PER_PAIR = 50
+# Background frames inserted between the right-side and left-side block of every cycle,
+# purely to make the block boundaries visually/analytically easier to pick out in the
+# recorded stream. Set to 0 to disable.
+const PRIMARY_INTERBLOCK_BACKGROUND_MEASUREMENTS = 1_000
 # A single-coil check only brackets the run at start/end, so a coil that fails partway
 # through leaves everything after it untrustworthy with no way to tell where the failure
 # happened. Re-running the 18-frame check every ~50,000 frames (~17 min at 50 Hz) bounds
@@ -165,6 +169,7 @@ function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKG
                                       maxCurrent_A::Float64=PRIMARY_RANDOM_MAX_CURRENT_A,
                                       singleCoilMaxCurrent_A::Float64=PRIMARY_SINGLE_COIL_MAX_CURRENT_A,
                                       repeatsPerPair::Int=PRIMARY_RANDOM_REPEATS_PER_PAIR,
+                                      interBlockBackgroundMeasurements::Int=PRIMARY_INTERBLOCK_BACKGROUND_MEASUREMENTS,
                                       periodicCheckInterval_frames::Int=PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES)
     total = all_coils_zero_currents(0)
 
@@ -174,18 +179,23 @@ function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKG
     # Quick per-coil amplifier checks.
     append_currents_segment!(total, single_coil_check_segment(; maxCurrent_A=singleCoilMaxCurrent_A))
 
-    # Right-side block, then left-side block: randomPairsPerSide base pairs, each held for
-    # repeatsPerPair consecutive measurements before moving to the next pair. With the default
-    # randomCycles=1 this runs exactly once per side (1000 pairs x 50 repeats = 50,000 frames/side).
+    # Right-side block, then left-side block, then a background: randomPairsPerSide base pairs,
+    # each held for repeatsPerPair consecutive measurements before moving to the next pair. With
+    # the default randomCycles=1 this runs exactly once per side (1000 pairs x 50 repeats =
+    # 50,000 frames/side). The trailing background just separates one right+left pair from the
+    # next in the stream; it is not a calibration bracket like the initial/middle/final backgrounds.
     for _ in 1:randomCycles
         append_currents_segment!(total, random_independent_right_coils(randomPairsPerSide; maxCurrent_A, repeatsPerPair))
         append_currents_segment!(total, random_independent_left_coils(randomPairsPerSide; maxCurrent_A, repeatsPerPair))
+        append_currents_segment!(total, all_coils_zero_currents(interBlockBackgroundMeasurements))
     end
 
     # Middle background before the combined 18-coil random block.
     append_currents_segment!(total, all_coils_zero_currents(backgroundMeasurements))
 
-    # All 18 coils randomly driven together.
+    # All 18 coils randomly driven together (the "double-sided"/simultaneous block). Deliberately
+    # last among the data-collection segments, immediately before the closing background+check
+    # bracket — it must stay last relative to the single-sided cycles above.
     append_currents_segment!(total, random_independent_coils(collect(1:18), randomPairsPerSide; maxCurrent_A, repeatsPerPair))
 
     # Final background.
@@ -199,6 +209,60 @@ function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKG
     insert_periodic_single_coil_checks!(total, periodicCheckInterval_frames; maxCurrent_A=singleCoilMaxCurrent_A)
 
     return total
+end
+
+# Per-frame label vector for build_primary_coil_currents, built with the exact same
+# segment order and periodic-splice logic (including insert_periodic_single_coil_checks!'s
+# checkpoint formula), so frame index i in the actual current/measurement data can be
+# looked up here to see what it is. Keep this in sync with build_primary_coil_currents;
+# if that function's segment order changes, mirror the change here too.
+function build_primary_frame_labels(; backgroundMeasurements::Int=PRIMARY_BACKGROUND_MEASUREMENTS,
+                                     randomPairsPerSide::Int=PRIMARY_RANDOM_PAIRS_PER_SIDE,
+                                     randomCycles::Int=PRIMARY_RANDOM_CYCLES,
+                                     repeatsPerPair::Int=PRIMARY_RANDOM_REPEATS_PER_PAIR,
+                                     interBlockBackgroundMeasurements::Int=PRIMARY_INTERBLOCK_BACKGROUND_MEASUREMENTS,
+                                     periodicCheckInterval_frames::Int=PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES)
+    labels = String[]
+    append!(labels, fill("bg_initial", backgroundMeasurements))
+    append!(labels, fill("coilcheck_initial", 18))
+
+    sideBlockFrames = randomPairsPerSide * repeatsPerPair
+    for c in 1:randomCycles
+        append!(labels, fill("cycle$(c)_right", sideBlockFrames))
+        append!(labels, fill("cycle$(c)_left", sideBlockFrames))
+        append!(labels, fill("cycle$(c)_interblock_bg", interBlockBackgroundMeasurements))
+    end
+
+    append!(labels, fill("bg_mid", backgroundMeasurements))
+    append!(labels, fill("all18", sideBlockFrames))
+    append!(labels, fill("bg_final", backgroundMeasurements))
+    append!(labels, fill("coilcheck_final", 18))
+
+    if periodicCheckInterval_frames > 0
+        totalFrames = length(labels)
+        checkpoints = periodicCheckInterval_frames:periodicCheckInterval_frames:(totalFrames - periodicCheckInterval_frames ÷ 4)
+        for checkpoint in Iterators.reverse(checkpoints)
+            splice!(labels, (checkpoint + 1):checkpoint, fill("periodic_check", 18))
+        end
+    end
+
+    return labels
+end
+
+# Collapse a per-frame label vector (e.g. from build_primary_frame_labels()) into
+# (label, firstIndex, lastIndex) ranges, for a compact human-readable overview.
+function summarize_frame_labels(labels::Vector{String})
+    ranges = Tuple{String, Int, Int}[]
+    isempty(labels) && return ranges
+    start = 1
+    for i in 2:length(labels)
+        if labels[i] != labels[i - 1]
+            push!(ranges, (labels[i - 1], start, i - 1))
+            start = i
+        end
+    end
+    push!(ranges, (labels[end], start, length(labels)))
+    return ranges
 end
 
 function nested_grid_random_outer_pairs(numPairs::Int;
@@ -482,10 +546,12 @@ if true
     # Primary staged protocol:
     #   1) 1000 background frames
     #   2) 18 one-frame single-coil max-current checks
-    #   3) 1000 right-side pairs x 50 repeats (50,000 frames), then
-    #      1000 left-side pairs x 50 repeats (50,000 frames)
+    #   3) 10x { 1000 right-side pairs x 50 repeats (50,000 frames),
+    #            1000 left-side pairs x 50 repeats (50,000 frames),
+    #            1000 background frames (separator only, not a calibration bracket) }
     #   4) 1000 background frames
-    #   5) 1000 all-18-coils pairs x 50 repeats (50,000 frames)
+    #   5) 1000 all-18-coils pairs x 50 repeats (50,000 frames) -- the "double-sided"/
+    #      simultaneous block; deliberately LAST among the data-collection segments
     #   6) 1000 background frames
     #   7) 18 final one-frame single-coil max-current checks
     # Additionally, an 18-frame single-coil check is spliced in every

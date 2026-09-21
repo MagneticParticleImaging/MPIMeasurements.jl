@@ -51,6 +51,13 @@ const FC_TDESIGN_REORDER = [
   21, 30, 35,  3, 15, 31, 20, 18, 28,  2,  5, 26
 ]
 
+# FC_SENSORS/FC_POS_X/Y/Z put the center sensor (Arduino pin 34) last, at raw index 37, with
+# position (0,0,0). It is deliberately excluded from FC_TDESIGN_REORDER (a t-design requires
+# points strictly on the sphere), so it never appears in the 36-sensor tDesign array used for
+# the spherical-harmonics fit -- but its field data is still captured every frame and can be
+# extracted from the raw payload via this index (see centerSensorField in PorridgeFieldMeasurementProtocol.jl).
+const FC_CENTER_SENSOR_INDEX = length(FC_SENSORS)
+
 const FC_BOTTOM = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 43, 44, 45, 46]
 const FC_BOTTOM_IDX = [findfirst(==(s), FC_SENSORS) for s in FC_BOTTOM]
 
