@@ -1,0 +1,334 @@
+export PeriodicMeasurementProtocol, PeriodicMeasurementProtocolParams
+"""
+Parameters for the `PeriodicMeasurementProtocol`
+
+$FIELDS
+"""
+Base.@kwdef mutable struct PeriodicMeasurementProtocolParams <: ProtocolParams
+  "Foreground frames to measure per measurement. Overwrites sequence frames"
+  fgFrames::Int64 = 1
+  "Background frames to measure. Overwrites sequence frames"
+  bgFrames::Int64 = 1
+  "Pause between measurements"
+  pause::typeof(1.0u"s") = 0.2u"s"
+  "Number of foreground measurements to accumulate before storing the MDF"
+  numMeasurements::Int64 = 1
+  "If set the tx amplitude and phase will be set with control steps"
+  controlTx::Bool = false
+  "If unset no background measurement will be taken"
+  measureBackground::Bool = true
+  "If the temperature should be saved or not"
+  saveTemperatureData::Bool = false
+  "Sequence to measure"
+  sequence::Union{Sequence, Nothing} = nothing
+end
+function PeriodicMeasurementProtocolParams(dict::Dict, scanner::MPIScanner) 
+  sequence = nothing
+  if haskey(dict, "sequence")
+    sequence = Sequence(scanner, dict["sequence"])
+    dict["sequence"] = sequence
+    delete!(dict, "sequence")
+  end
+  params = params_from_dict(PeriodicMeasurementProtocolParams, dict)
+  params.sequence = sequence
+  return params
+end
+PeriodicMeasurementProtocolParams(dict::Dict) = params_from_dict(PeriodicMeasurementProtocolParams, dict)
+
+Base.@kwdef mutable struct PeriodicMeasurementProtocol <: Protocol
+  @add_protocol_fields PeriodicMeasurementProtocolParams
+
+  seqMeasState::Union{SequenceMeasState, Nothing} = nothing
+  protocolMeasState::Union{ProtocolMeasState, Nothing} = nothing
+  mdfTemplate::Union{Nothing, MDFv2InMemory} = nothing
+
+  bgMeas::Array{Float32, 4} = zeros(Float32, 0, 0, 0, 0)
+  stopped::Bool = false
+  cancelled::Bool = false
+  finishAcknowledged::Bool = false
+  measuring::Bool = false
+  txCont::Union{TxDAQController, Nothing} = nothing
+  unit::String = ""
+  counter::Int64 = 0
+end
+
+function requiredDevices(protocol::PeriodicMeasurementProtocol)
+  result = [AbstractDAQ]
+  if protocol.params.controlTx
+    push!(result, TxDAQController)
+  end
+  if protocol.params.saveTemperatureData
+    push!(result, TemperatureSensor)
+  end
+  return result
+end
+
+function _init(protocol::PeriodicMeasurementProtocol)
+  if isnothing(protocol.params.sequence)
+    throw(IllegalStateException("Protocol requires a sequence"))
+  end
+  if protocol.params.numMeasurements < 1
+    throw(IllegalStateException("numMeasurements must be at least 1"))
+  end
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  if protocol.params.controlTx
+    protocol.txCont = getDevice(protocol.scanner, TxDAQController)
+  else
+    protocol.txCont = nothing
+  end
+  protocol.counter = 0
+  protocol.protocolMeasState = ProtocolMeasState()
+  protocol.mdfTemplate = prepareAsMDF(zeros(Float32, 0, 0, 0, 0), protocol.scanner, protocol.params.sequence)
+  return nothing
+end
+
+function timeEstimate(protocol::PeriodicMeasurementProtocol)
+  est = "Unknown"
+  if !isnothing(protocol.params.sequence)
+    params = protocol.params
+    seq = params.sequence
+    totalFrames = (params.fgFrames + params.bgFrames*params.measureBackground) * params.numMeasurements * acqNumFrameAverages(seq)
+    samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
+    totalTime = (samplesPerFrame * totalFrames) / (125e6/(txBaseFrequency(seq)/rxSamplingRate(seq)))
+    # Add the pause between measurements
+    totalTime += ustrip(u"s", params.pause) * max(params.numMeasurements - 1, 0)
+    time = totalTime * 1u"s"
+    est = string(time)
+  end
+  return est
+end
+
+function enterExecute(protocol::PeriodicMeasurementProtocol)
+  protocol.stopped = false
+  protocol.cancelled = false
+  protocol.finishAcknowledged = false
+  protocol.unit = ""
+  protocol.counter = 0
+  protocol.protocolMeasState = ProtocolMeasState()
+end
+
+
+function _execute(protocol::PeriodicMeasurementProtocol)
+  @info "Periodic measurement protocol started"
+
+  # Background measurement
+  if protocol.params.measureBackground
+    if askChoices(protocol, "Press continue when background measurement can be taken", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+    acqNumFrames(protocol.params.sequence, protocol.params.bgFrames)
+
+    @debug "Taking background measurement."
+    protocol.unit = "BG Measurement"
+    measurement(protocol)
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = true)
+    protocol.bgMeas = read(protocol.protocolMeasState, MeasurementBuffer)
+
+    if askChoices(protocol, "Press continue when foreground measurements can be started", ["Cancel", "Continue"]) == 1
+      throw(CancelException())
+    end
+  end
+
+  # Foreground measurements
+  acqNumFrames(protocol.params.sequence, protocol.params.fgFrames)
+  protocol.unit = "Measurements"
+
+  numMeasurements = protocol.params.numMeasurements
+  for i in 1:numMeasurements
+    @info "Taking measurement $i of $numMeasurements"
+    protocol.counter = i
+    protocol.measuring = true
+    measurement(protocol)
+    protocol.measuring = false
+    deviceBuffers = protocol.seqMeasState.deviceBuffers
+    push!(protocol.protocolMeasState, vcat(sinks(protocol.seqMeasState.sequenceBuffer), isnothing(deviceBuffers) ? SinkBuffer[] : deviceBuffers), isBGMeas = false)
+
+    # Pause between measurements, unless it is the last one
+    if i < numMeasurements
+      @debug "Pausing between measurements"
+      protocol.unit = "Pause"
+      measPauseOver = false
+      waitTimer = Timer(ustrip(u"s", protocol.params.pause))
+      @async begin
+        wait(waitTimer)
+        measPauseOver = true
+      end
+
+      notifiedStop = false
+      while !measPauseOver || protocol.stopped
+        handleEvents(protocol)
+        if !notifiedStop && protocol.stopped
+          put!(protocol.biChannel, OperationSuccessfulEvent(PauseEvent()))
+          notifiedStop = true
+        end
+        if notifiedStop && !protocol.stopped
+          put!(protocol.biChannel, OperationSuccessfulEvent(ResumeEvent()))
+          notifiedStop = false
+        end
+        protocol.cancelled && throw(CancelException())
+        sleep(0.05)
+      end
+      close(waitTimer)
+      protocol.unit = "Measurements"
+    end
+  end
+
+  @info "All measurements taken, notifying finish."
+  put!(protocol.biChannel, FinishedNotificationEvent())
+
+  while !(protocol.finishAcknowledged)
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+  end
+
+  @info "Protocol finished."
+  close(protocol.biChannel)
+end
+
+function measurement(protocol::PeriodicMeasurementProtocol)
+  # Start async measurement
+  protocol.measuring = true
+  measState = asyncMeasurement(protocol)
+  producer = measState.producer
+  consumer = measState.consumer
+  
+  # Handle events
+  while !istaskdone(consumer)
+    handleEvents(protocol)
+    protocol.cancelled && throw(CancelException())
+    sleep(0.05)
+  end
+  protocol.measuring = false
+
+  # Check tasks
+  ex = nothing
+  if Base.istaskfailed(producer)
+    currExceptions = current_exceptions(producer)
+    @error "Producer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    ex = currExceptions[1][:exception]
+  end
+  if Base.istaskfailed(consumer)
+    currExceptions = current_exceptions(consumer)
+    @error "Consumer failed" exception = (currExceptions[end][:exception], stacktrace(currExceptions[end][:backtrace]))
+    for i in 1:length(currExceptions) - 1
+      stack = currExceptions[i]
+      @error stack[:exception] trace = stacktrace(stack[:backtrace])
+    end
+    if isnothing(ex)
+      ex = currExceptions[1][:exception]
+    end
+  end
+  if !isnothing(ex)
+    throw(ErrorException("Measurement failed, see logged exceptions and stacktraces"))
+  end
+end
+
+function asyncMeasurement(protocol::PeriodicMeasurementProtocol)
+  scanner_ = protocol.scanner
+  sequence = protocol.params.sequence
+  daq = getDAQ(scanner_)
+  deviceBuffer = DeviceBuffer[]
+  if protocol.params.controlTx
+    sequence = controlTx(protocol.txCont, sequence)
+    push!(deviceBuffer, TxDAQControllerBuffer(protocol.txCont, sequence))
+  end
+  setup(daq, sequence)
+  protocol.seqMeasState = SequenceMeasState(daq, sequence)
+  if protocol.params.saveTemperatureData
+    push!(deviceBuffer, TemperatureBuffer(getTemperatureSensor(scanner_), acqNumFrames(protocol.params.sequence)))
+  end
+  protocol.seqMeasState.deviceBuffers = deviceBuffer
+  protocol.seqMeasState.producer = @tspawnat scanner_.generalParams.producerThreadID asyncProducer(protocol.seqMeasState.channel, protocol, sequence)
+  bind(protocol.seqMeasState.channel, protocol.seqMeasState.producer)
+  protocol.seqMeasState.consumer = @tspawnat scanner_.generalParams.consumerThreadID asyncConsumer(protocol.seqMeasState)
+  return protocol.seqMeasState
+end
+
+function pause(protocol::PeriodicMeasurementProtocol)
+  protocol.stopped = true
+end
+
+function resume(protocol::PeriodicMeasurementProtocol)
+  protocol.stopped = false
+end
+
+function cancel(protocol::PeriodicMeasurementProtocol)
+  protocol.cancelled = true
+  protocol.stopped = true
+  # TODO stopTx and reconnect for pipeline and so on
+end
+
+function handleEvent(protocol::PeriodicMeasurementProtocol, event::DataQueryEvent)
+  data = nothing
+  if event.message == "FG"
+    if !isnothing(protocol.seqMeasState)
+      data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
+    else
+      data = nothing
+    end
+  elseif event.message == "BG"
+    if length(protocol.bgMeas) > 0
+      data = copy(protocol.bgMeas)
+    else
+      data = nothing
+    end
+  elseif event.message == "BUFFER"
+    if !isnothing(protocol.seqMeasState)
+      data = copy(read(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)))
+    else
+      data = nothing
+    end
+  else
+    put!(protocol.biChannel, UnknownDataQueryEvent(event))
+    return
+  end
+
+  result = nothing
+  if !isnothing(data)
+    mdf = deepcopy(protocol.mdfTemplate)
+    fillMDFMeasurement(mdf, data, zeros(Bool, size(data, 4)))
+    acqNumPeriodsPerFrame(mdf, size(data,3))
+    acqNumFrames(mdf, size(data,4))
+    result = mdf
+  end
+  put!(protocol.biChannel, DataAnswerEvent(result, event))
+end
+
+
+function handleEvent(protocol::PeriodicMeasurementProtocol, event::ProgressQueryEvent)
+  reply = nothing
+  if protocol.measuring && !isnothing(protocol.seqMeasState)
+    framesTotal = protocol.seqMeasState.numFrames
+    framesDone = min(index(sink(protocol.seqMeasState.sequenceBuffer, MeasurementBuffer)) - 1, framesTotal)
+    reply = ProgressEvent(framesDone, framesTotal, protocol.unit, event)
+  else
+    reply = ProgressEvent(protocol.counter, protocol.params.numMeasurements, protocol.unit, event)
+  end
+  put!(protocol.biChannel, reply)
+end
+
+handleEvent(protocol::PeriodicMeasurementProtocol, event::FinishedAckEvent) = protocol.finishAcknowledged = true
+
+function handleEvent(protocol::PeriodicMeasurementProtocol, event::DatasetStoreStorageRequestEvent)
+  store = event.datastore
+  scanner = protocol.scanner
+  mdf = event.mdf
+  data = read(protocol.protocolMeasState, MeasurementBuffer)
+  isBGFrame = measIsBGFrame(protocol.protocolMeasState)
+  drivefield = read(protocol.protocolMeasState, DriveFieldBuffer)
+  appliedField = read(protocol.protocolMeasState, TxDAQControllerBuffer)
+  temperature = read(protocol.protocolMeasState, TemperatureBuffer)
+  filename = saveasMDF(store, scanner, protocol.params.sequence, data, isBGFrame, mdf, drivefield = drivefield, temperatures = temperature, applied = appliedField)
+  @info "The measurement was saved at `$filename`."
+  put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+protocolInteractivity(protocol::PeriodicMeasurementProtocol) = Interactive()
+protocolMDFStudyUse(protocol::PeriodicMeasurementProtocol) = UsingMDFStudy()
