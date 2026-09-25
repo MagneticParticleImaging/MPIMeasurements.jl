@@ -154,8 +154,12 @@ function executionTask(protocol::Protocol)
       put!(protocol.biChannel, IllegaleStateEvent(ex.message))
       close(protocol.biChannel)
     else
-      # Let task fail
-      @debug "An exception has been thrown during execution. $ex"
+      # Let task fail. This exception kills the background execution task silently
+      # (nothing else awaits/fetches it) -- data logging and the tail-fill/save steps
+      # downstream in _execute all stop right here, while any hardware sequence already
+      # handed to the DAQ keeps running independently on its own clock. @error (not @debug)
+      # so a run dying mid-measurement is never invisible.
+      @error "Unhandled exception during protocol execution; measurement stopped, downstream save was never reached" exception=(ex, catch_backtrace())
       put!(protocol.biChannel, ExceptionEvent(ex))
       close(protocol.biChannel)
       rethrow()

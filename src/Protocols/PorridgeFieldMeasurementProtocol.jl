@@ -221,10 +221,17 @@ Base.@kwdef mutable struct PorridgeFieldMeasurementProtocol <: Protocol
   streamCsvHandle::Union{IOStream,Nothing} = nothing
   requestedOutputPath::Union{String,Nothing} = nothing
 
-  # Coil currents are constant for many consecutive frames (held per patch for
-  # repeatsPerPair repetitions); caching the serialized CSV field by patchIdx
-  # avoids rebuilding an identical Dict + String on every single frame.
-  coilCurrentsCache::Dict{Int,String} = Dict{Int,String}()
+  # Coil currents are constant for many consecutive frames (held per pair for
+  # repeatsPerPair repetitions), so the serialized CSV field only needs rebuilding when the
+  # actual current values change -- NOT on every distinct patchIdx. patchIdx is the raw
+  # triggered-step index and is unique on essentially every frame (one rising edge per
+  # measurement), so a cache keyed by patchIdx (as this used to be: Dict{Int,String}) never
+  # gets a hit and instead grows by one entry per frame for the entire run -- on a
+  # multi-hour, ~1M-frame run that's an unbounded, useless multi-hundred-MB Dict, and the
+  # resulting GC pressure is why such a run gets progressively slower over time. A last-value
+  # memo (bounded, O(1)) captures the real repetition instead.
+  lastCoilCurrentsValues::Union{Dict{String,Float64},Nothing} = nothing
+  lastSerializedCoilCurrents::String = ""
 
   # Anchors for the periodic GC/heap diagnostic in appendTriggeredResults!.
   runStartTimeNs::UInt64 = UInt64(0)
@@ -265,7 +272,8 @@ function enterExecute(protocol::PorridgeFieldMeasurementProtocol)
   empty!(protocol.overheatFrames)
   empty!(protocol.overheatCoilIDs)
   empty!(protocol.overheatTemps)
-  empty!(protocol.coilCurrentsCache)
+  protocol.lastCoilCurrentsValues = nothing
+  protocol.lastSerializedCoilCurrents = ""
   protocol.runStartTimeNs = time_ns()
   protocol.runStartGcTimeNs = Base.gc_time_ns()
   protocol.requestedOutputPath = nothing
@@ -479,16 +487,21 @@ function getCoilCurrentsForPatch(sequence::Sequence, patchIdx::Int)
   return currents
 end
 
-# Coil currents (and therefore their serialized CSV form) only change when
-# patchIdx changes, which happens once every repeatsPerPair frames, not every
-# frame. Recomputing the Dict + sorted/joined String on every single row was
-# pure allocation churn sustained for the whole (multi-hour, multi-hundred-
-# thousand-frame) run.
+# patchIdx is the raw triggered-step index (one rising edge per acquired frame), so it is
+# essentially unique every single frame -- it is NOT the same for repeatsPerPair repeats of a
+# held current (confirmed against real stream CSVs: patchIndex increments every frame with no
+# repeats). The actual current *values* are what repeat for repeatsPerPair consecutive frames,
+# so compare those instead of patchIdx, and only re-serialize when they actually change.
 function cachedSerializedCoilCurrents!(protocol::PorridgeFieldMeasurementProtocol,
                                         sequence::Sequence, patchIdx::Int)
-  return get!(protocol.coilCurrentsCache, patchIdx) do
-    serializeCoilCurrents(getCoilCurrentsForPatch(sequence, patchIdx))
+  currents = getCoilCurrentsForPatch(sequence, patchIdx)
+  if protocol.lastCoilCurrentsValues == currents
+    return protocol.lastSerializedCoilCurrents
   end
+  serialized = serializeCoilCurrents(currents)
+  protocol.lastCoilCurrentsValues = currents
+  protocol.lastSerializedCoilCurrents = serialized
+  return serialized
 end
 
 function _temperatureToCelsius(value)
