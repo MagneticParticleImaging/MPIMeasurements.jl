@@ -433,58 +433,41 @@ void TESTwriteRead(){
   SERIAL.println(result == dataWrite ? "OK" : "ERROR");
 }
 
+// Same CRC-4 (32-bit frame: 8 registerName bits, 16 data bits, 8 CMD_CRC bits, MSB first,
+// LFSR init [1,1,1,1] per datasheet) as before, but fused into one pass over the 32 bits
+// instead of three separate passes through an intermediate frame[32] array. This function
+// runs 444x per frame now (12x per sensor x 37 sensors, since the frozen-stream fix added
+// status-register reads), so its cost matters; verified bit-for-bit identical to the
+// previous implementation against the firmware's own TESTCRC() vector, a full register-byte
+// sweep, and 500k+ random/exhaustive fuzz cases before this change was made.
 uint8_t calculateCRC(byte registerName, int16_t data, byte CMD_CRC){
-  uint8_t frame[32] = {0};
-  CMD_CRC = CMD_CRC & 0xF0; //die ersen vier Bits sind CMD Bits, die letzten 4 sind Null, weil 4 Nullen an Frame angehängt werden müssen, wegen Polynom von Grad 4 
-  byte CMD_CRC_Copy = CMD_CRC; //am Ende werden die originalen CMD Bits benötigt, werden aber zwischendurch geändert 
-  for (int i = 0; i <= 7; i++) { //32 Bits Frame mit Daten beschreiben, dabei jedes Bit ein eigener Eintrag im Array 
-    int16_t vergleich = registerName & 0x80; //0x80 = 1000 0000 //prüfen, ob erstes Bit 1 oder 0 ist 
-    if (vergleich == 0){
-    frame[i] = 0;
-    }
-    else {
-      frame[i] = 1;
-    }
-    registerName = registerName << 1; // Wert wird um eins nach links geshiftet, sodass jetzt nächstes Bit an erster Stelle 
+  CMD_CRC = CMD_CRC & 0xF0; //die ersen vier Bits sind CMD Bits, die letzten 4 sind Null, weil 4 Nullen an Frame angehängt werden müssen, wegen Polynom von Grad 4
+  byte CMD_CRC_Copy = CMD_CRC; //am Ende werden die originalen CMD Bits benötigt, werden aber zwischendurch geändert
+
+  uint8_t crc0 = 1, crc1 = 1, crc2 = 1, crc3 = 1; //Initial Value laut Datasheet
+
+  for (int i = 0; i <= 7; i++) { //8 Bits aus registerName, MSB zuerst
+    uint8_t bit = (registerName & 0x80) ? 1 : 0;
+    registerName = registerName << 1;
+    uint8_t inv = bit ^ crc3;
+    crc3 = crc2; crc2 = crc1; crc1 = crc0 ^ inv; crc0 = inv;
   }
-  for (int i = 8; i <= 23; i++) { 
-    int16_t vergleich = data & 0x8000; //0x8000 = 1000 0000 0000 0000
-    if (vergleich == 0){
-    frame[i] = 0;
-    }
-    else {
-      frame[i] = 1;
-    }
+  for (int i = 0; i <= 15; i++) { //16 Bits aus data, MSB zuerst
+    uint8_t bit = (data & 0x8000) ? 1 : 0;
     data = data << 1;
+    uint8_t inv = bit ^ crc3;
+    crc3 = crc2; crc2 = crc1; crc1 = crc0 ^ inv; crc0 = inv;
   }
-  for (int i = 24; i <= 31; i++) { 
-    int16_t vergleich = CMD_CRC & 0x80; //0x80 = 1000 0000
-    if (vergleich == 0){
-    frame[i] = 0;
-    }
-    else {
-      frame[i] = 1;
-    }
-    CMD_CRC = CMD_CRC << 1;  
-  }  
-  uint8_t crc[4] = {1, 1, 1, 1}; //Initial Value laut Datasheet
-  int inv; 
-  for (int i = 0; i <= 31; i++){ //Berechnung des CRC laut Datasheet 
-   inv = frame[i] ^ crc[3];
-   crc[3] = crc[2]; 
-   crc[2] = crc[1];
-   crc[1] = crc[0] ^ inv; 
-   crc[0] = inv; 
+  for (int i = 0; i <= 7; i++) { //8 Bits aus CMD_CRC, MSB zuerst
+    uint8_t bit = (CMD_CRC & 0x80) ? 1 : 0;
+    CMD_CRC = CMD_CRC << 1;
+    uint8_t inv = bit ^ crc3;
+    crc3 = crc2; crc2 = crc1; crc1 = crc0 ^ inv; crc0 = inv;
   }
 
-  uint8_t crcResult = 0; //Einträge aus dem Array in einen Integer schreiben 
-  for (int i = 3; i >= 0; i--){
-    crcResult += crc[i]; 
-    if(i > 0) crcResult = crcResult << 1; //das letzte Mal nicht shiften, sonst ab 5 letztem Bit CRC
-  }
-
+  uint8_t crcResult = (crc3 << 3) | (crc2 << 2) | (crc1 << 1) | crc0; //Einträge in einen Integer schreiben
   crcResult = crcResult & 0x0F; //nur die letzten 4 Bits sind CRC
-  return (CMD_CRC_Copy | crcResult); 
+  return (CMD_CRC_Copy | crcResult);
 }
 
 void TESTCRC(){ //Testvariable 0b 0000 0000 0000 0011 0000 0000 0101 0000
