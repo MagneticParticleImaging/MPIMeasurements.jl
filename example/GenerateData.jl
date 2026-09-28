@@ -15,7 +15,7 @@ const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
 const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
 const PRIMARY_BACKGROUND_MEASUREMENTS = 1_000
-const PRIMARY_RANDOM_PAIRS_PER_SIDE = 1_000
+const PRIMARY_RANDOM_PAIRS_PER_SIDE = 1000
 const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 50 reps/pair" R+L block is repeated. 1 = single pass (right block once, left block once), as intended.
 const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
 const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
