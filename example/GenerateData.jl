@@ -16,18 +16,23 @@ const LEFT_COIL_ORDER = [9, 6, 8, 7, 15, 5, 4, 2, 1]
 
 const PRIMARY_BACKGROUND_MEASUREMENTS = 1_000
 const PRIMARY_RANDOM_PAIRS_PER_SIDE = 1000
-const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 50 reps/pair" R+L block is repeated. 1 = single pass (right block once, left block once), as intended.
+const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side, 25 reps/pair" R+L block is repeated. 1 = single pass (right block once, left block once), as intended.
 const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
 const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
-const PRIMARY_RANDOM_REPEATS_PER_PAIR = 50
+# The real achieved trigger rate on this hardware is ~25 Hz, not the originally-assumed
+# 50 Hz (confirmed from real streamed data; the Arduino-side per-frame processing, not the
+# RedPitaya's trigger generation, is the limiting factor). Halved from 50 to keep the total
+# run at the originally-planned ~6h instead of ~12h -- fewer repeats per held current, same
+# total frame count and wall-clock target as before.
+const PRIMARY_RANDOM_REPEATS_PER_PAIR = 25
 # Background frames inserted between the right-side and left-side block of every cycle,
 # purely to make the block boundaries visually/analytically easier to pick out in the
 # recorded stream. Set to 0 to disable.
 const PRIMARY_INTERBLOCK_BACKGROUND_MEASUREMENTS = 1_000
 # A single-coil check only brackets the run at start/end, so a coil that fails partway
 # through leaves everything after it untrustworthy with no way to tell where the failure
-# happened. Re-running the 18-frame check every ~50,000 frames (~17 min at 50 Hz) bounds
-# that uncertainty window instead of covering the whole run. Set to 0 to disable.
+# happened. Re-running the 18-frame check every ~50,000 frames (~33 min at the real ~25 Hz)
+# bounds that uncertainty window instead of covering the whole run. Set to 0 to disable.
 const PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES = 50_000
 # The coil driver can source at most 150 A total, summed across all simultaneously active
 # coils, in any single frame. This setup's normalized current scale maps -1..1 to -30..30 A,
@@ -222,8 +227,8 @@ function build_primary_coil_currents(; backgroundMeasurements::Int=PRIMARY_BACKG
 
     # Right-side block, then left-side block, then a background: randomPairsPerSide base pairs,
     # each held for repeatsPerPair consecutive measurements before moving to the next pair. With
-    # the default randomCycles=1 this runs exactly once per side (1000 pairs x 50 repeats =
-    # 50,000 frames/side). The trailing background just separates one right+left pair from the
+    # the default randomCycles=1 this runs exactly once per side (1000 pairs x 25 repeats =
+    # 25,000 frames/side). The trailing background just separates one right+left pair from the
     # next in the stream; it is not a calibration bracket like the initial/middle/final backgrounds.
     for _ in 1:randomCycles
         append_currents_segment!(total, random_independent_right_coils(randomPairsPerSide; maxCurrent_A, repeatsPerPair))
@@ -587,11 +592,11 @@ if true
     # Primary staged protocol:
     #   1) 1000 background frames
     #   2) 18 one-frame single-coil max-current checks
-    #   3) 10x { 1000 right-side pairs x 50 repeats (50,000 frames),
-    #            1000 left-side pairs x 50 repeats (50,000 frames),
+    #   3) 10x { 1000 right-side pairs x 25 repeats (25,000 frames),
+    #            1000 left-side pairs x 25 repeats (25,000 frames),
     #            1000 background frames (separator only, not a calibration bracket) }
     #   4) 1000 background frames
-    #   5) 1000 all-18-coils pairs x 50 repeats (50,000 frames) -- the "double-sided"/
+    #   5) 1000 all-18-coils pairs x 25 repeats (25,000 frames) -- the "double-sided"/
     #      simultaneous block; deliberately LAST among the data-collection segments
     #   6) 1000 background frames
     #   7) 18 final one-frame single-coil max-current checks
@@ -602,7 +607,7 @@ if true
     protocol.params.sequence = build_coil_sequence_from_currents(
         scanner,
         primaryCurrents;
-        measurementRate_Hz=50.0,
+        measurementRate_Hz=25.0,
     )
 elseif false
     # FFP circle in the yz plane (r = 0.02 m), currents from CIRCLE6_CSV_FILE.

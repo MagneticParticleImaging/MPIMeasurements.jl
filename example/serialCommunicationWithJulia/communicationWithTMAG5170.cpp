@@ -1671,8 +1671,8 @@ String getFieldValueXYZ(char *data){
   }
 }
 
-// std::array<int16_t, 3> getFieldValueXYZFast(char *data){ 
-uint64_t getFieldValueXYZFast(char *data){ 
+// std::array<int16_t, 3> getFieldValueXYZFast(char *data){
+uint64_t getFieldValueXYZFast(char *data){
   // unsigned long start; 
   // unsigned long zeit;  
 
@@ -2441,7 +2441,7 @@ void sendAllSensorsArduinoFaster(char *data){
   static uint8_t readingCounter = 0;
   uint64_t ausgabe[37];
 
-  for(int i = 0; i < 37; i++){ 
+  for(int i = 0; i < 37; i++){
     chipSelect = sensors[i];
     // SERIAL.println(i);
     ausgabe[i] = getFieldValueXYZFast("*GETFIELDVALUEXYZ?#");

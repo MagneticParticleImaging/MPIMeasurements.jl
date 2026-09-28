@@ -627,8 +627,17 @@ function performFieldMeasurement(protocol::PorridgeFieldMeasurementProtocol)
   outcome = :complete
 
   while true
+    # On a fresh start, run the whole sequence. On resume (after an overheat cooldown), start
+    # one raw step *before* the next frame's HIGH trigger step -- i.e. on the guaranteed LOW
+    # step belonging to the frame already captured just before the pause. The trigger pin may
+    # have been left latched HIGH through the whole cooldown (overheat can strike mid-pulse,
+    # at any point in the HIGH half-cycle, and nothing during the pause drives it low again);
+    # without a guaranteed LOW step first, the Arduino's rising-edge debounce never sees a
+    # falling edge to reset on, and silently misses the first resumed trigger. Replaying the
+    # already-captured frame's LOW step is a no-op for data (no rising edge, no frame sent)
+    # but guarantees the debounce flag is clean before the real next-frame trigger arrives.
     runSequence = protocol.currentFrameNum == 0 ? sequence :
-                  sliceSequenceFromStep(sequence, 2 * protocol.currentFrameNum + 1)
+                  sliceSequenceFromStep(sequence, 2 * protocol.currentFrameNum)
     setup(daq, runSequence)
     startTx(daq)
     finish = getTiming(daq).finish
