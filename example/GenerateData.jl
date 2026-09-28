@@ -29,6 +29,10 @@ const PRIMARY_INTERBLOCK_BACKGROUND_MEASUREMENTS = 1_000
 # happened. Re-running the 18-frame check every ~50,000 frames (~17 min at 50 Hz) bounds
 # that uncertainty window instead of covering the whole run. Set to 0 to disable.
 const PRIMARY_PERIODIC_CHECK_INTERVAL_FRAMES = 50_000
+# The coil driver can source at most 150 A total, summed across all simultaneously active
+# coils, in any single frame. This setup's normalized current scale maps -1..1 to -30..30 A,
+# so the limit in these units is 150 / 30 = 5.0.
+const MAX_TOTAL_COIL_CURRENT_UNITS = 150.0 / 30.0
 
 # --- FFP circle trajectory (from magneticFieldEstimation work_circle6.jl) ----
 # 360 optimized current sets (one per degree) that move the FFP on a circle in
@@ -113,10 +117,47 @@ end
 
 function random_independent_coils(coilIDs::AbstractVector{Int}, numPairs::Int; maxCurrent_A::Float64=0.95, repeatsPerPair::Int=1)
     repeatsPerPair >= 1 || throw(ArgumentError("repeatsPerPair must be >= 1"))
+    n = length(coilIDs)
+    baseValues = Dict(coilID => Vector{Float64}(undef, numPairs) for coilID in coilIDs)
+
+    # This is training data for a neural network, so how a pair is drawn matters, not just
+    # whether it's within the coil driver's total-current limit. Scaling a violating draw down
+    # to the limit would push it onto the constraint boundary exactly -- for the 18-coil block,
+    # where a random draw exceeds the limit ~99.9% of the time, that means nearly every sample
+    # would land pinned at exactly 150 A total, wiping out the natural spread across the whole
+    # feasible range and forcing an artificial exact linear correlation between coils that isn't
+    # part of the intended i.i.d. design. Rejection sampling instead: redraw the whole i.i.d. set
+    # until one already satisfies the limit. Every accepted draw is then distributed exactly as
+    # originally intended, just conditioned on feasibility -- no boundary pileup, no added
+    # correlation. Cheap in practice (build-time only, not per measurement frame): even at the
+    # 18-coil block's ~0.1% acceptance rate, 1000 pairs takes a fraction of a second.
+    draw = Vector{Float64}(undef, n)
+    # Worst case (18 coils, maxCurrent_A=0.95) accepts a draw with probability ~0.0933%
+    # (exact, via the Irwin-Hall distribution of sum|X_i|) -- so a single pair needing more
+    # than 100,000 attempts has probability ~2.8e-41, i.e. never happens in practice. This
+    # cap exists only to fail loudly, fast, if a future config change (e.g. a much lower
+    # limit or more active coils) ever makes it actually infeasible.
+    maxAttemptsPerPair = 100_000
+    for pairIdx in 1:numPairs
+        total = Inf
+        attempts = 0
+        while total > MAX_TOTAL_COIL_CURRENT_UNITS
+            attempts += 1
+            attempts > maxAttemptsPerPair &&
+                throw(ErrorException("Could not draw a coil-current combination under the $(MAX_TOTAL_COIL_CURRENT_UNITS)-unit total-current limit within $maxAttemptsPerPair attempts; maxCurrent_A=$maxCurrent_A with $n active coils may make the limit infeasible or astronomically rare"))
+            for i in 1:n
+                draw[i] = (2 * rand() - 1) * maxCurrent_A
+            end
+            total = sum(abs, draw)
+        end
+        for (i, coilID) in enumerate(coilIDs)
+            baseValues[coilID][pairIdx] = draw[i]
+        end
+    end
+
     coilCurrents = Dict{Int, Vector{Float64}}()
     for coilID in coilIDs
-        baseValues = (2 .* rand(numPairs) .- 1) .* maxCurrent_A
-        coilCurrents[coilID] = repeat(baseValues, inner=repeatsPerPair)
+        coilCurrents[coilID] = repeat(baseValues[coilID], inner=repeatsPerPair)
     end
     return coilCurrents
 end
