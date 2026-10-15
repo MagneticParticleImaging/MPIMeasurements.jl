@@ -13,3 +13,4 @@ Manifest.toml
 
 venv/
 run.bat
+DataStore/
