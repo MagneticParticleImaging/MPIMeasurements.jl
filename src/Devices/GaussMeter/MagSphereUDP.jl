@@ -11,6 +11,13 @@ How the parts fit together
                getXYZValues      next fresh frame (acquireFrame), with or without a running stream
   Shutdown     disable / close
 
+Trigger modes (Sect. 1.3 and Table 2 of the manual)
+  internal   free running on the sphere's clock. `start` / `stop` switch the
+             stream on and off, so enable, disable and direct reads send them.
+  external   one frame per edge at the BNC input (`oneshot_on` + `trigger`).
+             The trigger signal alone decides when frames come; `start` and
+             `stop` are never sent in this mode.
+
 Threads and locks
   - Only one piece of code reads the data port at a time: the reader task while
     the stream runs, otherwise _readDirect while holding `cam.lock`.
@@ -20,7 +27,9 @@ Threads and locks
 
 Wire format, confirmed with magsphere_probe.jl on the real device
   Frame, 2066 bytes, one UDP broadcast to 192.168.1.255:65534
-    bytes 1-8     timestamp, UInt64 big-endian, Unix time in µs (sphere clock)
+    bytes 1-8     timestamp, UInt64 big-endian, µs on the sphere clock (the manual
+                  says Unix time, the vendor's udp.jl CLOCK_MONOTONIC_RAW; only
+                  differences between frames are meaningful either way)
     bytes 9-12    hub temperature, Float32 little-endian, °C
     byte  13      0xAB
     bytes 14-2065 114 sensor packets of 18 bytes, in sensor-ID order (Table 5)
@@ -83,8 +92,8 @@ MagSphereUDPParams(dict::Dict) = params_from_dict(MagSphereUDPParams, dict)
 """
 One measurement of all 114 sensors.
 
-- `timestamp`: sphere clock, Unix time in µs. Only meaningful after the system
-  time was set in the Web GUI; otherwise the clock starts at 1970.
+- `timestamp`: sphere clock in µs. Use differences between frames; the
+  absolute value depends on the sphere's system time (set in the Web GUI).
 - `received`: PC arrival time, `time()` in s.
 - `hubTemperature`: °C, temperature in the centre of the sphere.
 - `data`: 3×114 field in Tesla, column s = sensor ID s, NaN for invalid sensors.
@@ -104,7 +113,7 @@ end
 Device object for the MagSphere. Created by the framework from the TOML entry;
 `_init` opens the command socket and configures the sphere.
 """
-Base.@kwdef mutable struct MagSphereUDP <: AbstractFieldCamera
+Base.@kwdef mutable struct MagSphereUDP <: GaussMeter
   @add_device_fields MagSphereUDPParams
 
   # Network
@@ -128,7 +137,8 @@ Base.@kwdef mutable struct MagSphereUDP <: AbstractFieldCamera
   latestLock::ReentrantLock = ReentrantLock()
   latest::Union{Nothing, MagSphereUDPResult} = nothing
   frameCount::Int = 0
-  droppedFrames::Int = 0
+  droppedFrames::Int = 0      # malformed datagrams
+  overflowFrames::Int = 0     # good frames pushed out of the full channel
   warnedSensors::BitVector = falses(MAGSPHERE_UDP_NUM_SENSORS)
 end
 
@@ -141,9 +151,11 @@ optionalDependencies(::MagSphereUDP) = []
     _init(cam::MagSphereUDP)
 
 Called once by the framework when the device is created. Opens the command
-socket, stops the sphere (it starts streaming on its own after boot), sends the
-acquisition settings from the params via `configure!` and, if `checkOnInit` is
-set, reads one frame to check that data arrive. Leaves the sphere idle.
+socket, sends the acquisition settings from the params via `configure!` and,
+if `checkOnInit` is set, reads one frame to check that data arrive. With the
+internal trigger it then sends `stop`, because the sphere starts streaming on
+its own after boot. With the external trigger nothing more is needed:
+`oneshot_on` already ends free running, and frames come only on BNC edges.
 """
 function _init(cam::MagSphereUDP)
   p = cam.params
@@ -152,9 +164,9 @@ function _init(cam::MagSphereUDP)
   bind(sock, Sockets.IPv4(0), 0) || error("MagSphereUDP: could not open the command socket.")
   cam.cmdSocket = sock
 
-  sendCommand(cam, "stop")
   configure!(cam; triggerMode = p.triggerMode, samplingRate = p.samplingRate,
                   measurementRange = p.measurementRange)
+  _freeRunning(cam) && sendCommand(cam, "stop")
   @info "MagSphereUDP configured." p.deviceIP cam.samplingRate cam.measurementRange cam.triggerMode
 
   # With an external trigger there are no frames until the BNC input fires
@@ -180,21 +192,24 @@ their current value; numbers without units are read as Hz and mT.
     configure!(cam; triggerMode = "internal", samplingRate = 1u"kHz")
 
 All values are checked before the first command is sent, so a typo never
-leaves the sphere half-configured. Works while the stream runs; frames already
-in the channel were taken with the old settings.
+leaves the sphere half-configured. The trigger-mode commands go last, so no
+rate or range command can follow (and possibly undo) the switch to the BNC
+trigger. Works while the stream runs; frames already in the channel were taken
+with the old settings. Changing the trigger mode while the stream runs leaves
+`start`/`stop` bookkeeping to you; call `enable` again instead.
 """
 function configure!(cam::MagSphereUDP; triggerMode = nothing, samplingRate = nothing,
                     measurementRange = nothing)
   cmds = String[]
+  rate = isnothing(samplingRate) ? nothing : _strip(u"Hz", samplingRate)
+  rangeMT = isnothing(measurementRange) ? nothing : _strip(u"mT", measurementRange)
+  isnothing(rate) || push!(cmds, _lookup(MAGSPHERE_UDP_RATE_COMMANDS, rate, "samplingRate", "Hz"))
+  isnothing(rangeMT) || push!(cmds, _lookup(MAGSPHERE_UDP_RANGE_COMMANDS, rangeMT, "measurementRange", "mT"))
   if !isnothing(triggerMode)
     haskey(MAGSPHERE_UDP_TRIGGER_COMMANDS, triggerMode) ||
       error("MagSphereUDP: triggerMode must be \"internal\" or \"external\", got \"$triggerMode\".")
     append!(cmds, MAGSPHERE_UDP_TRIGGER_COMMANDS[triggerMode])
   end
-  rate = isnothing(samplingRate) ? nothing : _strip(u"Hz", samplingRate)
-  rangeMT = isnothing(measurementRange) ? nothing : _strip(u"mT", measurementRange)
-  isnothing(rate) || push!(cmds, _lookup(MAGSPHERE_UDP_RATE_COMMANDS, rate, "samplingRate", "Hz"))
-  isnothing(rangeMT) || push!(cmds, _lookup(MAGSPHERE_UDP_RANGE_COMMANDS, rangeMT, "measurementRange", "mT"))
 
   lock(cam.lock) do        # don't interleave with the start/stop of a direct read
     foreach(cmd -> sendCommand(cam, cmd), cmds)
@@ -259,6 +274,14 @@ _strip(unit, x::Real) = Float64(x)
 _strip(unit, x::Unitful.Quantity) = Float64(ustrip(unit, x))
 
 """
+    _freeRunning(cam)
+
+True for the internal trigger, the only mode in which the sphere needs `start`
+and `stop`. With the external trigger the BNC edges alone produce frames.
+"""
+_freeRunning(cam::MagSphereUDP) = cam.triggerMode == "internal"
+
+"""
     _openDataSocket(params)
 
 Open and bind a UDP socket on the data port. Binds to 0.0.0.0 by default
@@ -307,9 +330,10 @@ take!(cam::MagSphereUDP) = isready(cam.ch) ? take!(cam.ch) : error("Empty channe
     enable(cam::MagSphereUDP)
 
 Start continuous acquisition: open a fresh data socket and channel, start the
-reader task (`readData`) and send `start` to the sphere. Stops a running stream
-first. Frames then arrive in the channel (`take!`) and as the newest frame
-(`getXYZValues`).
+reader task (`readData`) and, with the internal trigger, send `start` to the
+sphere. With the external trigger nothing is sent; frames arrive as soon as
+the BNC input sees edges. Stops a running stream first. Frames then arrive in
+the channel (`take!`) and as the newest frame (`getXYZValues`).
 """
 function enable(cam::MagSphereUDP)
   lock(cam.lock) do
@@ -317,31 +341,32 @@ function enable(cam::MagSphereUDP)
     lock(cam.latestLock) do
       cam.latest = nothing
       cam.droppedFrames = 0
+      cam.overflowFrames = 0
     end
     fill!(cam.warnedSensors, false)
 
-    sock = _openDataSocket(cam.params)   # bind before "start" so no frame is missed
+    sock = _openDataSocket(cam.params)   # bind before "start" / the first trigger so no frame is missed
     ch = Channel{MagSphereUDPResult}(cam.params.bufferSize)
     cam.dataSocket = sock
     cam.ch = ch
     # Pass channel and socket explicitly so the task never sees later reassignments
     cam.task = Threads.@spawn readData(cam, ch, sock)
     bind(ch, cam.task)                    # channel closes if the task dies
-    sendCommand(cam, "start")
+    _freeRunning(cam) && sendCommand(cam, "start")
   end
 end
 
 """
     disable(cam::MagSphereUDP)
 
-Stop continuous acquisition: send `stop`, close the channel and the data
-socket (which wakes the reader task out of `recv`) and wait up to 2 s for the
-task to end. Frames still in the channel stay readable with `take!`. Safe to
-call when nothing is running.
+Stop continuous acquisition: send `stop` (internal trigger only), close the
+channel and the data socket (which wakes the reader task out of `recv`) and
+wait up to 2 s for the task to end. Frames still in the channel stay readable
+with `take!`. Safe to call when nothing is running.
 """
 function disable(cam::MagSphereUDP)
   lock(cam.lock) do
-    isnothing(cam.cmdSocket) || _trySend(cam, "stop")
+    !isnothing(cam.cmdSocket) && _freeRunning(cam) && _trySend(cam, "stop")
     close(cam.ch)
 
     sock = cam.dataSocket
@@ -395,8 +420,9 @@ end
 
 Make a parsed frame available: store it as the newest frame (for
 `acquireFrame`) and append it to the channel (for `take!`). When the channel is
-full the oldest frame is dropped, so the reader never stalls and the newest
-frame stays current. Returns false once the channel is closed.
+full the oldest frame is dropped and counted in `overflowFrames`, so the reader
+never stalls and the newest frame stays current. Returns false once the
+channel is closed.
 """
 function _publish!(cam::MagSphereUDP, ch::Channel{MagSphereUDPResult}, result::MagSphereUDPResult)
   lock(cam.latestLock) do
@@ -404,8 +430,11 @@ function _publish!(cam::MagSphereUDP, ch::Channel{MagSphereUDPResult}, result::M
     cam.frameCount += 1
   end
   try
-    if Base.n_avail(ch) >= ch.sz_max
-      isready(ch) && take!(ch)
+    if Base.n_avail(ch) >= ch.sz_max && isready(ch)
+      take!(ch)
+      n = lock(() -> (cam.overflowFrames += 1), cam.latestLock)
+      n == 1 && @warn "MagSphereUDP: frame channel full ($(ch.sz_max) frames), dropping the oldest. " *
+                      "Nobody takes frames fast enough; further drops are only counted in `overflowFrames`."
     end
     put!(ch, result)
   catch e
@@ -493,7 +522,9 @@ Return one fresh frame, taken after the call, or `nothing` on timeout.
 - Stream running: waits for the next frame the reader task publishes, without
   touching the socket or consuming the channel, so a recording via `take!`
   loses nothing.
-- Stream stopped: `_readDirect` starts the sphere, takes one frame and stops it.
+- Stream stopped: `_readDirect` takes one frame; with the internal trigger it
+  starts and stops the sphere around it, with the external trigger it waits
+  for the next BNC edge.
 """
 function acquireFrame(cam::MagSphereUDP; timeout = cam.params.timeout)
   t = _strip(u"s", timeout)
@@ -530,19 +561,20 @@ end
 """
     _readDirect(cam, timeout)
 
-Single measurement without a running stream: bind the data port, send `start`,
-wait for the first good frame (`_firstValidFrame`), send `stop` and close the
-socket, which also unblocks the receive on timeout. The caller must hold
-`cam.lock`, so `enable` cannot start a reader in the meantime.
+Single measurement without a running stream: bind the data port, send `start`
+(internal trigger only), wait for the first good frame (`_firstValidFrame`),
+send `stop` (internal trigger only) and close the socket, which also unblocks
+the receive on timeout. The caller must hold `cam.lock`, so `enable` cannot
+start a reader in the meantime.
 """
 function _readDirect(cam::MagSphereUDP, timeout::Float64)
   sock = _openDataSocket(cam.params)     # bind before "start" so the first frame is not missed
   reader = @async _firstValidFrame(cam, sock)
   try
-    sendCommand(cam, "start")
+    _freeRunning(cam) && sendCommand(cam, "start")
     timedwait(() -> istaskdone(reader), timeout; pollint = 0.005)
   finally
-    _trySend(cam, "stop")
+    _freeRunning(cam) && _trySend(cam, "stop")
     close(sock)
   end
   timedwait(() -> istaskdone(reader), 1.0; pollint = 0.005)
@@ -602,8 +634,8 @@ end
 """
     close(cam::MagSphereUDP)
 
-Stop the stream (`disable`, which also sends `stop`) and close the command
-socket. The device needs `_init` again afterwards.
+Stop the stream (`disable`, which also sends `stop` with the internal trigger)
+and close the command socket. The device needs `_init` again afterwards.
 """
 function close(cam::MagSphereUDP)
   disable(cam)
