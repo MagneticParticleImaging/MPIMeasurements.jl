@@ -1,0 +1,7 @@
+description = "Measure the magnetic field of the Porridge coils with the triggered MagSphere"
+type = "PorridgeMagSphereMeasurementProtocol"
+targetScanner = "PorridgeMagSphere"
+# No default sequence: example/GenerateDataMagSphere.jl builds it and sets protocol.params.sequence.
+statusReportInterval = 10000   # frames between status log lines (100 s at 100 Hz)
+timingTolerance = 0.25         # flag frames further than this many trigger periods off the trigger grid
+firstFrameTimeout = "5s"       # abort if the sphere sends nothing this long after the trigger started
