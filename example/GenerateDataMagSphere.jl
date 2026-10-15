@@ -392,7 +392,16 @@ try
     try
       sleep(stopping ? 0.1 : 2.0)
 
-      put!(biChannel, ProgressQueryEvent())
+      # A failed protocol closes the channel; its last event (the error) can still be taken.
+      try
+          put!(biChannel, ProgressQueryEvent())
+      catch e
+          isa(e, InvalidStateException) || rethrow(e)
+      end
+      if !isready(biChannel) && !isopen(biChannel)
+          println("The protocol ended without a result; see the log above.")
+          break
+      end
 
       if isready(biChannel)
           event = take!(biChannel)
@@ -441,7 +450,7 @@ try
     catch e
       if isa(e, InterruptException) && !stopping
           println("\nStopping measurement, saving collected data...")
-          stopping = true
+          global stopping = true
           put!(biChannel, StopEvent())
       else
           rethrow(e)

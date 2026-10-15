@@ -5,3 +5,6 @@ targetScanner = "PorridgeMagSphere"
 statusReportInterval = 10000   # frames between status log lines (100 s at 100 Hz)
 timingTolerance = 0.25         # flag frames further than this many trigger periods off the trigger grid
 firstFrameTimeout = "5s"       # abort if the sphere sends nothing this long after the trigger started
+# Sequence steps per RedPitaya upload. Each RedPitaya keeps the whole upload in memory (6 channels x steps);
+# 1.08 M steps (the 25 Hz run) worked, the full 4.35 M steps of the 100 Hz run made the servers drop the connection.
+maxStepsPerUpload = 1000000

@@ -23,10 +23,19 @@ Missed frames (sphere timestamps instead of the Arduino's reading_id)
     off the grid by > timingTolerance·T      kept, flagged `irregular`
     clock jump (sphere time set in the Web GUI): backwards, or forward by more
       than 10 s while the PC saw far less time pass      -> new reference
-    start, and resume after an overheat pause            -> new reference
-  Frames lost before the first received frame of a (re)start can't be seen in
-  timestamps. Frames missing at the end are filled with placeholders (tail
-  fill), as before.
+    start of every upload (see below)                    -> new reference
+  Frames lost before the first received frame of an upload can't be seen in
+  timestamps. Frames missing at the end of the run are filled with
+  placeholders (tail fill), as before.
+
+Uploads
+  Every RedPitaya holds the LUT of a whole upload in memory (6 channels × steps).
+  A 6 h run at 100 Hz has 4.35 M steps, more than the servers accept, so the
+  sequence is uploaded and played in slices of at most `maxStepsPerUpload` steps.
+  A slice ends on a frame where all coil currents are zero (a background
+  block), so the coils are off while the next slice is uploaded. The next slice
+  starts after the last frame actually received, so frames lost at the end of
+  a slice are measured again. Resuming after an overheat pause works the same way.
 
 Storage
   Frames go to a binary stream file in the datasetStore (fixed-size records,
@@ -46,6 +55,7 @@ Base.@kwdef mutable struct PorridgeMagSphereMeasurementProtocolParams <: Protoco
   statusReportInterval::Int64 = 10_000            # frames between status log lines
   timingTolerance::Float64 = 0.25                 # allowed offset from the trigger grid, in trigger periods
   firstFrameTimeout::typeof(1.0u"s") = 5.0u"s"    # abort if no frame arrives this long after the trigger starts (0 = never)
+  maxStepsPerUpload::Int64 = 1_000_000            # sequence steps per RedPitaya upload, see "Uploads" in the header
 end
 
 function PorridgeMagSphereMeasurementProtocolParams(dict::Dict, scanner::MPIScanner)
@@ -87,6 +97,7 @@ Base.@kwdef mutable struct PorridgeMagSphereMeasurementProtocol <: Protocol
 
   currentFrameNum::Int64 = 0
   totalFrames::Int64 = 0
+  uploadEnd::Int64 = 0              # last frame of the sequence slice currently on the RedPitayas
 
   # Missed-frame detection, see the header
   triggerPeriod_us::Float64 = NaN
@@ -148,6 +159,7 @@ function enterExecute(protocol::PorridgeMagSphereMeasurementProtocol)
   protocol.stopped = false
   protocol.finishAcknowledged = false
   protocol.currentFrameNum = 0
+  protocol.uploadEnd = 0
   protocol.gridTime_us = NaN
   protocol.lastTimestamp = 0
   protocol.lastReceived = NaN
@@ -218,8 +230,11 @@ end
 """
     magSphereTriggerPeriod(sequence, triggerPatches) -> Float64
 
-Time between two rising edges of the sequence's "trigger" channel, in seconds.
-The missed-frame detection needs it to be the same for every pair of edges.
+Time between two rising edges of the sequence's "trigger" channel, in seconds,
+as the RedPitayas play it: a step lasts a whole number of periods of the
+periodic channels (`acqNumPeriodsPerPatch`), so a nominal 5 ms step with the
+99.84 µs period of `coil1_fast` becomes 50 periods = 4.992 ms. The missed-frame
+detection needs this to be the same for every pair of edges.
 """
 function magSphereTriggerPeriod(sequence::Sequence, triggerPatches::Vector{Int})
   length(triggerPatches) >= 2 ||
@@ -228,13 +243,70 @@ function magSphereTriggerPeriod(sequence::Sequence, triggerPatches::Vector{Int})
   all(i -> triggerPatches[i+1] - triggerPatches[i] == spacing, 1:length(triggerPatches)-1) ||
     throw(IllegalStateException("The trigger edges are not evenly spaced; missed-frame detection " *
                                 "from timestamps needs a constant trigger period."))
-  for field in fields(sequence), channel in channels(field)
-    if id(channel) == "trigger" && isa(channel, StepwiseElectricalChannel)
-      stepTime = channel.divider / (length(channel.values) * ustrip(u"Hz", txBaseFrequency(sequence)))
-      return spacing * stepTime
+  any(ch -> id(ch) == "trigger" && isa(ch, StepwiseElectricalChannel), acyclicElectricalTxChannels(sequence)) ||
+    throw(IllegalStateException("The sequence has no stepwise \"trigger\" channel."))
+  stepTime = acqNumPeriodsPerPatch(sequence) * lcm(dfDivider(sequence)) / ustrip(u"Hz", txBaseFrequency(sequence))
+  return spacing * stepTime
+end
+
+"""
+    sliceMagSphereSequence(sequence, firstStep, lastStep)
+
+Steps `firstStep:lastStep` of `sequence` as a sequence of their own. The
+dividers of the stepwise channels shrink in proportion, so every step keeps its
+length (sliceSequenceFromStep keeps the divider, which stretches the steps).
+"""
+function sliceMagSphereSequence(sequence::Sequence, firstStep::Int, lastStep::Int)
+  numSteps = lastStep - firstStep + 1
+  newFields = MagneticField[]
+  for field in fields(sequence)
+    newChannels = TxChannel[]
+    for channel in channels(field)
+      if isa(channel, StepwiseElectricalChannel)
+        push!(newChannels, StepwiseElectricalChannel(
+          id=channel.id,
+          divider=Int(div(Int128(channel.divider) * numSteps, length(channel.values))),
+          values=channel.values[firstStep:lastStep],
+          enable=isempty(channel.enable) ? channel.enable : channel.enable[firstStep:lastStep],
+        ))
+      else
+        push!(newChannels, channel)
+      end
     end
+    push!(newFields, MagneticField(
+      id=field.id,
+      channels=newChannels,
+      safeStartInterval=field.safeStartInterval,
+      safeTransitionInterval=field.safeTransitionInterval,
+      safeEndInterval=field.safeEndInterval,
+      safeErrorInterval=field.safeErrorInterval,
+      control=field.control,
+      decouple=field.decouple,
+    ))
   end
-  throw(IllegalStateException("The sequence has no stepwise \"trigger\" channel."))
+  return Sequence(general=sequence.general, fields=newFields, acquisition=sequence.acquisition)
+end
+
+"""
+    magSphereUploadEnd(protocol, firstFrame) -> Int
+
+Last frame of the upload that starts with frame `firstFrame`: at most
+`maxStepsPerUpload` steps (two per frame, plus the leading LOW step of a
+resume), ending on the last frame within that limit where this and the next
+frame have all coil currents at zero. Frame f is played on steps 2f-1 (trigger
+HIGH) and 2f (LOW).
+"""
+function magSphereUploadEnd(protocol::PorridgeMagSphereMeasurementProtocol, firstFrame::Int)
+  maxFrames = (protocol.params.maxStepsPerUpload - 1) ÷ 2
+  maxFrames >= 1 || throw(IllegalStateException("maxStepsPerUpload must be at least 3"))
+  lastFrame = min(protocol.totalFrames, firstFrame - 1 + maxFrames)
+  lastFrame == protocol.totalFrames && return lastFrame
+  coilsOff(f) = all(ch -> iszero(ustrip(ch.values[2f])), protocol.coilChannels)
+  for f in lastFrame:-1:(firstFrame + maxFrames ÷ 2)   # no upload shorter than half the limit
+    coilsOff(f) && coilsOff(f + 1) && return f
+  end
+  @warn "No frame with all coils off near the end of this upload; the next one is uploaded with the coils on" frame=lastFrame
+  return lastFrame
 end
 
 function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProtocol)
@@ -252,10 +324,11 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
   period_s = magSphereTriggerPeriod(sequence, triggerPatches)
   protocol.triggerPeriod_us = period_s * 1e6
 
-  @info "Starting MagSphere field measurement" triggers=length(triggerPatches) total=protocol.totalFrames trigger_rate_Hz=round(1 / period_s, digits=3) duration_h=round(protocol.totalFrames * period_s / 3600, digits=2)
-  if repetitions != 1
-    @warn "Overheat resume assumes a single sequence repetition" repetitions
-  end
+  @info "Starting MagSphere field measurement" triggers=length(triggerPatches) total=protocol.totalFrames trigger_period_ms=round(period_s * 1000, digits=4) duration_h=round(protocol.totalFrames * period_s / 3600, digits=2)
+  # Uploads and resumes address frame f as steps 2f-1 (trigger HIGH) and 2f (LOW)
+  (repetitions == 1 && triggerPatches[1] == 1 && triggerPatches[end] == 2 * length(triggerPatches) - 1) ||
+    throw(IllegalStateException("PorridgeMagSphereMeasurementProtocol needs a single sequence repetition " *
+                                "with the trigger HIGH on the first and LOW on the second step of every frame."))
 
   coilTemperatures, _, _, _, _ = readCoilTemperatures(tempSensor)
   openMagSphereStream!(protocol, sequence, length(coilTemperatures), numSensors(cam))
@@ -268,12 +341,18 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
   enable(cam)
   try
     while true
-      # On resume (after an overheat cooldown) start on the LOW step of the frame captured
-      # last, so the next frame's trigger is a real rising edge; see performFieldMeasurement.
-      runSequence = protocol.currentFrameNum == 0 ? sequence :
-                    sliceSequenceFromStep(sequence, 2 * protocol.currentFrameNum)
+      # Next upload, see "Uploads" in the header. After the first one, start on the LOW step
+      # of the frame captured last, so the next frame's trigger is a real rising edge; see
+      # performFieldMeasurement.
+      uploadStart = protocol.currentFrameNum
+      uploadEnd = magSphereUploadEnd(protocol, uploadStart + 1)
+      firstStep = uploadStart == 0 ? 1 : 2 * uploadStart
+      runSequence = firstStep == 1 && uploadEnd == protocol.totalFrames ? sequence :
+                    sliceMagSphereSequence(sequence, firstStep, 2 * uploadEnd)
+      @info "Uploading frames $(uploadStart + 1)-$uploadEnd of $(protocol.totalFrames) to the RedPitayas" steps=(2 * uploadEnd - firstStep + 1)
       setup(daq, runSequence)
       discardUntriggeredFrames!(cam)
+      protocol.uploadEnd = uploadEnd
       protocol.gridTime_us = NaN   # the first frame after (re)starting begins a new trigger grid
       startTx(daq)
       finish = getTiming(daq).finish
@@ -334,8 +413,14 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
           break
         end
         @info "Resuming measurement" frame=protocol.currentFrameNum
-      else
+      elseif protocol.currentFrameNum == uploadStart
+        @error "The MagSphere sent no usable frame during this upload; aborting" frame=protocol.currentFrameNum
+        outcome = :noFrames
         break
+      elseif uploadEnd == protocol.totalFrames
+        break   # frames missing at the very end are tail-filled below
+      elseif protocol.currentFrameNum < uploadEnd
+        @warn "The last frames of this upload did not arrive; the next upload measures them again" missing=(uploadEnd - protocol.currentFrameNum)
       end
     end
 
@@ -394,9 +479,9 @@ function storeMagSphereFrames!(protocol::PorridgeMagSphereMeasurementProtocol, c
   while isready(cam.ch)
     frame = take!(cam.ch)
     taken += 1
-    if protocol.currentFrameNum >= protocol.totalFrames
+    if protocol.currentFrameNum >= protocol.uploadEnd
       protocol.skippedFrames += 1
-      @warn "The MagSphere sent more frames than the sequence has trigger edges; extra frames are skipped" maxlog=1
+      @warn "The MagSphere sent more frames than the uploaded sequence has trigger edges; extra frames are skipped" maxlog=10
       continue
     end
 
@@ -406,11 +491,11 @@ function storeMagSphereFrames!(protocol::PorridgeMagSphereMeasurementProtocol, c
     if k > 1
       @warn "Missed MagSphere frames detected from the timestamps" missing=(k - 1) first_missing_frame=(protocol.currentFrameNum + 1) gap_ms=round((Float64(frame.timestamp) - Float64(previousTimestamp)) / 1000, digits=2) maxlog=100
       for _ in 1:(k - 1)
-        protocol.currentFrameNum >= protocol.totalFrames && break
+        protocol.currentFrameNum >= protocol.uploadEnd && break
         writeMagSphereRecord!(protocol, nothing, triggerPatches, coilTemperatures, MS_FRAME_MISSING)
         protocol.missingFrames += 1
       end
-      if protocol.currentFrameNum >= protocol.totalFrames
+      if protocol.currentFrameNum >= protocol.uploadEnd
         protocol.skippedFrames += 1
         continue
       end
@@ -491,14 +576,14 @@ end
 """
     drainMagSphereFrames!(protocol, cam, triggerPatches, coilTemperatures)
 
-After the sequence ended: store the frames still on their way until none has
-arrived for a while (at least 0.5 s) or all frames are there.
+After the uploaded sequence ended: store the frames still on their way until
+none has arrived for a while (at least 0.5 s) or all frames of the upload are there.
 """
 function drainMagSphereFrames!(protocol::PorridgeMagSphereMeasurementProtocol, cam::MagSphereUDP,
                                triggerPatches::Vector{Int}, coilTemperatures::Vector{Float64})
   quiet = max(0.5, 50 * protocol.triggerPeriod_us * 1e-6)
   lastArrival = time()
-  while protocol.currentFrameNum < protocol.totalFrames && time() - lastArrival < quiet
+  while protocol.currentFrameNum < protocol.uploadEnd && time() - lastArrival < quiet
     if storeMagSphereFrames!(protocol, cam, triggerPatches, coilTemperatures) > 0
       lastArrival = time()
     else
