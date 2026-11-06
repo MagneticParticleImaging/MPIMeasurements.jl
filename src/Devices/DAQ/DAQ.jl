@@ -199,8 +199,8 @@ function createDAQParams(DAQType::Type{T}, dict::Dict{String, Any}) where {T <: 
       throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
                                       "for a device with the params type `$DAQType`."))
     elseif e isa MethodError
-      @warn e.args e.world e.f
-      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
+      @error "Error during creation of DAQ:" exception=(e, catch_backtrace())
+      throw(ScannerConfigurationError("The available values in the parameters do not match "*
                                       "with the params type `$DAQType`. Please check "*
                                       "the causing stacktrace."))
     else
