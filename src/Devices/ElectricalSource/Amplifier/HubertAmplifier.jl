@@ -68,6 +68,8 @@ function _hubertModel(amp::HubertAmplifier)
 		return A1110E
 	elseif answer == "P111MAINQE"
 		return A1110QE
+	elseif answer === nothing
+		error("Hubert did not respond!")
 	else
 		error("Unknown hubert model $(answer)! This should not happen...")
 	end
