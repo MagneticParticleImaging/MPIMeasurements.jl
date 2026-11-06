@@ -12,6 +12,8 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   relativeAmplitudeAccuracy::Float64
   "Magnetic field, default: 50µT, allowed absolute deviation of the excitation amplitude"
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
+  "Magnetic field, default: 50µT, allowed absolute deviation of the mean excitation amplitude, only used if `controlDC` is true"
+  dcAccuracy::typeof(1.0u"T") = 50.0u"µT"
   "Integer, default: 20, maximum number of steps to try to control the system"
   maxControlSteps::Int64 = 20
   "Bool, default: false, control the DC value of the excitation field (only posible for DC enabled DF amplifiers)"
@@ -691,10 +693,12 @@ function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, 
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
+  DC_diff = (mean(Ωt,dims=1) .- mean(Γt,dims=1))
   @debug "fieldAccuracyReached" diff=lineplot(1:size(diff,1),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
-  @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
-  amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
-  return all(amplitude_ok)
+  @info "Observed field deviation (time-domain):\nmax(ΔB):\t\t$(round(maximum(abs.(diff))*1000,digits=4)) mT\tMAE(ΔB):\t\t$(round(mean(abs.(diff))*1000,digits=4)) mT\nmax(ΔB) (w/o DC): \t$(round(maximum(abs.(zero_mean_diff))*1000,digits=4)) mT\tMAE(ΔB) (w/o DC): \t$(round(mean(abs.(zero_mean_diff))*1000,digits=4)) mT"
+  # amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy) # max
+  amplitude_ok = mean(abs.(diff)) < ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
+  return all(amplitude_ok) && (!txCont.params.controlDC || all(abs.(DC_diff) .< ustrip(u"T", txCont.params.dcAccuracy)))
 end
 
 
@@ -712,7 +716,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
     updateControlSequence!(cont, newTx)
     return true
   else
-    @info "Checks" validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont) checkVoltLimits(newTx, cont) 
+    @info "Checks" validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont, verbose=true) checkVoltLimits(newTx, cont) 
     error("The new tx values are not allowed! Either your forward calibration is inaccurate or the system can not produce the requested field strength!")
     return false
   end
@@ -859,7 +863,7 @@ function calcDesiredField(cont::AWControlSequence)
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
         if ustrip(u"T",amplitude(comp)) == 0
-          @warn "You tried to control a field to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
+          @warn "You tried to control field component $(id(comp)) to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
         end
         desiredField[i, cont.rfftIndices[i,j,:]] .= ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
@@ -952,7 +956,7 @@ function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
   return B_fw
 end
 
-function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController)
+function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController; verbose=false)
   # step 1 apply forward calibration to tx -> B_fw
   B_fw = calcExpectedField(tx, cont)
   
@@ -961,8 +965,12 @@ function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, 
   
   # step 3 check if B_fw and B are both below safety limit
   isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
+  if verbose
+    @info "Safety Checks:" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
+  else
+    @debug "validateAgainstForwardCalibrationAndSafetyLimit" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
+  end
 
-  @debug "validateAgainstForwardCalibrationAndSafetyLimit" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
 
   return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
 end
@@ -1002,7 +1010,7 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; retu
     valid = all(validSlew) && all(validPeak)
     @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
     if !valid
-      @debug "Valid Tx Channel" validSlew validPeak
+      @warn "Valid Tx Channel" validSlew[:]' validPeak[:]'
       @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
     end
     return valid
