@@ -2,7 +2,7 @@ function deviceTest(amp::Amplifier)
   @testset "$(string(typeof(amp)))" begin
     @test state(amp) == false # default
     @test mode(amp) == AMP_VOLTAGE_MODE # Safe default
-    @test voltageMode(amp) == AMP_LOW_VOLTAGE_MODE # Safe default
+    @test powerSupplyMode(amp) == AMP_LOW_POWER_SUPPLY # Safe default
     @test matchingNetwork(amp) == 1 # default
 
     turnOn(amp)
@@ -17,11 +17,11 @@ function deviceTest(amp::Amplifier)
     mode(amp, AMP_VOLTAGE_MODE)
     @test mode(amp) == AMP_VOLTAGE_MODE
 
-    voltageMode(amp, AMP_HIGH_VOLTAGE_MODE)
-    @test voltageMode(amp) == AMP_HIGH_VOLTAGE_MODE
+    powerSupplyMode(amp, AMP_HIGH_POWER_SUPPLY)
+    @test powerSupplyMode(amp) == AMP_HIGH_POWER_SUPPLY
 
-    voltageMode(amp, AMP_LOW_VOLTAGE_MODE)
-    @test voltageMode(amp) == AMP_LOW_VOLTAGE_MODE
+    powerSupplyMode(amp, AMP_LOW_POWER_SUPPLY)
+    @test powerSupplyMode(amp) == AMP_LOW_POWER_SUPPLY
 
     matchingNetwork(amp, 2)
     @test matchingNetwork(amp) == 2
@@ -34,11 +34,11 @@ function deviceTest(amp::Amplifier)
     toVoltageMode(amp)
     @test mode(amp) == AMP_VOLTAGE_MODE
 
-    toLowVoltageMode(amp)
-    @test voltageMode(amp) == AMP_LOW_VOLTAGE_MODE
+    toLowPowerSupplyMode(amp)
+    @test powerSupplyMode(amp) == AMP_LOW_POWER_SUPPLY
 
-    toHighVoltageMode(amp)
-    @test voltageMode(amp) == AMP_HIGH_VOLTAGE_MODE
+    toHighPowerSupplyMode(amp)
+    @test powerSupplyMode(amp) == AMP_HIGH_POWER_SUPPLY
   end
 end
 

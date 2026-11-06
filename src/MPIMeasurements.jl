@@ -15,6 +15,7 @@ using InteractiveUtils
 using Mmap
 using Scratch
 using StringEncodings
+using StyledStrings
 using Statistics
 using DocStringExtensions
 using MacroTools

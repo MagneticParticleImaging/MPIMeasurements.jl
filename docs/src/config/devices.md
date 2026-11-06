@@ -11,3 +11,9 @@ MPIMeasurements.DAQTxChannelParams
 ```@docs
 MPIMeasurements.TxDAQControllerParams
 ```
+
+## Hubert Amplifier
+```@docs
+MPIMeasurements.HubertAmplifierPoolParams
+MPIMeasurements.HubertAmplifierPortParams
+```

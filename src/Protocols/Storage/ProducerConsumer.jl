@@ -53,15 +53,8 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
     disable(robot)
   end
 
-  amps = getAmplifiers(scanner_)
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(vcat(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
-    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
-  end
+  amps = getRequiredAmplifiers(scanner_, sequence)
+  turnOn(amps)
   
   endSample = nothing
   try

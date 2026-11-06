@@ -199,8 +199,8 @@ function createDAQParams(DAQType::Type{T}, dict::Dict{String, Any}) where {T <: 
       throw(ScannerConfigurationError("The required field `$(e.var)` is missing in your configuration "*
                                       "for a device with the params type `$DAQType`."))
     elseif e isa MethodError
-      @warn e.args e.world e.f
-      throw(ScannerConfigurationError("A required field is missing in your configuration for a device "*
+      @error "Error during creation of DAQ:" exception=(e, catch_backtrace())
+      throw(ScannerConfigurationError("The available values in the parameters do not match "*
                                       "with the params type `$DAQType`. Please check "*
                                       "the causing stacktrace."))
     else
@@ -339,7 +339,7 @@ function applyForwardCalibration!(seq::Sequence, device::Device)
         if comp isa ArbitraryElectricalComponent
           N = length(values(comp))
           f_awg = rfftfreq(N, f_comp*N)
-          calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*2*pi*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
+          calib = calibration(device, id(channel), f_awg) ./ (abs.(calibration(device, id(channel), f_comp))*exp.(im*range(0,length(f_awg)-1).*angle(calibration(device, id(channel),f_comp)))) # since amplitude and phase are already calibrated for the base frequency, here we need to remove that factor
           calib = ustrip.(NoUnits, calib)
           values!(comp, irfft(rfft(values(comp)).*calib, N))
         end

@@ -1,7 +1,7 @@
-export Amplifier, AmplifierMode, AMP_VOLTAGE_MODE, AMP_CURRENT_MODE, AmplifierVoltageMode,
-       AMP_HIGH_VOLTAGE_MODE, AMP_LOW_VOLTAGE_MODE, getAmplifiers, getAmplifier, state,
-       turnOn, turnOff, mode, voltageMode, matchingNetwork, temperature, toCurrentMode,
-       toVoltageMode, toLowVoltageMode, toHighVoltageMode
+export Amplifier, AmplifierMode, AMP_VOLTAGE_MODE, AMP_CURRENT_MODE, AmplifierPowerSupplyMode,
+       AMP_HIGH_POWER_SUPPLY,AMP_MID_POWER_SUPPLY, AMP_LOW_POWER_SUPPLY, getAmplifiers, getAmplifier, state,
+       turnOn, turnOff, mode, powerSupplyMode, matchingNetwork, temperature, toCurrentMode,
+       toVoltageMode, toLowPowerSupplyMode, toHighPowerSupplyMode
 
 @enum AmplifierMode begin
   AMP_VOLTAGE_MODE
@@ -18,16 +18,19 @@ function convert(::Type{AmplifierMode}, x::String)
   end
 end
 
-@enum AmplifierVoltageMode begin
-  AMP_HIGH_VOLTAGE_MODE
-  AMP_LOW_VOLTAGE_MODE
+@enum AmplifierPowerSupplyMode begin
+  AMP_LOW_POWER_SUPPLY=0
+  AMP_MID_POWER_SUPPLY=1
+  AMP_HIGH_POWER_SUPPLY=3
 end
 
-function convert(::Type{AmplifierVoltageMode}, x::String)
-  if lowercase(x) == "low voltage"
-    return AMP_LOW_VOLTAGE_MODE
-  elseif  lowercase(x) == "high voltage"
-    return AMP_HIGH_VOLTAGE_MODE
+function convert(::Type{AmplifierPowerSupplyMode}, x::String)
+  if contains(lowercase(x),"low")
+    return AMP_LOW_POWER_SUPPLY
+  elseif contains(lowercase(x),"mid")
+    return AMP_MID_POWER_SUPPLY
+  elseif contains(lowercase(x),"high")
+    return AMP_HIGH_POWER_SUPPLY
   else
     throw(ScannerConfigurationError("The given amplifier mode `$x` for is not valid. Please use `low voltage` or `high voltage`."))
   end
@@ -37,17 +40,29 @@ abstract type Amplifier <: ElectricalSource end
 
 Base.close(amp::Amplifier) = nothing
 
+Base.@deprecate_binding AmplifierVoltageMode AmplifierPowerSupplyMode
+@deprecate voltageMode(amp::Amplifier) powerSupplyMode(amp)
+@deprecate voltageMode(amp::Amplifier, mode::AmplifierPowerSupplyMode) powerSupplyMode(amp, mode)
+
 @mustimplement state(amp::Amplifier)
 @mustimplement turnOn(amp::Amplifier)
 @mustimplement turnOff(amp::Amplifier)
 @mustimplement mode(amp::Amplifier)::AmplifierMode
 @mustimplement mode(amp::Amplifier, mode::AmplifierMode)
-@mustimplement voltageMode(amp::Amplifier)::AmplifierVoltageMode
-@mustimplement voltageMode(amp::Amplifier, mode::AmplifierVoltageMode)
+@mustimplement powerSupplyMode(amp::Amplifier)::AmplifierPowerSupplyMode
+@mustimplement powerSupplyMode(amp::Amplifier, mode::AmplifierPowerSupplyMode)
 @mustimplement matchingNetwork(amp::Amplifier)::Integer
 @mustimplement matchingNetwork(amp::Amplifier, network::Integer)
 @mustimplement temperature(amp::Amplifier)::typeof(1.0u"°C")
 @mustimplement channelId(amp::Amplifier)
+
+function turnOn(amps::Vector{<:Amplifier})
+  if !isempty(amps)
+    @sync for amp in amps
+      @async turnOn(amp)
+    end
+  end
+end
 
 export getAmplifiers
 getAmplifiers(scanner::MPIScanner) = getDevices(scanner, Amplifier)
@@ -64,7 +79,7 @@ function getRequiredAmplifiers(device::Device, sequence::Sequence)
   end
   return []
 end
-function getRequiredAmplifiers(amps::Vector{Amplifier}, sequence::Sequence)
+function getRequiredAmplifiers(amps::Vector{<:Amplifier}, sequence::Sequence)
   if !isempty(amps)
     # Only enable amps that amplify a channel of the current sequence
     channelIdx = id.(union(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
@@ -83,15 +98,17 @@ Sets the amplifier to voltage mode.
 """
 toVoltageMode(amp::Amplifier) = mode(amp, AMP_VOLTAGE_MODE)
 
+@deprecate toLowVoltageMode(amp::Amplifier) toLowPowerSupplyMode(amp)
 """
 Sets the amplifier to low voltage mode.
 """
-toLowVoltageMode(amp::Amplifier) = voltageMode(amp, AMP_LOW_VOLTAGE_MODE)
+toLowPowerSupplyMode(amp::Amplifier) = powerSupplyMode(amp, AMP_LOW_POWER_SUPPLY)
 
+@deprecate toHighVoltageMode(amp::Amplifier) toHighPowerSupplyMode(amp)
 """
 Sets the amplifier to high voltage mode.
 """
-toHighVoltageMode(amp::Amplifier) = voltageMode(amp, AMP_HIGH_VOLTAGE_MODE)
+toHighPowerSupplyMode(amp::Amplifier) = powerSupplyMode(amp, AMP_HIGH_POWER_SUPPLY)
 
 
 include("SimulatedAmplifier.jl")
