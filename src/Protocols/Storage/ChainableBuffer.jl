@@ -1,3 +1,6 @@
+# Export new frequency filtering buffers
+export PeriodGroupingBuffer, RFFTBuffer
+
 mutable struct AverageBuffer{T} <: IntermediateBuffer where {T<:Number}
   target::StorageBuffer
   buffer::Array{T,4}
@@ -222,3 +225,44 @@ end
 update!(buffer::TxDAQControllerBuffer, start, stop) = insert!(buffer, calcControlMatrix(buffer.tx.cont), start, stop)
 insert!(buffer::TxDAQControllerBuffer, applied::Matrix{ComplexF64}, start, stop) = buffer.applied[:, :, :, start:stop] .= applied
 read(buffer::TxDAQControllerBuffer) = buffer.applied
+
+mutable struct PeriodGroupingBuffer{T} <: IntermediateBuffer where {T<:Number}
+  target::StorageBuffer
+  numGrouping::Int
+end
+PeriodGroupingBuffer(buffer::StorageBuffer, numGrouping::Int) = PeriodGroupingBuffer{Float32}(buffer, numGrouping)
+
+function push!(buffer::PeriodGroupingBuffer{T}, frames::AbstractArray{T,4}) where {T<:Number}
+  if buffer.numGrouping == 1
+    return push!(buffer.target, frames)
+  end
+  
+  numSamples, numChannels, numPeriods, numFrames = size(frames)
+  
+  if mod(numPeriods, buffer.numGrouping) != 0
+    error("Periods cannot be grouped: $numPeriods periods cannot be divided by $(buffer.numGrouping)")
+  end
+  
+  tmp = permutedims(frames, (1, 3, 2, 4))
+  newNumPeriods = div(numPeriods, buffer.numGrouping)
+  tmp2 = reshape(tmp, numSamples * buffer.numGrouping, newNumPeriods, numChannels, numFrames)
+  result = permutedims(tmp2, (1, 3, 2, 4))
+  
+  return push!(buffer.target, result)
+end
+
+sinks!(buffer::PeriodGroupingBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)
+
+mutable struct RFFTBuffer{T} <: IntermediateBuffer where {T<:Complex}
+  target::StorageBuffer
+  frequencyMask::Union{Vector{Int}, Nothing}
+end
+RFFTBuffer(buffer::StorageBuffer, frequencyMask::Union{Vector{Int}, Nothing} = nothing) = RFFTBuffer{ComplexF32}(buffer, frequencyMask)
+
+function push!(buffer::RFFTBuffer{T}, frames::AbstractArray{<:Real,4}) where {T<:Complex}
+  dataFD = rfft(frames, 1)
+  result = isnothing(buffer.frequencyMask) ? dataFD : dataFD[buffer.frequencyMask, :, :, :]
+  return push!(buffer.target, result)
+end
+
+sinks!(buffer::RFFTBuffer, sinks::Vector{SinkBuffer}) = sinks!(buffer.target, sinks)

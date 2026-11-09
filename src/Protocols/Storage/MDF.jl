@@ -1,5 +1,5 @@
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory;temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Union{Array{Float32,4}, Array{ComplexF32,4}}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory;temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing, isFourierTransformed::Bool=false)
 	if !ismissing(studyName(mdf))
 		name = studyName(mdf)
 	else
@@ -19,7 +19,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	fillMDFScanner(mdf, scanner)
 	fillMDFTracer(mdf)
 
-	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied, frequencies = frequencies, isFourierTransformed = isFourierTransformed)
 	fillMDFAcquisition(mdf, scanner, sequence)
 
 	filename = getNewExperimentPath(study)
@@ -27,7 +27,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	return saveasMDF(filename, mdf)
 end
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4}, mdf::MDFv2InMemory; bgdata::Union{Array{Float32,4}, Nothing}=nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Union{Array{Float32,4}, Array{ComplexF32,4}}, mdf::MDFv2InMemory; bgdata::Union{Array{Float32,4}, Array{ComplexF32,4}, Nothing}=nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing, isFourierTransformed::Bool=false)
 	if !ismissing(studyName(mdf))
 		name = studyName(mdf)
 	else
@@ -47,7 +47,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 	fillMDFScanner(mdf, scanner)
 	fillMDFTracer(mdf)
 
-	fillMDFMeasurement(mdf, sequence, data, bgdata, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, sequence, data, bgdata, temperatures = temperatures, drivefield = drivefield, applied = applied, frequencies = frequencies, isFourierTransformed = isFourierTransformed)
 	fillMDFAcquisition(mdf, scanner, sequence)
 
 	filename = getNewExperimentPath(study)
@@ -57,8 +57,8 @@ end
 
 
 
-function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Array{Float32,4},
-														positions::Union{Positions, AbstractArray}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::Sequence, data::Union{Array{Float32,4}, Array{ComplexF32,4}},
+															positions::Union{Positions, AbstractArray}, isBackgroundFrame::Vector{Bool}, mdf::MDFv2InMemory; storeAsSystemMatrix::Bool = false, deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing, temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing, isFourierTransformed::Bool=false)
 
 	if storeAsSystemMatrix
 		study = MPIFiles.getCalibStudy(store)
@@ -85,7 +85,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	@debug isBackgroundFrame
 
-	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied, frequencies = frequencies, isFourierTransformed = isFourierTransformed)
 	fillMDFAcquisition(mdf, scanner, sequence)
 	fillMDFCalibration(mdf, positions, deltaSampleSize = deltaSampleSize)
 
@@ -93,8 +93,6 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 
 	return saveasMDF(filename, mdf)
 end
-
-
 
 function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaSampleSize::Union{Vector{typeof(1.0u"m")}, Nothing} = nothing)
 
@@ -245,14 +243,14 @@ function fillMDFTracer(mdf::MDFv2InMemory)
 	return
 end
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
-    bgdata::Nothing; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Nothing=nothing, bgTransmit::Nothing=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Union{Array{Float32,4}, Array{ComplexF32,4}},
+    bgdata::Nothing; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Nothing=nothing, bgTransmit::Nothing=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing, isFourierTransformed::Bool=false)
 	numFrames = acqNumFrames(sequence)
 	isBackgroundFrame = zeros(Bool, numFrames)
-	return fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied)
+	return fillMDFMeasurement(mdf, data, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield, applied = applied, frequencies = frequencies, isFourierTransformed = isFourierTransformed)
 end
-function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{Float32,4},
-	bgdata::Union{Array{Float32}}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Union{Array{ComplexF64}, Nothing}=nothing, bgTransmit::Union{Array{ComplexF64}, Nothing}=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Union{Array{Float32,4}, Array{ComplexF32,4}},
+	bgdata::Union{Array{Float32,4}, Array{ComplexF32,4}}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, bgDriveField::Union{Array{ComplexF64}, Nothing}=nothing, bgTransmit::Union{Array{ComplexF64}, Nothing}=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing, isFourierTransformed::Bool=false)
 	# /measurement/ subgroup
 	numFrames = acqNumFrames(sequence)
 	numBGFrames = size(bgdata,4)
@@ -267,11 +265,11 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, sequence::Sequence, data::Array{
 	end
 	isBackgroundFrame = cat(ones(Bool,numBGFrames), zeros(Bool,numFrames), dims=1)
 	numFrames = numFrames + numBGFrames
-	return fillMDFMeasurement(mdf, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_)
+	return fillMDFMeasurement(mdf, data_, isBackgroundFrame, temperatures = temperatures, drivefield = drivefield_, applied = applied_, frequencies = frequencies, isFourierTransformed = isFourierTransformed)
 end
 
 
-function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing)
+function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgroundFrame::Vector{Bool}; temperatures::Union{Array{Float32}, Nothing}=nothing, drivefield::Union{Array{ComplexF64}, Nothing}=nothing, applied::Union{Array{ComplexF64}, Nothing}=nothing, frequencies::Union{Vector{Int}, Nothing}=nothing)
 	# /measurement/ subgroup
 	numFrames = size(data, 4)
 
@@ -286,6 +284,47 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgrou
 	measIsSpectralLeakageCorrected(mdf, false)
 	measIsTransferFunctionCorrected(mdf, false)
 	if !isnothing(temperature)
+		MPIFiles.measTemperatures(mdf, temperatures)
+	end
+	if !isnothing(drivefield)
+		MPIFiles.measObservedDriveField(mdf, drivefield)
+	end
+	if !isnothing(applied)
+		MPIFiles.measAppliedDriveField(mdf, applied)
+	end
+	return
+end
+
+# New version with frequency filtering support
+function fillMDFMeasurement(mdf::MDFv2InMemory, data::Union{Array{Float32}, Array{ComplexF32}}, isBackgroundFrame::Vector{Bool}; 
+                            temperatures::Union{Array{Float32}, Nothing}=nothing, 
+                            drivefield::Union{Array{ComplexF64}, Nothing}=nothing, 
+                            applied::Union{Array{ComplexF64}, Nothing}=nothing, 
+                            frequencies::Union{Vector{Int}, Nothing}=nothing,
+                            isFourierTransformed::Bool=false)
+	# /measurement/ subgroup
+	# Supports both time domain (Float32) and frequency domain (ComplexF32) data
+	numFrames = size(data, 4)
+
+	measData(mdf, data)
+	measIsBackgroundCorrected(mdf, false)
+	measIsBackgroundFrame(mdf, isBackgroundFrame)
+	measIsFastFrameAxis(mdf, false)
+	measIsFourierTransformed(mdf, isFourierTransformed)
+	measIsFramePermutation(mdf, false)
+	measIsSparsityTransformed(mdf, false)
+	measIsSpectralLeakageCorrected(mdf, false)
+	measIsTransferFunctionCorrected(mdf, false)
+	
+	# Handle frequency selection
+	if !isnothing(frequencies) && isFourierTransformed
+		measIsFrequencySelection(mdf, true)
+		MPIFiles.measFrequencySelection(mdf, frequencies)
+	else
+		measIsFrequencySelection(mdf, false)
+	end
+	
+	if !isnothing(temperatures)
 		MPIFiles.measTemperatures(mdf, temperatures)
 	end
 	if !isnothing(drivefield)
