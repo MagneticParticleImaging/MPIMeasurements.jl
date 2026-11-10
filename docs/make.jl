@@ -17,6 +17,7 @@ makedocs(
             "Devices" => "framework/devices.md",
             "Sequences" => "framework/sequences.md",
             "Protocols" => "framework/protocols.md",
+            "Console Modes" => "framework/console.md",
             "Examples" => "framework/examples.md",
         ],
         "Configuration Files / Parameters" => Any[

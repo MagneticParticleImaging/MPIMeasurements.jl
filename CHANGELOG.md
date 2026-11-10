@@ -24,6 +24,11 @@
 - improved parsing of amplifier status
 - implemented setting and getting of amplifier ID
 
+### Updated REPL Modes
+- to remove the overlap with Julias built-in ALT+M (and the corresponding warning on every load) the Device REPL mode shortcut has been changed to ALT+2
+- the MPI REPL mode, which controls the complete scanner has been moved to ALT+1
+
+
 ### Other
 - improved error messages during device creation
 
