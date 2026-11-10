@@ -560,7 +560,3 @@ function getProtocolList(scanner::MPIScanner)
     return String[]
   end
 end
-
-function execute(scanner::MPIScanner, protocol::Protocol)
-  return execute(protocol, scanner.generalParams.protocolThreadID)
-end
