@@ -48,6 +48,34 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: lcov.info
+  subpackages:
+    name: Subpackage ${{ matrix.package }} - Julia ${{ matrix.version }} - ${{ github.event_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+        package:
+          - MPIMeasurementsTinkerforge
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: julia-actions/setup-julia@4a12c5f801ca5ef0458bba44687563ef276522dd # v3.0.0
+        with:
+          version: ${{ matrix.version }}
+      # Test the subpackage against this checkout of MPIMeasurements instead of a
+      # registered version by developing both paths into a temporary environment.
+      # ([sources] in Project.toml is not used because Julia 1.10 does not support it.)
+      - name: Test ${{ matrix.package }} against this checkout
+        run: |
+          julia --color=yes -e '
+            using Pkg
+            Pkg.activate(temp=true)
+            Pkg.develop([
+              PackageSpec(path=pwd()),
+              PackageSpec(path=joinpath(pwd(), "subpackages", ARGS[1])),
+            ])
+            Pkg.test(ARGS[1])' ${{ matrix.package }}
   docs:
     name: Documentation
     runs-on: ubuntu-latest
