@@ -1,0 +1,10 @@
+# Codecov configuration, see https://docs.codecov.com/docs/commit-status
+coverage:
+  status:
+    project:
+      default:
+        # Compare against the coverage of the base commit and allow it to drop by up
+        # to 0.5 percentage points, so that changes outside of tested code do not
+        # fail the check because of rounding noise
+        target: auto
+        threshold: 0.5
