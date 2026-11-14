@@ -158,6 +158,9 @@
     @test !isless(rot, spin)
     @test isContinuous(spin)
     @test doesRotationMovement(spin)
+    # One rotation lasts 100 samples at 125 MHz, i.e. 800 ns
+    @test dimension(cycleDuration(spin, baseFreq)) == dimension(u"s")
+    @test cycleDuration(spin, baseFreq) ≈ 800e-9u"s"
 
     contDict = Dict{String, Any}("type" => "ContinuousMechanicalTranslationChannel", "speed" => "1.0mm/s", "positions" => ["0.0mm", "10.0mm"])
     loaded = MPIMeasurements.createFieldChannel("t", contDict)
