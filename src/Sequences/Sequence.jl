@@ -260,7 +260,7 @@ hasStepwiseMechanicalChannels(sequence::Sequence) = any(isStepwise.(mechanicalTx
 # TODO: This currently blocks sorting for other properties
 function Base.isless(a::TxChannel, b::TxChannel)
   if isStepwise(a) && isStepwise(b)
-    isless(a.stepPriority, b.stepPriority)
+    isless(stepPriority(a), stepPriority(b))
   elseif isStepwise(a)
     return false
   elseif isStepwise(b)

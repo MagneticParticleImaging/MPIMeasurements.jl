@@ -167,6 +167,20 @@
     sorted = sort(TxChannel[rot, spin, trans, spin2])
     @test issetequal(id.(sorted[1:2]), ["c", "c2"])
     @test id.(sorted[3:4]) == ["t", "r"]
+    # Stepwise electrical channels have the default step priority of 99
+    stepElec = StepwiseElectricalChannel(id = "se", divider = 12, values = [0.001, 0.002] .* u"T")
+    offset = ProtocolOffsetElectricalChannel(id = "o", offsetStart = -0.002u"T", offsetStop = 0.002u"T", numOffsets = 5)
+    @test stepPriority(stepElec) == 99
+    @test stepPriority(offset) == 99
+    @test isless(trans, stepElec)
+    @test !isless(stepElec, rot) && !isless(rot, stepElec)
+    lowRot = StepwiseMechanicalRotationChannel(id = "r0", stepAngle = 30.0u"°", stepPriority = 0)
+    periodic = PeriodicElectricalChannel(id = "p", components = ElectricalComponent[
+      PeriodicElectricalComponent(id = "pc", divider = 100, amplitude = [0.001u"T"], phase = [0.0u"rad"])])
+    sorted = sort(TxChannel[stepElec, rot, periodic, offset, trans, lowRot])
+    @test id(sorted[1]) == "p"
+    @test id.(sorted[2:3]) == ["r0", "t"]
+    @test issetequal(id.(sorted[4:6]), ["se", "o", "r"])
     @test isContinuous(spin)
     @test doesRotationMovement(spin)
     # One rotation lasts 100 samples at 125 MHz, i.e. 800 ns

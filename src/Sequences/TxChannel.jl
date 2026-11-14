@@ -46,6 +46,15 @@ doesTranslationMovement(::TranslationTxChannel, channel) = true
 export stepsPerCycle
 stepsPerCycle(channelType::T) where T = channeltype(T) isa StepwiseTxChannel ? error("Method not defined for $T.") : nothing
 
+export stepPriority
+"""
+    stepPriority(channel::TxChannel)
+
+Priority used to order stepwise channels when sorting; lower values come first. Channels
+without a configurable priority have the default priority of the stepwise mechanical channels, 99.
+"""
+stepPriority(::TxChannel) = 99
+
 export cycleDuration
 cycleDuration(::T, var) where T <: TxChannel = error("The method has not been implemented for T")
 
