@@ -26,6 +26,14 @@
 - clearer errors for unknown channel, component and device types and for invalid component units
 - extended test suite and CI (separate job for subpackages)
 
+## 0.6.2
+- the `calibration` (transfer function) of a DAQ channel in the Scanner.toml can be given as a table that maps frequencies to values (#115)
+- compat for MPIFiles 0.19
+- CI and Dependabot updates
+
+## 0.6.1
+- compat for MPIFiles 0.18
+
 ## 0.6.0
 
 ### Most Important Breaking Changes
