@@ -42,8 +42,23 @@ MPIMeasurements.@mustimplement mustimplementTestFunction(x::Integer)
     @test MF.tracerConcentration(mdfWithAmount) == [0.5]
     @test MF.tracerVolume(mdfWithAmount) ≈ [1e-4]
 
-    # The reverse conversion assigns the per-tracer vectors of the MDF to the scalar
-    # fields of Tracer, which fails
-    @test_broken (try convert(MPIMeasurements.Tracer, mdfTracer).name == "Perimag"; catch; false; end)
+    # Reverse conversion of an MDF holding a single tracer
+    back = convert(MPIMeasurements.Tracer, mdfTracer)
+    @test back.name == "Perimag"
+    @test back.solute == "Fe"
+    @test back.vendor == "Micromod"
+    @test back.batch == "B1"
+    @test ismissing(back.concentration)
+    @test ismissing(back.volume)
+    @test isnothing(back.injectionTime)
+    back = convert(MPIMeasurements.Tracer, mdfWithAmount)
+    @test back.concentration == 0.5u"mol/L"
+    @test back.volume ≈ 0.1u"mL"
+
+    # A Tracer cannot represent several tracers
+    MF.addTracer(mdfTracer; batch = "B2", concentration = 1.0, injectionTime = MPIMeasurements.Dates.now(),
+      name = "Synomag", solute = "Fe", vendor = "Micromod", volume = 1e-4)
+    @test_throws ArgumentError convert(MPIMeasurements.Tracer, mdfTracer)
+    @test_throws "describes a single tracer" convert(MPIMeasurements.Tracer, mdfTracer)
   end
 end
