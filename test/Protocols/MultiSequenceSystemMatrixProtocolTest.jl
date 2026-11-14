@@ -139,5 +139,17 @@
     @test !protocol.paused
     @test take!(user) isa OperationUnsuccessfulEvent
   end
+
+  @testset "Missing positions" begin
+    params = MultiSequenceSystemMatrixProtocolParams(sequences = [configuredSequence])
+    protocol = MultiSequenceSystemMatrixProtocol(name = "MultiSequenceNoPositionsTest", description = "", scanner = scanner_, params = params)
+    @test_throws MPIMeasurements.IllegalStateException init(protocol)
+    @test_throws "Protocol requires positions" init(protocol)
+
+    params = RobotBasedSystemMatrixProtocolParams(sequence = configuredSequence, waitTime = 0.0, bgFrames = 1, fgFrames = 1)
+    protocol = RobotBasedSystemMatrixProtocol(name = "RobotNoPositionsTest", description = "", scanner = scanner_, params = params)
+    @test_throws MPIMeasurements.IllegalStateException init(protocol)
+    @test_throws "Protocol requires positions" init(protocol)
+  end
   close(scanner_)
 end

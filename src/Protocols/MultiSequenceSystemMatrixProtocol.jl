@@ -97,6 +97,9 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
   if isnothing(protocol.params.sequences)
     throw(IllegalStateException("Protocol requires sequences"))
   end
+  if isnothing(protocol.params.positions)
+    throw(IllegalStateException("Protocol requires positions"))
+  end
 
   if any(acqNumFrameAverages.(protocol.params.sequences) .!= 1)
     throw(ProtocolConfigurationError("The sequences for a MultiSequenceSystemMatrixProtocol currently do not support numFrameAverages != 1"))
