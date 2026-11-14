@@ -206,8 +206,9 @@
     chanx["c3"] = c3 # unknown ID -> appended
     @test length(chanx) == 3
     @test chanx["c3"] === c3
-    # Replacing an existing component by ID refers to an undefined variable `field`
-    @test_broken (try chanx["c3"] = c3; length(chanx) == 3; catch; false; end)
+    chanx["c3"] = c3 # known ID -> replaced
+    @test length(chanx) == 3
+    @test chanx["c3"] === c3
     delete!(chanx, "c3")
     @test collect(keys(chanx)) == ["c1", "c2"]
     @test_throws KeyError delete!(chanx, "c3")

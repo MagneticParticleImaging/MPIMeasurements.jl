@@ -89,7 +89,7 @@ setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::Integer) 
 function setindex!(ch::PeriodicElectricalChannel, comp::ElectricalComponent, i::String)
   for (index, cmp) in enumerate(components(ch))
     if isequal(id(cmp), i)
-      return setindex!(field, comp, index)
+      return setindex!(ch, comp, index)
     end
   end
   push!(ch, comp)
