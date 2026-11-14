@@ -52,15 +52,13 @@ const DateTime = MPIMeasurements.Dates.DateTime
     @test MF.measObservedDriveField(mdf) == applied
     @test MF.measAppliedDriveField(mdf) == applied
 
-    # Values that are not passed should be left alone. This works for the drive field,
-    # but the temperature check tests the function `temperature` instead of the
-    # argument `temperatures`, so existing temperatures are overwritten with nothing.
+    # Values that are not passed are left alone
     mdf = MF.MDFv2InMemory()
     MF.measTemperatures(mdf, temps)
     MF.measObservedDriveField(mdf, applied)
     MPIMeasurements.fillMDFMeasurement(mdf, data, zeros(Bool, 3))
     @test MF.measObservedDriveField(mdf) == applied
-    @test_broken MF.measTemperatures(mdf) == temps
+    @test MF.measTemperatures(mdf) == temps
 
     # Without background data all frames are foreground frames
     mdf = MF.MDFv2InMemory()

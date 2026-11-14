@@ -285,7 +285,7 @@ function fillMDFMeasurement(mdf::MDFv2InMemory, data::Array{Float32}, isBackgrou
 	measIsSparsityTransformed(mdf, false)
 	measIsSpectralLeakageCorrected(mdf, false)
 	measIsTransferFunctionCorrected(mdf, false)
-	if !isnothing(temperature)
+	if !isnothing(temperatures)
 		MPIFiles.measTemperatures(mdf, temperatures)
 	end
 	if !isnothing(drivefield)
