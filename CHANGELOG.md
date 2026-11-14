@@ -17,6 +17,7 @@
 - measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
 - sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML
 - sequences: integer values with prefixed units (e.g. `"2mT"`) can be loaded; electrical values are read by `parseFieldUnit`, whose errors name the key and the channel or component; `"a:b"` ranges are collected like `"a:b:c"`; `sequenceFromDict` leaves its input dict intact
+- `decimation(::RedPitayaDAQ)` and `decimation!(::RedPitayaDAQ, decimation)` are exported; the Red Pitaya decimation is checked whenever it is set
 - `WAVEFORM_ARBITRARY` is exported
 - MDF: existing temperatures are kept when none are given, fixed `deltaSampleSize` in `fillMDFCalibration`, default study time in `saveasMDF`, and conversion between `Tracer` and `MDFv2Tracer`
 - clearer errors for unknown channel, component and device types and for invalid component units

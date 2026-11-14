@@ -163,6 +163,20 @@ Base.close(daq::RedPitayaDAQ) = daq.rpc
 
 channel(daq::RedPitayaDAQ, channelID::AbstractString) = daq.params.channels[channelID]
 
+# Methods of RedPitayaDAQServer's functions, which also have methods for `RedPitayaCluster`
+import RedPitayaDAQServer: decimation, decimation!
+
+export decimation
+decimation(daq::RedPitayaDAQ) = daq.decimation
+
+export decimation!
+function decimation!(daq::RedPitayaDAQ, decimation)
+  if !(iseven(decimation) && 8 <= decimation <= 8192)
+    throw(ScannerConfigurationError("The decimation has to be an even integer from 8 to 8192 for the Red Pitaya. Tried to set $decimation"))
+  end
+  daq.decimation = decimation
+end
+
 export usesCounterTrigger
 usesCounterTrigger(daq::RedPitayaDAQ) = daq.params.useCounterTrigger
 
@@ -327,7 +341,7 @@ function setSequenceParams(daq::RedPitayaDAQ, luts::Vector{Union{Nothing, Array{
       end
     end
     rampTime = maximum([maximum(filter(!isnothing, x)) for x in result])
-    samplingRate = 125e6/daq.decimation
+    samplingRate = 125e6/decimation(daq)
     timePerStep = daq.samplesPerStep/samplingRate
     rampingSteps = Int64(ceil(rampTime/timePerStep))
     fractionSteps = Int64(ceil(daq.params.rampingFraction * sizes[1]))
@@ -893,7 +907,7 @@ function startProducer(channel::Channel, daq::RedPitayaDAQ, numFrames; isControl
   samplesPerFrame = samplesPerPeriod(daq.rpc) * periodsPerFrame(daq.rpc)
   startSample = timing.start
   samplesToRead = samplesPerFrame * numFrames
-  chunkSize = Int(ceil(0.1 * (125e6/daq.decimation)))
+  chunkSize = Int(ceil(0.1 * (125e6/decimation(daq))))
 
   rpu = daq.rpc
   if !isnothing(daq.rpv)
@@ -1049,27 +1063,11 @@ function setupTxComponent!(batch::ScpiBatch, daq::RedPitayaDAQ, channel::Periodi
   # Waveform is set together with amplitudes for arbitrary waveforms
 end
 
-function setupRx(daq::RedPitayaDAQ, decimation, samplesPerPeriod, periodsPerFrame)
+function _setupRx(daq::RedPitayaDAQ, samplesPerPeriod, periodsPerFrame)
   @debug "Setup rx"
-  decimation!(daq.rpc, decimation) # Only command with network communication here
+  decimation!(daq.rpc, decimation(daq)) # Only command with network communication here
   samplesPerPeriod!(daq.rpc, samplesPerPeriod)
   periodsPerFrame!(daq.rpc, periodsPerFrame)
-  #numSlowADCChan(daq.rpc, 4) # Not used as far as I know
-end
-"""
-    checkRedPitayaDecimation(decimation, bandwidth, baseFrequency)
-
-Throw a `ScannerConfigurationError` unless `decimation` is an even integer from 8 to 8192,
-the decimations the Red Pitaya supports. `bandwidth` and `baseFrequency` are the values the
-decimation was derived from and are shown in the error message.
-"""
-function checkRedPitayaDecimation(decimation::Integer, bandwidth, baseFrequency)
-  if !(iseven(decimation) && 8 <= decimation <= 8192)
-    throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $bandwidth and "*
-      "the base frequency of $baseFrequency has a value of $decimation "*
-      "but has to be an even integer from 8 to 8192 for the Red Pitaya."))
-  end
-  return nothing
 end
 
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
@@ -1077,8 +1075,7 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
   decimation_ = rxDecimation(sequence)
-  checkRedPitayaDecimation(decimation_, rxBandwidth(sequence), txBaseFrequency(sequence))
-  daq.decimation = decimation_
+  decimation!(daq, decimation_)
 
   daq.acqNumFrames = acqNumFrames(sequence)
   daq.acqNumFrameAverages = acqNumFrameAverages(sequence)
@@ -1103,15 +1100,15 @@ function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   end
   daq.rpv = RedPitayaClusterView(daq.rpc, selection)
 
-  setupRx(daq, daq.decimation, rxNumSamplesPerPeriod(sequence) * daq.acqNumAverages, acqNumPeriodsPerFrame(sequence))
+  _setupRx(daq, rxNumSamplesPerPeriod(sequence) * daq.acqNumAverages, acqNumPeriodsPerFrame(sequence))
 end
 function setupRx(daq::RedPitayaDAQ, decimation, numSamplesPerPeriod, numPeriodsPerFrame, numFrames; numFrameAverage=1, numAverages=1)
-  daq.decimation = decimation
+  decimation!(daq, decimation)
   daq.acqNumFrames = numFrames
   daq.acqNumFrameAverages = numFrameAverage
   daq.acqNumAverages = numAverages
   daq.rpv = nothing
-  setupRx(daq, decimation, numSamplesPerPeriod * daq.acqNumAverages, numPeriodsPerFrame)
+  _setupRx(daq, numSamplesPerPeriod * daq.acqNumAverages, numPeriodsPerFrame)
 end
 
 # Starts both tx and rx in the case of the Red Pitaya since both are entangled by the master trigger.
