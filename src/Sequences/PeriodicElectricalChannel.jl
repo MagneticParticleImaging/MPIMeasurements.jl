@@ -122,17 +122,7 @@ function createFieldChannel(channelID::AbstractString, ::Type{PeriodicElectrical
   splattingDict[:id] = channelID
 
   if haskey(channelDict, "offset")
-    tmp = uparse.(channelDict["offset"])
-    if eltype(tmp) <: Unitful.Current
-      tmp = tmp .|> u"A"
-    elseif eltype(tmp) <: Unitful.Voltage
-      tmp = tmp .|> u"V"
-    elseif eltype(tmp) <: Unitful.BField
-      tmp = tmp .|> u"T"
-    else
-      error("The value for an offset has to be either given as a voltage, current or in tesla. You supplied the type `$(eltype(tmp))`.")
-    end
-    splattingDict[:offset] = tmp
+    splattingDict[:offset] = parseFieldUnit(channelDict, "offset", channelID)
   end
 
   if haskey(channelDict, "isDfChannel")
@@ -168,7 +158,7 @@ end
 
 function createChannelComponent(componentID::AbstractString, ::Type{PeriodicElectricalComponent}, componentDict::Dict{String, Any})
 
-  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+  divider, amplitude, phase = extractBasicComponentProperties(componentID, componentDict)
 
   if haskey(componentDict, "waveform")
     waveform = toWaveform(componentDict["waveform"])
@@ -181,7 +171,7 @@ end
 
 function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryElectricalComponent}, componentDict::Dict{String, Any})
   
-  divider, amplitude, phase = extractBasicComponentProperties(componentDict)
+  divider, amplitude, phase = extractBasicComponentProperties(componentID, componentDict)
 
   if componentDict["values"] isa AbstractString # case 1: filename to waveform
     filename = joinpath(homedir(), ".mpi", "Waveforms", componentDict["values"])
@@ -201,20 +191,11 @@ function createChannelComponent(componentID::AbstractString, ::Type{ArbitraryEle
   return ArbitraryElectricalComponent(id=componentID, divider=divider,amplitude=amplitude, phase=phase, values=values)
 end
 
-function extractBasicComponentProperties(componentDict::Dict{String, Any})
+function extractBasicComponentProperties(componentID::AbstractString, componentDict::Dict{String, Any})
   divider = eval(Meta.parse("$(componentDict["divider"])"))
   if divider isa Dict; divider = divider["num"]//divider["den"] end
   if !(divider isa Rational); divider=rationalize(divider) end
-  amplitude = uparse.(componentDict["amplitude"])
-  if eltype(amplitude) <: Unitful.Current
-    amplitude = amplitude .|> u"A"
-  elseif eltype(amplitude) <: Unitful.Voltage
-    amplitude = amplitude .|> u"V"
-  elseif eltype(amplitude) <: Unitful.BField
-    amplitude = amplitude .|> u"T"
-  else
-    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(amplitude))`.")
-  end
+  amplitude = parseFieldUnit(componentDict, "amplitude", componentID)
 
   if haskey(componentDict, "phase")
     phaseDict = Dict("sine"=>0.0u"rad", "sin"=>0.0u"rad","cosine"=>pi/2u"rad", "cos"=>pi/2u"rad","-sine"=>pi*u"rad", "-sin"=>pi*u"rad","-cosine"=>-pi/2u"rad", "-cos"=>-pi/2u"rad")

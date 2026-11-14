@@ -16,27 +16,9 @@ end
 channeltype(::Type{<:ProtocolOffsetElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetElectricalChannel}, channelDict::Dict{String, Any})
-  offsetStart = uparse.(channelDict["offsetStart"])
-  if eltype(offsetStart) <: Unitful.Current
-    offsetStart = offsetStart .|> u"A"
-  elseif eltype(offsetStart) <: Unitful.Voltage
-    offsetStart = offsetStart .|> u"V"
-  elseif eltype(offsetStart) <: Unitful.BField
-    offsetStart = offsetStart .|> u"T"
-  else
-    error("The value for an offsetStart has to be either given as a current or in tesla. You supplied the type `$(eltype(offsetStart))`.")
-  end
+  offsetStart = parseFieldUnit(channelDict, "offsetStart", channelID)
 
-  offsetStop = uparse.(channelDict["offsetStop"])
-  if eltype(offsetStop) <: Unitful.Current
-    offsetStop = offsetStop .|> u"A"
-  elseif eltype(offsetStop) <: Unitful.Voltage
-    offsetStop = offsetStop .|> u"V"
-  elseif eltype(offsetStop) <: Unitful.BField
-    offsetStop = offsetStop .|> u"T"
-  else
-    error("The value for an offsetStop has to be either given as a current or in tesla. You supplied the type `$(eltype(offsetStop))`.")
-  end
+  offsetStop = parseFieldUnit(channelDict, "offsetStop", channelID)
 
   numOffsets = channelDict["numOffsets"]
 

@@ -21,7 +21,7 @@ channeltype(::Type{<:StepwiseMechanicalTranslationChannel}) = StepwiseTxChannel(
 mechanicalMovementType(::Type{<:StepwiseMechanicalTranslationChannel}) = TranslationTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseMechanicalTranslationChannel}, channelDict::Dict{String, Any})
-  speed = uconvert.(u"m/s", uparse.(channelDict["speed"]))
+  speed = float.(uconvert.(u"m/s", uparse.(channelDict["speed"])))
   positions = uparse.(channelDict["positions"])
 
   splattingDict = Dict{Symbol, Any}()

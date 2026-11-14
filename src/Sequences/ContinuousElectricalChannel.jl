@@ -23,16 +23,7 @@ unitIsTesla(chan::ContinuousElectricalChannel) = (dimension(chan.offset) == dime
 channeltype(::Type{<:ContinuousElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{ContinuousElectricalChannel}, channelDict::Dict{String, Any})
-  offset = uparse.(channelDict["offset"])
-  if eltype(offset) <: Unitful.Current
-    offset = offset .|> u"A"
-  elseif eltype(offset) <: Unitful.Voltage
-    offset = offset .|> u"V"
-  elseif eltype(offset) <: Unitful.BField
-    offset = offset .|> u"T"
-  else
-    error("The value for an offset has to be either given as a current or in tesla. You supplied the type `$(eltype(offset))`.")
-  end
+  offset = parseFieldUnit(channelDict, "offset", channelID)
 
   dividerSteps = channelDict["dividerSteps"]
   divider = channelDict["divider"]
@@ -41,16 +32,7 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Continu
     error("The divider $(divider) needs to be a multiple of the dividerSteps $(dividerSteps)")
   end
 
-  amplitude = uparse.(channelDict["amplitude"])
-  if eltype(amplitude) <: Unitful.Current
-    amplitude = amplitude .|> u"A"
-  elseif eltype(amplitude) <: Unitful.Voltage
-    amplitude = amplitude .|> u"V"
-  elseif eltype(amplitude) <: Unitful.BField
-    amplitude = amplitude .|> u"T"
-  else
-    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(amplitude))`.")
-  end
+  amplitude = parseFieldUnit(channelDict, "amplitude", channelID)
 
   if haskey(channelDict, "phase")
     phaseDict = Dict("cosine"=>0.0u"rad", "cos"=>0.0u"rad","sine"=>pi/2u"rad", "sin"=>pi/2u"rad","-cosine"=>pi*u"rad", "-cos"=>pi*u"rad","-sine"=>-pi/2u"rad", "-sin"=>-pi/2u"rad")

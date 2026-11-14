@@ -48,23 +48,24 @@
   @testset "Units and values" begin
     dict = fixture()
     dfChannel(dict, "chanx")["offset"] = "1.0m"
+    @test_throws "`offset` in `chanx`" sequenceFromDict(dict)
     @test_throws ErrorException sequenceFromDict(dict)
 
     dict = fixture()
     dict["Fields"]["ff"]["ffy"]["offset"] = "1.0m"
-    @test_throws ErrorException sequenceFromDict(dict)
+    @test_throws "`offset` in `ffy`" sequenceFromDict(dict)
 
     dict = fixture()
     dict["Fields"]["ff"]["ffy"]["amplitude"] = "1.0m"
-    @test_throws ErrorException sequenceFromDict(dict)
+    @test_throws "`amplitude` in `ffy`" sequenceFromDict(dict)
 
     dict = fixture()
     dict["Fields"]["ff"]["ffx"]["values"] = ["1.0m", "2.0m"]
-    @test_throws ErrorException sequenceFromDict(dict)
+    @test_throws "`values` in `ffx`" sequenceFromDict(dict)
 
     dict = fixture()
     dfChannel(dict, "chanx")["c1"]["amplitude"] = ["1.0m"]
-    @test_throws "You supplied the type" sequenceFromDict(dict)
+    @test_throws "The value of `amplitude` in `c1` has to be given as a current, a voltage or in tesla. You supplied the type" sequenceFromDict(dict)
     @test_throws ErrorException sequenceFromDict(dict)
 
     dict = fixture()
@@ -79,11 +80,17 @@
     dfChannel(dict, "chanx")["c1"]["waveform"] = "sideways"
     @test_throws Exception sequenceFromDict(dict)
 
-    # Integer values with a prefixed unit (e.g. "10mT") are converted to Rational and
-    # rejected with a MethodError, only floating point values ("10.0mT") work
+    # Integer values with a prefixed unit
     dict = fixture()
     dfChannel(dict, "chanx")["c1"]["amplitude"] = ["10mT"]
-    @test_broken (try amplitude(sequenceFromDict(dict)["df"]["chanx"]["c1"]) == 10u"mT"; catch; false; end)
+    dfChannel(dict, "chanx")["offset"] = "1mT"
+    dict["Fields"]["ff"]["ffx"]["values"] = ["1mT", "2mT", "3mT", "4mT"]
+    dict["Fields"]["ff"]["ffy"]["amplitude"] = "1A"
+    seq = sequenceFromDict(dict)
+    @test amplitude(seq["df"]["chanx"]["c1"]) == 10u"mT"
+    @test offset(seq["df"]["chanx"]) == 1u"mT"
+    @test MPIMeasurements.values(seq["ff"]["ffx"]) == [1, 2, 3, 4] .* u"mT"
+    @test seq["ff"]["ffy"].amplitude == 1.0u"A"
   end
 
   @testset "Phase keywords" begin

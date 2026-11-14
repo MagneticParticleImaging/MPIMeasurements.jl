@@ -147,6 +147,7 @@
     @test postStepPause(t) ≈ 0.1u"s"
     @test MPIMeasurements.createFieldChannel("t", transDict("2.0mm/s")).speed ≈ 0.002u"m/s"
     @test MPIMeasurements.createFieldChannel("t", transDict(["2.0mm/s"])).speed ≈ [0.002u"m/s"]
+    @test MPIMeasurements.createFieldChannel("t", transDict("2mm/s")).speed ≈ 0.002u"m/s"
 
     # Stepwise channels are ordered by their step priority
     @test isless(trans, rot)
@@ -181,10 +182,11 @@
       "offsetStart" => start, "offsetStop" => stop, "numOffsets" => 3)
     @test MPIMeasurements.createFieldChannel("o", offsetDict("-1.0A", "1.0A")).offsetStop == 1.0u"A"
     @test MPIMeasurements.createFieldChannel("o", offsetDict("0.0V", "1.0V")).offsetStop == 1.0u"V"
-    @test_throws "You supplied the type" MPIMeasurements.createFieldChannel("o", offsetDict("-1.0m", "1.0A"))
-    @test_throws "You supplied the type" MPIMeasurements.createFieldChannel("o", offsetDict("-1.0A", "1.0m"))
-    # Integer values with a prefixed unit (e.g. "2mT") are converted to Rational and
-    # do not match the Float64 type parameter
-    @test_broken (try MPIMeasurements.createFieldChannel("o", offsetDict("-2mT", "2mT")) isa ProtocolOffsetElectricalChannel; catch; false; end)
+    @test_throws "`offsetStart` in `o`" MPIMeasurements.createFieldChannel("o", offsetDict("-1.0m", "1.0A"))
+    @test_throws "`offsetStop` in `o`" MPIMeasurements.createFieldChannel("o", offsetDict("-1.0A", "1.0m"))
+    # Integer values with a prefixed unit
+    intOffset = MPIMeasurements.createFieldChannel("o", offsetDict("-2mT", "2mT"))
+    @test intOffset isa ProtocolOffsetElectricalChannel{typeof(1.0u"T")}
+    @test intOffset.offsetStop == 0.002u"T"
   end
 end

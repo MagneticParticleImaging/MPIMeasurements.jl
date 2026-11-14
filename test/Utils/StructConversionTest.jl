@@ -33,9 +33,8 @@ end
     @test parse(["1.0V", "2.0V"]) == [1.0u"V", 2.0u"V"]
     @test_throws ArgumentError parse("1:2:3:4")
 
-    # A two-part range is not collected, so a stepwise channel cannot use it
     chanDict = Dict{String, Any}("type" => "StepwiseElectricalChannel", "divider" => 12, "values" => "1.0mT:3.0mT")
-    @test_broken (try MPIMeasurements.values(MPIMeasurements.createFieldChannel("s", chanDict)) ≈ [1.0, 2.0, 3.0] .* u"mT"; catch; false; end)
+    @test MPIMeasurements.values(MPIMeasurements.createFieldChannel("s", chanDict)) ≈ [1.0, 2.0, 3.0] .* u"mT"
   end
 
   @testset "parse_into_tf" begin
