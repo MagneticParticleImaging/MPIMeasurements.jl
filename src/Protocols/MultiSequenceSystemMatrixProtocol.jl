@@ -429,6 +429,7 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   if !isnothing(protocol.params.bgSequence)
     params["bgSequence"] = toDict(protocol.params.bgSequence)
   end
+  params["numBGMeas"] = protocol.params.numBGMeas
 
   filename = file(protocol, "meta.toml")
   filename_backup = file(protocol, "meta.toml.backup")
@@ -466,13 +467,24 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
 
     sysObj.positions = Positions(params)
 
+    # `store` writes `bgSequence` only if there is one
     storedSeq = sequenceFromDict.(params["sequences"])
-    if storedSeq != protocol.params.sequences
-      message = "Stored sequences do not match initialized sequence. Use stored sequence instead?"
+    storedBGSeq = haskey(params, "bgSequence") ? sequenceFromDict(params["bgSequence"]) : nothing
+    storedNumBGMeas = get(params, "numBGMeas", protocol.params.numBGMeas)
+    mismatches = String[]
+    storedSeq != protocol.params.sequences && push!(mismatches, "sequences")
+    storedBGSeq != protocol.params.bgSequence && push!(mismatches, "background sequence")
+    if !isnothing(storedBGSeq) && storedNumBGMeas != protocol.params.numBGMeas
+      push!(mismatches, "number of background measurements")
+    end
+    if !isempty(mismatches)
+      message = "Stored $(join(mismatches, ", ", " and ")) do not match the initialized protocol. Use the stored values instead?"
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
       protocol.params.sequences = storedSeq
+      protocol.params.bgSequence = storedBGSeq
+      protocol.params.numBGMeas = storedNumBGMeas
     end
     seq = protocol.params.sequences
     protocol.allSequences = measurementSequences(protocol.params)

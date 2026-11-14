@@ -15,6 +15,7 @@
 - `stepPriority` is defined for every `TxChannel` (default 99), so channel lists with stepwise electrical channels can be sorted
 - the example sequences in `config/` are updated to the current sequence format and load again
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement with the stored sequences adopts them as the protocol sequences, and the background measurements are repeated `numBGMeas` times as in a new measurement
+- `MultiSequenceSystemMatrixProtocol`: resuming a measurement also compares the stored background sequence and `numBGMeas` with the configured ones and asks whether to use the stored values or cancel
 - measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
 - sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML
 - sequences: integer values with prefixed units (e.g. `"2mT"`) can be loaded; electrical values are read by `parseFieldUnit`, whose errors name the key and the channel or component; `"a:b"` ranges are collected like `"a:b:c"`; `sequenceFromDict` leaves its input dict intact
