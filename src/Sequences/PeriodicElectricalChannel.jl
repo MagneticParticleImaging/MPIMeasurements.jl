@@ -144,7 +144,7 @@ end
 
 function createChannelComponent(componentID::AbstractString, componentDict::Dict{String, Any})
   if haskey(componentDict, "type")
-    type = pop!(componentDict, "type")
+    type = componentDict["type"]
     concreteType = getConcreteType(ElectricalComponent, type)
     if !isnothing(concreteType) 
       createChannelComponent(componentID, concreteType, componentDict)

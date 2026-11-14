@@ -5,8 +5,6 @@
   @testset "Channel and component types" begin
     # Unknown types should be reported with an ErrorException ("unknown channel type"),
     # but getConcreteType fails earlier when caching `nothing` in its Dict{String, Type}
-    # (sequenceFromDict removes the `type` entries from the dict it is given, so every
-    # call gets a fresh dict)
     unknownChannel() = (dict = fixture(); dfChannel(dict, "chanx")["type"] = "NoSuchChannel"; dict)
     @test_throws Exception sequenceFromDict(unknownChannel())
     @test_broken (try sequenceFromDict(unknownChannel()); false; catch e; e isa ErrorException; end)
@@ -20,13 +18,11 @@
     @test_broken (try sequenceFromDict(unknownComponent()); false; catch e; e isa ErrorException; end)
   end
 
-  @testset "The input dict is consumed" begin
-    # Loading removes the `type` entries from the given dict, so the same dict cannot be
-    # loaded twice
+  @testset "The input dict is left unchanged" begin
     dict = fixture()
     seq = sequenceFromDict(dict)
-    @test !haskey(dfChannel(dict, "chanx"), "type")
-    @test_broken (try sequenceFromDict(dict) == seq; catch; false; end)
+    @test dict == fixture()
+    @test sequenceFromDict(dict) == seq
   end
 
   @testset "Control and decoupling flags" begin

@@ -186,7 +186,7 @@ end
 # TODO further remove redundant code in channel creation
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
-    type = pop!(channelDict, "type")
+    type = channelDict["type"]
     concreteType = getConcreteType(TxChannel, type)
     if !isnothing(concreteType) 
       createFieldChannel(channelID, concreteType, channelDict)
