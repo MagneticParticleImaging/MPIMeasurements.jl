@@ -275,7 +275,7 @@ function amplitude!(component::Union{PeriodicElectricalComponent,ArbitraryElectr
     component.amplitude[period] = value
   end
 end
-amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[period]
+amplitude(component::SweepElectricalComponent; trigger::Integer=1) = component.amplitude[trigger]
 
 export phase, phase!
 phase(component::Union{PeriodicElectricalComponent,ArbitraryElectricalComponent}, trigger::Integer=1) = component.phase[trigger]

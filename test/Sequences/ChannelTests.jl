@@ -113,8 +113,8 @@
     @test divider(sweep, 2) == 9600
     @test phase(sweep) == 0.0u"rad"
     @test waveform(sweep) == WAVEFORM_SINE
-    # amplitude() refers to an undefined variable `period` instead of `trigger`
-    @test_broken (try amplitude(sweep, trigger = 2) == 0.002u"T"; catch; false; end)
+    @test amplitude(sweep) == 0.001u"T"
+    @test amplitude(sweep, trigger = 2) == 0.002u"T"
   end
 
   @testset "Mechanical channels" begin
