@@ -122,9 +122,7 @@
     @test MPIMeasurements.createFieldChannel("r", rotDict("forward")).direction == MPIMeasurements.MECHANICAL_ROTATION_DIRECTION_FORWARD
     @test MPIMeasurements.createFieldChannel("r", rotDict("backward")).direction == MPIMeasurements.MECHANICAL_ROTATION_DIRECTION_BACKWARD
     @test_throws ErrorException MPIMeasurements.createFieldChannel("r", rotDict("sideways"))
-    # The branch meant for "standstill" compares against "forward" a second time
-    @test_broken (try MPIMeasurements.createFieldChannel("r", rotDict("standstill")).direction ==
-      MPIMeasurements.MECHANICAL_ROTATION_DIRECTION_STANDSTILL; catch; false; end)
+    @test MPIMeasurements.createFieldChannel("r", rotDict("standstill")).direction == MPIMeasurements.MECHANICAL_ROTATION_DIRECTION_STANDSTILL
 
     rot = StepwiseMechanicalRotationChannel(id = "r", stepAngle = 30.0u"°")
     @test rot.direction == MPIMeasurements.MECHANICAL_ROTATION_DIRECTION_STANDSTILL # default

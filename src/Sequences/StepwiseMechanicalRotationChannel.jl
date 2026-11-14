@@ -39,7 +39,7 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Stepwis
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_FORWARD
     elseif channelDict["direction"] == "backward"
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_BACKWARD
-    elseif channelDict["direction"] == "forward"
+    elseif channelDict["direction"] == "standstill"
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_STANDSTILL
     else
       error("The value `$(channelDict["direction"])` is not a valid direction.")
