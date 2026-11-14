@@ -15,7 +15,7 @@ mechanicalMovementType(::Type{<:ContinuousMechanicalTranslationChannel}) = Trans
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{ContinuousMechanicalTranslationChannel}, channelDict::Dict{String, Any})
   speed = uparse(channelDict["speed"])
-  positions = uparse.(channelDict["positions"])
+  positions = Tuple(uparse.(channelDict["positions"]))
   return ContinuousMechanicalTranslationChannel(id=channelID, speed=speed, positions=positions)
 end
 

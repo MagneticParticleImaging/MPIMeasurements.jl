@@ -161,9 +161,11 @@
     @test isContinuous(spin)
     @test doesRotationMovement(spin)
 
-    # The positions are parsed into a vector, but the struct expects a tuple
     contDict = Dict{String, Any}("type" => "ContinuousMechanicalTranslationChannel", "speed" => "1.0mm/s", "positions" => ["0.0mm", "10.0mm"])
-    @test_broken (try MPIMeasurements.createFieldChannel("t", contDict) isa ContinuousMechanicalTranslationChannel; catch; false; end)
+    loaded = MPIMeasurements.createFieldChannel("t", contDict)
+    @test loaded isa ContinuousMechanicalTranslationChannel
+    @test loaded.speed ≈ 1.0u"mm/s"
+    @test loaded.positions[1] ≈ 0.0u"mm" && loaded.positions[2] ≈ 10.0u"mm"
     contTrans = ContinuousMechanicalTranslationChannel(id = "t", speed = 1.0u"mm/s", positions = (0.0u"mm", 10.0u"mm"))
     @test isContinuous(contTrans)
     @test doesTranslationMovement(contTrans)
