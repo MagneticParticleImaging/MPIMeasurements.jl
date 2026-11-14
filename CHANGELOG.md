@@ -25,6 +25,7 @@
 - MDF: existing temperatures are kept when none are given, fixed `deltaSampleSize` in `fillMDFCalibration`, default study time in `saveasMDF`, and conversion between `Tracer` and `MDFv2Tracer`
 - clearer errors for unknown channel, component and device types and for invalid component units
 - extended test suite and CI (separate job for subpackages)
+- removed the scripts in `example/` that use functions that no longer exist (`runProtocol`, `prepareMDF`, `filename`, `setupSequence`)
 
 ## 0.6.2
 - the `calibration` (transfer function) of a DAQ channel in the Scanner.toml can be given as a table that maps frequencies to values (#115)
