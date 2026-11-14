@@ -9,6 +9,7 @@
 - **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
 
 ### Fixes and minor changes
+- measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
 - sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML
 - sequences: integer values with prefixed units (e.g. `"2mT"`) can be loaded; electrical values are read by `parseFieldUnit`, whose errors name the key and the channel or component; `"a:b"` ranges are collected like `"a:b:c"`; `sequenceFromDict` leaves its input dict intact
 - `WAVEFORM_ARBITRARY` is exported

@@ -6,5 +6,10 @@ mutable struct TempDirProtocol <: Protocol
 end
 MPIMeasurements.dir(protocol::TempDirProtocol) = protocol.dir
 
+# Protocol that only provides a scanner
+struct ScannerProtocol <: Protocol
+  scanner::MPIScanner
+end
+
 # DriveFieldBuffer requires a ControlSequence, which is not used when complex data is pushed
 struct UnusedControlSequence <: MPIMeasurements.ControlSequence end
