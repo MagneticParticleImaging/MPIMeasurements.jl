@@ -9,6 +9,7 @@
 - **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
 
 ### Fixes and minor changes
+- `unitIsTesla(::StepwiseElectricalChannel)` no longer calls a deprecated Unitful method
 - memory-mapping protocol files no longer leaves a file stream open per mapped array
 - `isless` for two non-stepwise `TxChannel`s returns `false`, so sorting channels uses a valid order
 - the example sequences in `config/` are updated to the current sequence format and load again

@@ -46,6 +46,9 @@
 
     chan2 = StepwiseElectricalChannel(id = "s", divider = 12, values = [1.0, 2.0] .* u"V", enable = [false, true])
     @test MPIMeasurements.enableValues(chan2) == [false, true]
+    @test !MPIMeasurements.unitIsTesla(chan2)
+    # No deprecation warning (shown when Julia runs with --depwarn=yes, as in Pkg.test)
+    @test_logs MPIMeasurements.unitIsTesla(chan2)
   end
 
   @testset "PeriodicElectricalChannel and components" begin
