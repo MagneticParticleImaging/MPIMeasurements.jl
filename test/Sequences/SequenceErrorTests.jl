@@ -144,13 +144,15 @@
     dict = fixture()
     dict["Acquisition"]["bandwidth"] = "122070.3125Hz" # 125 MHz / 1024
     @test_throws MPIMeasurements.ScannerConfigurationError rxNumSamplingPoints(sequenceFromDict(dict))
-    # If the decimation itself is not an integer, building the error message fails with
-    # an InexactError (Int(baseFrequency / samplingRate))
+    @test_throws "decimation (512)" rxNumSamplingPoints(sequenceFromDict(dict))
+    # The decimation has to be an integer
     dict = fixture()
-    dict["Acquisition"]["bandwidth"] = "3.0MHz" # 6 MHz * 2.9184 ms = 17510.4
+    dict["Acquisition"]["bandwidth"] = "3.0MHz" # 125 MHz / 6 MHz = 20.83
     seq = sequenceFromDict(dict)
-    @test_throws Exception rxNumSamplingPoints(seq)
-    @test_broken (try rxNumSamplingPoints(seq); false; catch e; e isa MPIMeasurements.ScannerConfigurationError; end)
+    @test MPIMeasurements.rxDecimation(sequenceFromDict(fixture())) === 8
+    @test_throws MPIMeasurements.ScannerConfigurationError MPIMeasurements.rxDecimation(seq)
+    @test_throws MPIMeasurements.ScannerConfigurationError rxNumSamplingPoints(seq)
+    @test_throws "The decimation has to be an integer, but the base frequency of 1.25e8 Hz and the rx sampling rate of 6.0e6 Hz (twice the rx bandwidth of 3.0e6 Hz) result in a decimation of 20.83" rxNumSamplingPoints(seq)
   end
 
   @testset "Drive-field quirks" begin

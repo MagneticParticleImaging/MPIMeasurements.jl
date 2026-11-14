@@ -482,12 +482,30 @@ rxSamplingRate(sequence::Sequence) = 2 * rxBandwidth(sequence)
 export rxNumChannels
 rxNumChannels(sequence::Sequence) = length(rxChannels(sequence))
 
+"""
+    rxDecimation(sequence)
+
+Return the decimation, the ratio of the base frequency to the rx sampling rate, as an
+`Int`. The decimation must be an integer; otherwise a `ScannerConfigurationError` is
+thrown. DAQs can impose further limits on it.
+"""
+function rxDecimation(sequence::Sequence)
+  decimation = upreferred(baseFrequency(sequence)/rxSamplingRate(sequence))
+  if !(decimation≈round(decimation))
+    throw(ScannerConfigurationError("The decimation has to be an integer, but the base frequency of $(baseFrequency(sequence)) "*
+      "and the rx sampling rate of $(rxSamplingRate(sequence)) (twice the rx bandwidth of $(rxBandwidth(sequence))) "*
+      "result in a decimation of $decimation."))
+  end
+  return round(Int, decimation)
+end
+
 export rxNumSamplingPoints
 function rxNumSamplingPoints(sequence::Sequence)
+  decimation = rxDecimation(sequence)
   result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
   if !(result≈round(result))
     @debug "rxNumSamplingPoints" result≈round(result) rxSamplingRate(sequence) dfCycle(sequence)
-    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($(Int(baseFrequency(sequence)/rxSamplingRate(sequence)))) results in non-integer sampling points ($result)."))
+    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($decimation) results in non-integer sampling points ($result)."))
   end
 
   return round(Int64,result)
