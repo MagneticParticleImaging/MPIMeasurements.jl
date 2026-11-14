@@ -17,12 +17,12 @@ function tryuparse(val::Vector{T}) where {T}
   end
 end
 
-function parsePossibleURange(val::String)
+function parsePossibleURange(val::AbstractString)
   result = nothing
   if contains(val, ":")
     splitted = split(val, ":")
     if length(splitted) == 2
-      result = uparse(splitted[1]):1*unit(uparse(splitted[1])):uparse(splitted[2])
+      result = collect(uparse(splitted[1]):1*unit(uparse(splitted[1])):uparse(splitted[2]))
     elseif length(splitted) == 3
       result = collect(uparse(splitted[1]):uparse(splitted[2]):uparse(splitted[3]))
     else
@@ -44,7 +44,7 @@ function parsePossibleURange(val::String)
 
   return result
 end
-parsePossibleURange(val::Vector{String}) = parsePossibleURange.(val)
+parsePossibleURange(val::AbstractVector) = parsePossibleURange.(val)
 
 function parse_into_tf(value::String)
   if occursin(".h5", value) # case 1: filename to transfer function, the TF will be read the first time calibration() is called, (done in _init(), to prevent delays while using the device)

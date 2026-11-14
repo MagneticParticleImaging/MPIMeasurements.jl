@@ -7,6 +7,7 @@ end
 include("Amplifier/AmplifierTests.jl")
 include("CollisionModule/ColisionModuleTests.jl")
 #include("DAQ/DAQTests.jl")
+include("DAQ/RedPitayaDecimationTest.jl")
 #include("GaussMeter/GaussMeterTests.jl")
 #include("Virtual/VirtualDeviceTests.jl")
 #include("Robots/RobotTests.jl")

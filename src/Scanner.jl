@@ -38,7 +38,9 @@ function getConcreteType(supertype_::Type, type::String)
       foundImplementation = Implementation
     end
   end
-  push!(concreteTypesCache, type=>foundImplementation)
+  if !isnothing(foundImplementation)
+    push!(concreteTypesCache, type=>foundImplementation)
+  end
   return foundImplementation
 end
 

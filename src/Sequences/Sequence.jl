@@ -186,7 +186,7 @@ end
 # TODO further remove redundant code in channel creation
 function createFieldChannel(channelID::AbstractString, channelDict::Dict{String, Any})
   if haskey(channelDict, "type")
-    type = pop!(channelDict, "type")
+    type = channelDict["type"]
     concreteType = getConcreteType(TxChannel, type)
     if !isnothing(concreteType) 
       createFieldChannel(channelID, concreteType, channelDict)
@@ -276,7 +276,7 @@ function amplitude!(channel::PeriodicElectricalChannel, componentId::AbstractStr
   if !isnothing(index)
     amplitude!(channel.components[index], value, period = period)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 
@@ -286,7 +286,7 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
   if !isnothing(index)
     phase!(channel.components[index], value, period = period)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 
@@ -296,7 +296,7 @@ function divider!(channel::PeriodicElectricalChannel, componentId::AbstractStrin
   if !isnothing(index)
     divider!(channel.components[index], value)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 
@@ -395,16 +395,23 @@ dfNumChannels(sequence::Sequence) = length(dfChannels(sequence)) # TODO: How do 
 
 dfChannels(sequence::Sequence) = [x for x in periodicElectricalTxChannels(sequence) if isDfChannel(x)]
 
+function checkNumPeriods(channel, component, values, numPeriods, name)
+  if length(values) != numPeriods
+    throw(SequenceConfigurationError("All drive-field components must define the same number of periods. Component $(id(component)) of channel $(id(channel)) defines $(length(values)) $name instead of $numPeriods."))
+  end
+end
+
 export dfPhase
 function dfPhase(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(phase(channels[1].components[1])) # Should all be of the same length
+  numPeriods = length(channels[1].components[1].phase)
   result = zeros(typeof(1.0u"rad"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, phase) in enumerate(phase(component))
+      checkNumPeriods(channel, component, component.phase, numPeriods, "phases")
+      for (periodIdx, phase) in enumerate(component.phase)
         result[periodIdx, channelIdx, componentIdx] = phase
       end
     end
@@ -417,12 +424,13 @@ export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
+  numPeriods = length(channels[1].components[1].amplitude)
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+      checkNumPeriods(channel, component, component.amplitude, numPeriods, "amplitudes")
+      for (periodIdx, strength) in enumerate(component.amplitude) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
         if strength isa Unitful.Voltage
           # HACKY way to save Voltage DFs into the MDF -> use Tesla as mV (everything > 1 will be V)
           @warn "Your DF is defined as a voltage! Will save $(uconvert(u"mV",strength)) as $(ustrip(u"mV", strength).*u"T")"
@@ -473,10 +481,6 @@ export acqNumFrameAverages
 acqNumFrameAverages(sequence::Sequence) = acqNumFrameAverages(sequence.acquisition)
 acqNumFrameAverages(sequence::Sequence, val) = acqNumFrameAverages(sequence.acquisition, val)
 
-export isBackground
-isBackground(sequence::Sequence) = isBackground(sequence.acquisition)
-isBackground(sequence::Sequence, val) = isBackground(sequence.acquisition, val)
-
 export rxBandwidth
 rxBandwidth(sequence::Sequence) = rxBandwidth(sequence.acquisition)
 
@@ -486,12 +490,30 @@ rxSamplingRate(sequence::Sequence) = 2 * rxBandwidth(sequence)
 export rxNumChannels
 rxNumChannels(sequence::Sequence) = length(rxChannels(sequence))
 
+"""
+    rxDecimation(sequence)
+
+Return the decimation, the ratio of the base frequency to the rx sampling rate, as an
+`Int`. The decimation must be an integer; otherwise a `ScannerConfigurationError` is
+thrown. DAQs can impose further limits on it.
+"""
+function rxDecimation(sequence::Sequence)
+  decimation = upreferred(baseFrequency(sequence)/rxSamplingRate(sequence))
+  if !(decimation≈round(decimation))
+    throw(ScannerConfigurationError("The decimation has to be an integer, but the base frequency of $(baseFrequency(sequence)) "*
+      "and the rx sampling rate of $(rxSamplingRate(sequence)) (twice the rx bandwidth of $(rxBandwidth(sequence))) "*
+      "result in a decimation of $decimation."))
+  end
+  return round(Int, decimation)
+end
+
 export rxNumSamplingPoints
 function rxNumSamplingPoints(sequence::Sequence)
+  decimation = rxDecimation(sequence)
   result = upreferred(rxSamplingRate(sequence)*dfCycle(sequence))
   if !(result≈round(result))
     @debug "rxNumSamplingPoints" result≈round(result) rxSamplingRate(sequence) dfCycle(sequence)
-    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($(Int(baseFrequency(sequence)/rxSamplingRate(sequence)))) results in non-integer sampling points ($result)."))
+    throw(ScannerConfigurationError("The selected combination of divider ($(dfSamplesPerCycle(sequence))) and decimation ($decimation) results in non-integer sampling points ($result)."))
   end
 
   return round(Int64,result)

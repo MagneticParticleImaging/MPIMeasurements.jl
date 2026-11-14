@@ -20,24 +20,32 @@ end
 function Base.convert(::Type{MDFv2Tracer}, x::Tracer)
   tracer = defaultMDFv2Tracer()
   tracerBatch(tracer, ismissing(x.batch) ? missing : [x.batch])
-  tracerConcentration(tracer, ismissing(x.concentration) ? missing : [x.concentration])
+  tracerConcentration(tracer, ismissing(x.concentration) ? missing : [ustrip(u"mol/L", x.concentration)])
   tracerInjectionTime(tracer, isnothing(x.injectionTime) ? nothing : [x.injectionTime])
   tracerName(tracer, ismissing(x.name) ? missing : [x.name])
   tracerSolute(tracer, ismissing(x.solute) ? missing : [x.solute])
   tracerVendor(tracer, ismissing(x.vendor) ? missing : [x.vendor])
-  tracerVolume(tracer, ismissing(x.volume) ? missing : [x.volume])
+  tracerVolume(tracer, ismissing(x.volume) ? missing : [ustrip(u"L", x.volume)])
 
   return tracer
 end
 
 function Base.convert(::Type{Tracer}, x::MDFv2Tracer)
+  values = (tracerBatch(x), tracerConcentration(x), tracerInjectionTime(x), tracerName(x), tracerSolute(x), tracerVendor(x), tracerVolume(x))
+  lengths = [length(v) for v in values if !ismissing(v) && !isnothing(v)]
+  if !all(==(1), lengths)
+    throw(ArgumentError("A Tracer describes a single tracer, but the given MDFv2Tracer has fields with $(join(sort(unique(lengths)), " and ")) entries"))
+  end
+  single(v) = ismissing(v) || isnothing(v) ? v : only(v)
+  concentration = tracerConcentration(x)
+  volume = tracerVolume(x)
   return Tracer(
-    batch = tracerBatch(x),
-    concentration = tracerConcentration(x),
-    injectionTime = tracerInjectionTime(x),
-    name = tracerName(x),
-    solute = tracerSolute(x),
-    vendor = tracerVendor(x),
-    volume = tracerVolume(x),
+    batch = single(tracerBatch(x)),
+    concentration = ismissing(concentration) ? missing : only(concentration)*u"mol/L",
+    injectionTime = single(tracerInjectionTime(x)),
+    name = single(tracerName(x)),
+    solute = single(tracerSolute(x)),
+    vendor = single(tracerVendor(x)),
+    volume = ismissing(volume) ? missing : only(volume)*u"L",
   )
 end
