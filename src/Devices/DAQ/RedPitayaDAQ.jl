@@ -1056,19 +1056,29 @@ function setupRx(daq::RedPitayaDAQ, decimation, samplesPerPeriod, periodsPerFram
   periodsPerFrame!(daq.rpc, periodsPerFrame)
   #numSlowADCChan(daq.rpc, 4) # Not used as far as I know
 end
+"""
+    checkRedPitayaDecimation(decimation, bandwidth, baseFrequency)
+
+Throw a `ScannerConfigurationError` unless `decimation` is an even integer from 8 to 8192,
+the decimations the Red Pitaya supports. `bandwidth` and `baseFrequency` are the values the
+decimation was derived from and are shown in the error message.
+"""
+function checkRedPitayaDecimation(decimation::Integer, bandwidth, baseFrequency)
+  if !(iseven(decimation) && 8 <= decimation <= 8192)
+    throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $bandwidth and "*
+      "the base frequency of $baseFrequency has a value of $decimation "*
+      "but has to be an even integer from 8 to 8192 for the Red Pitaya."))
+  end
+  return nothing
+end
+
 function setupRx(daq::RedPitayaDAQ, sequence::Sequence)
   @assert txBaseFrequency(sequence) == 125.0u"MHz" "The base frequency is fixed for the Red Pitaya "*
   "and must thus be 125 MHz and not $(txBaseFrequency(sequence))."
 
-  # The decimation has to be divisible by 2 and must be 8 or larger
-  decimation_ = upreferred(txBaseFrequency(sequence)/rxSamplingRate(sequence))
-  if iseven(decimation_) &&  decimation_ >= 8
-    daq.decimation = decimation_
-  else
-    throw(ScannerConfigurationError("The decimation derived from the rx bandwidth of $(rxBandwidth(sequence)) and "*
-      "the base frequency of $(txBaseFrequency(sequence)) has a value of $decimation_ "*
-      "but has to be a power of 2"))
-  end
+  decimation_ = rxDecimation(sequence)
+  checkRedPitayaDecimation(decimation_, rxBandwidth(sequence), txBaseFrequency(sequence))
+  daq.decimation = decimation_
 
   daq.acqNumFrames = acqNumFrames(sequence)
   daq.acqNumFrameAverages = acqNumFrameAverages(sequence)
