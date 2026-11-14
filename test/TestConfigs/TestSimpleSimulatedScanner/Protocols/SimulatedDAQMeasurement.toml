@@ -1,5 +1,9 @@
 name = "SimulatedDAQMeasurement"
-type = "DAQMeasurementProtocol"
+type = "MPIMeasurementProtocol"
 description = "A simulated acquisition"
 targetScanner = "TestSimpleSimulatedScanner"
-sequenceName = "SimpleSimulatedSequence"
+
+sequence = "SimpleSimulatedSequence"
+
+fgFrames = 1
+measureBackground = false
