@@ -266,7 +266,7 @@ function Base.isless(a::TxChannel, b::TxChannel)
   elseif isStepwise(b)
     return true
   else
-    return true
+    return false
   end
 end
 

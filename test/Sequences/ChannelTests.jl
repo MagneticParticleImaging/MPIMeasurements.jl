@@ -156,6 +156,14 @@
     spin = ContinuousMechanicalRotationChannel(id = "c", divider = 100, phase = 0.0u"rad")
     @test isless(spin, rot)  # continuous before stepwise
     @test !isless(rot, spin)
+    # Continuous channels are equivalent to each other (strict weak order)
+    spin2 = ContinuousMechanicalRotationChannel(id = "c2", divider = 200, phase = 0.0u"rad")
+    @test !isless(spin, spin)
+    @test !isless(spin, spin2)
+    @test !isless(spin2, spin)
+    sorted = sort(TxChannel[rot, spin, trans, spin2])
+    @test issetequal(id.(sorted[1:2]), ["c", "c2"])
+    @test id.(sorted[3:4]) == ["t", "r"]
     @test isContinuous(spin)
     @test doesRotationMovement(spin)
     # One rotation lasts 100 samples at 125 MHz, i.e. 800 ns

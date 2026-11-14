@@ -9,6 +9,7 @@
 - **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
 
 ### Fixes and minor changes
+- `isless` for two non-stepwise `TxChannel`s returns `false`, so sorting channels uses a valid order
 - the example sequences in `config/` are updated to the current sequence format and load again
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement with the stored sequences adopts them as the protocol sequences, and the background measurements are repeated `numBGMeas` times as in a new measurement
 - measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
