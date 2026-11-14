@@ -3,7 +3,6 @@ name = "2DSequence"
 description = "Precise description."
 targetScanner = "HeadScanner"
 baseFrequency = "125.0MHz"
-triggered = false
 
 [Fields]
 
@@ -19,12 +18,14 @@ type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
+type = "PeriodicElectricalComponent"
 divider = 4800
 amplitude = ["0.02T"]
 phase = ["0.0rad"]
 waveform = "sine"
 
 [Fields.df.chanx.c2]
+type = "PeriodicElectricalComponent"
 divider = 4864
 phase = ["0.0rad"]
 amplitude = ["0.0T"]
@@ -35,12 +36,14 @@ type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chany.c1]
+type = "PeriodicElectricalComponent"
 divider = 4800
 amplitude = ["0.0T"]
 phase = ["0.0rad"]
 waveform = "sine"
 
 [Fields.df.chany.c2]
+type = "PeriodicElectricalComponent"
 divider = 4864
 phase = ["0.0rad"]
 amplitude = ["0.02T"]

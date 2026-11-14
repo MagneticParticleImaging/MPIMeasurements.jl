@@ -47,8 +47,8 @@
   end
 
   @testset "Outdated sequence files are rejected" begin
-    # Several sequence files in config/ still use the old format, e.g. a `triggered`
-    # entry in [General] or channels without a `type`. Loading them must fail loudly.
+    # Sequences in an old format, e.g. with a `triggered` entry in [General] or
+    # channels without a `type`, must fail loudly.
     dict = loadFixtureDict("MultiChannelSequence.toml")
     dict["General"]["triggered"] = false
     @test_throws Exception sequenceFromDict(dict)
@@ -56,6 +56,24 @@
     dict = loadFixtureDict("MultiChannelSequence.toml")
     delete!(dict["Fields"]["df"]["chanx"], "type")
     @test_throws ErrorException sequenceFromDict(dict)
+  end
+
+  @testset "All configured sequences load" begin
+    packageDir = normpath(@__DIR__, "..", "..")
+    sequenceFiles = String[]
+    for configRoot in (joinpath(packageDir, "config"), testConfigDir)
+      for scannerDir in readdir(configRoot, join = true)
+        sequenceDir = joinpath(scannerDir, "Sequences")
+        isdir(sequenceDir) || continue
+        for (dir, _, files) in walkdir(sequenceDir), file in files
+          endswith(file, ".toml") && push!(sequenceFiles, joinpath(dir, file))
+        end
+      end
+    end
+    @test !isempty(sequenceFiles)
+    @testset "$(relpath(file, packageDir))" for file in sequenceFiles
+      @test Sequence(file) isa Sequence
+    end
   end
 
   @testset "Structure of the multi-channel fixture" begin
