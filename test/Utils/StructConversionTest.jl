@@ -55,6 +55,29 @@ end
     tf = MPIMeasurements.parse_into_tf(Dict("2000" => "2.0V/T", "1000" => "1000.0mV/T", "500" => "0.5V/T"))
     @test tf.freq == [500.0, 1000.0, 2000.0]
     @test uconvert.(u"V/T", vec(tf.data) .* tf.units[1]) ≈ ComplexF64[0.5, 1.0, 2.0] .* u"V/T"
+
+    # Frequency keys with a unit are converted to Hz, keys without a unit are in Hz
+    for key in ["25000", "25kHz", "25 kHz", "0.025 MHz", "2.5e4Hz"]
+      @test MPIMeasurements.parse_into_tf(Dict(key => "2.0V/T", "0" => "1.0V/T")).freq ≈ [0.0, 25000.0]
+    end
+    tf = MPIMeasurements.parse_into_tf(Dict("30 kHz" => "3.0V/T", "1000" => "1.0V/T", "0.002MHz" => "2.0V/T"))
+    @test tf.freq ≈ [1000.0, 2000.0, 30000.0]
+    @test vec(tf.data) == ComplexF64[1.0, 2.0, 3.0]
+    @test_throws "The frequency key `5 mT` of the transfer function does not have a frequency unit" MPIMeasurements.parse_into_tf(Dict("5 mT" => "2.0V/T"))
+    @test_throws "The frequency key `garbage` of the transfer function could not be parsed" MPIMeasurements.parse_into_tf(Dict("garbage" => "2.0V/T"))
+    @test_throws "The frequency key `25 foo` of the transfer function could not be parsed" MPIMeasurements.parse_into_tf(Dict("25 foo" => "2.0V/T"))
+    @test_throws "contain the same frequency more than once" MPIMeasurements.parse_into_tf(Dict("1000" => "1.0V/T", "1kHz" => "2.0V/T"))
+    @test MPIMeasurements.parse_into_tf(Dict("40 μs^-1" => "2.0V/T", "0" => "1.0V/T")).freq ≈ [0.0, 4.0e7]
+    # Angular frequencies are rejected, Unitful would convert them to Hz without the factor 2π
+    @test_throws "The frequency key `1 rad/s` of the transfer function has the unit `rad s^-1`. Frequencies must be given in Hz-based units" MPIMeasurements.parse_into_tf(Dict("1 rad/s" => "2.0V/T"))
+    for key in ["6.28 rad*s^-1", "1 °/s", "2 rad*kHz", "60 rpm", "1 rps"]
+      @test_throws MPIMeasurements.ScannerConfigurationError MPIMeasurements.parse_into_tf(Dict(key => "2.0V/T"))
+      @test_throws "not as angular frequency" MPIMeasurements.parse_into_tf(Dict(key => "2.0V/T"))
+    end
+
+    # Frequency keys with a unit in a channel dict of the Scanner.toml
+    chanDict = Dict{String, Any}("tx" => Dict{String, Any}("type" => "tx", "channel" => 1, "limitPeak" => "1.0V", "calibration" => Dict{String, Any}("25kHz" => "2.0V/T", "30 kHz" => "3.0V/T")))
+    @test MPIMeasurements.createDAQChannels(chanDict)["tx"].calibration.freq == [25000.0, 30000.0]
   end
 
   @testset "dict_to_splatting and params_from_dict" begin

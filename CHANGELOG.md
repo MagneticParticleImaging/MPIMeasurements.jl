@@ -9,6 +9,8 @@
 - **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
 
 ### Fixes and minor changes
+- the frequency keys of a `calibration`/`transferFunction` table in the Scanner.toml can have a frequency unit (e.g. `"25 kHz"`); keys without unit are in Hz; invalid keys throw a `ScannerConfigurationError` naming the key
+- frequency keys of a `calibration`/`transferFunction` table given as angular frequency (e.g. `"1 rad/s"`, `"1 °/s"`, `"60 rpm"`) throw a `ScannerConfigurationError`; only units built from Hz and s are accepted
 - `unitIsTesla(::StepwiseElectricalChannel)` no longer calls a deprecated Unitful method
 - memory-mapping protocol files no longer leaves a file stream open per mapped array
 - `isless` for two non-stepwise `TxChannel`s returns `false`, so sorting channels uses a valid order
