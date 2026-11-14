@@ -95,8 +95,10 @@ const DateTime = MPIMeasurements.Dates.DateTime
     @test MF.calibFovCenter(mdf) ≈ [0.0, 0.0005, 0.0]
     @test isnothing(MF.calibDeltaSampleSize(mdf))
 
-    # deltaSampleSize is converted with a leftover of a ternary (`... : nothing`), which throws
-    @test_broken (try MPIMeasurements.fillMDFCalibration(MF.MDFv2InMemory(), grid; deltaSampleSize = [0.001, 0.001, 0.001] .* u"m"); true; catch; false; end)
+    # deltaSampleSize is stored in meters
+    mdf = MF.MDFv2InMemory()
+    MPIMeasurements.fillMDFCalibration(mdf, grid; deltaSampleSize = [0.001, 0.002, 0.0005] .* u"m")
+    @test MF.calibDeltaSampleSize(mdf) == [0.001, 0.002, 0.0005]
 
     # Hybrid calibration from offset fields on a 2 x 2 x 1 grid (last dimension: x, y, z)
     offsets = zeros(2, 2, 1, 3)
@@ -111,7 +113,9 @@ const DateTime = MPIMeasurements.Dates.DateTime
     @test size(MF.calibOffsetFields(mdf)) == (3, 4)
     @test MF.calibOffsetFields(mdf)[:, 4] ≈ [0.01, 0.02, 0.0] # position (2, 2)
     @test MF.acqGradient(mdf) == reshape([1.0 0 0; 0 1 0; 0 0 1], 3, 3, 1, 1)
-    @test_broken (try MPIMeasurements.fillMDFCalibration(MF.MDFv2InMemory(), offsets; deltaSampleSize = [0.001, 0.001, 0.001] .* u"m"); true; catch; false; end)
+    mdf = MF.MDFv2InMemory()
+    MPIMeasurements.fillMDFCalibration(mdf, offsets; deltaSampleSize = [0.001, 0.002, 0.0005] .* u"m")
+    @test MF.calibDeltaSampleSize(mdf) == [0.001, 0.002, 0.0005]
 
     # Other position types are not supported and only produce a warning
     mdf = MF.MDFv2InMemory()

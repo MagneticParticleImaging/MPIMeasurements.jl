@@ -101,7 +101,7 @@ function fillMDFCalibration(mdf::MDFv2InMemory, positions::GridPositions; deltaS
 	# /calibration/ subgroup
 
 	if !isnothing(deltaSampleSize)
-		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize)))
 	end
 	
 	subgrid = isa(positions,BreakpointGridPositions) ? positions.grid : positions
@@ -140,7 +140,7 @@ function fillMDFCalibration(mdf::MDFv2InMemory, offsetFields::Union{AbstractArra
 	# /calibration/ subgroup
 
 	if !isnothing(deltaSampleSize)
-		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize))) : nothing
+		deltaSampleSize = Float64.(ustrip.(uconvert.(Unitful.m, deltaSampleSize)))
 	end
 
 	method = "hybrid"
