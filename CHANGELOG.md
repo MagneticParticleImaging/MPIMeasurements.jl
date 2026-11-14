@@ -2,35 +2,25 @@
 
 ## Unreleased
 
-### Breaking changes
-- **Breaking**: removed `isBackground` for `AcquisitionSettings` and `Sequence` (and its export); it accessed a field that does not exist and always failed
-- **Breaking**: `rxDecimation` returns an `Int` and throws a `ScannerConfigurationError` if the decimation is not an integer; the Red Pitaya DAQ requires an even decimation from 8 to 8192
-- **Breaking**: `dfStrength` and `dfPhase` return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods
-- **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
+### Technically breaking changes
+- removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
+- `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
+- `fillMDFMeasurement`/`saveasMDF` with background data and `temperatures` now require the new keyword `bgTemperatures`; previously this caused an error
 
-### Fixes and minor changes
-- the frequency keys of a `calibration`/`transferFunction` table in the Scanner.toml can have a frequency unit (e.g. `"25 kHz"`); keys without unit are in Hz; invalid keys throw a `ScannerConfigurationError` naming the key
-- frequency keys of a `calibration`/`transferFunction` table given as angular frequency (e.g. `"1 rad/s"`, `"1 °/s"`, `"60 rpm"`) throw a `ScannerConfigurationError`; only units built from Hz and s are accepted
-- `unitIsTesla(::StepwiseElectricalChannel)` no longer calls a deprecated Unitful method
-- memory-mapping protocol files no longer leaves a file stream open per mapped array
-- `isless` for two non-stepwise `TxChannel`s returns `false`, so sorting channels uses a valid order
-- `stepPriority` is defined for every `TxChannel` (default 99), so channel lists with stepwise electrical channels can be sorted
-- the example sequences in `config/` are updated to the current sequence format and load again; their `targetScanner` is the scanner of their configuration folder
-- the example and test protocol files load again: `Positions` tables use the keys read by MPIFiles (`type`, `shape`, `fov`, `center`, `unit`), and protocols of the removed `DAQMeasurementProtocol` are `MPIMeasurementProtocol`s
-- `MultiSequenceSystemMatrixProtocol`: resuming a measurement with the stored sequences adopts them as the protocol sequences, and the background measurements are repeated `numBGMeas` times as in a new measurement
-- `MultiSequenceSystemMatrixProtocol`: pausing is possible during the background measurements after the last sequence
-- `MultiSequenceSystemMatrixProtocol` and `RobotBasedSystemMatrixProtocol` without a `[Positions]` table throw an `IllegalStateException` on `init` instead of a `MethodError`
-- `MultiSequenceSystemMatrixProtocol`: resuming a measurement also compares the stored background sequence and `numBGMeas` with the configured ones and asks whether to use the stored values or cancel
-- measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
-- sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML
-- sequences: integer values with prefixed units (e.g. `"2mT"`) can be loaded; electrical values are read by `parseFieldUnit`, whose errors name the key and the channel or component; `"a:b"` ranges are collected like `"a:b:c"`; `sequenceFromDict` leaves its input dict intact
-- `decimation(::RedPitayaDAQ)` and `decimation!(::RedPitayaDAQ, decimation)` are exported; the Red Pitaya decimation is checked whenever it is set
-- `ProtocolException` (and thus `CancelException` and `IllegalStateException`) is a subtype of `Exception`
-- `WAVEFORM_ARBITRARY` is exported
-- MDF: existing temperatures are kept when none are given, fixed `deltaSampleSize` in `fillMDFCalibration`, default study time in `saveasMDF`, and conversion between `Tracer` and `MDFv2Tracer`
-- clearer errors for unknown channel, component and device types and for invalid component units
-- extended test suite and CI (separate job for subpackages)
-- removed the scripts in `example/` that use functions that no longer exist (`runProtocol`, `prepareMDF`, `filename`, `setupSequence`)
+### New features
+- frequencies in a `calibration`/`transferFunction` table in the Scanner.toml can be given with a unit (e.g. `"25 kHz"`); numbers without unit are in Hz, angular frequencies such as `"1 rad/s"` or `"60 rpm"` are not possible
+- added verification of valid decimations to `RedPitayaDAQ`
+
+### Fixes
+- `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
+- `WAVEFORM_ARBITRARY` is now exported for consistency
+- if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled
+- multiple fixes for `MultiSequenceSystemMatrixProtocol`: resuming a measurement compares the sequences, the background sequence and the number of background measurements with the stored ones and can continue with the stored values
+- sequences: fixed loading `ContinuousMechanicalTranslationChannel`s and integer values with units (e.g. `"2mT"`), the rotation direction "standstill", `cycleDuration` of continuous channels, the amplitude of `SweepElectricalComponent`, replacing a component by its id, writing offset and rotation channels to TOML, `"a:b"` ranges and sorting channel lists; `sequenceFromDict` no longer modifies its input
+- MDF: fixed `deltaSampleSize` in `fillMDFCalibration`, `saveasMDF` without a study time, and the conversion between `Tracer` and `MDFv2Tracer`
+- clearer errors for unknown channel, component and device types and for invalid units
+- the example sequences and protocols in `config/` load again; removed outdated scripts from `example/`
+- fixed a deprecation warning and orphaned file handles
 
 ## 0.6.2
 - the `calibration` (transfer function) of a DAQ channel in the Scanner.toml can be given as a table that maps frequencies to values (#115)
