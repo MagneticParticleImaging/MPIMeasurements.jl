@@ -49,6 +49,7 @@ The numbers differ slightly from those reported by Codecov in CI.
 | `Devices/`   | Device tests with simulated devices                            |
 | `Sequences/` | Sequence loading, accessors, channels; fixtures in `Sequences/TOML/` |
 | `Storage/`   | Measurement buffers and MDF assembly                           |
+| `Protocols/` | Protocol logic that runs on simulated scanners                 |
 | `Utils/`     | Configuration parsing, coordinates, channels, memory-mapped files |
 
 Known bugs in the package are marked with `@test_broken` and a comment describing the

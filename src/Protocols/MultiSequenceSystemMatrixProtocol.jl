@@ -68,6 +68,20 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocol <: Protocol
   txCont::Union{TxDAQController,Nothing} = nothing
 end
 
+"""
+    measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+
+Return the sequences in the order they are measured: `numBGMeas` background
+measurements before and after the sequences if a `bgSequence` is set.
+"""
+function measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+  if isnothing(params.bgSequence)
+    return params.sequences
+  end
+  bgSequences = repeat([params.bgSequence], params.numBGMeas)
+  return [bgSequences; params.sequences; bgSequences]
+end
+
 function requiredDevices(protocol::MultiSequenceSystemMatrixProtocol)
   result = [AbstractDAQ]
   if protocol.params.controlTx
@@ -98,11 +112,7 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
 
   protocol.systemMeasState = SystemMatrixMeasState()
   numBGMeas = protocol.params.numBGMeas
-  if !isnothing(protocol.params.bgSequence)
-    protocol.allSequences = [repeat([protocol.params.bgSequence], numBGMeas); protocol.params.sequences; repeat([protocol.params.bgSequence], numBGMeas)]
-  else
-    protocol.allSequences = protocol.params.sequences
-  end
+  protocol.allSequences = measurementSequences(protocol.params)
   numPos = length(protocol.allSequences)
 
   if numPos == 0 
@@ -455,23 +465,17 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
     #end
 
     sysObj.positions = Positions(params)
-    seq = protocol.params.sequences
 
     storedSeq = sequenceFromDict.(params["sequences"])
-    if storedSeq != seq
+    if storedSeq != protocol.params.sequences
       message = "Stored sequences do not match initialized sequence. Use stored sequence instead?"
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
-      seq = storedSeq 
-      protocol.params.sequence # What is going on here?
+      protocol.params.sequences = storedSeq
     end
-
-    if !isnothing(protocol.params.bgSequence)
-      protocol.allSequences = [protocol.params.bgSequence; protocol.params.sequences; protocol.params.bgSequence]
-    else
-      protocol.allSequences = protocol.params.sequences
-    end
+    seq = protocol.params.sequences
+    protocol.allSequences = measurementSequences(protocol.params)
 
     # Drive Field
     #if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
