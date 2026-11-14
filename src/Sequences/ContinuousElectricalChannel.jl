@@ -96,7 +96,7 @@ function values(channel::ContinuousElectricalChannel)
   end 
 end
 
-cycleDuration(channel::ContinuousElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = baseFrequency/channel.divider
+cycleDuration(channel::ContinuousElectricalChannel, baseFrequency::typeof(1.0u"Hz")) = upreferred(channel.divider/baseFrequency)
 
 function enableValues(channel::ContinuousElectricalChannel)
   numPatches = div(channel.divider, channel.dividerSteps)

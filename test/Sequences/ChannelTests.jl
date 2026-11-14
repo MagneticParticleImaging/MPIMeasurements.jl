@@ -27,9 +27,9 @@
     @test MPIMeasurements.unitIsTesla(ContinuousElectricalChannel(id = "c", divider = 16, dividerSteps = 4,
       amplitude = 0.001u"T", offset = 0.0u"T", phase = 0.0u"rad"))
 
-    # The cycle of 16 samples at 125 MHz lasts 128 ns, but baseFrequency/divider is
-    # returned, which is a frequency
-    @test_broken dimension(cycleDuration(chan(WAVEFORM_SINE), baseFreq)) == dimension(u"s")
+    # The cycle of 16 samples at 125 MHz lasts 128 ns
+    @test dimension(cycleDuration(chan(WAVEFORM_SINE), baseFreq)) == dimension(u"s")
+    @test cycleDuration(chan(WAVEFORM_SINE), baseFreq) ≈ 128e-9u"s"
   end
 
   @testset "StepwiseElectricalChannel" begin
