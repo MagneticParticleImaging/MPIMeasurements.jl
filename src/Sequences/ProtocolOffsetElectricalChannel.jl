@@ -29,7 +29,7 @@ values(channel::ProtocolOffsetElectricalChannel{T}) where T = collect(range(chan
 values(channel::ProtocolOffsetElectricalChannel, isPositive::Bool) = filter(x-> signbit(x) != isPositive, values(channel))
 
 function toDict!(dict, channel::ProtocolOffsetElectricalChannel)
-  dict["type"] = string(typeof(channel))
+  dict["type"] = string(nameof(typeof(channel)))
   for field in [x for x in fieldnames(typeof(channel)) if !in(x, [:id])]
     dict[String(field)] = toDictValue(getproperty(channel, field))
   end

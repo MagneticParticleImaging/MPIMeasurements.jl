@@ -209,10 +209,9 @@
     delete!(dict["Fields"], "offsets")
     delete!(dict["Fields"]["mech"], "rot")
     @test sequenceFromDict(dict)["mech"]["spin"] == spin
-    # The type of a ProtocolOffsetElectricalChannel is written including its type parameter,
-    # which cannot be resolved when reading the dict back
     dict = MPIMeasurements.toDict(seq)
     delete!(dict["Fields"], "mech")
-    @test_broken (try sequenceFromDict(dict)["offsets"]["sweep"] == sweep; catch; false; end)
+    @test dict["Fields"]["offsets"]["sweep"]["type"] == "ProtocolOffsetElectricalChannel"
+    @test sequenceFromDict(dict)["offsets"]["sweep"] == sweep
   end
 end
