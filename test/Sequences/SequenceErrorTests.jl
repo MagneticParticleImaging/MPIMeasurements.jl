@@ -3,19 +3,17 @@
   dfChannel(dict, chan) = dict["Fields"]["df"][chan]
 
   @testset "Channel and component types" begin
-    # Unknown types should be reported with an ErrorException ("unknown channel type"),
-    # but getConcreteType fails earlier when caching `nothing` in its Dict{String, Type}
     unknownChannel() = (dict = fixture(); dfChannel(dict, "chanx")["type"] = "NoSuchChannel"; dict)
-    @test_throws Exception sequenceFromDict(unknownChannel())
-    @test_broken (try sequenceFromDict(unknownChannel()); false; catch e; e isa ErrorException; end)
+    @test_throws ErrorException sequenceFromDict(unknownChannel())
+    @test_throws "Channel chanx has an unknown channel type `NoSuchChannel`" sequenceFromDict(unknownChannel())
 
     dict = fixture()
     delete!(dfChannel(dict, "chanx")["c1"], "type")
     @test_throws ErrorException sequenceFromDict(dict)
 
     unknownComponent() = (dict = fixture(); dfChannel(dict, "chanx")["c1"]["type"] = "NoSuchComponent"; dict)
-    @test_throws Exception sequenceFromDict(unknownComponent())
-    @test_broken (try sequenceFromDict(unknownComponent()); false; catch e; e isa ErrorException; end)
+    @test_throws ErrorException sequenceFromDict(unknownComponent())
+    @test_throws "Component c1 has an unknown channel type `NoSuchComponent`" sequenceFromDict(unknownComponent())
   end
 
   @testset "The input dict is left unchanged" begin
