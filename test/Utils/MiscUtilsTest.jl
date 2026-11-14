@@ -36,10 +36,11 @@ MPIMeasurements.@mustimplement mustimplementTestFunction(x::Integer)
     @test ismissing(MF.tracerVolume(mdfTracer))
     @test isnothing(MF.tracerInjectionTime(mdfTracer))
 
-    # Concentration and volume are passed on with their units, but the MDF expects
-    # plain Float64 values
+    # The MDF stores the concentration in mol/L and the volume in L
     withAmount = MPIMeasurements.Tracer(name = "Perimag", concentration = 0.5u"mol/L", volume = 0.1u"mL")
-    @test_broken (try convert(MF.MDFv2Tracer, withAmount) isa MF.MDFv2Tracer; catch; false; end)
+    mdfWithAmount = convert(MF.MDFv2Tracer, withAmount)
+    @test MF.tracerConcentration(mdfWithAmount) == [0.5]
+    @test MF.tracerVolume(mdfWithAmount) ≈ [1e-4]
 
     # The reverse conversion assigns the per-tracer vectors of the MDF to the scalar
     # fields of Tracer, which fails

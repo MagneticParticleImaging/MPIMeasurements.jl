@@ -20,12 +20,12 @@ end
 function Base.convert(::Type{MDFv2Tracer}, x::Tracer)
   tracer = defaultMDFv2Tracer()
   tracerBatch(tracer, ismissing(x.batch) ? missing : [x.batch])
-  tracerConcentration(tracer, ismissing(x.concentration) ? missing : [x.concentration])
+  tracerConcentration(tracer, ismissing(x.concentration) ? missing : [ustrip(u"mol/L", x.concentration)])
   tracerInjectionTime(tracer, isnothing(x.injectionTime) ? nothing : [x.injectionTime])
   tracerName(tracer, ismissing(x.name) ? missing : [x.name])
   tracerSolute(tracer, ismissing(x.solute) ? missing : [x.solute])
   tracerVendor(tracer, ismissing(x.vendor) ? missing : [x.vendor])
-  tracerVolume(tracer, ismissing(x.volume) ? missing : [x.volume])
+  tracerVolume(tracer, ismissing(x.volume) ? missing : [ustrip(u"L", x.volume)])
 
   return tracer
 end
