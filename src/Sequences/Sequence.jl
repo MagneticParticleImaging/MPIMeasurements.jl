@@ -395,16 +395,23 @@ dfNumChannels(sequence::Sequence) = length(dfChannels(sequence)) # TODO: How do 
 
 dfChannels(sequence::Sequence) = [x for x in periodicElectricalTxChannels(sequence) if isDfChannel(x)]
 
+function checkNumPeriods(channel, component, values, numPeriods, name)
+  if length(values) != numPeriods
+    throw(SequenceConfigurationError("All drive-field components must define the same number of periods. Component $(id(component)) of channel $(id(channel)) defines $(length(values)) $name instead of $numPeriods."))
+  end
+end
+
 export dfPhase
 function dfPhase(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(phase(channels[1].components[1])) # Should all be of the same length
+  numPeriods = length(channels[1].components[1].phase)
   result = zeros(typeof(1.0u"rad"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, phase) in enumerate(phase(component))
+      checkNumPeriods(channel, component, component.phase, numPeriods, "phases")
+      for (periodIdx, phase) in enumerate(component.phase)
         result[periodIdx, channelIdx, componentIdx] = phase
       end
     end
@@ -417,12 +424,13 @@ export dfStrength
 function dfStrength(sequence::Sequence) # TODO: How do we integrate the mechanical channels and non-periodic channels and sweeps?
   channels = dfChannels(sequence)
   maxComponents = maximum([length(channel.components) for channel in channels])
-  numPeriods = length(amplitude(channels[1].components[1])) # Should all be of the same length
+  numPeriods = length(channels[1].components[1].amplitude)
   result = zeros(typeof(1.0u"T"), (numPeriods, dfNumChannels(sequence), maxComponents))
 
   for (channelIdx, channel) in enumerate(channels)
     for (componentIdx, component) in enumerate(channel.components)
-      for (periodIdx, strength) in enumerate(amplitude(component)) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
+      checkNumPeriods(channel, component, component.amplitude, numPeriods, "amplitudes")
+      for (periodIdx, strength) in enumerate(component.amplitude) # TODO: What do we do if this is in volt? The conversion factor is with the scanner... Remove the volt version?
         if strength isa Unitful.Voltage
           # HACKY way to save Voltage DFs into the MDF -> use Tesla as mV (everything > 1 will be V)
           @warn "Your DF is defined as a voltage! Will save $(uconvert(u"mV",strength)) as $(ustrip(u"mV", strength).*u"T")"

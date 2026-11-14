@@ -163,8 +163,7 @@
     strength = @test_logs (:warn, r"voltage") match_mode = :any dfStrength(seq)
     @test strength[1, 1, 1] ≈ 500.0u"T"
 
-    # Components can have amplitudes and phases per period. dfStrength and dfPhase
-    # should report all of them, but only see the first period.
+    # Components can have amplitudes and phases per period
     dict = fixture()
     for chan in ["chanx", "chany"], comp in keys(dfChannel(dict, chan))
       component = dfChannel(dict, chan)[comp]
@@ -174,7 +173,17 @@
     end
     seq = sequenceFromDict(dict)
     @test amplitude(seq["df"]["chanx"]["c1"], period = 2) == 0.001u"T"
-    @test_broken size(dfStrength(seq), 1) == 2
-    @test_broken size(dfPhase(seq), 1) == 2
+    @test size(dfStrength(seq)) == (2, 2, 2)
+    @test size(dfPhase(seq)) == (2, 2, 2)
+    @test dfStrength(seq)[:, 1, 1] == [0.01, 0.001] .* u"T"
+    @test all(==(0.0u"rad"), dfPhase(seq))
+
+    # All drive-field components must have the same number of periods
+    dfChannel(dict, "chany")["c1"]["amplitude"] = ["12.0mT"]
+    dfChannel(dict, "chany")["c1"]["phase"] = ["0.0rad"]
+    seq = sequenceFromDict(dict)
+    @test_throws MPIMeasurements.SequenceConfigurationError dfStrength(seq)
+    @test_throws "Component c1 of channel chany defines 1 amplitudes instead of 2" dfStrength(seq)
+    @test_throws "Component c1 of channel chany defines 1 phases instead of 2" dfPhase(seq)
   end
 end
