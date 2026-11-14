@@ -173,9 +173,17 @@ const DateTime = MPIMeasurements.Dates.DateTime
       @test MF.calibSize(mdf) == [3, 1, 1]
       @test MF.calibMethod(mdf) == "robot"
 
-      # A fresh MDF has no study time (`missing`), but only `nothing` is checked for,
-      # so the missing value is passed on as the study date and Study() throws
-      @test_broken (try MF.saveasMDF(store, simulatedScanner, seq, data, zeros(Bool, 3), MF.MDFv2InMemory()) isa AbstractString; catch; false; end)
+      # Without study name and time, defaults are used
+      mdf = MF.MDFv2InMemory()
+      @test isfile(MF.saveasMDF(store, simulatedScanner, seq, data, zeros(Bool, 3), mdf))
+      @test MF.studyName(mdf) == "n.a."
+      @test MF.studyTime(mdf) isa DateTime
+      mdf = MF.MDFv2InMemory()
+      @test isfile(MF.saveasMDF(store, simulatedScanner, seq, data, mdf; bgdata = zeros(Float32, 625, 1, 2, 1)))
+      @test MF.studyTime(mdf) isa DateTime
+      mdf = MF.MDFv2InMemory()
+      @test isfile(MF.saveasMDF(store, simulatedScanner, seq, data, grid, zeros(Bool, 3), mdf))
+      @test MF.studyTime(mdf) isa DateTime
     end
   end
 end

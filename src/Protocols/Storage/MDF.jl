@@ -6,7 +6,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 		name = "n.a."
 	end
 
-	if !isnothing(studyTime(mdf))
+	if !ismissing(studyTime(mdf))
 		date = studyTime(mdf)
 	else
 		date = now()
@@ -34,7 +34,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 		name = "n.a."
 	end
 
-	if !isnothing(studyTime(mdf))
+	if !ismissing(studyTime(mdf))
 		date = studyTime(mdf)
 	else
 		date = now()
@@ -69,7 +69,7 @@ function MPIFiles.saveasMDF(store::DatasetStore, scanner::MPIScanner, sequence::
 			name = "n.a."
 		end
 
-		if !isnothing(studyTime(mdf))
+		if !ismissing(studyTime(mdf))
 			date = studyTime(mdf)
 		else
 			date = now()
