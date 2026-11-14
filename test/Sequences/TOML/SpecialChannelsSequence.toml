@@ -1,0 +1,54 @@
+# Fixture with the less common channel and component types.
+
+[General]
+name = "SpecialChannelsSequence"
+description = "Arbitrary waveform component, mechanical rotation channels and a protocol offset channel."
+targetScanner = "TestScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+control = false
+decouple = false
+
+[Fields.df.chanx]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.chanx.awg]
+type = "ArbitraryElectricalComponent"
+divider = 5000
+amplitude = ["2.0mT"]
+phase = ["0.0rad"]
+values = [0.0, 0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]
+
+[Fields.mech]
+control = false
+decouple = false
+
+[Fields.mech.rot]
+type = "StepwiseMechanicalRotationChannel"
+stepAngle = "90.0°"
+direction = "backward"
+stepPriority = 2
+preStepPause = "1.0s"
+
+[Fields.mech.spin]
+type = "ContinuousMechanicalRotationChannel"
+divider = 125000
+phase = "90.0°"
+
+[Fields.offsets]
+control = false
+decouple = false
+
+[Fields.offsets.sweep]
+type = "ProtocolOffsetElectricalChannel"
+offsetStart = "-2.0mT"
+offsetStop = "2.0mT"
+numOffsets = 5
+
+[Acquisition]
+channels = ["rx1"]
+bandwidth = "7.8125MHz"

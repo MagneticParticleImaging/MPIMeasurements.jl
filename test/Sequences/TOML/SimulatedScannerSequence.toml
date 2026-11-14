@@ -1,0 +1,34 @@
+# Sequence matching the channels of test/TestConfigs/TestSimpleSimulatedScanner.
+# Divider 5000 -> cycle 40 µs; with a sampling rate of 15.625 MHz this gives
+# 625 sampling points per period.
+
+[General]
+name = "SimulatedScannerSequence"
+description = "Single drive-field channel for the simulated test scanner."
+targetScanner = "TestSimpleSimulatedScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+control = false
+decouple = false
+
+[Fields.df.tx_main]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.tx_main.c1]
+type = "PeriodicElectricalComponent"
+divider = 5000
+amplitude = ["0.012T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Acquisition]
+channels = ["rx_main"]
+bandwidth = "7.8125MHz"
+numPeriodsPerFrame = 2
+numFrames = 3
+numAverages = 4
+numFrameAverages = 2

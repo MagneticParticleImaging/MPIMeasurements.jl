@@ -1,7 +1,7 @@
 [General]
 name = "SimpleSimulatedSequence"
 description = "Precise description."
-targetScanner = "MyAwesomeScanner"
+targetScanner = "TestSimpleSimulatedScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]
@@ -14,25 +14,20 @@ control = true
 decouple = true
 
 [Fields.my_df.tx_main]
-waveform = "sine"
+type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.my_df.tx_main.main_component]
+type = "PeriodicElectricalComponent"
 divider = 5000
 amplitude = ["0.02T"]
 phase = ["0.0rad"]
+waveform = "sine"
 
 [Acquisition]
 channels = ["rx_main"]
 bandwidth = "7.8125MHz"
 numPeriodsPerFrame = 1
-
-[Acquisition.Foreground]
 numFrames = 2000
 numAverages = 1
 numFrameAverages = 1
-
-[Acquisition.Background]
-numFrames = 20
-numAverages = 5
-numFrameAverages = 5

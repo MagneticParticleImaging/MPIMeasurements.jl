@@ -1,0 +1,34 @@
+[General]
+boreSize = "1337mm"
+facility = "My awesome institute"
+manufacturer = "Me, Myself and I"
+name = "TestProducerCleanupScanner"
+topology = "FFL"
+gradient = "42T/m"
+datasetStore = "./tmp/TestProducerCleanupScannerStore"
+
+[Devices]
+initializationOrder = [
+  "dummy_su",
+  "temperature_controller",
+  "simulated_robot",
+  "simulated_amplifier",
+  "failing_amplifier"
+]
+
+[Devices.dummy_su]
+deviceType = "DummySurveillanceUnit"
+
+[Devices.temperature_controller]
+deviceType = "TestTemperatureController"
+
+[Devices.simulated_robot]
+deviceType = "SimulatedRobot"
+
+[Devices.simulated_amplifier]
+deviceType = "SimulatedAmplifier"
+channelID = "tx_main"
+
+[Devices.failing_amplifier]
+deviceType = "TestFailingAmplifier"
+channelID = "tx_main"

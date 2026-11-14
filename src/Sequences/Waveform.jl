@@ -1,5 +1,5 @@
 export Waveform, WAVEFORM_SINE, WAVEFORM_SQUARE, WAVEFORM_TRIANGLE, WAVEFORM_SAWTOOTH_RISING,
-WAVEFORM_SAWTOOTH_FALLING, toWaveform, fromWaveform
+WAVEFORM_SAWTOOTH_FALLING, WAVEFORM_ARBITRARY, toWaveform, fromWaveform
 
 "Enum describing the existing waveforms."
 @enum Waveform begin

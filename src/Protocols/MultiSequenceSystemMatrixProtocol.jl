@@ -68,6 +68,20 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocol <: Protocol
   txCont::Union{TxDAQController,Nothing} = nothing
 end
 
+"""
+    measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+
+Return the sequences in the order they are measured: `numBGMeas` background
+measurements before and after the sequences if a `bgSequence` is set.
+"""
+function measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+  if isnothing(params.bgSequence)
+    return params.sequences
+  end
+  bgSequences = repeat([params.bgSequence], params.numBGMeas)
+  return [bgSequences; params.sequences; bgSequences]
+end
+
 function requiredDevices(protocol::MultiSequenceSystemMatrixProtocol)
   result = [AbstractDAQ]
   if protocol.params.controlTx
@@ -82,6 +96,9 @@ end
 function _init(protocol::MultiSequenceSystemMatrixProtocol)
   if isnothing(protocol.params.sequences)
     throw(IllegalStateException("Protocol requires sequences"))
+  end
+  if isnothing(protocol.params.positions)
+    throw(IllegalStateException("Protocol requires positions"))
   end
 
   if any(acqNumFrameAverages.(protocol.params.sequences) .!= 1)
@@ -98,11 +115,7 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
 
   protocol.systemMeasState = SystemMatrixMeasState()
   numBGMeas = protocol.params.numBGMeas
-  if !isnothing(protocol.params.bgSequence)
-    protocol.allSequences = [repeat([protocol.params.bgSequence], numBGMeas); protocol.params.sequences; repeat([protocol.params.bgSequence], numBGMeas)]
-  else
-    protocol.allSequences = protocol.params.sequences
-  end
+  protocol.allSequences = measurementSequences(protocol.params)
   numPos = length(protocol.allSequences)
 
   if numPos == 0 
@@ -479,7 +492,7 @@ end
 
 function pause(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
-  if calib.currPos <= length(calib.positions)
+  if calib.currPos <= length(protocol.allSequences)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.paused = true
   else

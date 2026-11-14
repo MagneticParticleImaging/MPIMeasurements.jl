@@ -9,6 +9,11 @@
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestBrokenDeviceMissingConfigFile")
   end
 
+  @testset "Unknown device type" begin
+    params = Dict{String, Any}("deviceType" => "NoSuchDevice")
+    @test_throws "`NoSuchDevice` could not be retrieved since its device struct was not found" MPIMeasurements.Device("noSuchDevice", params; dependencies = Dict{String, Device}())
+  end
+
   # Dependencies are checked correctly
   @testset "Incorrect Dependency" begin
     @test_throws MPIMeasurements.ScannerConfigurationError MPIScanner("TestDeviceMissingDependencies")

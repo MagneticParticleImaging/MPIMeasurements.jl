@@ -1,7 +1,6 @@
 using Test
 using Aqua
 using Unitful
-using Pkg
 using Statistics
 
 using MPIMeasurements
@@ -17,18 +16,15 @@ addConfigurationPath(testConfigDir)
   end
 
   include("TestDevices.jl")
+  include("TestStubs.jl")
   include("Scanner/ScannerTests.jl")
   include("Devices/DeviceTests.jl")
   #include("Safety/SafetyTests.jl")
+  include("Sequences/SequenceTests.jl")
+  include("Storage/StorageTests.jl")
+  include("Protocols/ProtocolTests.jl")
   include("Utils/UtilTests.jl")
 
-  @testset "Subpackages" begin
-    packageNames = ["MPIMeasurementsTinkerforge"]
-    for packageName ∈ packageNames
-      basePath = joinpath("..", "subpackages", packageName)
-      Pkg.activate(basePath)
-      Pkg.instantiate()
-      include(joinpath(basePath, "test", "runtests.jl"))
-    end
-  end
+  # Subpackages (e.g. MPIMeasurementsTinkerforge) are tested in a separate CI job
+  # against this checkout, see .github/workflows/ci.yml.
 end

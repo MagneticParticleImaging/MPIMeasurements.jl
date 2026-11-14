@@ -40,24 +40,25 @@ asyncProducer(channel, protocol, sequence::ControlSequence) = asyncProducer(chan
 function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   scanner_ = scanner(protocol)
   su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
-  if !isnothing(su)
-    enableACPower(su)
-    # TODO Send expected enable time to SU
-  end
   tempControl = getTemperatureController(scanner_)
-  if !isnothing(tempControl)
-    disableControl(tempControl)
-  end
   robots = getRobots(scanner_)
-  for robot in robots
-    disable(robot)
-  end
 
   amps = getRequiredAmplifiers(scanner_, sequence)
-  turnOn(amps)
   
   endSample = nothing
   try
+    if !isnothing(su)
+      enableACPower(su)
+      # TODO Send expected enable time to SU
+    end
+    if !isnothing(tempControl)
+      disableControl(tempControl)
+    end
+    for robot in robots
+      disable(robot)
+    end
+    turnOn(amps)
+
     daq = getDAQ(scanner_)
     endSample = asyncProducer(channel, daq, sequence)
   finally

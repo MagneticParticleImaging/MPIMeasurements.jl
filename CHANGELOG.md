@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+
 ### Improvements for MultiSequenceSystemMatrixProtocol
 - fix reloading of protocol with more than one BG measurement
 - improve performance by not writing sequences to file every iteration
@@ -28,9 +29,36 @@
 - to remove the overlap with Julias built-in ALT+M (and the corresponding warning on every load) the Device REPL mode shortcut has been changed to ALT+2
 - the MPI REPL mode, which controls the complete scanner has been moved to ALT+1
 
-
 ### Other
 - improved error messages during device creation
+
+### Technically breaking changes
+- removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
+- `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
+- `fillMDFMeasurement`/`saveasMDF` with background data and `temperatures` now require the new keyword `bgTemperatures`; previously this caused an error
+
+### New features
+- frequencies in a `calibration`/`transferFunction` table in the Scanner.toml can be given with a unit (e.g. `"25 kHz"`); numbers without unit are in Hz, angular frequencies such as `"1 rad/s"` or `"60 rpm"` are not possible
+- added verification of valid decimations to `RedPitayaDAQ`
+
+### Fixes
+- `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
+- `WAVEFORM_ARBITRARY` is now exported for consistency
+- if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled
+- multiple fixes for `MultiSequenceSystemMatrixProtocol`: resuming a measurement compares the sequences, the background sequence and the number of background measurements with the stored ones and can continue with the stored values
+- sequences: fixed loading `ContinuousMechanicalTranslationChannel`s and integer values with units (e.g. `"2mT"`), the rotation direction "standstill", `cycleDuration` of continuous channels, the amplitude of `SweepElectricalComponent`, replacing a component by its id, writing offset and rotation channels to TOML, `"a:b"` ranges and sorting channel lists; `sequenceFromDict` no longer modifies its input
+- MDF: fixed `deltaSampleSize` in `fillMDFCalibration`, `saveasMDF` without a study time, and the conversion between `Tracer` and `MDFv2Tracer`
+- clearer errors for unknown channel, component and device types and for invalid units
+- the example sequences and protocols in `config/` load again; removed outdated scripts from `example/`
+- fixed a deprecation warning and orphaned file handles
+
+## 0.6.2
+- the `calibration` (transfer function) of a DAQ channel in the Scanner.toml can be given as a table that maps frequencies to values (#115)
+- compat for MPIFiles 0.19
+- CI and Dependabot updates
+
+## 0.6.1
+- compat for MPIFiles 0.18
 
 ## 0.6.0
 

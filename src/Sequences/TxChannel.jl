@@ -46,6 +46,15 @@ doesTranslationMovement(::TranslationTxChannel, channel) = true
 export stepsPerCycle
 stepsPerCycle(channelType::T) where T = channeltype(T) isa StepwiseTxChannel ? error("Method not defined for $T.") : nothing
 
+export stepPriority
+"""
+    stepPriority(channel::TxChannel)
+
+Priority used to order stepwise channels when sorting; lower values come first. Channels
+without a configurable priority have the default priority of the stepwise mechanical channels, 99.
+"""
+stepPriority(::TxChannel) = 99
+
 export cycleDuration
 cycleDuration(::T, var) where T <: TxChannel = error("The method has not been implemented for T")
 
@@ -61,6 +70,29 @@ function toDict!(dict, channel::TxChannel)
   end
   dict["type"] = string(typeof(channel))
   return dict
+end
+
+"""
+    parseFieldUnit(channelDict, key, channelId)
+
+Parse `channelDict[key]` with `parsePossibleURange` and convert the result to ampere,
+volt or tesla, depending on its dimension, with floating-point values. The float
+conversion is required because a plain `uconvert` turns integer values with a prefixed
+unit into rationals (`2u"mT"` into `1//500 T`), which fields of type `typeof(1.0u"T")`
+inside unions or type parameters cannot hold. Any other dimension is an error naming
+`key` and `channelId`.
+"""
+function parseFieldUnit(channelDict, key, channelId)
+  value = parsePossibleURange(channelDict[key])
+  if eltype(value) <: Unitful.Current
+    return float.(uconvert.(u"A", value))
+  elseif eltype(value) <: Unitful.Voltage
+    return float.(uconvert.(u"V", value))
+  elseif eltype(value) <: Unitful.BField
+    return float.(uconvert.(u"T", value))
+  else
+    error("The value of `$key` in `$channelId` has to be given as a current, a voltage or in tesla. You supplied the type `$(eltype(value))`.")
+  end
 end
 
 include("PeriodicElectricalChannel.jl")

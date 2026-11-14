@@ -16,23 +16,14 @@ Base.@kwdef mutable struct StepwiseElectricalChannel <: AcyclicElectricalTxChann
   enable::Vector{Bool} = Bool[]
 end
 
-unitIsTesla(chan::StepwiseElectricalChannel) = all(dimension(chan.values) .== [dimension(u"T")])
+unitIsTesla(chan::StepwiseElectricalChannel) = all(value -> dimension(value) == dimension(u"T"), chan.values)
 
 channeltype(::Type{<:StepwiseElectricalChannel}) = StepwiseTxChannel()
 
 function createFieldChannel(channelID::AbstractString, channelType::Type{StepwiseElectricalChannel}, channelDict::Dict{String, Any})
   divider = channelDict["divider"]
   enable = haskey(channelDict, "enable") ? channelDict["enable"] : Bool[]
-  values = parsePossibleURange(channelDict["values"])
-  if eltype(values) <: Unitful.Current
-    values = values .|> u"A"
-  elseif eltype(values) <: Unitful.Voltage
-    values = values .|> u"V"
-  elseif eltype(values) <: Unitful.BField
-    values = values .|> u"T"
-  else
-    error("The values have to be either given as a current or in Tesla. You supplied the type `$(eltype(values))`.")
-  end
+  values = parseFieldUnit(channelDict, "values", channelID)
 
   if mod(divider, length(values)) != 0
     error("The divider $(divider) needs to be a multiple of the $(length(values))")

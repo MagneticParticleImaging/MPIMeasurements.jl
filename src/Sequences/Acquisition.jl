@@ -75,10 +75,6 @@ export acqNumFrameAverages
 acqNumFrameAverages(acq::AcquisitionSettings) = acq.numFrameAverages
 acqNumFrameAverages(acq::AcquisitionSettings, val) = acq.numFrameAverages = val
 
-export isBackground
-isBackground(acq::AcquisitionSettings) = acq.isBackground
-isBackground(acq::AcquisitionSettings, val) = acq.isBackground = val
-
 export rxBandwidth
 rxBandwidth(acq::AcquisitionSettings) = acq.bandwidth
 

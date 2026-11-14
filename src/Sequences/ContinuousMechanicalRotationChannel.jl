@@ -19,4 +19,4 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Continu
   return ContinuousMechanicalRotationChannel(id=channelID, divider=divider, phase=phase)
 end
 
-cycleDuration(channel::ContinuousMechanicalRotationChannel, baseFrequency::typeof(1.0u"Hz")) = baseFrequency/channel.divider
+cycleDuration(channel::ContinuousMechanicalRotationChannel, baseFrequency::typeof(1.0u"Hz")) = upreferred(channel.divider/baseFrequency)

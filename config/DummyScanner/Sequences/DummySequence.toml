@@ -14,9 +14,11 @@ control = false
 decouple = false
 
 [Fields.df.chanx]
+type = "PeriodicElectricalChannel"
 offset = "0.0mT"
 
 [Fields.df.chanx.c1]
+type = "PeriodicElectricalComponent"
 divider = 4800
 amplitude = ["0.02T"]
 phase = ["0.0rad"]
@@ -32,6 +34,7 @@ decouple = false
 
 
 [Fields.ff.ffx]
+type = "StepwiseElectricalChannel"
 divider = 4800
 values = ["0.0V"]
 

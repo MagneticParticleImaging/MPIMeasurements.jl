@@ -219,3 +219,62 @@ Base.@kwdef mutable struct TestMissingConfigFileDevice <: Device
 
   initRan::Bool = false
 end
+
+# Amplifier whose `turnOn` always fails
+Base.@kwdef mutable struct TestFailingAmplifierParams <: DeviceParams
+  channelID::String
+end
+TestFailingAmplifierParams(dict::Dict) = params_from_dict(TestFailingAmplifierParams, dict)
+
+Base.@kwdef mutable struct TestFailingAmplifier <: Amplifier
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::TestFailingAmplifierParams
+  "Flag if the device is optional."
+  optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
+
+  turnOffCalls::Int = 0
+end
+
+MPIMeasurements._init(amp::TestFailingAmplifier) = nothing
+MPIMeasurements.neededDependencies(amp::TestFailingAmplifier) = []
+MPIMeasurements.optionalDependencies(amp::TestFailingAmplifier) = []
+MPIMeasurements.turnOn(amp::TestFailingAmplifier) = error("$(deviceID(amp)) failed to turn on")
+MPIMeasurements.turnOff(amp::TestFailingAmplifier) = amp.turnOffCalls += 1
+MPIMeasurements.channelId(amp::TestFailingAmplifier) = amp.params.channelID
+
+# Temperature controller that only records whether control is enabled
+Base.@kwdef mutable struct TestTemperatureControllerParams <: DeviceParams
+  # NOP
+end
+TestTemperatureControllerParams(dict::Dict) = params_from_dict(TestTemperatureControllerParams, dict)
+
+Base.@kwdef mutable struct TestTemperatureController <: TemperatureController
+  "Unique device ID for this device as defined in the configuration."
+  deviceID::String
+  "Parameter struct for this devices read from the configuration."
+  params::TestTemperatureControllerParams
+  "Flag if the device is optional."
+  optional::Bool = false
+  "Flag if the device is present."
+  present::Bool = false
+  "Vector of dependencies for this device."
+  dependencies::Dict{String, Union{Device, Missing}}
+  "Path of the config used to create the device (either Scanner.toml or Device.toml)"
+  configFile::Union{String, Nothing} = nothing
+
+  controlEnabled::Bool = true
+end
+
+MPIMeasurements._init(controller::TestTemperatureController) = nothing
+MPIMeasurements.neededDependencies(controller::TestTemperatureController) = []
+MPIMeasurements.optionalDependencies(controller::TestTemperatureController) = []
+MPIMeasurements.enableControl(controller::TestTemperatureController) = controller.controlEnabled = true
+MPIMeasurements.disableControl(controller::TestTemperatureController) = controller.controlEnabled = false

@@ -102,6 +102,9 @@ function _init(protocol::RobotBasedSystemMatrixProtocol)
   if isnothing(protocol.params.sequence)
     throw(IllegalStateException("Protocol requires a sequence"))
   end
+  if isnothing(protocol.params.positions)
+    throw(IllegalStateException("Protocol requires positions"))
+  end
   protocol.systemMeasState = SystemMatrixMeasState()
 
   # Prepare Positions

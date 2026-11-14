@@ -5,6 +5,7 @@ MPIMeasurements.RedPitayaDAQParams
 MPIMeasurements.RedPitayaLUTChannelParams
 MPIMeasurements.DAQRxChannelParams
 MPIMeasurements.DAQTxChannelParams
+MPIMeasurements.parse_into_tf
 ```
 
 ## TxController

@@ -39,7 +39,7 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Stepwis
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_FORWARD
     elseif channelDict["direction"] == "backward"
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_BACKWARD
-    elseif channelDict["direction"] == "forward"
+    elseif channelDict["direction"] == "standstill"
       splattingDict[:direction] = MECHANICAL_ROTATION_DIRECTION_STANDSTILL
     else
       error("The value `$(channelDict["direction"])` is not a valid direction.")
@@ -59,6 +59,18 @@ function createFieldChannel(channelID::AbstractString, channelType::Type{Stepwis
   end
 
   return StepwiseMechanicalRotationChannel(;id=channelID, splattingDict...)
+end
+
+function toDictValue(direction::MechanicalRotationDirection)
+  if direction == MECHANICAL_ROTATION_DIRECTION_FORWARD
+    return "forward"
+  elseif direction == MECHANICAL_ROTATION_DIRECTION_BACKWARD
+    return "backward"
+  elseif direction == MECHANICAL_ROTATION_DIRECTION_STANDSTILL
+    return "standstill"
+  else
+    error("The direction `$direction` has no string representation.")
+  end
 end
 
 export stepPriority

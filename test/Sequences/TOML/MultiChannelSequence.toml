@@ -1,0 +1,105 @@
+# Fixture for the sequence tests. The expected values in the tests are derived
+# by hand from the numbers below, so change both together.
+#
+# Drive field: dividers 4800 and 4864 -> lcm = 364800 samples per cycle,
+# i.e. a cycle of 364800 / 125 MHz = 2.9184 ms. With a bandwidth of 7.8125 MHz
+# (sampling rate 15.625 MHz) this gives 45600 sampling points per period.
+# The acyclic channels span 4 drive-field cycles (divider 1459200).
+
+[General]
+name = "MultiChannelSequence"
+description = "Two drive-field channels, one auxiliary periodic channel, acyclic channels and a robot field."
+targetScanner = "TestScanner"
+baseFrequency = "125.0MHz"
+
+[Fields]
+
+[Fields.df]
+safeStartInterval = "1.0s"
+safeTransitionInterval = "0.25s"
+safeEndInterval = "2.0s"
+safeErrorInterval = "0.1s"
+control = true
+decouple = false
+
+[Fields.df.chanx]
+type = "PeriodicElectricalChannel"
+offset = "1.5mT"
+
+[Fields.df.chanx.c1]
+type = "PeriodicElectricalComponent"
+divider = 4800
+amplitude = ["0.010T"]
+phase = ["0.0rad"]
+waveform = "sine"
+
+[Fields.df.chanx.c2]
+type = "PeriodicElectricalComponent"
+divider = 4864
+amplitude = ["5.0mT"]
+phase = ["cos"]
+waveform = "triangle"
+
+[Fields.df.chany]
+type = "PeriodicElectricalChannel"
+offset = "0.0mT"
+
+[Fields.df.chany.c1]
+type = "PeriodicElectricalComponent"
+divider = 4864
+amplitude = ["12.0mT"]
+phase = ["-sin"]
+
+# Periodic, but not part of the drive field
+[Fields.df.chanz]
+type = "PeriodicElectricalChannel"
+isDfChannel = false
+dcEnabled = false
+offset = "0.5A"
+
+[Fields.df.chanz.c1]
+type = "PeriodicElectricalComponent"
+divider = 4800
+amplitude = ["1.0A"]
+phase = ["0.5rad"]
+waveform = "square"
+
+[Fields.ff]
+control = false
+decouple = false
+
+[Fields.ff.ffx]
+type = "StepwiseElectricalChannel"
+divider = 1459200
+values = "-1.0mT:1.0mT:2.0mT"
+enable = [true, false, true, true]
+
+[Fields.ff.ffy]
+type = "ContinuousElectricalChannel"
+divider = 1459200
+dividerSteps = 364800
+amplitude = "1.0A"
+offset = "0.5A"
+phase = "0.0rad"
+waveform = "sawtooth_rising"
+
+[Fields.robot]
+control = false
+decouple = false
+
+[Fields.robot.rob]
+type = "StepwiseMechanicalTranslationChannel"
+speed = "0.01m/s" # given in m/s, see the channel tests for other units
+positions = ["0.0mm", "10.0mm", "20.0mm"]
+stepPriority = 1
+preStepPause = "0.5s"
+postStepPause = "250.0ms"
+
+[Acquisition]
+channels = ["rx1", "rx2"]
+bandwidth = "7.8125MHz"
+# Ignored: the acyclic channels define the frame length (4 periods)
+numPeriodsPerFrame = 7
+numFrames = 10
+numAverages = 3
+numFrameAverages = 2
