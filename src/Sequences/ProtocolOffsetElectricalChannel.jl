@@ -24,7 +24,7 @@ function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetEl
   elseif eltype(offsetStart) <: Unitful.BField
     offsetStart = offsetStart .|> u"T"
   else
-    error("The value for an offsetStart has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+    error("The value for an offsetStart has to be either given as a current or in tesla. You supplied the type `$(eltype(offsetStart))`.")
   end
 
   offsetStop = uparse.(channelDict["offsetStop"])
@@ -35,7 +35,7 @@ function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetEl
   elseif eltype(offsetStop) <: Unitful.BField
     offsetStop = offsetStop .|> u"T"
   else
-    error("The value for an offsetStop has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+    error("The value for an offsetStop has to be either given as a current or in tesla. You supplied the type `$(eltype(offsetStop))`.")
   end
 
   numOffsets = channelDict["numOffsets"]

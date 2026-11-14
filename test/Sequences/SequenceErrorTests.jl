@@ -62,10 +62,10 @@
     dict["Fields"]["ff"]["ffx"]["values"] = ["1.0m", "2.0m"]
     @test_throws ErrorException sequenceFromDict(dict)
 
-    # The error message for an invalid amplitude unit refers to an undefined variable `tmp`
     dict = fixture()
     dfChannel(dict, "chanx")["c1"]["amplitude"] = ["1.0m"]
-    @test_broken (try sequenceFromDict(dict); false; catch e; e isa ErrorException; end)
+    @test_throws "You supplied the type" sequenceFromDict(dict)
+    @test_throws ErrorException sequenceFromDict(dict)
 
     dict = fixture()
     dfChannel(dict, "chanx")["c1"]["phase"] = ["sideways"]

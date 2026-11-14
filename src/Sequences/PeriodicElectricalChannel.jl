@@ -213,7 +213,7 @@ function extractBasicComponentProperties(componentDict::Dict{String, Any})
   elseif eltype(amplitude) <: Unitful.BField
     amplitude = amplitude .|> u"T"
   else
-    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(tmp))`.")
+    error("The value for an amplitude has to be either given as a current or in tesla. You supplied the type `$(eltype(amplitude))`.")
   end
 
   if haskey(componentDict, "phase")
