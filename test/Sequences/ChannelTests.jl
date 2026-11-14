@@ -169,8 +169,7 @@
     contTrans = ContinuousMechanicalTranslationChannel(id = "t", speed = 1.0u"mm/s", positions = (0.0u"mm", 10.0u"mm"))
     @test isContinuous(contTrans)
     @test doesTranslationMovement(contTrans)
-    # cycleDuration refers to an undefined variable `speed` instead of `channel.speed`
-    @test_broken (try cycleDuration(contTrans, baseFreq) ≈ 10.0u"s"; catch; false; end)
+    @test cycleDuration(contTrans, baseFreq) ≈ 10.0u"s"
   end
 
   @testset "ProtocolOffsetElectricalChannel" begin
