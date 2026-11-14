@@ -22,7 +22,7 @@ function parsePossibleURange(val::AbstractString)
   if contains(val, ":")
     splitted = split(val, ":")
     if length(splitted) == 2
-      result = uparse(splitted[1]):1*unit(uparse(splitted[1])):uparse(splitted[2])
+      result = collect(uparse(splitted[1]):1*unit(uparse(splitted[1])):uparse(splitted[2]))
     elseif length(splitted) == 3
       result = collect(uparse(splitted[1]):uparse(splitted[2]):uparse(splitted[3]))
     else

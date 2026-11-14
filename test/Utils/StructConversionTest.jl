@@ -26,7 +26,9 @@ end
   @testset "parsePossibleURange" begin
     parse = MPIMeasurements.parsePossibleURange
     @test parse("1.0mT") == 1.0u"mT"
-    @test collect(parse("1.0mT:3.0mT")) == [1.0, 2.0, 3.0] .* u"mT" # step of one unit
+    @test parse("1.0mT:3.0mT") == [1.0, 2.0, 3.0] .* u"mT" # step of one unit
+    @test parse("1.0mT:3.0mT") isa Vector
+    @test parse("0.0A:0.5A:1.5A") isa Vector
     @test parse("0.0A:0.5A:1.5A") == [0.0, 0.5, 1.0, 1.5] .* u"A"
     @test parse("fill(2.0mT,3)") == fill(2.0u"mT", 3)
     @test parse("fill(true,2)") == [true, true]
