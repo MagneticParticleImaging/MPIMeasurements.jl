@@ -8,7 +8,7 @@
 
     @test name(seq) == "1DSequence"
     @test description(seq) == "Precise description."
-    @test targetScanner(seq) == "testscanner"
+    @test targetScanner(seq) == "TestDeviceWorkingScanner"
     @test baseFrequency(seq) == 125.0u"MHz"
     @test length(seq) == 2
     @test sort(collect(keys(seq))) == ["df", "ff"]
@@ -60,19 +60,24 @@
 
   @testset "All configured sequences load" begin
     packageDir = normpath(@__DIR__, "..", "..")
-    sequenceFiles = String[]
+    sequenceFiles = Tuple{String, String}[] # (sequence file, scanner directory)
     for configRoot in (joinpath(packageDir, "config"), testConfigDir)
       for scannerDir in readdir(configRoot, join = true)
         sequenceDir = joinpath(scannerDir, "Sequences")
         isdir(sequenceDir) || continue
         for (dir, _, files) in walkdir(sequenceDir), file in files
-          endswith(file, ".toml") && push!(sequenceFiles, joinpath(dir, file))
+          endswith(file, ".toml") && push!(sequenceFiles, (joinpath(dir, file), scannerDir))
         end
       end
     end
     @test !isempty(sequenceFiles)
-    @testset "$(relpath(file, packageDir))" for file in sequenceFiles
-      @test Sequence(file) isa Sequence
+    @testset "$(relpath(file, packageDir))" for (file, scannerDir) in sequenceFiles
+      seq = Sequence(file)
+      @test seq isa Sequence
+      # The target scanner is the scanner of the configuration folder
+      if isfile(joinpath(scannerDir, "Scanner.toml"))
+        @test targetScanner(seq) == basename(scannerDir)
+      end
     end
   end
 

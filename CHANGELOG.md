@@ -13,7 +13,7 @@
 - memory-mapping protocol files no longer leaves a file stream open per mapped array
 - `isless` for two non-stepwise `TxChannel`s returns `false`, so sorting channels uses a valid order
 - `stepPriority` is defined for every `TxChannel` (default 99), so channel lists with stepwise electrical channels can be sorted
-- the example sequences in `config/` are updated to the current sequence format and load again
+- the example sequences in `config/` are updated to the current sequence format and load again; their `targetScanner` is the scanner of their configuration folder
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement with the stored sequences adopts them as the protocol sequences, and the background measurements are repeated `numBGMeas` times as in a new measurement
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement also compares the stored background sequence and `numBGMeas` with the configured ones and asks whether to use the stored values or cancel
 - measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails

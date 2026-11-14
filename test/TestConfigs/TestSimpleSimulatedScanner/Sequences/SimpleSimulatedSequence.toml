@@ -1,7 +1,7 @@
 [General]
 name = "SimpleSimulatedSequence"
 description = "Precise description."
-targetScanner = "MyAwesomeScanner"
+targetScanner = "TestSimpleSimulatedScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]

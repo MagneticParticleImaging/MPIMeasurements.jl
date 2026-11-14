@@ -1,7 +1,7 @@
 [General]
 name = "PMPS"
 description = "Precise description."
-targetScanner = "HeadScanner"
+targetScanner = "SimpleRedPitayaScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]

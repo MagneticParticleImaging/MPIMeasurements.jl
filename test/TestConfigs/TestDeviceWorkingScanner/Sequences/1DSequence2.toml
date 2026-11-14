@@ -1,7 +1,7 @@
 [General]
 name = "1DSequence2"
 description = "Precise description."
-targetScanner = "testScanner"
+targetScanner = "TestDeviceWorkingScanner"
 baseFrequency = "125.0MHz"
 
 [Fields]
