@@ -18,6 +18,7 @@
 - the example sequences in `config/` are updated to the current sequence format and load again; their `targetScanner` is the scanner of their configuration folder
 - the example and test protocol files load again: `Positions` tables use the keys read by MPIFiles (`type`, `shape`, `fov`, `center`, `unit`), and protocols of the removed `DAQMeasurementProtocol` are `MPIMeasurementProtocol`s
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement with the stored sequences adopts them as the protocol sequences, and the background measurements are repeated `numBGMeas` times as in a new measurement
+- `MultiSequenceSystemMatrixProtocol`: pausing is possible during the background measurements after the last sequence
 - `MultiSequenceSystemMatrixProtocol`: resuming a measurement also compares the stored background sequence and `numBGMeas` with the configured ones and asks whether to use the stored values or cancel
 - measurement protocols turn the amplifiers and the AC power off and re-enable temperature control and robots also when switching on one of these devices fails
 - sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML

@@ -520,7 +520,8 @@ end
 
 function pause(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
-  if calib.currPos <= length(calib.positions)
+  # `positions` does not contain the background measurements, `allSequences` does
+  if calib.currPos <= length(protocol.allSequences)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.paused = true
   else

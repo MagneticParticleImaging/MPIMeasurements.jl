@@ -118,5 +118,26 @@
     GC.gc()
     removeProtocolDirs()
   end
+
+  # Pausing is possible until all measurements, including the trailing background
+  # measurements, are done
+  @testset "Pause" begin
+    params = MultiSequenceSystemMatrixProtocolParams(sequences = [configuredSequence], positions = positions, bgSequence = bgSequence, numBGMeas = 2)
+    protocol = MultiSequenceSystemMatrixProtocol(name = "MultiSequencePauseTest", description = "", scanner = scanner_, params = params)
+    init(protocol)
+    protocol.biChannel = BidirectionalChannel{ProtocolEvent}(4)
+    user = BidirectionalChannel(protocol.biChannel)
+    @test length(protocol.allSequences) == 5
+    protocol.systemMeasState.currPos = 5 # last background measurement
+    MPIMeasurements.pause(protocol)
+    @test protocol.paused
+    @test !isready(user)
+
+    protocol.paused = false
+    protocol.systemMeasState.currPos = 6 # all measurements done
+    MPIMeasurements.pause(protocol)
+    @test !protocol.paused
+    @test take!(user) isa OperationUnsuccessfulEvent
+  end
   close(scanner_)
 end
