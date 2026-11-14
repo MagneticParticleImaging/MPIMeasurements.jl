@@ -145,9 +145,8 @@
     t = MPIMeasurements.createFieldChannel("t", transDict("0.002m/s"))
     @test t.positions ≈ [0.0, 10.0] .* u"mm"
     @test postStepPause(t) ≈ 0.1u"s"
-    # The speed field is a union of a scalar and a vector type, so Julia cannot convert
-    # a speed given in another unit (e.g. "2.0mm/s") to m/s
-    @test_broken (try MPIMeasurements.createFieldChannel("t", transDict("2.0mm/s")).speed ≈ 0.002u"m/s"; catch; false; end)
+    @test MPIMeasurements.createFieldChannel("t", transDict("2.0mm/s")).speed ≈ 0.002u"m/s"
+    @test MPIMeasurements.createFieldChannel("t", transDict(["2.0mm/s"])).speed ≈ [0.002u"m/s"]
 
     # Stepwise channels are ordered by their step priority
     @test isless(trans, rot)
