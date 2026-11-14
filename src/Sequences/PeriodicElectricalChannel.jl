@@ -258,7 +258,7 @@ function waveform!(channel::PeriodicElectricalChannel, componentId::AbstractStri
   if !isnothing(index)
     waveform!(channel.components[index], value)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 

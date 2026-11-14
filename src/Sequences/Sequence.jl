@@ -276,7 +276,7 @@ function amplitude!(channel::PeriodicElectricalChannel, componentId::AbstractStr
   if !isnothing(index)
     amplitude!(channel.components[index], value, period = period)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 
@@ -286,7 +286,7 @@ function phase!(channel::PeriodicElectricalChannel, componentId::AbstractString,
   if !isnothing(index)
     phase!(channel.components[index], value, period = period)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 
@@ -296,7 +296,7 @@ function divider!(channel::PeriodicElectricalChannel, componentId::AbstractStrin
   if !isnothing(index)
     divider!(channel.components[index], value)
   else
-    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentid"))
+    throw(ArgumentError("Channel $(id(channel)) has no component with id $componentId"))
   end
 end
 

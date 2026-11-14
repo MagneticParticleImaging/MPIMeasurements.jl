@@ -144,12 +144,11 @@
     @test MPIMeasurements.unitIsTesla(seq["df"]["chany"])
     @test !MPIMeasurements.unitIsTesla(seq["df"]["chanz"]) # defined in ampere
 
-    # Unknown component IDs should give an ArgumentError, but the error message refers
-    # to an undefined variable (`componentid` instead of `componentId`)
-    @test_broken (try amplitude!(chanx, "nope", 0.1u"T"); false; catch e; e isa ArgumentError; end)
-    @test_broken (try phase!(chanx, "nope", 0.1u"rad"); false; catch e; e isa ArgumentError; end)
-    @test_broken (try divider!(chanx, "nope", 10); false; catch e; e isa ArgumentError; end)
-    @test_broken (try MPIMeasurements.waveform!(chanx, "nope", WAVEFORM_SINE); false; catch e; e isa ArgumentError; end)
+    @test_throws "has no component with id nope" amplitude!(chanx, "nope", 0.1u"T")
+    @test_throws "has no component with id nope" phase!(chanx, "nope", 0.1u"rad")
+    @test_throws "has no component with id nope" divider!(chanx, "nope", 10)
+    @test_throws "has no component with id nope" MPIMeasurements.waveform!(chanx, "nope", WAVEFORM_SINE)
+    @test_throws ArgumentError amplitude!(chanx, "nope", 0.1u"T")
   end
 
   @testset "Indexing and iteration" begin
