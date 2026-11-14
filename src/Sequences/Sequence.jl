@@ -473,10 +473,6 @@ export acqNumFrameAverages
 acqNumFrameAverages(sequence::Sequence) = acqNumFrameAverages(sequence.acquisition)
 acqNumFrameAverages(sequence::Sequence, val) = acqNumFrameAverages(sequence.acquisition, val)
 
-export isBackground
-isBackground(sequence::Sequence) = isBackground(sequence.acquisition)
-isBackground(sequence::Sequence, val) = isBackground(sequence.acquisition, val)
-
 export rxBandwidth
 rxBandwidth(sequence::Sequence) = rxBandwidth(sequence.acquisition)
 

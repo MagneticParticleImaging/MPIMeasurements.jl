@@ -76,9 +76,6 @@
     @test acqNumAverages(seq3) == 1
     @test acqNumFrameAverages(seq3) == 1
     @test acqNumPeriodsPerFrame(seq3) == 1
-
-    # AcquisitionSettings has no isBackground field, so the accessors cannot work
-    @test_broken (try isBackground(seq, true); isBackground(seq) == true; catch; false; end)
   end
 
   @testset "Channel selection" begin
