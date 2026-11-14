@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+- **Breaking**: removed `isBackground` for `AcquisitionSettings` and `Sequence` (and its export); it accessed a field that does not exist and always failed
+- **Breaking**: `rxDecimation` returns an `Int` and throws a `ScannerConfigurationError` if the decimation is not an integer; the Red Pitaya DAQ requires an even decimation from 8 to 8192
+- **Breaking**: `dfStrength` and `dfPhase` return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods
+- **Breaking**: `fillMDFMeasurement`/`saveasMDF` with background data throw an `ArgumentError` if only one of `temperatures` and the new keyword `bgTemperatures` is given; the temperatures are extended by the background frames
+
+### Fixes and minor changes
+- sequences: fixed loading `ContinuousMechanicalTranslationChannel`, `cycleDuration` of continuous electrical and mechanical channels, the rotation direction "standstill", the amplitude of `SweepElectricalComponent`, replacing a component by its id and writing offset and rotation channels to TOML
+- sequences: integer values with prefixed units (e.g. `"2mT"`) can be loaded; electrical values are read by `parseFieldUnit`, whose errors name the key and the channel or component; `"a:b"` ranges are collected like `"a:b:c"`; `sequenceFromDict` leaves its input dict intact
+- `WAVEFORM_ARBITRARY` is exported
+- MDF: existing temperatures are kept when none are given, fixed `deltaSampleSize` in `fillMDFCalibration`, default study time in `saveasMDF`, and conversion between `Tracer` and `MDFv2Tracer`
+- clearer errors for unknown channel, component and device types and for invalid component units
+- extended test suite and CI (separate job for subpackages)
+
 ## 0.6.0
 
 ### Most Important Breaking Changes
