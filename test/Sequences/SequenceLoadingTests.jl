@@ -200,10 +200,10 @@
     seq2 = sequenceFromDict(dict)
     @test seq2["df"] == seq["df"]
 
-    # Rotation directions are written as enum names but only read as "forward"/"backward"
     dict = MPIMeasurements.toDict(seq)
     delete!(dict["Fields"], "offsets")
-    @test_broken (try sequenceFromDict(dict)["mech"]["rot"] == rot; catch; false; end)
+    @test dict["Fields"]["mech"]["rot"]["direction"] == "backward"
+    @test sequenceFromDict(dict)["mech"]["rot"] == rot
     # The continuous rotation channel on its own round-trips fine
     dict = MPIMeasurements.toDict(seq)
     delete!(dict["Fields"], "offsets")
