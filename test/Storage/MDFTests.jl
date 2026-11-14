@@ -70,7 +70,8 @@ const DateTime = MPIMeasurements.Dates.DateTime
     bg = fill(-1.0f0, 625, 1, 2, 2)
     bgField = fill(ComplexF64(0, 1), 1, 1, 2, 2)
     mdf = MF.MDFv2InMemory()
-    MPIMeasurements.fillMDFMeasurement(mdf, seq, data, bg; temperatures = temps,
+    bgTemps = fill(-1.0f0, 2, 2)
+    MPIMeasurements.fillMDFMeasurement(mdf, seq, data, bg; temperatures = temps, bgTemperatures = bgTemps,
       drivefield = applied, bgDriveField = bgField, applied = applied, bgTransmit = bgField)
     @test MF.measIsBackgroundFrame(mdf) == [true, true, false, false, false]
     @test size(MF.measData(mdf)) == (625, 1, 2, 5)
@@ -79,8 +80,11 @@ const DateTime = MPIMeasurements.Dates.DateTime
     @test MF.measObservedDriveField(mdf)[:, :, :, 1:2] == bgField
     @test MF.measObservedDriveField(mdf)[:, :, :, 3:5] == applied
     @test size(MF.measAppliedDriveField(mdf), 4) == 5
-    # The temperatures are not extended for the background frames
-    @test_broken size(MF.measTemperatures(mdf), 2) == 5
+    @test MF.measTemperatures(mdf) == hcat(bgTemps, temps)
+    # Temperatures that do not cover the background frames are rejected
+    @test_throws ArgumentError MPIMeasurements.fillMDFMeasurement(MF.MDFv2InMemory(), seq, data, bg; temperatures = temps)
+    @test_throws "must be given together" MPIMeasurements.fillMDFMeasurement(MF.MDFv2InMemory(), seq, data, bg; temperatures = temps)
+    @test_throws "must be given together" MPIMeasurements.fillMDFMeasurement(MF.MDFv2InMemory(), seq, data, bg; bgTemperatures = bgTemps)
   end
 
   @testset "fillMDFCalibration" begin
