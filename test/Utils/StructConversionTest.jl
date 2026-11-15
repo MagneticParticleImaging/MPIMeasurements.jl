@@ -69,7 +69,8 @@ end
     @test_throws "contain the same frequency more than once" MPIMeasurements.parse_into_tf(Dict("1000" => "1.0V/T", "1kHz" => "2.0V/T"))
     @test MPIMeasurements.parse_into_tf(Dict("40 μs^-1" => "2.0V/T", "0" => "1.0V/T")).freq ≈ [0.0, 4.0e7]
     # Angular frequencies are rejected, Unitful would convert them to Hz without the factor 2π
-    @test_throws "The frequency key `1 rad/s` of the transfer function has the unit `rad s^-1`. Frequencies must be given in Hz-based units" MPIMeasurements.parse_into_tf(Dict("1 rad/s" => "2.0V/T"))
+    # The printed unit depends on the platform (`rad s^-1` or `rad s⁻¹`), so it is not matched
+    @test_throws ["The frequency key `1 rad/s` of the transfer function has the unit `rad s", "Frequencies must be given in Hz-based units"] MPIMeasurements.parse_into_tf(Dict("1 rad/s" => "2.0V/T"))
     for key in ["6.28 rad*s^-1", "1 °/s", "2 rad*kHz", "60 rpm", "1 rps"]
       @test_throws MPIMeasurements.ScannerConfigurationError MPIMeasurements.parse_into_tf(Dict(key => "2.0V/T"))
       @test_throws "not as angular frequency" MPIMeasurements.parse_into_tf(Dict(key => "2.0V/T"))
