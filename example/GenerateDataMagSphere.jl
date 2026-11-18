@@ -38,7 +38,7 @@ frames_for_seconds(seconds) = round(Int, seconds * TRIGGER_RATE_HZ)
 
 const PRIMARY_BACKGROUND_MEASUREMENTS = frames_for_seconds(40.0)
 const PRIMARY_RANDOM_PAIRS_PER_SIDE = 1000
-const PRIMARY_RANDOM_CYCLES = 10 # number of times the "1000 pairs/side" R+L block is repeated
+const PRIMARY_RANDOM_CYCLES = 4 # number of times the "1000 pairs/side" R+L block is repeated
 const PRIMARY_RANDOM_MAX_CURRENT_A = 0.95
 const PRIMARY_SINGLE_COIL_MAX_CURRENT_A = 0.95
 const PRIMARY_RANDOM_REPEATS_PER_PAIR = FRAMES_PER_CONFIGURATION

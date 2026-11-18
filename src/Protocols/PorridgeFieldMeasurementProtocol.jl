@@ -65,17 +65,22 @@ function waitForCoilCooling(sensor::TemperatureSensor, overheatCoilIdx::Int; coo
   return false
 end
 
-function sliceSequenceFromStep(sequence::Sequence, startStep::Int)
+function sliceSequenceFromStep(sequence::Sequence, startStep::Int, endStep::Int)
   newFields = MagneticField[]
   for field in fields(sequence)
     newChannels = TxChannel[]
     for channel in channels(field)
       if isa(channel, StepwiseElectricalChannel)
-        slicedValues = channel.values[startStep:end]
-        slicedEnable = isempty(channel.enable) ? channel.enable : channel.enable[startStep:end]
+        1 <= startStep <= endStep <= length(channel.values) ||
+          throw(BoundsError(channel.values, startStep:endStep))
+        slicedValues = channel.values[startStep:endStep]
+        slicedEnable = isempty(channel.enable) ? channel.enable : channel.enable[startStep:endStep]
+        dividerPerStep, remainder = divrem(channel.divider, length(channel.values))
+        slicedDivider = iszero(remainder) ? dividerPerStep * length(slicedValues) :
+                        round(Int, channel.divider * length(slicedValues) / length(channel.values))
         push!(newChannels, StepwiseElectricalChannel(
           id=channel.id,
-          divider=channel.divider,
+          divider=slicedDivider,
           values=slicedValues,
           enable=slicedEnable,
         ))
@@ -95,6 +100,11 @@ function sliceSequenceFromStep(sequence::Sequence, startStep::Int)
     ))
   end
   return Sequence(general=sequence.general, fields=newFields, acquisition=sequence.acquisition)
+end
+
+function sliceSequenceFromStep(sequence::Sequence, startStep::Int)
+  return sliceSequenceFromStep(sequence, startStep,
+                               minimum(length(channel.values) for channel in stepwiseElectricalTxChannels(sequence)))
 end
 
 function rampDownAndWait!(daq, protocol)

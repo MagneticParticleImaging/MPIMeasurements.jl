@@ -40,6 +40,7 @@ const MS_FRAME_IRREGULAR = UInt32(4)   # received off the trigger grid
 const MS_CLOCK_JUMP_S = 10.0           # forward gaps above this are checked against the PC clock
 const MS_GRID_GAIN = 0.05              # how fast the trigger grid follows the sphere clock
 const MS_SAVE_BLOCK = 10_000           # frames per block when converting the stream to HDF5
+const MS_MAX_SEQUENCE_CHUNK_FRAMES = 100_000
 
 Base.@kwdef mutable struct PorridgeMagSphereMeasurementProtocolParams <: ProtocolParams
   sequence::Union{Sequence, Nothing} = nothing
@@ -237,6 +238,18 @@ function magSphereTriggerPeriod(sequence::Sequence, triggerPatches::Vector{Int})
   throw(IllegalStateException("The sequence has no stepwise \"trigger\" channel."))
 end
 
+function magSphereSequenceChunk(sequence::Sequence, firstFrame::Int, lastFrame::Int)
+  triggerChannels = [channel for channel in stepwiseElectricalTxChannels(sequence) if id(channel) == "trigger"]
+  length(triggerChannels) == 1 || throw(IllegalStateException("The sequence needs one stepwise \"trigger\" channel."))
+  numTriggerSteps = length(only(triggerChannels).values)
+  iseven(numTriggerSteps) || throw(IllegalStateException("The trigger channel needs high/low steps for each frame."))
+  totalFrames = div(numTriggerSteps, 2)
+  0 <= firstFrame < lastFrame <= totalFrames ||
+    throw(ArgumentError("Invalid MagSphere frame chunk $firstFrame:$lastFrame for $totalFrames frames"))
+  startStep = firstFrame == 0 ? 1 : 2 * firstFrame
+  return sliceSequenceFromStep(sequence, startStep, 2 * lastFrame)
+end
+
 function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProtocol)
   protocol.measuring = true
 
@@ -268,10 +281,12 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
   enable(cam)
   try
     while true
-      # On resume (after an overheat cooldown) start on the LOW step of the frame captured
-      # last, so the next frame's trigger is a real rising edge; see performFieldMeasurement.
-      runSequence = protocol.currentFrameNum == 0 ? sequence :
-                    sliceSequenceFromStep(sequence, 2 * protocol.currentFrameNum)
+      chunkStartFrame = protocol.currentFrameNum
+      chunkEndFrame = min(chunkStartFrame + MS_MAX_SEQUENCE_CHUNK_FRAMES, protocol.totalFrames)
+      # Start resumed chunks on the LOW half of the previous frame, then upload only this
+      # bounded interval. A low step guarantees the next HIGH step is a real rising edge.
+      runSequence = magSphereSequenceChunk(sequence, chunkStartFrame, chunkEndFrame)
+      @info "Configuring MagSphere sequence chunk" first_frame=(chunkStartFrame + 1) last_frame=chunkEndFrame steps=length(first(acyclicElectricalTxChannels(runSequence)).values)
       setup(daq, runSequence)
       discardUntriggeredFrames!(cam)
       protocol.gridTime_us = NaN   # the first frame after (re)starting begins a new trigger grid
@@ -323,6 +338,9 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
 
       endSequence(daq, finish)
       drainMagSphereFrames!(protocol, cam, triggerPatches, coilTemperatures)
+      if outcome == :complete && !overheated && protocol.currentFrameNum < chunkEndFrame
+        appendMagSphereChunkFill!(protocol, triggerPatches, coilTemperatures, chunkEndFrame)
+      end
 
       if outcome != :complete || protocol.currentFrameNum >= protocol.totalFrames
         break
@@ -335,7 +353,7 @@ function performMagSphereMeasurement(protocol::PorridgeMagSphereMeasurementProto
         end
         @info "Resuming measurement" frame=protocol.currentFrameNum
       else
-        break
+        @info "MagSphere sequence chunk complete" frames=protocol.currentFrameNum target=protocol.totalFrames
       end
     end
 
@@ -508,8 +526,8 @@ function drainMagSphereFrames!(protocol::PorridgeMagSphereMeasurementProtocol, c
 end
 
 function appendMagSphereTailFill!(protocol::PorridgeMagSphereMeasurementProtocol, triggerPatches::Vector{Int},
-                                  coilTemperatures::Vector{Float64})
-  n = protocol.totalFrames - protocol.currentFrameNum
+                                  coilTemperatures::Vector{Float64}; targetFrame::Int=protocol.totalFrames)
+  n = targetFrame - protocol.currentFrameNum
   n <= 0 && return 0
   for _ in 1:n
     writeMagSphereRecord!(protocol, nothing, triggerPatches, coilTemperatures, MS_FRAME_MISSING | MS_FRAME_TAIL_FILL)
@@ -517,6 +535,19 @@ function appendMagSphereTailFill!(protocol::PorridgeMagSphereMeasurementProtocol
   protocol.tailFillFrames += n
   flush(protocol.streamHandle)
   @warn "Tail frames missing from the MagSphere stream; filled with NaN placeholders" missing=n
+  return n
+end
+
+function appendMagSphereChunkFill!(protocol::PorridgeMagSphereMeasurementProtocol, triggerPatches::Vector{Int},
+                                   coilTemperatures::Vector{Float64}, targetFrame::Int)
+  n = targetFrame - protocol.currentFrameNum
+  n <= 0 && return 0
+  for _ in 1:n
+    writeMagSphereRecord!(protocol, nothing, triggerPatches, coilTemperatures, MS_FRAME_MISSING)
+  end
+  protocol.missingFrames += n
+  flush(protocol.streamHandle)
+  @warn "Frames missing at the end of a MagSphere sequence chunk; filled with NaN placeholders" missing=n
   return n
 end
 

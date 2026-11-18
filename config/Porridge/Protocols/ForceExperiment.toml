@@ -1,0 +1,6 @@
+type = "MPIForceProtocol"
+description = "Blabla"
+targetScanner = "Porridge"
+
+sequence = "SimpleOffset"
+controlTx = false

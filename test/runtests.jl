@@ -19,6 +19,7 @@ addConfigurationPath(testConfigDir)
   include("TestDevices.jl")
   include("Scanner/ScannerTests.jl")
   include("Devices/DeviceTests.jl")
+  include("Protocols/MagSphereSequenceChunkTest.jl")
   #include("Safety/SafetyTests.jl")
   include("Utils/UtilTests.jl")
 
