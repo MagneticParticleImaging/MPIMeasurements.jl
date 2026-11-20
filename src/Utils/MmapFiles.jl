@@ -25,11 +25,13 @@ function mmap!(protocol::Protocol, f::String, eltype::DataType, size::Union{Tupl
 end
 
 function mmap(protocol::Protocol, f::String, eltype::Type{T}) where {T}
-  io = open(file(protocol, f), "r+")
-  N = Base.read(io, Int64)
-  dims = []
-  for i = 1:N
-    push!(dims, Base.read(io, Int64))
+  # The mapping stays valid after the stream is closed
+  open(file(protocol, f), "r+") do io
+    N = Base.read(io, Int64)
+    dims = []
+    for i = 1:N
+      push!(dims, Base.read(io, Int64))
+    end
+    return Mmap.mmap(io, Array{eltype,N}, tuple(dims...))
   end
-  return Mmap.mmap(io, Array{eltype,N}, tuple(dims...))
 end

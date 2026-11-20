@@ -262,7 +262,7 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   # Now for the buffer chain we want to reinterpret periods to frames
   # This has to happen after the RedPitaya sequence is set, as that code repeats the full sequence for each frame
   acqNumFrames(protocol.sequence, acqNumFrames(protocol.sequence) * periodsPerFrame(daq.rpc))
-  setupRx(daq, daq.decimation, samplesPerPeriod(daq.rpc), 1)
+  _setupRx(daq, samplesPerPeriod(daq.rpc), 1)
 
   numFrames = acqNumFrames(protocol.sequence)
 

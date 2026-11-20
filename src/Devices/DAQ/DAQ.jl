@@ -98,6 +98,7 @@ Base.@kwdef mutable struct DAQTxChannelParams <: TxChannelParams
   sinkImpedance::SinkImpedance = SINK_HIGH
   allowedWaveforms::Vector{Waveform} = [WAVEFORM_SINE]
   feedbackChannelID::Union{String, Nothing} = nothing
+  "optional, can be either a filename to a .h5 file in the TransferFunctions folder, a single (complex) value with unit or a table that maps frequencies to values, see [`MPIMeasurements.parse_into_tf`](@ref)"
   calibration::Union{TransferFunction, String, Nothing} = nothing
 end
 
@@ -109,7 +110,7 @@ $FIELDS
 Base.@kwdef mutable struct DAQRxChannelParams <: RxChannelParams
   "required, Integer, channel idx of the corresponding DAQ"
   channelIdx::Int64
-  "optional, can be either a filename to a .h5 file in the TransferFunctions folder or a single (complex) number"
+  "optional, can be either a filename to a .h5 file in the TransferFunctions folder, a single (complex) value with unit or a table that maps frequencies to values, see [`MPIMeasurements.parse_into_tf`](@ref)"
   transferFunction::Union{TransferFunction, String, Nothing} = nothing
 end
 

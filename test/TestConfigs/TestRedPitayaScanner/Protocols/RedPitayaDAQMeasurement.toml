@@ -1,6 +1,9 @@
 name = "RedPitayaDAQMeasurement"
-type = "DAQMeasurementProtocol"
+type = "MPIMeasurementProtocol"
 description = "An acquisition with the Red Pitaya"
 targetScanner = "TestRedPitayaScanner"
 
-sequenceName = "SimpleRedPitayaSequence"
+sequence = "SimpleRedPitayaSequence"
+
+fgFrames = 1
+measureBackground = false

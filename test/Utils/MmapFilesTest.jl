@@ -28,4 +28,41 @@
   @test eltype(zeroed) == ComplexF64
   @test all(iszero, zeroed)
   @test size(MPIMeasurements.mmap!(protocol, "vector.bin", Int16, [5])) == (5,)
+
+  @testset "Mapping does not leave the file open" begin
+    # Number of open handles (Windows) or file descriptors (Linux) of this process
+    function openHandleCount()
+      if Sys.iswindows()
+        count = Ref{UInt32}(0)
+        process = ccall((:GetCurrentProcess, "kernel32"), stdcall, Ptr{Cvoid}, ())
+        ccall((:GetProcessHandleCount, "kernel32"), stdcall, Int32, (Ptr{Cvoid}, Ref{UInt32}), process, count) != 0 || error("GetProcessHandleCount failed")
+        return Int(count[])
+      elseif Sys.islinux()
+        return length(readdir("/proc/self/fd"))
+      end
+      return nothing
+    end
+    # On Windows each mapped array holds the handle of its file mapping object
+    handlesPerMapping = Sys.iswindows() ? 1 : 0
+
+    numMappings = 20
+    arrays = []
+    # Garbage collection would close leaked streams and hide them from the count
+    GC.enable(false)
+    before, after = try
+      countBefore = openHandleCount()
+      for i in 1:numMappings
+        push!(arrays, MPIMeasurements.mmap(protocol, "data.bin", Float32))
+      end
+      countBefore, openHandleCount()
+    finally
+      GC.enable(true)
+    end
+    if isnothing(before)
+      @test_skip after - before <= numMappings * handlesPerMapping
+    else
+      @test after - before < numMappings * (handlesPerMapping + 1)
+    end
+    @test all(==(mapped), arrays)
+  end
 end

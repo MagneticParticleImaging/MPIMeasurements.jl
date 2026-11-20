@@ -22,6 +22,7 @@ addConfigurationPath(testConfigDir)
   #include("Safety/SafetyTests.jl")
   include("Sequences/SequenceTests.jl")
   include("Storage/StorageTests.jl")
+  include("Protocols/ProtocolTests.jl")
   include("Utils/UtilTests.jl")
 
   # Subpackages (e.g. MPIMeasurementsTinkerforge) are tested in a separate CI job

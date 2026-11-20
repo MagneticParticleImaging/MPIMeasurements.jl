@@ -68,6 +68,20 @@ Base.@kwdef mutable struct MultiSequenceSystemMatrixProtocol <: Protocol
   txCont::Union{TxDAQController,Nothing} = nothing
 end
 
+"""
+    measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+
+Return the sequences in the order they are measured: `numBGMeas` background
+measurements before and after the sequences if a `bgSequence` is set.
+"""
+function measurementSequences(params::MultiSequenceSystemMatrixProtocolParams)
+  if isnothing(params.bgSequence)
+    return params.sequences
+  end
+  bgSequences = repeat([params.bgSequence], params.numBGMeas)
+  return [bgSequences; params.sequences; bgSequences]
+end
+
 function requiredDevices(protocol::MultiSequenceSystemMatrixProtocol)
   result = [AbstractDAQ]
   if protocol.params.controlTx
@@ -82,6 +96,9 @@ end
 function _init(protocol::MultiSequenceSystemMatrixProtocol)
   if isnothing(protocol.params.sequences)
     throw(IllegalStateException("Protocol requires sequences"))
+  end
+  if isnothing(protocol.params.positions)
+    throw(IllegalStateException("Protocol requires positions"))
   end
 
   if any(acqNumFrameAverages.(protocol.params.sequences) .!= 1)
@@ -98,11 +115,7 @@ function _init(protocol::MultiSequenceSystemMatrixProtocol)
 
   protocol.systemMeasState = SystemMatrixMeasState()
   numBGMeas = protocol.params.numBGMeas
-  if !isnothing(protocol.params.bgSequence)
-    protocol.allSequences = [repeat([protocol.params.bgSequence], numBGMeas); protocol.params.sequences; repeat([protocol.params.bgSequence], numBGMeas)]
-  else
-    protocol.allSequences = protocol.params.sequences
-  end
+  protocol.allSequences = measurementSequences(protocol.params)
   numPos = length(protocol.allSequences)
 
   if numPos == 0 
@@ -419,6 +432,7 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   if !isnothing(protocol.params.bgSequence)
     params["bgSequence"] = toDict(protocol.params.bgSequence)
   end
+  params["numBGMeas"] = protocol.params.numBGMeas
 
   filename = file(protocol, "meta.toml")
   filename_backup = file(protocol, "meta.toml.backup")
@@ -455,23 +469,28 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
     #end
 
     sysObj.positions = Positions(params)
-    seq = protocol.params.sequences
 
+    # `store` writes `bgSequence` only if there is one
     storedSeq = sequenceFromDict.(params["sequences"])
-    if storedSeq != seq
-      message = "Stored sequences do not match initialized sequence. Use stored sequence instead?"
+    storedBGSeq = haskey(params, "bgSequence") ? sequenceFromDict(params["bgSequence"]) : nothing
+    storedNumBGMeas = get(params, "numBGMeas", protocol.params.numBGMeas)
+    mismatches = String[]
+    storedSeq != protocol.params.sequences && push!(mismatches, "sequences")
+    storedBGSeq != protocol.params.bgSequence && push!(mismatches, "background sequence")
+    if !isnothing(storedBGSeq) && storedNumBGMeas != protocol.params.numBGMeas
+      push!(mismatches, "number of background measurements")
+    end
+    if !isempty(mismatches)
+      message = "Stored $(join(mismatches, ", ", " and ")) do not match the initialized protocol. Use the stored values instead?"
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
-      seq = storedSeq 
-      protocol.params.sequence # What is going on here?
+      protocol.params.sequences = storedSeq
+      protocol.params.bgSequence = storedBGSeq
+      protocol.params.numBGMeas = storedNumBGMeas
     end
-
-    if !isnothing(protocol.params.bgSequence)
-      protocol.allSequences = [protocol.params.bgSequence; protocol.params.sequences; protocol.params.bgSequence]
-    else
-      protocol.allSequences = protocol.params.sequences
-    end
+    seq = protocol.params.sequences
+    protocol.allSequences = measurementSequences(protocol.params)
 
     # Drive Field
     #if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
@@ -504,7 +523,8 @@ end
 
 function pause(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
-  if calib.currPos <= length(calib.positions)
+  # `positions` does not contain the background measurements, `allSequences` does
+  if calib.currPos <= length(protocol.allSequences)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.paused = true
   else
