@@ -209,6 +209,7 @@ function initMeasData(protocol::MultiSequenceSystemMatrixProtocol)
     seqDict["sequences"] = toDict.(protocol.params.sequences)
     if !isnothing(protocol.params.bgSequence)
       seqDict["bgSequence"] = toDict(protocol.params.bgSequence)
+      seqDict["numBGMeas"] = protocol.params.numBGMeas
     end
     open(file(protocol, "sequences.toml"), "w") do f
       TOML.print(f, seqDict)
@@ -441,25 +442,29 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
     #end
 
     sysObj.positions = Positions(params)
-    seq = protocol.params.sequences
 
+    # `initMeasData` writes `bgSequence` and `numBGMeas` only if there is a background sequence
     sequenceParams = TOML.parsefile(file(protocol, "sequences.toml"))
     storedSeq = sequenceFromDict.(sequenceParams["sequences"])
-    if storedSeq != seq
-      message = "Stored sequences do not match initialized sequence. Use stored sequence instead?"
+    storedBGSeq = haskey(sequenceParams, "bgSequence") ? sequenceFromDict(sequenceParams["bgSequence"]) : nothing
+    storedNumBGMeas = get(sequenceParams, "numBGMeas", protocol.params.numBGMeas)
+    mismatches = String[]
+    storedSeq != protocol.params.sequences && push!(mismatches, "sequences")
+    storedBGSeq != protocol.params.bgSequence && push!(mismatches, "background sequence")
+    if !isnothing(storedBGSeq) && storedNumBGMeas != protocol.params.numBGMeas
+      push!(mismatches, "number of background measurements")
+    end
+    if !isempty(mismatches)
+      message = "Stored $(join(mismatches, ", ", " and ")) do not match the initialized protocol. Use the stored values instead?"
       if askChoices(protocol, message, ["Cancel", "Use"]) == 1
         throw(CancelException())
       end
-      seq = storedSeq 
-      protocol.params.sequence # What is going on here?
-      protocol.params.bgSequence = sequenceFromDict(sequenceParams["bgSequence"])
+      protocol.params.sequences = storedSeq
+      protocol.params.bgSequence = storedBGSeq
+      protocol.params.numBGMeas = storedNumBGMeas
     end
-    numBGMeas = protocol.params.numBGMeas
-    if !isnothing(protocol.params.bgSequence)
-      protocol.allSequences = [repeat([protocol.params.bgSequence], numBGMeas); protocol.params.sequences; repeat([protocol.params.bgSequence], numBGMeas)]
-    else
-      protocol.allSequences = protocol.params.sequences
-    end
+    seq = protocol.params.sequences
+    protocol.allSequences = measurementSequences(protocol.params)
 
     # Drive Field
     #if isfile(protocol, "observedField.bin") # sysObj.drivefield is still empty at point of (length(sysObj.drivefield) == length(drivefield))
