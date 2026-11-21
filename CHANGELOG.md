@@ -24,6 +24,9 @@
 - do not override startup parameters on every init
 - improved parsing of amplifier status
 - implemented setting and getting of amplifier ID
+- `hubertStatus` returns the decoded status of the amplifier (ready, overload, overtemperature, interlock, power supply level of the A1110E, output on)
+- errors instead of silently continuing when the amplifier does not acknowledge a command, does not report its model, reports an invalid power supply level or when an ID longer than 128 bytes is set
+- the model detected during `init` is used instead of querying it for every command
 
 ### Updated REPL Modes
 - to remove the overlap with Julias built-in ALT+M (and the corresponding warning on every load) the Device REPL mode shortcut has been changed to ALT+2
@@ -33,6 +36,8 @@
 - improved error messages during device creation
 
 ### Technically breaking changes
+- `state(::HubertAmplifier)` returns `true` if the output is enabled, like the other amplifiers (in 0.6 it returned the raw status bytes); use `hubertStatus` for the full status
+- `temperature(::HubertAmplifier)` returns a `Float64` in °C, as declared by the `Amplifier` interface (in 0.6 it returned an `Int` without unit)
 - `TxDAQController` with arbitrary waveform control: the control is accurate when, for every channel, the mean absolute deviation between desired and measured field over one period is below `absoluteAmplitudeAccuracy` (in 0.6 the maximum deviation over all samples and channels was compared)
 - removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
 - `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
@@ -48,6 +53,7 @@
 - `TxDAQController`: control works without amplifiers, and if turning on an amplifier fails, the amplifiers and the AC power are switched off and temperature control is re-enabled
 - `TxDAQController` DC search (`controlDC`): the search restarts from the forward calibration when the last two steps are too close together also for zero or negative DC targets, and stops with an error instead of setting non-finite voltages
 - `TxDAQController`: the slew rate of AW sequences with more than 100000 frequencies is no longer overestimated, which could reject valid control values
+- clearer error message for an invalid amplifier power supply mode in the configuration
 - `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
 - `WAVEFORM_ARBITRARY` is now exported for consistency
 - if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled

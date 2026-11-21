@@ -61,20 +61,38 @@ Base.@kwdef mutable struct HubertAmplifier <: Amplifier
 	model::Union{HubertVersion, Missing} = missing
 end
 
-function _hubertModel(amp::HubertAmplifier)
+"Query the model of the amplifier over the serial connection."
+function _queryHubertModel(amp::HubertAmplifier)
 	# Undocumented command, suggested by Hubert support via E-Mail
-	answer = String(_hubertSerial(amp, UInt8[0x02,0x50]))
+	return _parseHubertModel(String(_hubertSerial(amp, UInt8[0x02,0x50])), deviceID(amp))
+end
+
+function _parseHubertModel(answer::AbstractString, deviceID::AbstractString)
 	if answer == "P111MAIN"
 		return A1110E
 	elseif answer == "P111MAINQE"
 		return A1110QE
-	elseif answer === nothing
-		error("Hubert did not respond!")
+	elseif isempty(answer)
+		error("Hubert amplifier `$deviceID` did not respond to the model query.")
 	else
-		error("Unknown hubert model $(answer)! This should not happen...")
+		error("Hubert amplifier `$deviceID` reported the unknown model $(repr(answer)).")
 	end
 end
 
+"Model of the amplifier as determined during `init`."
+function _hubertModel(amp::HubertAmplifier)
+	if ismissing(amp.model)
+		error("The model of Hubert amplifier `$(deviceID(amp))` is unknown because the device has not been initialized.")
+	end
+	return amp.model
+end
+
+"""
+    HubertStatus(state::UInt8, model::HubertVersion=A1110QE)
+
+Status of a Hubert amplifier decoded from its status byte `state`. The power supply level
+(`supplyVoltage`) is only reported by the A1110E; for other models it is `missing`.
+"""
 struct HubertStatus
 	ready::Bool
 	overload::Bool
@@ -84,11 +102,27 @@ struct HubertStatus
 	on::Bool
 	function HubertStatus(state::UInt8, model::HubertVersion=A1110QE)
 		if model == A1110E
-			supplyVoltage = AmplifierPowerSupplyMode((state&(0b11 << 5))>>5)
+			supplyVoltage = _hubertPowerSupplyMode(state)
 		else
 			supplyVoltage = missing
 		end
-		new(state&(0x1 << 0) != 0, state&(0x1 << 1)!= 0, state&(0x1 << 2)!= 0, state&(0x1 << 4)!= 0,supplyVoltage, state&(0x1 << 7)!= 0)
+		new(state&(0x1 << 0) != 0, state&(0x1 << 1)!= 0, state&(0x1 << 2)!= 0, state&(0x1 << 4)!= 0,supplyVoltage, _hubertIsOn(state))
+	end
+end
+
+_hubertIsOn(state::UInt8) = state&(0x1 << 7) != 0
+
+# Bits 5 and 6 of the status byte of the A1110E
+function _hubertPowerSupplyMode(state::UInt8)
+	bits = (state >> 5) & 0b11
+	if bits == 0b00
+		return AMP_LOW_POWER_SUPPLY
+	elseif bits == 0b01
+		return AMP_MID_POWER_SUPPLY
+	elseif bits == 0b11
+		return AMP_HIGH_POWER_SUPPLY
+	else
+		error("The Hubert status byte 0x$(string(state, base=16, pad=2)) contains the invalid power supply value $(bits) in bits 5 and 6.")
 	end
 end
 status_symbol(status::Bool, positive::Bool=true)= if status&&positive; styled"{green:✔}" elseif status&&!positive; styled"{red,bold:!}" elseif !status&&positive; styled"{red:✘}" else styled"{green,bold:-}" end
@@ -105,7 +139,7 @@ end
 
 function _init(amp::HubertAmplifier)
 	amp.driver = initSerialDevice(amp, amp.params)
-	amp.model = _hubertModel(amp)
+	amp.model = _queryHubertModel(amp)
 
 	# Set values given by configuration
 	mode(amp, amp.params.mode)
@@ -131,13 +165,15 @@ function _hubertSerial(amp::HubertAmplifier, input::Array{UInt8}, ack::Array{UIn
 
 	output = zeros(UInt8, size(ack))
 	answer_hex = _hubertSerial!(amp, input, output)
+	_checkHubertAck(deviceID(amp), input, ack, answer_hex)
+	return nothing
+end
 
-	if answer_hex == ack
-		@debug "Hubert acknowleged: '$(answer_hex)' set."
-	else
-		@error "Hubert: Serial communication error. Expected '$(ack)', received '$(answer_hex)'"	
+function _checkHubertAck(deviceID::AbstractString, input, ack, answer)
+	if answer != ack
+		error("Hubert amplifier `$deviceID`: serial communication error for command $(repr(input)). Expected the acknowledgement $(repr(ack)), received $(repr(answer)).")
 	end
-
+	@debug "Hubert acknowledged: '$(answer)' set."
 	return nothing
 end
 
@@ -199,11 +235,22 @@ function _hubertGetExtendedStartupSettings(amp::HubertAmplifier)
 	return _hubertSerial!(amp, input, output)
 end
 
-function state(amp::HubertAmplifier)
+function _hubertStatusByte(amp::HubertAmplifier)
 	input = UInt8[0x02, 0x10]
 	output = zeros(UInt8, 1)
-	return HubertStatus(_hubertSerial!(amp, input, output)[], _hubertModel(amp))
+	return only(_hubertSerial!(amp, input, output))
 end
+
+"Return `true` if the output of the amplifier is enabled."
+state(amp::HubertAmplifier) = _hubertIsOn(_hubertStatusByte(amp))
+
+export hubertStatus
+"""
+    hubertStatus(amp::HubertAmplifier)
+
+Return the full `HubertStatus` of the amplifier, including the on/off state returned by `state`.
+"""
+hubertStatus(amp::HubertAmplifier) = HubertStatus(_hubertStatusByte(amp), _hubertModel(amp))
 
 function turnOn(amp::HubertAmplifier)
 	@info "Amplifier $(amp.deviceID) enabled"
@@ -254,7 +301,7 @@ end
 
 function powerSupplyMode(amp::HubertAmplifier)
 	if _hubertModel(amp) == A1110E
-		return state(amp).supplyVoltage
+		return hubertStatus(amp).supplyVoltage
 	elseif _hubertModel(amp) == A1110QE
 		res = _hubertSerial!(amp, UInt8[0x02,0x38], zeros(UInt8,12))
 		if res[12] == 0x05
@@ -282,18 +329,22 @@ function powerSupplyMode(amp::HubertAmplifier, mode::AmplifierPowerSupplyMode)
 		ack = UInt8[0x54]
 		_hubertSerial(amp, input, ack)
 	elseif _hubertModel(amp) == A1110E
-		orig_timeout = amp.driver.timeout_ms
-		amp.driver.timeout_ms = 10000 # changing the power supply takes a moment on the A1110E Huberts
 		if mode==AMP_HIGH_POWER_SUPPLY
-			_hubertSerial(amp, UInt8[0x02, 0x05], UInt8[0x05])
+			command = 0x05
 		elseif mode==AMP_MID_POWER_SUPPLY
-			_hubertSerial(amp, UInt8[0x02, 0x27], UInt8[0x27])
+			command = 0x27
 		elseif mode==AMP_LOW_POWER_SUPPLY
-			_hubertSerial(amp, UInt8[0x02, 0x06], UInt8[0x06])
+			command = 0x06
 		else
 			throw(ScannerConfigurationError("Unsupported voltage mode for Hubert amplifier $(_hubertModel(amp)): $mode."))
 		end
-		amp.driver.timeout_ms = orig_timeout
+		orig_timeout = amp.driver.timeout_ms
+		amp.driver.timeout_ms = 10000 # changing the power supply takes a moment on the A1110E Huberts
+		try
+			_hubertSerial(amp, UInt8[0x02, command], UInt8[command])
+		finally
+			amp.driver.timeout_ms = orig_timeout
+		end
 	end
 	return nothing
 end
@@ -317,8 +368,10 @@ function temperature(amp::HubertAmplifier)
 	input = UInt8[0x02, 0x04]
 	output = zeros(UInt8, 1)
 	hex = _hubertSerial!(amp, input, output)
-	return Int(hex[1])*u"°C"
+	return _hubertTemperature(only(hex))
 end
+
+_hubertTemperature(byte::UInt8) = Float64(byte)*u"°C"
 
 function currentPowerLossPercent(amp::HubertAmplifier)
 	if _hubertModel(amp) == A1110QE
@@ -329,10 +382,19 @@ function currentPowerLossPercent(amp::HubertAmplifier)
 	return Int(hex[1])/250*100
 end
 
-hubertId(amp::HubertAmplifier) = String(_hubertSerial(amp, UInt8[0x02,0x51])) 
-function hubertId!(amp::HubertAmplifier, newID::String) 
-	_hubertSerial(amp, [UInt8[0x82,0x52]; Vector{UInt8}(newID); repeat(UInt8[0x0], 128-length(newID))], UInt8[0x52])
+hubertId(amp::HubertAmplifier) = String(_hubertSerial(amp, UInt8[0x02,0x51]))
+function hubertId!(amp::HubertAmplifier, newID::AbstractString)
+	_hubertSerial(amp, _hubertIdCommand(newID), UInt8[0x52])
 	return hubertId(amp)
+end
+
+# The ID field of the amplifier holds 128 bytes; shorter IDs are padded with zeros.
+function _hubertIdCommand(newID::AbstractString)
+	bytes = Vector{UInt8}(codeunits(String(newID)))
+	if length(bytes) > 128
+		throw(ArgumentError("The ID of a Hubert amplifier can have at most 128 bytes, got $(length(bytes)) bytes for $(repr(newID))."))
+	end
+	return [UInt8[0x82,0x52]; bytes; zeros(UInt8, 128-length(bytes))]
 end
 
 channelId(amp::HubertAmplifier) = amp.params.channelID

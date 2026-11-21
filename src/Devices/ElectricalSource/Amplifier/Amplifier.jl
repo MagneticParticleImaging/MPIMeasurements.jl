@@ -14,7 +14,7 @@ function convert(::Type{AmplifierMode}, x::String)
   elseif  lowercase(x) == "current"
     return AMP_CURRENT_MODE
   else
-    throw(ScannerConfigurationError("The given amplifier mode `$x` for is not valid. Please use `voltage` or `current`."))
+    throw(ScannerConfigurationError("The given amplifier mode `$x` is not valid. Please use `voltage` or `current`."))
   end
 end
 
@@ -32,7 +32,7 @@ function convert(::Type{AmplifierPowerSupplyMode}, x::String)
   elseif contains(lowercase(x),"high")
     return AMP_HIGH_POWER_SUPPLY
   else
-    throw(ScannerConfigurationError("The given amplifier mode `$x` for is not valid. Please use `low voltage` or `high voltage`."))
+    throw(ScannerConfigurationError("The given amplifier power supply mode `$x` is not valid. Please use a value containing `low`, `mid` or `high`."))
   end
 end
 
