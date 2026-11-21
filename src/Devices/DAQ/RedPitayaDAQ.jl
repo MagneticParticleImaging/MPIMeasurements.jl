@@ -1200,13 +1200,20 @@ function prepareTx(daq::RedPitayaDAQ, sequence::Sequence)
 end
 
 """
-Set the amplitude and phase for all the selected channels.
+    setTxParams(daq::RedPitayaDAQ, offsets, amplitudes, phases, awg=nothing)
 
-Note: `amplitudes` and `phases` are defined as a dictionary of
-vectors, since every channel referenced by the dict's key could
-have a different amount of components.
+Set the offset, the amplitudes and phases of the sinusoidal components and the arbitrary
+waveform (AWG) of the selected Tx channels.
+
+`amplitudes` and `phases` are dictionaries of vectors, since every channel referenced by the
+dictionary's key can have a different number of components. A `nothing` component or
+`awg = nothing` leaves the corresponding value on the device unchanged.
+
+Before anything is sent, `checkTxLimits` verifies the
+combined worst-case voltage of every channel against its `limitPeak`.
 """
 function setTxParams(daq::RedPitayaDAQ, offsets::Dict{String,Float32},amplitudes::Dict{String, Vector{Union{Float32, Nothing}}}, phases::Dict{String, Vector{Union{Float32, Nothing}}}, awg::Union{Dict{String, Vector{Float32}}, Nothing} = nothing)
+  checkTxLimits(daq, offsets, amplitudes, awg)
   execute!(daq.rpc) do batch
     setTxParamsOffsets(daq, batch, offsets)
     setTxParamsAmplitudes(daq, batch, amplitudes)
@@ -1215,36 +1222,52 @@ function setTxParams(daq::RedPitayaDAQ, offsets::Dict{String,Float32},amplitudes
   setTxParamsArbitrary(daq, awg)
 end
 
-function setTxParamsOffsets(daq::RedPitayaDAQ, batch::ScpiBatch, offsets::Dict{String, Float32})
-  for (channelID, offset) in offsets
-    if offset >= ustrip(u"V", limitPeak(daq, channelID))
-      error("This should never happen!!! \nTx offset voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
+"""
+    checkTxLimits(daq, offsets, amplitudes, awg)
+
+Throw an `ArgumentError` unless, for every channel appearing in `offsets`, `amplitudes` or
+`awg`, the worst-case output voltage
+
+    abs(offset) + sum(abs, amplitudes) + maximum(abs, awg)
+
+is finite and strictly below the channel's `limitPeak`. All values are in volts. Missing
+entries count as zero.
+
+The check only knows the values passed to it. A `nothing` amplitude or a missing AWG means
+"leave the value on the device unchanged"; the value that remains on the device is not known
+here and does not enter the sum, so a partial update is only checked against the values it
+sets.
+"""
+function checkTxLimits(daq::AbstractDAQ, offsets::AbstractDict, amplitudes::AbstractDict, awg::Union{AbstractDict, Nothing})
+  channelIDs = union(keys(offsets), keys(amplitudes), isnothing(awg) ? () : keys(awg))
+  for channelID in channelIDs
+    offset_ = abs(get(offsets, channelID, 0))
+    amplitudes_ = sum(a -> isnothing(a) ? 0 : abs(a), get(amplitudes, channelID, ()); init=0)
+    awg_ = isnothing(awg) ? 0 : maximum(abs, get(awg, channelID, ()); init=0)
+    worstCase = offset_ + amplitudes_ + awg_
+    limit = ustrip(u"V", limitPeak(daq, channelID))
+    if !isfinite(worstCase)
+      throw(ArgumentError("The Tx values for channel `$channelID` are not finite: |offset| = $offset_ V, " *
+        "sum of |amplitudes| = $amplitudes_ V, max |AWG| = $awg_ V. Nothing was sent to the DAQ."))
+    end
+    if !(worstCase < limit)
+      throw(ArgumentError("The worst-case Tx voltage on channel `$channelID` is $worstCase V " *
+        "(|offset| = $offset_ V + sum of |amplitudes| = $amplitudes_ V + max |AWG| = $awg_ V), " *
+        "which is not below the channel's limit of $limit V. Nothing was sent to the DAQ."))
     end
   end
-  
+  return nothing
+end
+
+# The following functions send their values without checking the voltage limits;
+# `setTxParams` checks the combined values of all of them first.
+function setTxParamsOffsets(daq::RedPitayaDAQ, batch::ScpiBatch, offsets::Dict{String, Float32})
   for (channelID, offset) in offsets
     @add_batch batch offsetDAC!(daq.rpc, channelIdx(daq, channelID), offset)
   end
-  
 end
 
 function setTxParamsAmplitudes(daq::RedPitayaDAQ, batch::ScpiBatch, amplitudes::Dict{String, Vector{Union{Float32, Nothing}}})
-  # Determine the worst case voltage per channel
-  # Note: this would actually need a fourier synthesis with the given signal type,
-  # but I don't think this is necessary
-  for (channelID, components_) in amplitudes
-    channelVoltage = 0
-    for amplitude_ in components_
-      if !isnothing(amplitude_)
-        channelVoltage += amplitude_
-      end
-    end
-
-    if channelVoltage >= ustrip(u"V", limitPeak(daq, channelID))
-      error("This should never happen!!! \nTx voltage on channel with ID `$channelID` is above the limit with a voltage of $channelVoltage.")
-    end
-  end
-
   for (channelID, components_) in amplitudes
     for (componentIdx, amplitude_) in enumerate(components_)
       if !isnothing(amplitude_)

@@ -13,3 +13,10 @@ end
 
 # DriveFieldBuffer requires a ControlSequence, which is not used when complex data is pushed
 struct UnusedControlSequence <: MPIMeasurements.ControlSequence end
+
+# RedPitayaDAQ with the given channels; constructing it does not connect to the Red Pitayas,
+# that happens in `init`
+function unconnectedRedPitayaDAQ(channels = Dict{String, MPIMeasurements.DAQChannelParams}())
+  params = MPIMeasurements.RedPitayaDAQParams(channels = channels, ips = String[])
+  return RedPitayaDAQ(deviceID = "testRedPitaya", params = params, dependencies = Dict{String, Union{Device, Missing}}())
+end
