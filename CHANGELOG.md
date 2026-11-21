@@ -43,6 +43,7 @@
 
 ### Fixes
 - `RedPitayaDAQ` checks before sending any Tx value that |offset| + sum of |amplitudes| + max |AWG| of every channel is finite and below the channel's `limitPeak`; negative offsets and arbitrary waveforms were not checked before, and offset and amplitudes were only checked separately
+- `TxDAQController` works with DataStructures 0.19 (creating the device and resetting the cached control results failed)
 - `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
 - `WAVEFORM_ARBITRARY` is now exported for consistency
 - if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled

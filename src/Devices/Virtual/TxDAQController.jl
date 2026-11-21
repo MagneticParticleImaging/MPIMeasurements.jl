@@ -74,7 +74,7 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   ref::Union{Array{Float32, 4}, Nothing} = nothing
   cont::Union{Nothing, ControlSequence} = nothing
   startFrame::Int64 = 1
-  controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
   lastDCResults::Union{Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}},Nothing} = nothing
   lastChannelIDs::Vector{String} = String[]
 end
@@ -606,7 +606,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
 end
 
 function resetCachedCalibration(txCont::TxDAQController)
-  txCont.controlResults = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  txCont.controlResults = OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
   txCont.lastDCResults = nothing
   txCont.lastChannelIDs = String[]
   @debug "Reset cached calibration"
