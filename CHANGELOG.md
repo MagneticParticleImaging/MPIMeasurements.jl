@@ -33,6 +33,7 @@
 - improved error messages during device creation
 
 ### Technically breaking changes
+- `TxDAQController` with arbitrary waveform control: the control is accurate when, for every channel, the mean absolute deviation between desired and measured field over one period is below `absoluteAmplitudeAccuracy` (in 0.6 the maximum deviation over all samples and channels was compared)
 - removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
 - `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
 - `fillMDFMeasurement`/`saveasMDF` with background data and `temperatures` now require the new keyword `bgTemperatures`; previously this caused an error

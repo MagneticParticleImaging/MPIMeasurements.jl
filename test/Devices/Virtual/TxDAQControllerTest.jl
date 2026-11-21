@@ -77,3 +77,31 @@ end
     @test isapprox(slew, expectedSlew, rtol=0.03)
   end
 end
+
+@testset "AW field accuracy" begin
+  seq = sequenceFromTOML(joinpath(testConfigDir, "TestSimpleSimulatedScanner", "Sequences", "SimpleSimulatedSequence.toml"))
+  nFreq = rxNumSamplingPoints(seq)÷2+1
+  # Only `currSequence` and `maxIndex` are used to synthesize the time signals
+  cont = MPIMeasurements.AWControlSequence(seq, seq, MPIMeasurements.OrderedDict{PeriodicElectricalChannel, MPIMeasurements.TxChannelParams}(),
+    Int[], MPIMeasurements.TransferFunction[], falses(2, 1, nFreq), [], nFreq, zeros(ComplexF64, 0, 0))
+  txCont(absolute, dc=nothing) = TxDAQController(deviceID="txCont", dependencies=Dict{String, Union{Device, Missing}}(),
+    params=TxDAQControllerParams(phaseAccuracy=0.01u"rad", relativeAmplitudeAccuracy=0.01, absoluteAmplitudeAccuracy=absolute,
+      controlDC=!isnothing(dc), dcAccuracy=something(dc, 50.0u"µT")))
+  # rfft coefficients: column 1 is the DC field, column k+1 the amplitude of a cosine at bin k
+  Ω = zeros(ComplexF64, 2, nFreq)
+  Ω[:, 2] = [10e-3, 5e-3]
+
+  # Cosine deviations of 100 µT and 10 µT have mean absolute deviations of 63.7 µT and 6.4 µT:
+  # their mean over both channels (35 µT) is below 50 µT, the first channel is not
+  Γ = copy(Ω)
+  Γ[:, 4] = [100e-6, 10e-6]
+  @test !MPIMeasurements.fieldAccuracyReached(cont, txCont(50.0u"µT"), Γ, Ω)
+  @test MPIMeasurements.fieldAccuracyReached(cont, txCont(70.0u"µT"), Γ, Ω)
+
+  # DC deviations of 20 µT and -30 µT are only checked if DC is controlled
+  Γdc = copy(Ω)
+  Γdc[:, 1] = [20e-6, -30e-6]
+  @test MPIMeasurements.fieldAccuracyReached(cont, txCont(50.0u"µT"), Γdc, Ω)
+  @test MPIMeasurements.fieldAccuracyReached(cont, txCont(50.0u"µT", 40.0u"µT"), Γdc, Ω)
+  @test !MPIMeasurements.fieldAccuracyReached(cont, txCont(50.0u"µT", 25.0u"µT"), Γdc, Ω)
+end

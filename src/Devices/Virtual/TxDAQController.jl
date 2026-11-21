@@ -10,9 +10,9 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   phaseAccuracy::typeof(1.0u"rad")
   "Number, required, allowed relative deviation of the excitation amplitude"
   relativeAmplitudeAccuracy::Float64
-  "Magnetic field, default: 50µT, allowed absolute deviation of the excitation amplitude"
+  "Magnetic field, default: 50µT, allowed absolute deviation of the excitation field. For sinusoidal control it is compared with the deviation of the amplitude of every controlled component; reaching it or `relativeAmplitudeAccuracy` is sufficient. For arbitrary waveform control it is compared, for every channel, with the mean absolute deviation between the desired and the measured field over one period."
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
-  "Magnetic field, default: 50µT, allowed absolute deviation of the mean excitation amplitude, only used if `controlDC` is true"
+  "Magnetic field, default: 50µT, allowed absolute deviation between the desired and the measured mean field over one period of every channel; only used for arbitrary waveform control with `controlDC = true`. The DC search restarts if the measured mean field changes by less than a tenth of this value between two steps."
   dcAccuracy::typeof(1.0u"T") = 50.0u"µT"
   "Integer, default: 20, maximum number of steps to try to control the system"
   maxControlSteps::Int64 = 20
@@ -693,12 +693,12 @@ function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, 
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
-  DC_diff = (mean(Ωt,dims=1) .- mean(Γt,dims=1))
   @debug "fieldAccuracyReached" diff=lineplot(1:size(diff,1),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
-  @info "Observed field deviation (time-domain):\nmax(ΔB):\t\t$(round(maximum(abs.(diff))*1000,digits=4)) mT\tMAE(ΔB):\t\t$(round(mean(abs.(diff))*1000,digits=4)) mT\nmax(ΔB) (w/o DC): \t$(round(maximum(abs.(zero_mean_diff))*1000,digits=4)) mT\tMAE(ΔB) (w/o DC): \t$(round(mean(abs.(zero_mean_diff))*1000,digits=4)) mT"
-  # amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy) # max
-  amplitude_ok = mean(abs.(diff)) < ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
-  return all(amplitude_ok) && (!txCont.params.controlDC || all(abs.(DC_diff) .< ustrip(u"T", txCont.params.dcAccuracy)))
+  @info "Observed field deviation (time-domain):\nmax(ΔB):\t\t$(round(maximum(abs.(diff))*1000,digits=4)) mT\tMAE(ΔB) per channel:\t$(round.(vec(mean(abs.(diff), dims=1))*1000,digits=4)) mT\nmax(ΔB) (w/o DC): \t$(round(maximum(abs.(zero_mean_diff))*1000,digits=4)) mT\tMAE(ΔB) (w/o DC): \t$(round(mean(abs.(zero_mean_diff))*1000,digits=4)) mT"
+  # Every channel separately: mean absolute deviation and, if DC is controlled, deviation of the mean field
+  amplitude_ok = all(mean(abs.(diff), dims=1) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy))
+  dc_ok = !txCont.params.controlDC || all(abs.(mean(diff, dims=1)) .< ustrip(u"T", txCont.params.dcAccuracy))
+  return amplitude_ok && dc_ok
 end
 
 
