@@ -75,9 +75,9 @@ function getRequiredAmplifiers(scanner::MPIScanner, sequence::Sequence)
 end
 function getRequiredAmplifiers(device::Device, sequence::Sequence)
   if hasDependency(device, Amplifier)
-    return getRequiredAmplifiers(dependencies(device, Amplifier), sequence)
+    return getRequiredAmplifiers(Amplifier[amp for amp in dependencies(device, Amplifier)], sequence)
   end
-  return []
+  return Amplifier[]
 end
 function getRequiredAmplifiers(amps::Vector{<:Amplifier}, sequence::Sequence)
   if !isempty(amps)

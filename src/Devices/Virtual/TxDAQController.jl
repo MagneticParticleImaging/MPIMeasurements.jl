@@ -411,7 +411,6 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   end
 
   amps = getRequiredAmplifiers(txCont, control.currSequence)
-  turnOn(amps)
 
   # Hacky solution
   controlPhaseDone = false
@@ -419,6 +418,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   i = 1
 
   try
+    turnOn(amps)
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
