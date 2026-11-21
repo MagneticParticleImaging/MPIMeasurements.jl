@@ -670,8 +670,8 @@ function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQC
   #   abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
   #   rel_deviation = rel_deviation[allComponentMask(cont)]'
   #   phase_deviation = phase_deviation[allComponentMask(cont)]'
-  #   Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-  #   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+  #   Γt = first(txToTimeDomain(Γ, cont))'
+  #   Ωt = first(txToTimeDomain(Ω, cont))'
 
   #   diff = (Ωt .- Γt)
   #   @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
@@ -688,8 +688,8 @@ end
 
 function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   
-  Γt = transpose(checkVoltLimits(Γ,cont,return_time_signal=true))
-  Ωt = transpose(checkVoltLimits(Ω,cont,return_time_signal=true))
+  Γt = transpose(first(txToTimeDomain(Γ, cont)))
+  Ωt = transpose(first(txToTimeDomain(Ω, cont)))
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
@@ -763,10 +763,10 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
     end
   end
 
-  #@debug "Last TX matrix [V]:" oldTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(oldTx,cont,return_time_signal=true)')
-  #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
-  #@debug "Desired matrix [V]:" Ω=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Ω,cont,return_time_signal=true)')
-  #@debug "New TX matrix [T]:" newTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(newTx,cont,return_time_signal=true)')
+  #@debug "Last TX matrix [V]:" oldTx=lineplot(first(txToTimeDomain(oldTx, cont))')
+  #@debug "Ref matrix [T]:" Γ=lineplot(first(txToTimeDomain(Γ, cont))')
+  #@debug "Desired matrix [V]:" Ω=lineplot(first(txToTimeDomain(Ω, cont))')
+  #@debug "New TX matrix [T]:" newTx=lineplot(first(txToTimeDomain(newTx, cont))')
 
   return newTx
 end
@@ -1009,30 +1009,36 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
   return valid
 end
 
-function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
-  if cont.maxIndex == size(cont.rfftIndices,3)
-    N = rxNumSamplingPoints(cont.currSequence)
-  else
-    N = 2cont.maxIndex-2
-  end
+"""
+    txToTimeDomain(tx, cont)
 
-  spectrum = copy(newTx[:,1:cont.maxIndex])*0.5N
+Synthesize one period of the Tx signals from `tx`, the rfft coefficients (one row per channel)
+of the AW control sequence `cont`, using only the first `cont.maxIndex` coefficients. Return the
+time signals (one row per channel) and their sampling rate. If `cont.maxIndex` is less than
+`size(tx, 2)`, the time signals have `2cont.maxIndex-2` samples per period instead of
+`rxNumSamplingPoints(cont.currSequence)`, and their sampling rate is lower than
+`rxSamplingRate(cont.currSequence)` by the same factor.
+"""
+function txToTimeDomain(tx::AbstractMatrix, cont)
+  N = rxNumSamplingPoints(cont.currSequence)
+  Nsignal = cont.maxIndex == size(tx, 2) ? N : 2cont.maxIndex-2
+  spectrum = tx[:, 1:cont.maxIndex]*0.5Nsignal
   spectrum[:,1] .*= 2
-  testSignalTime = irfft(spectrum, N, 2)
+  return irfft(spectrum, Nsignal, 2), rxSamplingRate(cont.currSequence)*Nsignal/N
+end
 
-  if return_time_signal
-    return testSignalTime
-  else
-    slew_rate = (diff(testSignalTime, dims=2)*u"V"*rxSamplingRate(cont.currSequence)) .|> u"V/µs"
-    validSlew = maximum(abs.(slew_rate), dims=2) .< getproperty.(getControlledDAQChannels(cont),:limitSlewRate)
-    validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
+function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence)
+  testSignalTime, samplingRate = txToTimeDomain(newTx, cont)
+
+  slew_rate = (diff(testSignalTime, dims=2)*u"V"*samplingRate) .|> u"V/µs"
+  validSlew = maximum(abs.(slew_rate), dims=2) .< getproperty.(getControlledDAQChannels(cont),:limitSlewRate)
+  validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
   
-    valid = all(validSlew) && all(validPeak)
-    @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
-    if !valid
-      @warn "Valid Tx Channel" validSlew[:]' validPeak[:]'
-      @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
-    end
-    return valid
+  valid = all(validSlew) && all(validPeak)
+  @debug "Check Volt Limit" p=lineplot(1:size(testSignalTime, 2),testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
+  if !valid
+    @warn "Valid Tx Channel" validSlew[:]' validPeak[:]'
+    @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
   end
+  return valid
 end

@@ -46,6 +46,7 @@
 - `TxDAQController` works with DataStructures 0.19 (creating the device and resetting the cached control results failed)
 - `TxDAQController`: control works without amplifiers, and if turning on an amplifier fails, the amplifiers and the AC power are switched off and temperature control is re-enabled
 - `TxDAQController` DC search (`controlDC`): the search restarts from the forward calibration when the last two steps are too close together also for zero or negative DC targets, and stops with an error instead of setting non-finite voltages
+- `TxDAQController`: the slew rate of AW sequences with more than 100000 frequencies is no longer overestimated, which could reject valid control values
 - `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
 - `WAVEFORM_ARBITRARY` is now exported for consistency
 - if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled

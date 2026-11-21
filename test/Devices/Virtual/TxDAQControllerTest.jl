@@ -56,3 +56,24 @@ end
 
   @test_throws "non-finite voltages" step(previous, (V=[0.3, 0.5], B=[NaN, 1.0]), [0.0, 0.0], voltsPerTesla, minStep)
 end
+
+@testset "AW Tx time signal and slew rate" begin
+  seq = sequenceFromTOML(joinpath(testConfigDir, "TestSimpleSimulatedScanner", "Sequences", "SimpleSimulatedSequence.toml"))
+  N = rxNumSamplingPoints(seq)
+  samplingRate = rxSamplingRate(seq)
+  # 1 V cosine at bin 10; its maximum slew rate is 2π*f*1 V
+  tx = zeros(ComplexF64, 1, N÷2+1)
+  tx[1, 11] = 1.0
+  expectedSlew = 2π*(10*samplingRate/N)*1.0u"V"
+  for maxIndex in (N÷2+1, 51)
+    # Only the fields used by `txToTimeDomain`
+    cont = (maxIndex = maxIndex, currSequence = seq)
+    signal, rate = MPIMeasurements.txToTimeDomain(tx, cont)
+    Nsignal = maxIndex == N÷2+1 ? N : 2maxIndex-2
+    @test size(signal) == (1, Nsignal)
+    @test maximum(abs, signal) ≈ 1.0
+    @test rate ≈ samplingRate*Nsignal/N
+    slew = maximum(abs, diff(signal, dims=2))*u"V"*rate
+    @test isapprox(slew, expectedSlew, rtol=0.03)
+  end
+end
