@@ -23,7 +23,7 @@ using LibSerialPort
 using UnicodePlots
 using LinearAlgebra
 using HDF5
-using FFTW
+using FFTL
 using NaturalSort
 using RelocatableFolders
 
