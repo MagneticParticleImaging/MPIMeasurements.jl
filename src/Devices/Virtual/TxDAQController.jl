@@ -757,14 +757,9 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
       testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
       newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
     else
-      last = cont.dcSearch[end]
-      previous = cont.dcSearch[end-1]
-      if any(abs.(last.B.-previous.B) .< 0.005*real.(Ω[:,1])) # if the last two DC search steps are too close together (especially when close to zero) the next step might produce wrong results
-        @info "Restarting DC Search"
-        newTx[:,1] = ustrip.(u"V", real.(Ω[:,1])*u"T".*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
-      else
-        newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
-      end
+      voltsPerTesla = [ustrip(u"V/T", abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0))) for channel in getControlledChannels(cont)]
+      minStep = ustrip(u"T", txCont.params.dcAccuracy)/10
+      newTx[:,1] = dcSearchStep(cont.dcSearch[end-1], cont.dcSearch[end], real.(Ω[:,1]), voltsPerTesla, minStep)
     end
   end
 
@@ -774,6 +769,31 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   #@debug "New TX matrix [T]:" newTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(newTx,cont,return_time_signal=true)')
 
   return newTx
+end
+
+"""
+    dcSearchStep(previous, last, target, voltsPerTesla, minStep)
+
+Return the DC voltages (V) of the next step of the DC search, given the last two steps
+`previous` and `last` (named tuples of DC voltages `V` and measured DC fields `B` in T) and
+the `target` DC field (T).
+
+The next voltages are the secant step through the last two steps. If for any channel the
+fields of the last two steps differ by less than `max(0.005*abs(target), minStep)`, the secant
+step is not reliable and the search restarts from the forward calibration,
+`target .* voltsPerTesla`.
+"""
+function dcSearchStep(previous, last, target::AbstractVector, voltsPerTesla::AbstractVector, minStep::Real)
+  ΔB = last.B .- previous.B
+  if any(abs.(ΔB) .< max.(0.005 .* abs.(target), minStep))
+    @info "Restarting DC Search"
+    return target .* voltsPerTesla
+  end
+  newV = previous.V .- (previous.B .- target) .* (last.V .- previous.V) ./ ΔB
+  if !all(isfinite, newV)
+    error("The DC search step produced non-finite voltages $newV from the steps $previous and $last for the target $target T.")
+  end
+  return newV
 end
 
 #################################################################################

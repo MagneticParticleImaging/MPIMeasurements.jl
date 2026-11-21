@@ -34,3 +34,25 @@ end
     @test !su.acPowerEnabled
   end
 end
+
+@testset "DC search step" begin
+  step = MPIMeasurements.dcSearchStep
+  voltsPerTesla = [100.0, 50.0]
+  minStep = 5e-6
+  # Linear system B = 0.01 T/V * V + 1 mT: the secant step reaches the target exactly
+  B(V) = 0.01 .* V .+ 1e-3
+  previous = (V=[0.1, 0.2], B=B([0.1, 0.2]))
+  last = (V=[0.3, 0.5], B=B([0.3, 0.5]))
+  for target in ([2e-3, 3e-3], [-2e-3, 0.0], [0.0, 0.0])
+    @test step(previous, last, target, voltsPerTesla, minStep) ≈ (target .- 1e-3) ./ 0.01
+  end
+
+  # Fields of the last two steps too close together: restart from the forward calibration,
+  # also for negative and zero targets
+  close_ = (V=[0.3, 0.2000001], B=[B(0.3), B(0.2000001)])
+  for target in ([2e-3, 3e-3], [-2e-3, -3e-3], [0.0, 0.0])
+    @test step(previous, close_, target, voltsPerTesla, minStep) == target .* voltsPerTesla
+  end
+
+  @test_throws "non-finite voltages" step(previous, (V=[0.3, 0.5], B=[NaN, 1.0]), [0.0, 0.0], voltsPerTesla, minStep)
+end
