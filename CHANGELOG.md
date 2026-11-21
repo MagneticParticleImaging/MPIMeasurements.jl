@@ -2,7 +2,61 @@
 
 ## Unreleased
 
+### Improvements for MultiSequenceSystemMatrixProtocol
+- fix reloading of protocol with more than one BG measurement
+- improve performance by not writing sequences to file every iteration
+- change protocol to be able to turn on/off amplifiers for necessary coil channels
+
+### Improvements for TxDAQController
+- fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
+- improved control caching, which should result is less misses due to numerical issues
+- speed improvements for AWController by caching calculations and reducing amount of processed frequencies
+
+### Improvements to RedPitayaDAQ
+- added ramp time optimization feature which can be enabled in the Scanner.toml, this can optimize (i.e. reduce) the step size of a RedPitaya sequence to waste less time during the ramping phase, since before a minimum of one step was at least used for ramping, even though it might be shorter
+
+### Improvements for HubertAmplifier
+- added differentiation for A1110E and A1110QE amplifiers, model will be automatically detected
+- renamed AmplifierVoltageMode to AmplifierPowerSupplyMode to avoid confusion with voltage and current modes, deprecating the related function names
+- renamed `voltageMode` to `powerSupplyMode` in HubertAmplifierParams, .toml parsing still works with the old parameter, but outputs a deprecation warning
+- implemented getters for powerSupplyMode and mode
+- added monitoring of powerloss for A1110E
+- do not override startup parameters on every init
+- improved parsing of amplifier status
+- implemented setting and getting of amplifier ID
+- `hubertStatus` returns the decoded status of the amplifier (ready, overload, overtemperature, interlock, power supply level of the A1110E, output on)
+- errors instead of silently continuing when the amplifier does not acknowledge a command, does not report its model, reports an invalid power supply level or when an ID longer than 128 bytes is set
+- the model detected during `init` is used instead of querying it for every command
+
+### Updated REPL Modes
+- to remove the overlap with Julias built-in ALT+M (and the corresponding warning on every load) the Device REPL mode shortcut has been changed to ALT+2
+- the MPI REPL mode, which controls the complete scanner has been moved to ALT+1
+
+### Other
+- improved error messages during device creation
+
 ### Technically breaking changes
+See also the [upgrade guide](https://magneticparticleimaging.github.io/MPIMeasurements.jl/dev/config/upgrade.html).
+
+Amplifiers:
+- the constants `AMP_HIGH_VOLTAGE_MODE` and `AMP_LOW_VOLTAGE_MODE` are removed; use `AMP_HIGH_POWER_SUPPLY` and `AMP_LOW_POWER_SUPPLY` (new: `AMP_MID_POWER_SUPPLY`). `AmplifierVoltageMode` is a deprecated alias of the new enum `AmplifierPowerSupplyMode`, whose instances have different integer values
+- `voltageMode` is renamed to `powerSupplyMode`; `voltageMode(amp)`, `voltageMode(amp, mode)`, `toLowVoltageMode` and `toHighVoltageMode` still work but are deprecated
+- custom amplifier types must implement `powerSupplyMode(amp)` and `powerSupplyMode(amp, mode)` instead of `voltageMode`
+- the `SimulatedAmplifier` parameter `voltageMode` in the Scanner.toml is renamed to `powerSupplyMode`; the old name causes an error when the scanner is loaded (the `HubertAmplifier` still accepts it with a deprecation warning)
+- the power supply mode in the Scanner.toml is accepted if it contains `low`, `mid` or `high` (e.g. `"low voltage"` still works)
+- `state(::HubertAmplifier)` returns `true` if the output is enabled, like the other amplifiers (in 0.6 it returned the raw status bytes); use `hubertStatus` for the full status
+- `temperature(::HubertAmplifier)` returns a `Float64` in °C, as declared by the `Amplifier` interface (in 0.6 it returned an `Int` without unit)
+
+TxDAQController and DAQ:
+- `TxDAQController` with arbitrary waveform control: the control is accurate when, for every channel, the mean absolute deviation between desired and measured field over one period is below `absoluteAmplitudeAccuracy` (in 0.6 the maximum deviation over all samples and channels was compared)
+- `TxDAQController` with arbitrary waveform control and `controlDC = true`: the control additionally requires the mean field of every channel over one period to deviate by less than the new parameter `dcAccuracy` (default 50 µT) from the desired mean field
+- `calibration(txCont::TxDAQController, channelID, frequency)` rounds `frequency` to 1 mHz before looking up the cached control results and before falling back to the calibration of the DAQ
+- `applyForwardCalibration!` for arbitrary waveform components: the phase of the base-frequency calibration is removed from the n-th harmonic as n·φ (in 0.6 it was 2π·n·φ)
+- `scaledValues(::ArbitraryElectricalComponent)`: a positive `phase` shifts the waveform to earlier times, as for `sin(ωt + φ)`; in 0.6 it was shifted in the opposite direction
+- `setTxParams(::RedPitayaDAQ, offsets, amplitudes, phases, awg=nothing)` takes the channel offsets as first argument after the DAQ; the offsets are set together with amplitudes and phases in `prepareTx` instead of in `setupTx`
+- `setTxParamsAmplitudes`, `setTxParamsPhases` and `setTxParamsFrequencies` of the `RedPitayaDAQ` take a `ScpiBatch` as second argument and only add commands to it; they no longer send on their own and do not check voltage limits
+
+Other:
 - removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
 - `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
 - `fillMDFMeasurement`/`saveasMDF` with background data and `temperatures` now require the new keyword `bgTemperatures`; previously this caused an error
@@ -12,6 +66,12 @@
 - added verification of valid decimations to `RedPitayaDAQ`
 
 ### Fixes
+- `RedPitayaDAQ` checks before sending any Tx value that |offset| + sum of |amplitudes| + max |AWG| of every channel is finite and below the channel's `limitPeak`; negative offsets and arbitrary waveforms were not checked before, and offset and amplitudes were only checked separately
+- `TxDAQController` works with DataStructures 0.19 (creating the device and resetting the cached control results failed)
+- `TxDAQController`: control works without amplifiers, and if turning on an amplifier fails, the amplifiers and the AC power are switched off and temperature control is re-enabled
+- `TxDAQController` DC search (`controlDC`): the search restarts from the forward calibration when the last two steps are too close together also for zero or negative DC targets, and stops with an error instead of setting non-finite voltages
+- `TxDAQController`: the slew rate of AW sequences with more than 100000 frequencies is no longer overestimated, which could reject valid control values
+- clearer error message for an invalid amplifier power supply mode in the configuration
 - `ProtocolException` (and thus `CancelException` and `IllegalStateException`) are now a subtype of `Exception`
 - `WAVEFORM_ARBITRARY` is now exported for consistency
 - if switching on a device fails at the start of a measurement, the amplifiers and the AC power are switched off again and temperature control and robots are re-enabled

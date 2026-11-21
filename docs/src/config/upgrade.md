@@ -1,6 +1,22 @@
 # Upgrade Guide
 This page should give you hints on what to change in your configuration files when upgrading between breaking releases of this package. This guide focusses on removed or changed parameters not on new features that have a sensible default value, for that please check the release notes.
 
+## v0.6 to v0.7
+### Amplifiers
+**Old parameter:**  \
+`voltageMode`  \
+**Replaced by:**  \
+`powerSupplyMode`, e.g. `powerSupplyMode = "low"`. Accepted values contain `low`, `mid` or `high`, so `"low voltage"` and `"high voltage"` still work. The `HubertAmplifier` still reads `voltageMode` and prints a deprecation warning; the `SimulatedAmplifier` throws an error.
+
+**Code using the amplifier interface:**
+- replace `AMP_LOW_VOLTAGE_MODE` and `AMP_HIGH_VOLTAGE_MODE` by `AMP_LOW_POWER_SUPPLY` and `AMP_HIGH_POWER_SUPPLY`; `AMP_MID_POWER_SUPPLY` is new
+- replace `voltageMode(amp)`, `voltageMode(amp, mode)`, `toLowVoltageMode(amp)` and `toHighVoltageMode(amp)` by `powerSupplyMode(amp)`, `powerSupplyMode(amp, mode)`, `toLowPowerSupplyMode(amp)` and `toHighPowerSupplyMode(amp)`
+- custom amplifier types implement `powerSupplyMode` instead of `voltageMode`
+- `state(::HubertAmplifier)` returns a `Bool`; use `hubertStatus(amp)` for the full status
+
+### RedPitayaDAQ
+`setTxParams(daq, amplitudes, phases, awg)` becomes `setTxParams(daq, offsets, amplitudes, phases, awg)`, where `offsets` maps channel IDs to the offset voltage.
+
 ## v0.5 to v0.6
 ### Scanner and Devices
 - the `defaultSequence` parameter in the [General] section has been removed without replacement, the sequence is defined by the protocol

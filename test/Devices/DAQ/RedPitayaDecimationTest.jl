@@ -1,7 +1,5 @@
 @testset "Red Pitaya decimation" begin
-  # Constructing the device does not connect to the Red Pitayas; that happens in `init`.
-  params = MPIMeasurements.RedPitayaDAQParams(channels=Dict{String, MPIMeasurements.DAQChannelParams}(), ips=String[])
-  daq = RedPitayaDAQ(deviceID="testRedPitaya", params=params, dependencies=Dict{String, Union{Device, Missing}}())
+  daq = unconnectedRedPitayaDAQ()
 
   for value in [8, 50, 64, 8192]
     decimation!(daq, value)

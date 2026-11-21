@@ -13,3 +13,19 @@ end
 
 # DriveFieldBuffer requires a ControlSequence, which is not used when complex data is pushed
 struct UnusedControlSequence <: MPIMeasurements.ControlSequence end
+
+# ControlSequence that skips building a real control sequence, so that `controlTx` reaches the
+# start of Tx directly
+struct StubControlSequence <: MPIMeasurements.ControlSequence
+  currSequence::Sequence
+end
+MPIMeasurements.calcDesiredField(::StubControlSequence) = nothing
+MPIMeasurements.calcControlMatrix(::StubControlSequence) = nothing
+MPIMeasurements.checkVoltLimits(::Nothing, ::StubControlSequence) = true
+
+# RedPitayaDAQ with the given channels; constructing it does not connect to the Red Pitayas,
+# that happens in `init`
+function unconnectedRedPitayaDAQ(channels = Dict{String, MPIMeasurements.DAQChannelParams}())
+  params = MPIMeasurements.RedPitayaDAQParams(channels = channels, ips = String[])
+  return RedPitayaDAQ(deviceID = "testRedPitaya", params = params, dependencies = Dict{String, Union{Device, Missing}}())
+end

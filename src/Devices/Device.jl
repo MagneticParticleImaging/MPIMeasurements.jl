@@ -1,5 +1,16 @@
 export Device, DeviceParams, deviceID, params, dependencies, dependency, hasDependency, init, _init, checkDependencies
 
+"""
+Abstract type for all devices
+
+Every device has to implement its own device struct which identifies it.
+A concrete implementation should contain e.g. the handle to device ressources
+or internal variables.
+The device struct must at least have the fields `deviceID`, `params` and `dependencies` and
+all other fields should have default values.
+"""
+abstract type Device end
+
 abstract type VirtualDevice <: Device end
 
 """

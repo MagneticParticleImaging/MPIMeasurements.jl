@@ -86,9 +86,9 @@
     vals = collect(1.0:8.0)
     comp = ArbitraryElectricalComponent(id = "a", divider = 5000, amplitude = [0.002u"T"], phase = [0.0u"rad"], values = vals)
     @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* vals
-    # A phase of π/2 shifts the waveform by a quarter of its 8 samples
+    # A phase of π/2 shifts the waveform to earlier times by a quarter of its 8 samples, as for sin(ωt + φ)
     phase!(comp, (π / 2)u"rad")
-    @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [7.0, 8.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0]
     phase!(comp, (1.0π)u"rad")
     @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0]
 

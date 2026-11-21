@@ -12,3 +12,9 @@ MPIMeasurements.parse_into_tf
 ```@docs
 MPIMeasurements.TxDAQControllerParams
 ```
+
+## Hubert Amplifier
+```@docs
+MPIMeasurements.HubertAmplifierPoolParams
+MPIMeasurements.HubertAmplifierPortParams
+```

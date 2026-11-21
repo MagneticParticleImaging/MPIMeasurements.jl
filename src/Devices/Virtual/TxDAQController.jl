@@ -10,8 +10,10 @@ Base.@kwdef mutable struct TxDAQControllerParams <: DeviceParams
   phaseAccuracy::typeof(1.0u"rad")
   "Number, required, allowed relative deviation of the excitation amplitude"
   relativeAmplitudeAccuracy::Float64
-  "Magnetic field, default: 50µT, allowed absolute deviation of the excitation amplitude"
+  "Magnetic field, default: 50µT, allowed absolute deviation of the excitation field. For sinusoidal control it is compared with the deviation of the amplitude of every controlled component; reaching it or `relativeAmplitudeAccuracy` is sufficient. For arbitrary waveform control it is compared, for every channel, with the mean absolute deviation between the desired and the measured field over one period."
   absoluteAmplitudeAccuracy::typeof(1.0u"T") = 50.0u"µT"
+  "Magnetic field, default: 50µT, allowed absolute deviation between the desired and the measured mean field over one period of every channel; only used for arbitrary waveform control with `controlDC = true`. The DC search restarts if the measured mean field changes by less than a tenth of this value between two steps."
+  dcAccuracy::typeof(1.0u"T") = 50.0u"µT"
   "Integer, default: 20, maximum number of steps to try to control the system"
   maxControlSteps::Int64 = 20
   "Bool, default: false, control the DC value of the excitation field (only posible for DC enabled DF amplifiers)"
@@ -59,6 +61,8 @@ mutable struct AWControlSequence <: ControlSequence
   @ControlSequence_fields
   rfftIndices::BitArray{3} # Matrix of size length(controlledChannelsDict) x 4 (max. num of components) x len(rfft)
   dcSearch::Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}}
+  maxIndex::Int
+  cachedTFs::Array{ComplexF64,2}
   #lutMap::Dict{String, Dict{AcyclicElectricalTxChannel, Int}} # for every field ID contain a dict of removed LUTChannels together with the corresponding channel
 end
 
@@ -70,7 +74,7 @@ Base.@kwdef mutable struct TxDAQController <: VirtualDevice
   ref::Union{Array{Float32, 4}, Nothing} = nothing
   cont::Union{Nothing, ControlSequence} = nothing
   startFrame::Int64 = 1
-  controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  controlResults::OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}} = OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
   lastDCResults::Union{Vector{@NamedTuple{V::Vector{Float64}, B::Vector{Float64}}},Nothing} = nothing
   lastChannelIDs::Vector{String} = String[]
 end
@@ -84,6 +88,7 @@ function calibration(txCont::TxDAQController, channelID::AbstractString)
 end
 
 function calibration(txCont::TxDAQController, channelID::AbstractString, frequency::Real)
+  frequency = round(frequency,digits=3)
   if haskey(txCont.controlResults, channelID) && txCont.controlResults[channelID] isa Dict && haskey(txCont.controlResults[channelID],frequency)
     return txCont.controlResults[channelID][frequency]
   else
@@ -185,8 +190,18 @@ function ControlSequence(txCont::TxDAQController, target::Sequence)
     end
 
     rfftIndices = createRFFTindices(controlledChannelsDict, target, daq)
+    if size(rfftIndices,3)>100000
+      maxIndex = min(round(Int,max(findlast(.|(eachslice(rfftIndices, dims=(1,2))...))*1.1,65537)),size(rfftIndices,3))
+      if iseven(maxIndex); maxIndex+=1 end
+    else
+      maxIndex = size(rfftIndices,3)
+    end
     
-    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [])
+    N = rxNumSamplingPoints(currSeq)
+    frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(currSeq)))
+    fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in refTFs]))
+
+    cont = AWControlSequence(target, currSeq, controlledChannelsDict, refIndices, refTFs, rfftIndices, [], maxIndex, fbTF)
 
     ## Apply last DC result
     if !isnothing(txCont.lastDCResults) && (txCont.lastChannelIDs == id.(seqControlledChannels))
@@ -246,7 +261,7 @@ function createRFFTindices(controlledChannelsDict::OrderedDict{PeriodicElectrica
       elseif isa(comp, ArbitraryElectricalComponent)
         # the frequency samples have a spacing dfCyclesPerPeriod in the spectrum, only use a maximum number of 2^13+1 points, since the waveform has a buffer length of 2^14 (=> rfft 2^13+1)
         N_harmonics = findlast(x->x>1e-8, abs.(rfft(values(comp)/0.5length(values(comp)))))
-        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod+1)] .= true
+        index_mask[i,j,dfCyclesPerPeriod+1:dfCyclesPerPeriod:min(rfftSize, N_harmonics*dfCyclesPerPeriod)] .= true
         @debug "createRFFTindices: AWG component" divider(comp) sum(index_mask[i,j,:]) N_harmonics
       end
     end
@@ -395,18 +410,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
     disableControl(tempControl)
   end
 
-  amps = []
-  if hasDependency(txCont, Amplifier)
-    amps = dependencies(txCont, Amplifier)
-  end
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    txChannelIds = id.(vcat(acyclicElectricalTxChannels(control.targetSequence), periodicElectricalTxChannels(control.targetSequence)))
-    amps = filter(amp -> in(channelId(amp), txChannelIds), amps)
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
-  end
+  amps = getRequiredAmplifiers(txCont, control.currSequence)
 
   # Hacky solution
   controlPhaseDone = false
@@ -414,6 +418,7 @@ function controlTx(txCont::TxDAQController, control::ControlSequence)
   i = 1
 
   try
+    turnOn(amps)
 
     while !controlPhaseDone && i <= txCont.params.maxControlSteps
       @info "CONTROL STEP $i"
@@ -557,14 +562,14 @@ function updateCachedCalibration(txCont::TxDAQController, cont::ControlSequence)
   finalCalibration = diag(calcControlMatrix(cont) ./ calcDesiredField(cont))
   channelIds = id.(getControlledChannels(cont))
   dividers = divider.(MPIMeasurements.getPrimaryComponents(cont))
-  frequencies = ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers
+  frequencies = round.(ustrip(u"Hz", txBaseFrequency(cont.currSequence))  ./ dividers, digits=3)
   for i in axes(finalCalibration, 1)
       if !isnan(finalCalibration[i])
         if !haskey(txCont.controlResults, channelIds[i])
           txCont.controlResults[channelIds[i]] = Dict{Float64,typeof(1.0im*u"V/T")}()
         end
         txCont.controlResults[channelIds[i]][frequencies[i]] = finalCalibration[i]*u"V/T"
-        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz"
+        @debug "Cached control result: $(round(finalCalibration[i], digits=2)*u"V/T") for channel $(channelIds[i]) at $(round(frequencies[i],digits=3)) Hz" maxlog=10
       end
   end
   
@@ -580,12 +585,14 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
     
   for res in calibrationResults
     chId = channelIDs[res[1]]
-    f = freqAxis[res[2]]
+    f = round(freqAxis[res[2]],digits=3)
     if !haskey(txCont.controlResults, chId)
       txCont.controlResults[chId] = Dict{Float64,typeof(1.0im*u"V/T")}()
     end
-    txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
-    @debug "Cached calibration result:" chId f finalCalibration[res]
+    if !isnan(finalCalibration[res]) && !iszero(finalCalibration[res])
+      txCont.controlResults[chId][f] = finalCalibration[res]*u"V/T"
+      @debug "Cached control result:" chId f finalCalibration[res] maxlog=10
+    end
   end
 
   if length(cont.dcSearch) >= 2
@@ -599,7 +606,7 @@ function updateCachedCalibration(txCont::TxDAQController, cont::AWControlSequenc
 end
 
 function resetCachedCalibration(txCont::TxDAQController)
-  txCont.controlResults = Dict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
+  txCont.controlResults = OrderedDict{String, Union{typeof(1.0im*u"V/T"), Dict{Float64,typeof(1.0im*u"V/T")}}}()
   txCont.lastDCResults = nothing
   txCont.lastChannelIDs = String[]
   @debug "Reset cached calibration"
@@ -663,8 +670,8 @@ function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQC
   #   abs_deviation = abs_deviation[allComponentMask(cont)]' # TODO/JA: keep the distinction between the channels (maybe as Vector{Vector{}}), instead of putting everything into a long vector with unknown order
   #   rel_deviation = rel_deviation[allComponentMask(cont)]'
   #   phase_deviation = phase_deviation[allComponentMask(cont)]'
-  #   Γt = checkVoltLimits(Γ,cont,return_time_signal=true)'
-  #   Ωt = checkVoltLimits(Ω,cont,return_time_signal=true)'
+  #   Γt = first(txToTimeDomain(Γ, cont))'
+  #   Ωt = first(txToTimeDomain(Ω, cont))'
 
   #   diff = (Ωt .- Γt)
   #   @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff, canvas=DotCanvas, border=:ascii)
@@ -681,15 +688,17 @@ end
 
 function fieldAccuracyReached(cont::AWControlSequence, txCont::TxDAQController, Γ::Matrix{<:Complex}, Ω::Matrix{<:Complex})
   
-  Γt = transpose(checkVoltLimits(Γ,cont,return_time_signal=true))
-  Ωt = transpose(checkVoltLimits(Ω,cont,return_time_signal=true))
+  Γt = transpose(first(txToTimeDomain(Γ, cont)))
+  Ωt = transpose(first(txToTimeDomain(Ω, cont)))
   @debug "fieldAccuracyReached" transpose(Γ[allComponentMask(cont)]) abs.(Γ[allComponentMask(cont)])' angle.(Γ[allComponentMask(cont)])'# abs.(Ω[allComponentMask(cont)])' angle.(Ω[allComponentMask(cont)])'
   diff = (Ωt .- Γt)
   zero_mean_diff = diff .- mean(diff, dims=1)
-  @debug "fieldAccuracyReached" diff=lineplot(1:rxNumSamplingPoints(cont.currSequence),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
-  @info "Observed field deviation (time-domain):\nmax_diff:\t$(maximum(abs.(diff))*1000) mT\nmax_diff (w/o DC): \t$(maximum(abs.(zero_mean_diff))*1000)"
-  amplitude_ok = abs.(diff).< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy)
-  return all(amplitude_ok)
+  @debug "fieldAccuracyReached" diff=lineplot(1:size(diff,1),diff*1000, canvas=DotCanvas, border=:ascii, ylabel="mT", name=dependency(txCont, AbstractDAQ).refChanIDs[cont.refIndices])
+  @info "Observed field deviation (time-domain):\nmax(ΔB):\t\t$(round(maximum(abs.(diff))*1000,digits=4)) mT\tMAE(ΔB) per channel:\t$(round.(vec(mean(abs.(diff), dims=1))*1000,digits=4)) mT\nmax(ΔB) (w/o DC): \t$(round(maximum(abs.(zero_mean_diff))*1000,digits=4)) mT\tMAE(ΔB) (w/o DC): \t$(round(mean(abs.(zero_mean_diff))*1000,digits=4)) mT"
+  # Every channel separately: mean absolute deviation and, if DC is controlled, deviation of the mean field
+  amplitude_ok = all(mean(abs.(diff), dims=1) .< ustrip(u"T", txCont.params.absoluteAmplitudeAccuracy))
+  dc_ok = !txCont.params.controlDC || all(abs.(mean(diff, dims=1)) .< ustrip(u"T", txCont.params.dcAccuracy))
+  return amplitude_ok && dc_ok
 end
 
 
@@ -707,6 +716,7 @@ function updateControl!(cont::ControlSequence, txCont::TxDAQController, Γ::Matr
     updateControlSequence!(cont, newTx)
     return true
   else
+    @info "Checks" validateAgainstForwardCalibrationAndSafetyLimit(newTx, Ω, cont, txCont, verbose=true) checkVoltLimits(newTx, cont) 
     error("The new tx values are not allowed! Either your forward calibration is inaccurate or the system can not produce the requested field strength!")
     return false
   end
@@ -733,28 +743,57 @@ function updateControlMatrix(cont::AWControlSequence, txCont::TxDAQController, �
   # For now we completely ignore coupling and hope that it can find good values anyways
   # The problem is, that to achieve 0 we will always output zero, but we would need a much more sophisticated method to solve this
   newTx = oldTx./Γ.*Ω
+  if any(isnan.(newTx))
+    @warn "There were zeros in the reference signal!" any(iszero.(Γ)) findall(iszero.(Γ))
+    newTx[isnan.(newTx)] .= 0.0
+  end
 
   # handle DC separately:
   if txCont.params.controlDC
     push!(cont.dcSearch, (V=oldTx[:,1], B=Γ[:,1]))
+    @debug "History of dcSearch" cont.dcSearch
     if length(cont.dcSearch)==1
       my_sign(x) = if x<0; -1 else 1 end
       testOffset = real.(Ω[:,1])*u"T" .- 2u"mT"*my_sign.(real.(Ω[:,1]))
       newTx[:,1] = ustrip.(u"V", testOffset.*[abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0)) for channel in getControlledChannels(cont)]) 
     else
-      @debug "History of dcSearch" cont.dcSearch
-      last = cont.dcSearch[end]
-      previous = cont.dcSearch[end-1]
-      newTx[:,1] .= previous.V .- ((previous.B.-Ω[:,1]).*(last.V.-previous.V))./(last.B.-previous.B)
+      voltsPerTesla = [ustrip(u"V/T", abs(calibration(dependency(txCont, AbstractDAQ), id(channel))(0))) for channel in getControlledChannels(cont)]
+      minStep = ustrip(u"T", txCont.params.dcAccuracy)/10
+      newTx[:,1] = dcSearchStep(cont.dcSearch[end-1], cont.dcSearch[end], real.(Ω[:,1]), voltsPerTesla, minStep)
     end
   end
 
-  #@debug "Last TX matrix [V]:" oldTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(oldTx,cont,return_time_signal=true)')
-  #@debug "Ref matrix [T]:" Γ=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Γ,cont,return_time_signal=true)')
-  #@debug "Desired matrix [V]:" Ω=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(Ω,cont,return_time_signal=true)')
-  #@debug "New TX matrix [T]:" newTx=lineplot(1:rxNumSamplingPoints(cont.currSequence),checkVoltLimits(newTx,cont,return_time_signal=true)')
+  #@debug "Last TX matrix [V]:" oldTx=lineplot(first(txToTimeDomain(oldTx, cont))')
+  #@debug "Ref matrix [T]:" Γ=lineplot(first(txToTimeDomain(Γ, cont))')
+  #@debug "Desired matrix [V]:" Ω=lineplot(first(txToTimeDomain(Ω, cont))')
+  #@debug "New TX matrix [T]:" newTx=lineplot(first(txToTimeDomain(newTx, cont))')
 
   return newTx
+end
+
+"""
+    dcSearchStep(previous, last, target, voltsPerTesla, minStep)
+
+Return the DC voltages (V) of the next step of the DC search, given the last two steps
+`previous` and `last` (named tuples of DC voltages `V` and measured DC fields `B` in T) and
+the `target` DC field (T).
+
+The next voltages are the secant step through the last two steps. If for any channel the
+fields of the last two steps differ by less than `max(0.005*abs(target), minStep)`, the secant
+step is not reliable and the search restarts from the forward calibration,
+`target .* voltsPerTesla`.
+"""
+function dcSearchStep(previous, last, target::AbstractVector, voltsPerTesla::AbstractVector, minStep::Real)
+  ΔB = last.B .- previous.B
+  if any(abs.(ΔB) .< max.(0.005 .* abs.(target), minStep))
+    @info "Restarting DC Search"
+    return target .* voltsPerTesla
+  end
+  newV = previous.V .- (previous.B .- target) .* (last.V .- previous.V) ./ ΔB
+  if !all(isfinite, newV)
+    error("The DC search step produced non-finite voltages $newV from the steps $previous and $last for the target $target T.")
+  end
+  return newV
 end
 
 #################################################################################
@@ -791,12 +830,11 @@ end
 function calcFieldsFromRef(cont::AWControlSequence, uRef::Array{Float32,4})
   N = rxNumSamplingPoints(cont.currSequence)
   # do rfft channel wise and correct with the transfer function, return as (num control channels x len rfft x periods x frames) Matrix, the selection of [:,:,1,1] is done in controlTx
-  spectrum = rfft(uRef, 1)/0.5N
+  spectrum = rfft(uRef[:, cont.refIndices, :, :], 1)
+  spectrum ./= 0.5N
   spectrum[1,:,:,:] ./= 2
-  sortedSpectrum = permutedims(spectrum[:, cont.refIndices, :, :], (2,1,3,4))
-  frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
-  fbTF = reduce(vcat, transpose([ustrip.(u"V/T", tf(frequencies)) for tf in cont.refTFs]))
-  return sortedSpectrum./fbTF
+  sortedSpectrum = permutedims(spectrum, (2,1,3,4))
+  return sortedSpectrum./cont.cachedTFs
 end
 
 function _calcFieldFromRef!(Γ::AbstractArray{ComplexF64, 2}, cont::CrossCouplingControlSequence, uRef, ::SortedRef)
@@ -845,7 +883,7 @@ function calcDesiredField(cont::AWControlSequence)
     for (j, comp) in enumerate(components(channel))
       if isa(comp, PeriodicElectricalComponent)
         if ustrip(u"T",amplitude(comp)) == 0
-          @warn "You tried to control a field to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
+          @warn "You tried to control field component $(id(comp)) to 0 T, this will just output 0 V on that channel, since this controller can not correct cross coupling"
         end
         desiredField[i, cont.rfftIndices[i,j,:]] .= ustrip(u"T",amplitude(comp)) * exp(im*ustrip(u"rad",phase(comp)-pi/2)) # The phase given in the component is for a sine, but the FFT-phase uses a cosine
       elseif isa(comp, ArbitraryElectricalComponent)
@@ -933,11 +971,12 @@ function calcExpectedField(tx::Matrix{<:Complex}, cont::AWControlSequence)
   N = rxNumSamplingPoints(cont.currSequence)
   frequencies = ustrip.(u"Hz",rfftfreq(N, rxSamplingRate(cont.currSequence)))
   calibFieldToVoltEstimate = reduce(vcat,transpose([ustrip.(u"V/T", chan.calibration(frequencies)) for chan in getControlledDAQChannels(cont)]))
+  @debug "calcExpectedField" any(calibFieldToVoltEstimate.==0) any(isnan.(tx))
   B_fw = tx ./ calibFieldToVoltEstimate
   return B_fw
 end
 
-function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController)
+function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, B::Matrix{<:Complex}, cont::ControlSequence, txCont::TxDAQController; verbose=false)
   # step 1 apply forward calibration to tx -> B_fw
   B_fw = calcExpectedField(tx, cont)
   
@@ -946,8 +985,12 @@ function validateAgainstForwardCalibrationAndSafetyLimit(tx::Matrix{<:Complex}, 
   
   # step 3 check if B_fw and B are both below safety limit
   isSafe(Btest) = abs.(Btest).<ustrip(u"T",txCont.params.maxField)
+  if verbose
+    @info "Safety Checks:" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
+  else
+    @debug "validateAgainstForwardCalibrationAndSafetyLimit" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
+  end
 
-  @debug "validateAgainstForwardCalibrationAndSafetyLimit" findmax(abs.(B_fw)) findmax(abs.(B)) all(forwardCalibrationAgrees) all(isSafe(B_fw)) all(isSafe(B))
 
   return all(forwardCalibrationAgrees) && all(isSafe(B)) && all(isSafe(B_fw))
 end
@@ -966,26 +1009,36 @@ function checkVoltLimits(newTx::Matrix{<:Complex}, cont::CrossCouplingControlSeq
   return valid
 end
 
-function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence; return_time_signal=false)
+"""
+    txToTimeDomain(tx, cont)
+
+Synthesize one period of the Tx signals from `tx`, the rfft coefficients (one row per channel)
+of the AW control sequence `cont`, using only the first `cont.maxIndex` coefficients. Return the
+time signals (one row per channel) and their sampling rate. If `cont.maxIndex` is less than
+`size(tx, 2)`, the time signals have `2cont.maxIndex-2` samples per period instead of
+`rxNumSamplingPoints(cont.currSequence)`, and their sampling rate is lower than
+`rxSamplingRate(cont.currSequence)` by the same factor.
+"""
+function txToTimeDomain(tx::AbstractMatrix, cont)
   N = rxNumSamplingPoints(cont.currSequence)
-
-  spectrum = copy(newTx)*0.5N
+  Nsignal = cont.maxIndex == size(tx, 2) ? N : 2cont.maxIndex-2
+  spectrum = tx[:, 1:cont.maxIndex]*0.5Nsignal
   spectrum[:,1] .*= 2
-  testSignalTime = irfft(spectrum, N, 2)
+  return irfft(spectrum, Nsignal, 2), rxSamplingRate(cont.currSequence)*Nsignal/N
+end
 
-  if return_time_signal
-    return testSignalTime
-  else
-    slew_rate = (diff(testSignalTime, dims=2)*u"V"*rxSamplingRate(cont.currSequence)) .|> u"V/µs"
-    validSlew = maximum(abs.(slew_rate), dims=2) .< getproperty.(getControlledDAQChannels(cont),:limitSlewRate)
-    validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
+function checkVoltLimits(newTx::Matrix{<:Complex}, cont::AWControlSequence)
+  testSignalTime, samplingRate = txToTimeDomain(newTx, cont)
+
+  slew_rate = (diff(testSignalTime, dims=2)*u"V"*samplingRate) .|> u"V/µs"
+  validSlew = maximum(abs.(slew_rate), dims=2) .< getproperty.(getControlledDAQChannels(cont),:limitSlewRate)
+  validPeak = maximum(abs.(testSignalTime), dims=2) .< ustrip.(u"V", getproperty.(getControlledDAQChannels(cont),:limitPeak))
   
-    valid = all(validSlew) && all(validPeak)
-    @debug "Check Volt Limit" p=lineplot(1:N,testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
-    if !valid
-      @debug "Valid Tx Channel" validSlew validPeak
-      @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
-    end
-    return valid
+  valid = all(validSlew) && all(validPeak)
+  @debug "Check Volt Limit" p=lineplot(1:size(testSignalTime, 2),testSignalTime', canvas=DotCanvas, border=:ascii) maximum(abs.(testSignalTime), dims=2) maximum(abs.(slew_rate), dims=2)
+  if !valid
+    @warn "Valid Tx Channel" validSlew[:]' validPeak[:]'
+    @warn "New control sequence exceeds voltage limits (slew rate or peak) of tx channel"
   end
+  return valid
 end

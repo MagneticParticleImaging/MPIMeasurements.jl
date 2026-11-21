@@ -173,16 +173,6 @@ function timeEstimate(protocol::MultiSequenceSystemMatrixProtocol)
   else
     est = "Unknown"
   end
-  #if !isnothing(protocol.params.sequence)
-  #  params = protocol.params
-  #  seq = params.sequence
-  #  totalFrames = (params.fgFrames + params.bgFrames) * acqNumFrameAverages(seq)
-  #  samplesPerFrame = rxNumSamplingPoints(seq) * acqNumAverages(seq) * acqNumPeriodsPerFrame(seq)
-  #  totalTime = (samplesPerFrame * totalFrames) / (125e6 / (txBaseFrequency(seq) / rxSamplingRate(seq)))
-  #  time = totalTime * 1u"s"
-  #  est = string(time)
-  #  @show est
-  #end
   return est
 end
 
@@ -212,6 +202,18 @@ function initMeasData(protocol::MultiSequenceSystemMatrixProtocol)
     signals = mmap!(protocol, "signals.bin", Float32, (rxNumSamplingPoints, numRxChannels, numPeriods, numTotalFrames))
     protocol.systemMeasState.signals = signals  
     protocol.systemMeasState.signals[:] .= 0.0
+    # Store sequences
+    # If they arent static we can also store a hash and read/update it again
+    seqDict = Dict{String, Any}()
+    rm(file(protocol, "sequences.toml"), force=true)
+    seqDict["sequences"] = toDict.(protocol.params.sequences)
+    if !isnothing(protocol.params.bgSequence)
+      seqDict["bgSequence"] = toDict(protocol.params.bgSequence)
+      seqDict["numBGMeas"] = protocol.params.numBGMeas
+    end
+    open(file(protocol, "sequences.toml"), "w") do f
+      TOML.print(f, seqDict)
+    end
   end
 end
 
@@ -292,7 +294,7 @@ function performMeasurements(protocol::MultiSequenceSystemMatrixProtocol)
           @info "Coils still cooling down: $T °C (goal: $(protocol.params.coolDownTo) °C)"
           sleep(1)
         else
-          @info "Coil temperature of $T °C is below goal of $(protocol.params.coolDownTo) °C. Starting next measurement..."
+          @info "Coil temperature of $T °C is below limit of $(protocol.params.coolDownTo) °C. Starting next measurement..."
           break
         end
         if i==60
@@ -343,7 +345,7 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   setup(daq, sequence)
 
   channel = Channel{channelType(daq)}(32)
-  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, daq, sequence)
+  calib.producer = @tspawnat protocol.scanner.generalParams.producerThreadID asyncProducer(channel, protocol, sequence)
   bind(channel, calib.producer)
   calib.consumer = @tspawnat protocol.scanner.generalParams.consumerThreadID asyncConsumer(channel, protocol, index)
   while !istaskdone(calib.producer)
@@ -355,30 +357,6 @@ function performMeasurement(protocol::MultiSequenceSystemMatrixProtocol)
   # Increment measured positions
   calib.currPos += 1
 end
-
-# function prepareDAQ(protocol::MultiSequenceSystemMatrixProtocol)
-#   calib = protocol.systemMeasState
-#   daq = getDAQ(protocol.scanner)
-
-#   sequence = protocol.allSequences[calib.currPos]
-#   if protocol.params.controlTx
-#     if isnothing(protocol.contSequence) || protocol.restored || (calib.currPos == 1)
-#     sequence = controlTx(protocol.txCont, sequence)
-#     end
-#     #if isempty(protocol.systemMeasState.drivefield)
-#     #  len = length(keys(protocol.contSequence.simpleChannel))
-#     #  drivefield = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-#     #  calib.drivefield = mmap!(protocol, "observedField.bin", drivefield)
-#     #  applied = zeros(ComplexF64, len, len, size(calib.signals, 3), size(calib.signals, 4))
-#     #  calib.applied = mmap!(protocol, "appliedFiled.bin", applied)
-#     #end
-#     #sequence = protocol.contSequence
-#   end
-#   setup(daq, sequence)
-#   if protocol.restored
-#     protocol.restored = false
-#   end
-# end
 
 function asyncConsumer(channel::Channel, protocol::MultiSequenceSystemMatrixProtocol, index)
   calib = protocol.systemMeasState
@@ -428,11 +406,6 @@ function store(protocol::MultiSequenceSystemMatrixProtocol, index)
   params["posToIdx"] = sysObj.posToIdx
   params["measIsBGFrame"] = sysObj.measIsBGFrame
   #params["temperatures"] = vec(sysObj.temperatures)
-  params["sequences"] = toDict.(protocol.params.sequences)
-  if !isnothing(protocol.params.bgSequence)
-    params["bgSequence"] = toDict(protocol.params.bgSequence)
-  end
-  params["numBGMeas"] = protocol.params.numBGMeas
 
   filename = file(protocol, "meta.toml")
   filename_backup = file(protocol, "meta.toml.backup")
@@ -470,10 +443,11 @@ function restore(protocol::MultiSequenceSystemMatrixProtocol)
 
     sysObj.positions = Positions(params)
 
-    # `store` writes `bgSequence` only if there is one
-    storedSeq = sequenceFromDict.(params["sequences"])
-    storedBGSeq = haskey(params, "bgSequence") ? sequenceFromDict(params["bgSequence"]) : nothing
-    storedNumBGMeas = get(params, "numBGMeas", protocol.params.numBGMeas)
+    # `initMeasData` writes `bgSequence` and `numBGMeas` only if there is a background sequence
+    sequenceParams = TOML.parsefile(file(protocol, "sequences.toml"))
+    storedSeq = sequenceFromDict.(sequenceParams["sequences"])
+    storedBGSeq = haskey(sequenceParams, "bgSequence") ? sequenceFromDict(sequenceParams["bgSequence"]) : nothing
+    storedNumBGMeas = get(sequenceParams, "numBGMeas", protocol.params.numBGMeas)
     mismatches = String[]
     storedSeq != protocol.params.sequences && push!(mismatches, "sequences")
     storedBGSeq != protocol.params.bgSequence && push!(mismatches, "background sequence")
@@ -523,7 +497,6 @@ end
 
 function pause(protocol::MultiSequenceSystemMatrixProtocol)
   calib = protocol.systemMeasState
-  # `positions` does not contain the background measurements, `allSequences` does
   if calib.currPos <= length(protocol.allSequences)
     # OperationSuccessfulEvent is put when it actually is in the stop loop
     protocol.paused = true

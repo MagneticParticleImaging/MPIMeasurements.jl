@@ -42,13 +42,9 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
   su = getSurveillanceUnit(scanner_) # Maybe also support multiple SU units?
   tempControl = getTemperatureController(scanner_)
   robots = getRobots(scanner_)
-  amps = getAmplifiers(scanner_)
-  if !isempty(amps)
-    # Only enable amps that amplify a channel of the current sequence
-    channelIdx = id.(vcat(acyclicElectricalTxChannels(sequence), periodicElectricalTxChannels(sequence)))
-    amps = filter(amp -> in(channelId(amp), channelIdx), amps)
-  end
 
+  amps = getRequiredAmplifiers(scanner_, sequence)
+  
   endSample = nothing
   try
     if !isnothing(su)
@@ -61,9 +57,7 @@ function asyncProducer(channel::Channel, protocol::Protocol, sequence::Sequence)
     for robot in robots
       disable(robot)
     end
-    @sync for amp in amps
-      @async turnOn(amp)
-    end
+    turnOn(amps)
 
     daq = getDAQ(scanner_)
     endSample = asyncProducer(channel, daq, sequence)
