@@ -36,9 +36,27 @@
 - improved error messages during device creation
 
 ### Technically breaking changes
+See also the [upgrade guide](https://magneticparticleimaging.github.io/MPIMeasurements.jl/dev/config/upgrade.html).
+
+Amplifiers:
+- the constants `AMP_HIGH_VOLTAGE_MODE` and `AMP_LOW_VOLTAGE_MODE` are removed; use `AMP_HIGH_POWER_SUPPLY` and `AMP_LOW_POWER_SUPPLY` (new: `AMP_MID_POWER_SUPPLY`). `AmplifierVoltageMode` is a deprecated alias of the new enum `AmplifierPowerSupplyMode`, whose instances have different integer values
+- `voltageMode` is renamed to `powerSupplyMode`; `voltageMode(amp)`, `voltageMode(amp, mode)`, `toLowVoltageMode` and `toHighVoltageMode` still work but are deprecated
+- custom amplifier types must implement `powerSupplyMode(amp)` and `powerSupplyMode(amp, mode)` instead of `voltageMode`
+- the `SimulatedAmplifier` parameter `voltageMode` in the Scanner.toml is renamed to `powerSupplyMode`; the old name causes an error when the scanner is loaded (the `HubertAmplifier` still accepts it with a deprecation warning)
+- the power supply mode in the Scanner.toml is accepted if it contains `low`, `mid` or `high` (e.g. `"low voltage"` still works)
 - `state(::HubertAmplifier)` returns `true` if the output is enabled, like the other amplifiers (in 0.6 it returned the raw status bytes); use `hubertStatus` for the full status
 - `temperature(::HubertAmplifier)` returns a `Float64` in °C, as declared by the `Amplifier` interface (in 0.6 it returned an `Int` without unit)
+
+TxDAQController and DAQ:
 - `TxDAQController` with arbitrary waveform control: the control is accurate when, for every channel, the mean absolute deviation between desired and measured field over one period is below `absoluteAmplitudeAccuracy` (in 0.6 the maximum deviation over all samples and channels was compared)
+- `TxDAQController` with arbitrary waveform control and `controlDC = true`: the control additionally requires the mean field of every channel over one period to deviate by less than the new parameter `dcAccuracy` (default 50 µT) from the desired mean field
+- `calibration(txCont::TxDAQController, channelID, frequency)` rounds `frequency` to 1 mHz before looking up the cached control results and before falling back to the calibration of the DAQ
+- `applyForwardCalibration!` for arbitrary waveform components: the phase of the base-frequency calibration is removed from the n-th harmonic as n·φ (in 0.6 it was 2π·n·φ)
+- `scaledValues(::ArbitraryElectricalComponent)`: a positive `phase` shifts the waveform to earlier times, as for `sin(ωt + φ)`; in 0.6 it was shifted in the opposite direction
+- `setTxParams(::RedPitayaDAQ, offsets, amplitudes, phases, awg=nothing)` takes the channel offsets as first argument after the DAQ; the offsets are set together with amplitudes and phases in `prepareTx` instead of in `setupTx`
+- `setTxParamsAmplitudes`, `setTxParamsPhases` and `setTxParamsFrequencies` of the `RedPitayaDAQ` take a `ScpiBatch` as second argument and only add commands to it; they no longer send on their own and do not check voltage limits
+
+Other:
 - removed `isBackground` for `AcquisitionSettings` and `Sequence`; it never worked
 - `dfStrength` and `dfPhase` now return the values of all periods and throw a `SequenceConfigurationError` if the drive-field components have different numbers of periods, before multiple periods were ignored
 - `fillMDFMeasurement`/`saveasMDF` with background data and `temperatures` now require the new keyword `bgTemperatures`; previously this caused an error
