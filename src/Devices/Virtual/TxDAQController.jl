@@ -659,7 +659,8 @@ function fieldAccuracyReached(cont::CrossCouplingControlSequence, txCont::TxDAQC
   abs_deviation = abs.(Ω) .- abs.(Γ)
   rel_deviation = abs_deviation ./ abs.(Ω)
   rel_deviation[abs.(Ω).<1e-15] .= 0 # relative deviation does not make sense for a zero goal
-  phase_deviation = angle.(Ω).-angle.(Γ)
+  # Wrap to [-π, π], so that a deviation of e.g. -359.99° counts as the 0.01° it is
+  phase_deviation = rem2pi.(angle.(Ω) .- angle.(Γ), RoundNearest)
   phase_deviation[abs.(Ω).<1e-15] .= 0 # phase deviation does not make sense for a zero goal
 
   if !needsDecoupling(cont.targetSequence)

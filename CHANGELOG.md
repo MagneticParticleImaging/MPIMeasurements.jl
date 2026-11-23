@@ -11,6 +11,7 @@
 - fixed some edge cases, preventing crashes or inaccurate guesses in the AW controller
 - improved control caching, which should result is less misses due to numerical issues
 - speed improvements for AWController by caching calculations and reducing amount of processed frequencies
+- fix phase wrap issue dicarding valid control results
 
 ### Improvements to RedPitayaDAQ
 - added ramp time optimization feature which can be enabled in the Scanner.toml, this can optimize (i.e. reduce) the step size of a RedPitaya sequence to waste less time during the ramping phase, since before a minimum of one step was at least used for ramping, even though it might be shorter

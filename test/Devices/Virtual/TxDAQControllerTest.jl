@@ -78,6 +78,24 @@ end
   end
 end
 
+@testset "Cross-coupling field accuracy" begin
+  seq = sequenceFromTOML(joinpath(testConfigDir, "TestSimpleSimulatedScanner", "Sequences", "SimpleSimulatedSequence.toml"))
+  # Only `targetSequence` is used to decide between the diagonal and the full matrix
+  cont = MPIMeasurements.CrossCouplingControlSequence(seq, seq,
+    MPIMeasurements.OrderedDict{PeriodicElectricalChannel, MPIMeasurements.TxChannelParams}(),
+    Int[], MPIMeasurements.TransferFunction[], nothing, nothing)
+  txCont = TxDAQController(deviceID="txCont", dependencies=Dict{String, Union{Device, Missing}}(),
+    params=TxDAQControllerParams(phaseAccuracy=0.01u"rad", relativeAmplitudeAccuracy=0.01))
+
+  Ω = fill(20e-3 + 0im, 1, 1)
+  # A phase deviation of -359.99° is a deviation of 0.01° after wrapping to [-180°, 180°]
+  Γ = fill(20e-3 * exp(im*deg2rad(-359.99)), 1, 1)
+  @test MPIMeasurements.fieldAccuracyReached(cont, txCont, Γ, Ω)
+  # A deviation of 1° is still detected
+  Γ = fill(20e-3 * exp(im*deg2rad(1.0)), 1, 1)
+  @test !MPIMeasurements.fieldAccuracyReached(cont, txCont, Γ, Ω)
+end
+
 @testset "AW field accuracy" begin
   seq = sequenceFromTOML(joinpath(testConfigDir, "TestSimpleSimulatedScanner", "Sequences", "SimpleSimulatedSequence.toml"))
   nFreq = rxNumSamplingPoints(seq)÷2+1
