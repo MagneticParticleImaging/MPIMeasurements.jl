@@ -23,6 +23,23 @@ using Unitful
 # can be stopped cleanly and the partial data can still be saved.
 Base.exit_on_sigint(false)
 
+# Optional live view of the measured field in a MagneticFieldViewer (example/LiveFieldViewer):
+#   :off     nothing extra
+#   :feed    send the settled frame at the end of every coil configuration (once per HOLD_TIME_S)
+#            to 127.0.0.1, so the viewer can be opened (and closed) by hand at any time during the run:
+#              julia --project=example/LiveFieldViewer example/LiveFieldViewer/LiveFieldViewer.jl
+#   :viewer  send, and open the viewer right away
+# The viewer is its own Julia process; it never slows down or stops the measurement. Its
+# environment must be instantiated once, see LiveFieldViewer.jl.
+const LIVE_FIELD_VIEW = :off
+LIVE_FIELD_VIEW in (:off, :feed, :viewer) || error("LIVE_FIELD_VIEW must be :off, :feed or :viewer")
+LIVE_FIELD_VIEW == :off || include(joinpath(@__DIR__, "LiveFieldViewer", "LiveFieldFeed.jl"))
+if LIVE_FIELD_VIEW == :viewer   # start it first: it compiles its plots while the scanner initializes
+    let dir = joinpath(@__DIR__, "LiveFieldViewer")
+        run(`$(Base.julia_cmd()) --project=$dir $(joinpath(dir, "LiveFieldViewer.jl"))`; wait = false)
+    end
+end
+
 println("Starting Porridge MagSphere field measurement...")
 
 const RIGHT_COIL_ORDER = [17, 3, 18, 14, 12, 16, 10, 11, 13]
@@ -355,6 +372,14 @@ function print_missed_frame_summary(protocol)
     end
 end
 
+# One-line status for the live field viewer: the configuration and segment of the frame shown
+# (frame `shown`, the settled end of its configuration), the run's progress and missed frames.
+function live_field_status(protocol, frameLabels, shown)
+    progress = "run $(protocol.currentFrameNum)/$(protocol.totalFrames), missed $(protocol.missingFrames)"
+    1 <= shown <= length(frameLabels) || return progress
+    return "configuration $(cld(shown, FRAMES_PER_CONFIGURATION)) ($(frameLabels[shown])) · " * progress
+end
+
 # 1. Initialize
 scanner = MPIScanner("PorridgeMagSphere", robust=true)
 protocol = Protocol("PorridgeMagSphereMeasurement", scanner)
@@ -380,6 +405,16 @@ protocol.params.sequence = build_coil_sequence_from_currents(
     measurementRate_Hz=TRIGGER_RATE_HZ,
 )
 init(protocol)
+
+liveFeed = nothing
+if LIVE_FIELD_VIEW != :off
+    frameLabels = build_primary_frame_labels()
+    length(frameLabels) == totalFrames ||
+        @warn "build_primary_frame_labels is out of sync with build_primary_coil_currents; segment names in the viewer are wrong"
+    # one frame per coil configuration, from its last 10 frames (coils settled)
+    liveFeed = LiveFieldFeed.start(protocol; framesPerConfiguration = FRAMES_PER_CONFIGURATION,
+                                   status = i -> live_field_status(protocol, frameLabels, i))
+end
 
 # 2. Execute
 println("Starting measurement...")
@@ -466,6 +501,7 @@ catch e
 end
 
 # 4. Cleanup
+isnothing(liveFeed) || LiveFieldFeed.stop!(liveFeed)
 cleanup(protocol)
 close(scanner)
 

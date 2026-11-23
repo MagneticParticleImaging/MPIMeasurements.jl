@@ -1,0 +1,24 @@
+# Environment of the live field viewer process (LiveFieldViewer.jl). It only needs the viewer
+# packages: the sensor positions come with every frame from LiveFieldFeed.jl.
+#
+#   julia --project=example/LiveFieldViewer -e "using Pkg; Pkg.instantiate()"   (once)
+#
+# MagneticFieldUI and MPIHarmonicMagneticFields are pinned to their last commits before the move
+# to the IBIJuliaRegistry, which changed their UUIDs and requires DataStructures 0.19.
+# Fetched over HTTPS, because the registry's SSH URLs need a TUHH key.
+
+[deps]
+Gtk4 = "9db2cae5-386f-4011-9d63-a5602296539b"
+MPIHarmonicMagneticFields = "2527f7a4-0af4-4016-a944-036fbac19de9"
+MagneticFieldUI = "4d2074d4-b07e-4fe6-bf47-a122d548417c"
+SphericalHarmonicExpansions = "504afa71-bae7-47b4-8ec9-3851161806ac"
+
+[sources]
+MPIHarmonicMagneticFields = {url = "https://collaborating.tuhh.de/e-5/magnetic-fields/MPIHarmonicMagneticFields.jl.git", rev = "fb4c0d5a03c481487b6a9b85cd471aea55b4da2f"}
+MagneticFieldUI = {url = "https://collaborating.tuhh.de/e-5/magnetic-fields/MagneticFieldUI.jl.git", rev = "addb646f2f27f6257e3848aa4cc1761d6f017487"}
+
+[compat]
+Gtk4 = "0.4.2"
+# 0.1.5 makes SphericalHarmonicCoefficients parametric, which these commits predate
+SphericalHarmonicExpansions = "=0.1.4"
+julia = "1.11"

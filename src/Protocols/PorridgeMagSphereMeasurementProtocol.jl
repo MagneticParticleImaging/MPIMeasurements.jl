@@ -41,6 +41,13 @@ Storage
   Frames go to a binary stream file in the datasetStore (fixed-size records,
   layout in the .toml beside it), flushed after every batch, so a crash loses
   at most the last batch. FileStorageRequestEvent converts it into HDF5.
+
+Frame observer (optional)
+  `protocol.frameObserver = (frameIndex, frame) -> ...` is called on the protocol's
+  thread with every received frame right after it is stored, frameIndex being its
+  trigger edge (placeholders are not passed on). Meant for live displays, e.g.
+  example/LiveFieldViewer: it must return quickly and must not block. An observer
+  that throws is removed, the measurement goes on.
 =#
 
 const MS_FRAME_MISSING = UInt32(1)     # placeholder for a lost frame
@@ -134,6 +141,8 @@ Base.@kwdef mutable struct PorridgeMagSphereMeasurementProtocol <: Protocol
   # Anchors for the GC/heap figures in the status log
   runStartTimeNs::UInt64 = UInt64(0)
   runStartGcTimeNs::UInt64 = UInt64(0)
+
+  frameObserver::Union{Function,Nothing} = nothing   # see "Frame observer" in the header
 end
 
 requiredDevices(::PorridgeMagSphereMeasurementProtocol) = [AbstractDAQ, MagSphereUDP, TemperatureSensor]
@@ -511,10 +520,24 @@ function storeMagSphereFrames!(protocol::PorridgeMagSphereMeasurementProtocol, c
     writeMagSphereRecord!(protocol, frame, triggerPatches, coilTemperatures,
                           irregular ? MS_FRAME_IRREGULAR : UInt32(0))
     protocol.receivedFrames += 1
+    notifyFrameObserver(protocol, frame)
     reportMagSphereStatus(protocol, cam)
   end
   taken > 0 && flush(protocol.streamHandle)
   return taken
+end
+
+"Pass the frame just stored to `protocol.frameObserver`, see the header. Never lets it stop the run."
+function notifyFrameObserver(protocol::PorridgeMagSphereMeasurementProtocol, frame::MagSphereUDPResult)
+  observer = protocol.frameObserver
+  isnothing(observer) && return
+  try
+    observer(protocol.currentFrameNum, frame)
+  catch e
+    protocol.frameObserver = nothing
+    @error "The frame observer failed and was removed; the measurement goes on" exception = (e, catch_backtrace())
+  end
+  return
 end
 
 """
