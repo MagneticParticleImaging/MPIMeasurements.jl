@@ -34,6 +34,7 @@
 
 ### Other
 - improved error messages during device creation
+- `offsetsPerPatch(::MPSMeasurementProtocol)` returns the offset of each stored patch, for protocols that run an `MPSMeasurementProtocol` as part of their measurement
 
 ### Technically breaking changes
 See also the [upgrade guide](https://magneticparticleimaging.github.io/MPIMeasurements.jl/dev/config/upgrade.html).

@@ -382,15 +382,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
   acqNumFrames(sequence, size(data, 4))
   
-  periodsPerOffset = size(protocol.patchPermutation,1)÷size(protocol.offsetfields,1)
-
-  offsetPerm = zeros(Int64, size(data, 3))
-  for (index, patch) in enumerate(protocol.patchPermutation)
-    if !isnothing(patch)
-      offsetPerm[patch] = (index-1)÷periodsPerOffset + 1
-    end
-  end
-  offsets = protocol.offsetfields[offsetPerm, :]
+  offsets = offsetsPerPatch(protocol)
+  size(offsets, 1) == size(data, 3) || throw(DimensionMismatch("$(size(data, 3)) patches per frame were measured, but $(size(offsets, 1)) offsets are known"))
 
 
   isBGFrame = reduce(&, reshape(measIsBGFrame(protocol.protocolMeasState), size(data, 3), :), dims = 1)[1, :]
@@ -418,6 +411,24 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+"""
+    offsetsPerPatch(protocol::MPSMeasurementProtocol)
+
+Offset field of each stored patch of one frame in tesla, one row per patch and one column per
+offset channel, in the order in which the patches are stored. Requires an initialized protocol.
+"""
+function offsetsPerPatch(protocol::MPSMeasurementProtocol)
+  periodsPerOffset = size(protocol.patchPermutation, 1) ÷ size(protocol.offsetfields, 1)
+  numPatches = count(!isnothing, unique(protocol.patchPermutation))
+  offsetPerm = zeros(Int64, numPatches)
+  for (index, patch) in enumerate(protocol.patchPermutation)
+    if !isnothing(patch)
+      offsetPerm[patch] = (index - 1) ÷ periodsPerOffset + 1
+    end
+  end
+  return protocol.offsetfields[offsetPerm, :]
 end
 
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
