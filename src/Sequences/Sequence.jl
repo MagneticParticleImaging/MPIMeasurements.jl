@@ -343,6 +343,32 @@ end
 export acqNumPatches
 acqNumPatches(sequence::Sequence) = div(acqNumPeriodsPerFrame(sequence), acqNumPeriodsPerPatch(sequence))
 
+export dfPeriodsPerOffset
+"""
+    dfPeriodsPerOffset(sequence::Sequence)
+
+Number of drive-field periods measured per offset of the `ProtocolOffsetElectricalChannel`s of
+`sequence`. Channels that leave `dfPeriodsPerOffset` as `nothing` inherit the value defined by
+the channels that set it, so only one channel needs to define it. Returns the default of 50 if
+no channel defines a value.
+
+Throws a `SequenceConfigurationError` if `sequence` has no `ProtocolOffsetElectricalChannel`,
+since the value is meaningless without one, and if the channels define different values, since
+a single sequence can only measure one number of periods per offset.
+"""
+function dfPeriodsPerOffset(sequence::Sequence)
+  channels_ = [channel for field in fields(sequence) for channel in channels(field, ProtocolOffsetElectricalChannel)]
+  isempty(channels_) && throw(SequenceConfigurationError("`dfPeriodsPerOffset` is only defined for sequences with a `ProtocolOffsetElectricalChannel`, but sequence `$(name(sequence))` has none."))
+  defined = [channel for channel in channels_ if channel.dfPeriodsPerOffset !== nothing]
+  isempty(defined) && return 50
+  values_ = unique(channel.dfPeriodsPerOffset for channel in defined)
+  if length(values_) > 1
+    throw(SequenceConfigurationError("All ProtocolOffsetElectricalChannels must define the same number of drive-field periods per offset. " *
+      join(["Channel `$(id(channel))` defines $(channel.dfPeriodsPerOffset)" for channel in defined], ", ") * "."))
+  end
+  return only(values_)
+end
+
 export acqOffsetField
 function acqOffsetField(sequence::Sequence)
   # TODO: This is a hack for getting the required information for the MPSMeasurementProtocol. Can we find a generalized solution?

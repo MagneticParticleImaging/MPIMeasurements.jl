@@ -215,6 +215,8 @@
     @test sweep isa ProtocolOffsetElectricalChannel
     @test MPIMeasurements.values(sweep) ≈ [-2.0, -1.0, 0.0, 1.0, 2.0] .* u"mT"
     @test MPIMeasurements.protocolTxChannels(seq["offsets"]) == [sweep]
+    @test sweep.dfPeriodsPerOffset === nothing # the fixture does not set it
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 50
 
     # The arbitrary component survives a round trip
     dict = MPIMeasurements.toDict(seq)

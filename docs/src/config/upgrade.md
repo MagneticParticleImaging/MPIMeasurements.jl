@@ -14,8 +14,27 @@ This page should give you hints on what to change in your configuration files wh
 - custom amplifier types implement `powerSupplyMode` instead of `voltageMode`
 - `state(::HubertAmplifier)` returns a `Bool`; use `hubertStatus(amp)` for the full status
 
-### RedPitayaDAQ
-`setTxParams(daq, amplitudes, phases, awg)` becomes `setTxParams(daq, offsets, amplitudes, phases, awg)`, where `offsets` maps channel IDs to the offset voltage.
+### Periods per offset
+**Old parameter:**  \
+`dfPeriodsPerOffset` in the parameters of `MPSMeasurementProtocol`
+**Replaced by:**  \
+`dfPeriodsPerOffset` in the `ProtocolOffsetElectricalChannel` of the sequence, e.g.
+
+```toml
+[Fields.offset.dc_x]
+type = "ProtocolOffsetElectricalChannel"
+offsetStart = "0mT"
+offsetStop = "2mT"
+numOffsets = 5
+dfPeriodsPerOffset = 100
+```
+
+The parameter is optional. If a sequence contains several
+`ProtocolOffsetElectricalChannel`s, only one of them needs to define it; the others inherit the
+value. If several channels define a value, all of them must agree. If no channel defines a
+value, the default of 50 is used.
+
+`averagePeriodsPerOffset` remains a protocol parameter.
 
 ## v0.5 to v0.6
 ### Scanner and Devices

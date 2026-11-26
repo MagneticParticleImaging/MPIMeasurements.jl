@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### `dfPeriodsPerOffset` moved from the protocols to the sequence
+- `ProtocolOffsetElectricalChannel` has a new field `dfPeriodsPerOffset` that sets the number of
+  drive-field periods measured per offset. It is read from the sequence TOML with the optional
+  key `dfPeriodsPerOffset` and is serialized back automatically. It defaults to `nothing`, which
+  means the channel inherits the value defined by the other offset channels of the sequence, so
+  only one channel needs to define it.
+- the new accessor `dfPeriodsPerOffset(sequence)` returns the value defined by the sequence's
+  offset channels, falling back to 50 if none of them defines one. It throws a
+  `SequenceConfigurationError` if several offset channels define different values, since a
+  sequence can only measure one number of periods per offset, and if the sequence has no
+  `ProtocolOffsetElectricalChannel` at all, since the value is meaningless without one.
+- the parameter `dfPeriodsPerOffset` has been removed from `MPSMeasurementProtocolParams`; the
+  protocol now takes the value from its sequence during `_init` and stores it in the new field
+  `MPSMeasurementProtocol.dfPeriodsPerOffset`.
+- `averagePeriodsPerOffset` stays a protocol parameter, since it selects whether the periods of
+  an offset are averaged or stored individually.
+
 ### Accessors are now extensions of the MPIFiles functions
 - `calibration`, `experiment`, `fields`, `measurement`, `study`, `tracer`, `temperature`,
   `description`, `rxNumFrequencies`, `scannerBoreSize`, `scannerFacility`, `scannerManufacturer`,
