@@ -11,6 +11,10 @@ Base.@kwdef mutable struct ProtocolOffsetElectricalChannel{T<:Union{typeof(1.0u"
   offsetStart::T
   offsetStop::T
   numOffsets::Int64
+  "Number of drive-field periods measured per offset.
+  If `nothing`, the value defined by the other offset channels of the sequence is used, so only
+  one channel needs to define it."
+  dfPeriodsPerOffset::Union{Nothing, Integer} = nothing
 end
 
 channeltype(::Type{<:ProtocolOffsetElectricalChannel}) = StepwiseTxChannel()
@@ -22,7 +26,10 @@ function createFieldChannel(channelID::AbstractString, ::Type{<:ProtocolOffsetEl
 
   numOffsets = channelDict["numOffsets"]
 
-  return ProtocolOffsetElectricalChannel(;id = channelID, offsetStart = offsetStart, offsetStop = offsetStop, numOffsets = numOffsets)
+  dfPeriodsPerOffset = get(channelDict, "dfPeriodsPerOffset", nothing)
+
+  return ProtocolOffsetElectricalChannel(;id = channelID, offsetStart = offsetStart, offsetStop = offsetStop,
+    numOffsets = numOffsets, dfPeriodsPerOffset = dfPeriodsPerOffset)
 end
 
 values(channel::ProtocolOffsetElectricalChannel{T}) where T = collect(range(channel.offsetStart, channel.offsetStop, length = channel.numOffsets))
@@ -31,7 +38,10 @@ values(channel::ProtocolOffsetElectricalChannel, isPositive::Bool) = filter(x-> 
 function toDict!(dict, channel::ProtocolOffsetElectricalChannel)
   dict["type"] = string(nameof(typeof(channel)))
   for field in [x for x in fieldnames(typeof(channel)) if !in(x, [:id])]
-    dict[String(field)] = toDictValue(getproperty(channel, field))
+    val = getproperty(channel, field)
+    # `nothing` means "inherit from another channel" and is not a valid TOML value.
+    val === nothing && continue
+    dict[String(field)] = toDictValue(val)
   end
   return dict
 end

@@ -5,6 +5,17 @@ export  Protocol, ProtocolParams, name, description, scanner, params,
         ExceptionEvent, IllegaleStateEvent, DatasetStoreStorageRequestEvent, FileStorageRequestEvent, StorageSuccessEvent, StorageRequestEvent,
         OperationSuccessfulEvent, OperationUnsuccessfulEvent, OperationNotSupportedEvent, MultipleChoiceEvent, ChoiceAnswerEvent
 
+"""
+Abstract type for all protocols
+
+Every protocol has to implement its own protocol struct which identifies it.
+A concrete implementation should contain e.g. the handle to the datastore
+or internal variables.
+The protocol struct must at least have the fields `name`, `description`,
+`scanner` and `params` and all other fields should have default values.
+"""
+abstract type Protocol end
+
 abstract type ProtocolParams end
 
 export ProtocolState, PS_UNDEFINED, PS_INIT, PS_RUNNING, PS_PAUSED, PS_FINISHED, PS_FAILED, PS_STOPPED
@@ -156,6 +167,15 @@ function execute(protocol::Protocol, threadID::Integer = 1)
     @warn "Protocol cannot be executed again as it is still running."
     return nothing
   end
+end
+
+"""
+    $(SIGNATURES)
+
+Execute `protocol` on the thread configured for protocols in the scanner's configuration.
+"""
+function execute(scanner::MPIScanner, protocol::Protocol)
+  return execute(protocol, scanner.generalParams.protocolThreadID)
 end
 
 function executionTask(protocol::Protocol)

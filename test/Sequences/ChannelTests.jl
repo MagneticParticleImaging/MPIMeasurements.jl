@@ -86,9 +86,9 @@
     vals = collect(1.0:8.0)
     comp = ArbitraryElectricalComponent(id = "a", divider = 5000, amplitude = [0.002u"T"], phase = [0.0u"rad"], values = vals)
     @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* vals
-    # A phase of π/2 shifts the waveform by a quarter of its 8 samples
+    # A phase of π/2 shifts the waveform to earlier times by a quarter of its 8 samples, as for sin(ωt + φ)
     phase!(comp, (π / 2)u"rad")
-    @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [7.0, 8.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 1.0, 2.0]
     phase!(comp, (1.0π)u"rad")
     @test MPIMeasurements.scaledValues(comp) ≈ 0.002u"T" .* [5.0, 6.0, 7.0, 8.0, 1.0, 2.0, 3.0, 4.0]
 
@@ -205,6 +205,7 @@
     @test MPIMeasurements.values(chan, true) ≈ [0.0, 1.0, 2.0] .* u"mT"
     @test MPIMeasurements.values(chan, false) ≈ [-2.0, -1.0] .* u"mT"
     @test isStepwise(chan)
+    @test chan.dfPeriodsPerOffset === nothing
 
     offsetDict(start, stop) = Dict{String, Any}("type" => "ProtocolOffsetElectricalChannel",
       "offsetStart" => start, "offsetStop" => stop, "numOffsets" => 3)
@@ -216,5 +217,12 @@
     intOffset = MPIMeasurements.createFieldChannel("o", offsetDict("-2mT", "2mT"))
     @test intOffset isa ProtocolOffsetElectricalChannel{typeof(1.0u"T")}
     @test intOffset.offsetStop == 0.002u"T"
+    # The number of periods per offset is optional and inherits from other channels by default
+    @test intOffset.dfPeriodsPerOffset === nothing
+    withPeriods = MPIMeasurements.createFieldChannel("o", merge(offsetDict("-2mT", "2mT"), Dict{String, Any}("dfPeriodsPerOffset" => 100)))
+    @test withPeriods.dfPeriodsPerOffset == 100
+    # A channel without a value must not write the key, otherwise `toTOML` fails on `nothing`
+    @test !haskey(MPIMeasurements.toDict(intOffset), "dfPeriodsPerOffset")
+    @test MPIMeasurements.toDict(withPeriods)["dfPeriodsPerOffset"] == 100
   end
 end

@@ -45,10 +45,15 @@ end
 
     # A single value becomes a frequency-independent transfer function
     tf = MPIMeasurements.parse_into_tf("2.0V/T")
-    @test tf.freq == [0.0, Inf]
+    @test tf.freq == [0.0, 1e15]
     @test vec(tf.data) == ComplexF64[2.0, 2.0]
     @test tf.units == [u"V/T"]
     @test tf(10.0) == 2u"V/T"
+    # Combining with a transfer function on a smaller frequency range, as done for the
+    # receive channels when storing an MDF, keeps the constant value at all frequencies
+    combined = MPIMeasurements.MPIFiles.combine(tf, MPIMeasurements.MPIFiles.TransferFunction([0.0, 1e6], ComplexF64[1.0, 1.0]), interpolate = true)
+    @test ustrip.([combined(f, 1) for f in (25e3, 2e6, 1e9)]) == ComplexF64[2.0, 2.0, 2.0]
+    @test ustrip.([combined(f, 2) for f in (25e3, 2e6, 1e9)]) == ComplexF64[1.0, 1.0, 1.0]
     @test tf(1000000.0, 1) == 2u"V/T"
 
     # Frequency -> value pairs are sorted by frequency and converted to a common unit

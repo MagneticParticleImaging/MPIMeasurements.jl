@@ -164,7 +164,7 @@ function mpi_mode_enable()
   if isdefined(Base, :active_repl)
     initrepl(parse_command,
             prompt_text=prompt_string,
-            start_key='|',
+            start_key="\\M-1",
             repl = Base.active_repl,
             mode_name="MPI mode",
             valid_input_checker=mpi_mode_valid_input_checker,

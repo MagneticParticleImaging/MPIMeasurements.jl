@@ -109,6 +109,33 @@
     @test isempty(MPIMeasurements.protocolTxChannels(df))
   end
 
+  @testset "Periods per offset" begin
+    # The value is only defined for sequences with an offset channel
+    @test_throws "only defined for sequences with a `ProtocolOffsetElectricalChannel`" MPIMeasurements.dfPeriodsPerOffset(loadSeq())
+
+    seq = sequenceFromTOML(sequenceFixture("SpecialChannelsSequence.toml"))
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 50
+    seq["offsets"]["sweep"].dfPeriodsPerOffset = 100
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 100
+
+    # Channels that do not define a value inherit it from the channels that do
+    push!(seq["offsets"], ProtocolOffsetElectricalChannel(id = "sweep2", offsetStart = 0.0u"T",
+      offsetStop = 0.001u"T", numOffsets = 2))
+    @test seq["offsets"]["sweep2"].dfPeriodsPerOffset === nothing
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 100
+
+    # Several offset channels are allowed as long as the defined values agree
+    seq["offsets"]["sweep2"].dfPeriodsPerOffset = 100
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 100
+    seq["offsets"]["sweep2"].dfPeriodsPerOffset = 25
+    @test_throws "must define the same number of drive-field periods per offset" MPIMeasurements.dfPeriodsPerOffset(seq)
+
+    # Without any defined value the default is used
+    seq["offsets"]["sweep"].dfPeriodsPerOffset = nothing
+    seq["offsets"]["sweep2"].dfPeriodsPerOffset = nothing
+    @test MPIMeasurements.dfPeriodsPerOffset(seq) == 50
+  end
+
   @testset "Setters" begin
     seq = loadSeq()
     chanx = seq["df"]["chanx"]

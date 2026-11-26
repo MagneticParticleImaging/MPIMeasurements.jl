@@ -72,11 +72,12 @@ function initiateDevices(configDir::AbstractString, devicesParams::Dict{String, 
       dependencies = filter(kv -> in(kv[1], get(params, "dependencies", String[])), devices)
       device = Device(deviceID, params; dependencies = dependencies, robust = robust, configFile = configFile)
  
-      if !isOptional(device) && !isPresent(device)
+      if isnothing(device) || (!isOptional(device) && !isPresent(device))
         @error "The device with ID `$deviceID` should be present but isn't."
       end
-
-      devices[deviceID] = device
+      if !isnothing(device)
+        devices[deviceID] = device
+      end
     else 
       throw(ScannerConfigurationError("The device ID `$deviceID` was not found in the configuration. Please check your configuration."))
     end
@@ -104,7 +105,7 @@ function Device(deviceID::String, deviceParams::Dict{String, Any}; dependencies:
     # Find valid device struct
     DeviceImpl = getConcreteType(Device, deviceType)
     if isnothing(DeviceImpl)
-      error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found.")
+      error("The type implied by the string `$deviceType` could not be retrieved since its device struct was not found. Maybe the type is defined in another package that needs to be loaded first?")
     end
     validateDeviceStruct(DeviceImpl)
 
@@ -125,7 +126,7 @@ function Device(deviceID::String, deviceParams::Dict{String, Any}; dependencies:
     if !robust
       rethrow()
     else
-      @warn e
+      @warn "Device $deviceID could not be created!" exception=(e,catch_backtrace())
     end
   end
 
@@ -252,6 +253,12 @@ mutable struct MPIScanner
 
     return scanner
   end
+end
+
+function Base.show(io::IO, sc::MPIScanner)
+    println(io, "MPIScanner:         $(sc.name)")
+    println(io, "  Config File:      ", sc.configFile)
+    println(io, "  Loaded Devices:   $(String.(keys(sc.devices)))")
 end
 
 function findConfigDir(name::AbstractString)
@@ -552,8 +559,4 @@ function getProtocolList(scanner::MPIScanner)
   else
     return String[]
   end
-end
-
-function execute(scanner::MPIScanner, protocol::Protocol)
-  return execute(protocol, scanner.generalParams.protocolThreadID)
 end

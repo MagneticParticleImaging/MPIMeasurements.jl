@@ -25,8 +25,6 @@ Base.@kwdef mutable struct MPSMeasurementProtocolParams <: ProtocolParams
   sortPatches::Bool = true
   "Flag if the measurement should be saved as a system matrix or not"
   saveInCalibFolder::Bool = false
-  "Number of periods per offset of the MPS offset measurement. Overwrites parts of the sequence definition."
-  dfPeriodsPerOffset::Integer = 50
   "If true all periods per offset are averaged"
   averagePeriodsPerOffset::Bool = true
 end
@@ -64,6 +62,8 @@ Base.@kwdef mutable struct MPSMeasurementProtocol <: Protocol
   offsetfields::Union{Matrix{Float64}, Nothing} = nothing
   patchPermutation::Vector{Union{Int64, Nothing}} = Union{Int64, Nothing}[]
   calibsize::Vector{Int64} = Int64[]
+  "Number of drive-field periods per offset, taken from the sequence during `_init`."
+  dfPeriodsPerOffset::Int64 = 50
 
   bgMeas::Array{Float32, 4} = zeros(Float32,0,0,0,0)
   done::Bool = false
@@ -98,7 +98,8 @@ function _init(protocol::MPSMeasurementProtocol)
   protocol.protocolMeasState = ProtocolMeasState()
 
   #try
-    seq, perm, offsets, calibsize, numPeriodsPerFrame = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerOffset = protocol.params.dfPeriodsPerOffset)
+    protocol.dfPeriodsPerOffset = dfPeriodsPerOffset(protocol.params.sequence)
+    seq, perm, offsets, calibsize, numPeriodsPerFrame = prepareProtocolSequences(protocol.params.sequence, getDAQ(scanner(protocol)); numPeriodsPerOffset = protocol.dfPeriodsPerOffset)
 
     # For each patch assign nothing if invalid or otherwise index in "proper" frame
     patchPerm = Vector{Union{Int64, Nothing}}(nothing, numPeriodsPerFrame)
@@ -110,7 +111,7 @@ function _init(protocol::MPSMeasurementProtocol)
      
     # patchPerm contains the "target" for every patch that is measured, nothing for discarded patches, different indizes for non-averaged patches, identical indizes for averaged-patches
     # Same target for all frames to be averaged
-    part = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+    part = protocol.params.averagePeriodsPerOffset ? protocol.dfPeriodsPerOffset : 1
     for (i, patches) in enumerate(Iterators.partition(perm, part))
       patchPerm[patches] .= i
     end
@@ -270,7 +271,7 @@ function SequenceMeasState(protocol::MPSMeasurementProtocol)
   # RedPitaya-> MPSBuffer -> Splitter --> FrameBuffer{Mmap}
   #                                   |-> DriveFieldBuffer 
   numValidPatches = length(filter(x->!isnothing(x), protocol.patchPermutation))
-  averages = protocol.params.averagePeriodsPerOffset ? protocol.params.dfPeriodsPerOffset : 1
+  averages = protocol.params.averagePeriodsPerOffset ? protocol.dfPeriodsPerOffset : 1
   numFrames = div(numValidPatches, averages)
   bufferSize = (rxNumSamplingPoints(protocol.sequence), length(rxChannels(protocol.sequence)), 1, numFrames)
   buffer = FrameBuffer(protocol, "meas.bin", Float32, bufferSize)
@@ -382,15 +383,8 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
   data = reshape(data, rxNumSamplingPoints(sequence), length(rxChannels(sequence)), :, protocol.params.fgFrames + protocol.params.bgFrames * protocol.params.measureBackground)
   acqNumFrames(sequence, size(data, 4))
   
-  periodsPerOffset = size(protocol.patchPermutation,1)÷size(protocol.offsetfields,1)
-
-  offsetPerm = zeros(Int64, size(data, 3))
-  for (index, patch) in enumerate(protocol.patchPermutation)
-    if !isnothing(patch)
-      offsetPerm[patch] = (index-1)÷periodsPerOffset + 1
-    end
-  end
-  offsets = protocol.offsetfields[offsetPerm, :]
+  offsets = offsetsPerPatch(protocol)
+  size(offsets, 1) == size(data, 3) || throw(DimensionMismatch("$(size(data, 3)) patches per frame were measured, but $(size(offsets, 1)) offsets are known"))
 
 
   isBGFrame = reduce(&, reshape(measIsBGFrame(protocol.protocolMeasState), size(data, 3), :), dims = 1)[1, :]
@@ -401,7 +395,7 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
   filename = nothing
 
-  periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.params.dfPeriodsPerOffset
+  periodsPerOffset = protocol.params.averagePeriodsPerOffset ? 1 : protocol.dfPeriodsPerOffset
   isBGFrame = repeat(isBGFrame, inner = div(size(data, 3), periodsPerOffset))
   data = reshape(data, size(data, 1), size(data, 2), periodsPerOffset, :)
 
@@ -418,6 +412,24 @@ function handleEvent(protocol::MPSMeasurementProtocol, event::DatasetStoreStorag
 
   @info "The measurement was saved at `$filename`."
   put!(protocol.biChannel, StorageSuccessEvent(filename))
+end
+
+"""
+    offsetsPerPatch(protocol::MPSMeasurementProtocol)
+
+Offset field of each stored patch of one frame in tesla, one row per patch and one column per
+offset channel, in the order in which the patches are stored. Requires an initialized protocol.
+"""
+function offsetsPerPatch(protocol::MPSMeasurementProtocol)
+  periodsPerOffset = size(protocol.patchPermutation, 1) ÷ size(protocol.offsetfields, 1)
+  numPatches = count(!isnothing, unique(protocol.patchPermutation))
+  offsetPerm = zeros(Int64, numPatches)
+  for (index, patch) in enumerate(protocol.patchPermutation)
+    if !isnothing(patch)
+      offsetPerm[patch] = (index - 1) ÷ periodsPerOffset + 1
+    end
+  end
+  return protocol.offsetfields[offsetPerm, :]
 end
 
 protocolInteractivity(protocol::MPSMeasurementProtocol) = Interactive()
