@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Accessors are now extensions of the MPIFiles functions
+- `calibration`, `experiment`, `fields`, `measurement`, `study`, `tracer`, `temperature`,
+  `description`, `rxNumFrequencies`, `scannerBoreSize`, `scannerFacility`, `scannerManufacturer`,
+  `scannerName` and `scannerTopology` are now imported from MPIFiles and extended for
+  MPIMeasurements' own types instead of being separate functions that shadowed them. This removes
+  the "both X and Y export ..." warnings in downstream packages and makes
+  `MPIMeasurements.scannerName === MPIFiles.scannerName` hold.
+
 ### Improvements for MultiSequenceSystemMatrixProtocol
 - fix reloading of protocol with more than one BG measurement
 - improve performance by not writing sequences to file every iteration

@@ -43,7 +43,12 @@ import MPIFiles: hasKeyAndValue,
     acqGradient, acqNumPeriodsPerFrame, acqNumPeriodsPerPatch, acqNumPatches, acqOffsetField,
     acqNumFrames, acqNumAverages,
     dfBaseFrequency, dfCycle, dfDivider, dfNumChannels, dfPhase, dfStrength, dfWaveform,
-    rxBandwidth, rxNumChannels, rxNumSamplingPoints
+    rxBandwidth, rxNumChannels, rxNumSamplingPoints,
+    # Accessors that MPIFiles owns and that MPIMeasurements extends for its own
+    # types (MPIScanner, Sequence, Protocol, Amplifier, AbstractDAQ, ...).
+    calibration, experiment, fields, measurement, study, tracer, temperature,
+    description, rxNumFrequencies,
+    scannerBoreSize, scannerFacility, scannerManufacturer, scannerName, scannerTopology
 
 using RedPitayaDAQServer
 const DEFAULT_SCANNER_CONFIG_PATH = @path joinpath(@__DIR__, "..", "config")
